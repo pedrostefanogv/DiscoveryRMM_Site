@@ -500,7 +500,11 @@ describe("RemoteDebugConsole", () => {
 
       // Rolar para longe do fim desliga o auto.
       fireEvent.scroll(scroller);
-      await waitFor(() => expect(screen.getByText("scroll: manual")).toBeTruthy());
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Rolagem automática desativada" }),
+        ).toBeTruthy(),
+      );
 
       emitLog("linha enquanto manual");
       expect(scroller.scrollTop).toBe(0);
@@ -519,12 +523,20 @@ describe("RemoteDebugConsole", () => {
       const scroller = getScroller();
       setGeometry(scroller, { scrollHeight: 1000, clientHeight: 100, scrollTop: 0 });
       fireEvent.scroll(scroller);
-      await waitFor(() => expect(screen.getByText("scroll: manual")).toBeTruthy());
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Rolagem automática desativada" }),
+        ).toBeTruthy(),
+      );
 
       scroller.scrollTop = 950; // dentro da tolerância de 20px do fim
       fireEvent.scroll(scroller);
 
-      await waitFor(() => expect(screen.getByText("scroll: auto")).toBeTruthy());
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Rolagem automática ativada" }),
+        ).toBeTruthy(),
+      );
     });
   });
 

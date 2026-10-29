@@ -15,7 +15,7 @@ import {
 import { useSessionLiveness } from "@/hooks/useSessionLiveness";
 import { realtimeConfig, resolveNatsWsUrl } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
-import { Badge, Button, ErrorDisplay } from "@/components/ui";
+import { Badge, Button, ErrorDisplay, Icon } from "@/components/ui";
 import { ThemeToggle } from "@/components/auth/ThemeToggle";
 
 const MAX_LOG_LINES = 2000;
@@ -990,61 +990,91 @@ export default function RemoteDebugConsole() {
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      {/* Toolbar */}
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-surface/80 px-3 py-2 text-xs">
-        <Badge color={statusColor}>{statusLabel}</Badge>
+      {/* Toolbar em 2 linhas — linha 1: contexto + ação principal;
+          linha 2: filtros, busca e ações secundárias. */}
+      <header className="border-b border-border bg-surface/80">
+        {/* ── Linha 1: identidade da sessão e ação principal ─────────────── */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
+          <Badge color={statusColor}>{statusLabel}</Badge>
 
-        {/* Identidade do alvo — MESMO formato da tela de acesso remoto:
-            🖥 cliente → site → agente (agente em destaque). */}
-        <span
-          className="inline-flex min-w-0 items-center gap-1 rounded bg-surface-hover px-2 py-0.5 text-xs font-medium text-foreground/80"
-          title={`${agentLabel} — ${siteLabel}`}
-        >
-          <span className="text-muted">🖥</span>
+          {/* Identidade do alvo — MESMO formato da tela de acesso remoto:
+              🖥 cliente → site → agente (agente em destaque). */}
           <span
-            className="max-w-[10rem] truncate text-muted"
-            title={clientId ? `Cliente: ${target?.clientName ?? ""} (${clientId})` : "Cliente (não identificado)"}
+            className="inline-flex min-w-0 items-center gap-1 rounded bg-surface-hover px-2 py-0.5 text-xs font-medium text-foreground/80"
+            title={`${agentLabel} — ${siteLabel}`}
           >
-            {clientLabel}
+            <Icon name="desktop_windows" className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
+            <span
+              className="max-w-[10rem] truncate text-muted"
+              title={clientId ? `Cliente: ${target?.clientName ?? ""} (${clientId})` : "Cliente (não identificado)"}
+            >
+              {clientLabel}
+            </span>
+            <span className="text-muted-foreground" aria-hidden="true">→</span>
+            <span
+              className="max-w-[10rem] truncate text-muted"
+              title={siteId ? `Site: ${target?.siteName ?? ""} (${siteId})` : "Site (não identificado)"}
+            >
+              {siteLabel}
+            </span>
+            <span className="text-muted-foreground" aria-hidden="true">→</span>
+            <strong
+              className="max-w-[12rem] truncate text-foreground"
+              title={`Agente: ${agentLabel} (${resolvedAgentId})`}
+            >
+              {agentLabel}
+            </strong>
           </span>
-          <span className="text-muted-foreground">→</span>
-          <span
-            className="max-w-[10rem] truncate text-muted"
-            title={siteId ? `Site: ${target?.siteName ?? ""} (${siteId})` : "Site (não identificado)"}
-          >
-            {siteLabel}
+
+          <span className="text-[11px] text-muted tabular-nums">
+            {totalLines} {totalLines === 1 ? "linha" : "linhas"}
+            <span className="mx-1.5 text-border-strong" aria-hidden="true">·</span>
+            <span
+              title={
+                `Expira em ${sessionExpiresAt || "?"}` +
+                (maxExpiresAt ? ` (teto: ${maxExpiresAt})` : "")
+              }
+            >
+              exp {expiresLabel}
+            </span>
           </span>
-          <span className="text-muted-foreground">→</span>
-          <strong
-            className="max-w-[12rem] truncate text-foreground"
-            title={`Agente: ${agentLabel} (${resolvedAgentId})`}
-          >
-            {agentLabel}
-          </strong>
-        </span>
 
-        <span className="text-muted">·</span>
-        <span className="text-muted">{totalLines} linhas</span>
-        <span className="text-muted">·</span>
-        <span
-          className="text-muted"
-          title={
-            `Expira em ${sessionExpiresAt || "?"}` +
-            (maxExpiresAt ? ` (teto: ${maxExpiresAt})` : "")
-          }
-        >
-          exp: {expiresLabel}
-        </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <ThemeToggle />
+            {debugState === "running" ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleStopDebug}
+                title="Encerra a sessão de debug remoto"
+              >
+                <Icon name="block" className="h-3.5 w-3.5" aria-hidden="true" />
+                parar
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleStartDebug}
+                title="Inicia o recebimento de logs do agente"
+              >
+                <Icon name="play_arrow" className="h-3.5 w-3.5" aria-hidden="true" />
+                iniciar debug
+              </Button>
+            )}
+          </div>
+        </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          {(debugState === "running" || debugState === "stopped") && (
-            <>
-              {/* Filtro de nível (display only) */}
-              <span className="text-muted">filtro:</span>
+        {/* ── Linha 2: filtros + busca + ações secundárias ───────────────── */}
+        {(debugState === "running" || debugState === "stopped") && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-border/60 px-3 py-1.5">
+            {/* Filtro por nível (só exibição) */}
+            <div className="flex items-center gap-1" role="group" aria-label="Filtrar por nível de log">
               {LEVELS.map((level) => (
                 <button
                   key={level}
                   type="button"
+                  aria-pressed={levelFilters[level]}
                   title={`${levelCounts[level]} linha(s) no nível ${LEVEL_LABELS[level]}`}
                   onClick={() =>
                     setLevelFilters((current) => ({
@@ -1052,7 +1082,7 @@ export default function RemoteDebugConsole() {
                       [level]: !current[level],
                     }))
                   }
-                  className={`rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                  className={`rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
                     levelFilters[level]
                       ? "bg-primary/20 text-primary"
                       : "text-muted line-through opacity-60 hover:text-muted-foreground"
@@ -1064,35 +1094,51 @@ export default function RemoteDebugConsole() {
                   )}
                 </button>
               ))}
+              {/* Um único controle no lugar de "todos"/"nenhum" */}
               <button
                 type="button"
-                onClick={() =>
-                  setLevelFilters({ trace: true, debug: true, info: true, warn: true, error: true })
+                onClick={() => {
+                  const allActive = LEVELS.every((level) => levelFilters[level]);
+                  setLevelFilters({
+                    trace: !allActive,
+                    debug: !allActive,
+                    info: !allActive,
+                    warn: !allActive,
+                    error: !allActive,
+                  });
+                }}
+                aria-label={
+                  LEVELS.every((level) => levelFilters[level])
+                    ? "Ocultar todos os níveis"
+                    : "Mostrar todos os níveis"
                 }
-                className="rounded px-1.5 py-0.5 text-[10px] text-muted underline-offset-2 hover:text-foreground hover:underline"
-              >
-                todos
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setLevelFilters({ trace: false, debug: false, info: false, warn: false, error: false })
+                title={
+                  LEVELS.every((level) => levelFilters[level])
+                    ? "Ocultar todos os níveis"
+                    : "Mostrar todos os níveis"
                 }
-                className="rounded px-1.5 py-0.5 text-[10px] text-muted underline-offset-2 hover:text-foreground hover:underline"
+                className="rounded p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
               >
-                nenhum
+                <Icon
+                  name="filter_alt"
+                  className={`h-3.5 w-3.5 ${LEVELS.every((level) => levelFilters[level]) ? "" : "opacity-50"}`}
+                  aria-hidden="true"
+                />
               </button>
+            </div>
 
-              <span className="mx-1 h-4 w-px bg-surface-hover" />
+            <span className="h-4 w-px bg-border" aria-hidden="true" />
 
-              {/* Nível da sessão (restart) */}
-              <span className="text-muted">nível:</span>
+            {/* Nível da sessão (aplicado em tempo real no agente) */}
+            <label className="flex items-center gap-1 text-[11px] text-muted">
+              <Icon name="tune" className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">Nível de log da sessão</span>
               <select
                 value={currentLevel}
                 onChange={(e) => handleSetLevel(e.target.value as RemoteDebugLogLevel)}
                 disabled={isRestarting}
                 title="Altera o nível de log em tempo real, sem reiniciar a sessão"
-                className="h-6 rounded border border-border bg-surface-light px-2 text-[10px] font-mono uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
+                className="h-6 rounded border border-border bg-surface-light px-1.5 font-mono text-[10px] uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
               >
                 {LEVELS.map((level) => (
                   <option key={level} value={level}>
@@ -1100,87 +1146,118 @@ export default function RemoteDebugConsole() {
                   </option>
                 ))}
               </select>
+            </label>
 
-              <span className="mx-1 h-4 w-px bg-surface-hover" />
-            </>
-          )}
+            <span className="h-4 w-px bg-border" aria-hidden="true" />
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={toggleAutoScroll}
-            disabled={totalLines === 0}
-            aria-pressed={autoScroll}
-            title="Alterna a rolagem automática para o fim do console"
-            className="text-[10px]"
-          >
-            scroll: {autoScroll ? "auto" : "manual"}
-          </Button>
+            {/* Busca por texto nas mensagens */}
+            <div className="relative min-w-[14rem] flex-1">
+              <Icon
+                name="search"
+                className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+                aria-hidden="true"
+              />
+              <input
+                value={messageFilter}
+                onChange={(event) => setMessageFilter(event.target.value)}
+                placeholder="Filtrar mensagens…"
+                aria-label="Filtrar mensagens do log"
+                className="h-7 w-full rounded border border-border bg-background pl-7 pr-7 font-mono text-xs text-foreground outline-none focus:border-primary"
+              />
+              {messageFilter && (
+                <button
+                  type="button"
+                  onClick={() => setMessageFilter("")}
+                  aria-label="Limpar filtro de mensagens"
+                  title="Limpar filtro de mensagens"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleCopyLogs}
-            disabled={visibleLogs.length === 0}
-            title="Copia as linhas visíveis (respeita os filtros)"
-            className="text-[10px]"
-          >
-            {copyState === "ok" ? "copiado" : copyState === "error" ? "falhou" : "copiar"}
-          </Button>
+            {/* Ações secundárias — ícones com tooltip (menos ruído visual) */}
+            <div className="flex items-center gap-0.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={toggleAutoScroll}
+                disabled={totalLines === 0}
+                aria-pressed={autoScroll}
+                aria-label={autoScroll ? "Rolagem automática ativada" : "Rolagem automática desativada"}
+                title={
+                  autoScroll
+                    ? "Rolagem automática ativada — clique para rolar manualmente"
+                    : "Rolagem manual — clique para seguir o fim do console"
+                }
+              >
+                <Icon
+                  name={autoScroll ? "arrow_downward" : "speed"}
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                />
+              </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleDownloadLogs}
-            disabled={visibleLogs.length === 0}
-            title="Baixa as linhas visíveis como arquivo .log"
-            className="text-[10px]"
-          >
-            baixar
-          </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleCopyLogs}
+                disabled={visibleLogs.length === 0}
+                aria-label={copyState === "ok" ? "Logs copiados" : "Copiar linhas visíveis"}
+                title={
+                  copyState === "ok"
+                    ? "Copiado!"
+                    : copyState === "error"
+                      ? "Falha ao copiar"
+                      : "Copia as linhas visíveis (respeita os filtros)"
+                }
+              >
+                <Icon
+                  name={copyState === "ok" ? "check" : "content_copy"}
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                />
+              </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setLogs([])}
-            disabled={totalLines === 0}
-            className="text-[10px]"
-          >
-            limpar
-          </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleDownloadLogs}
+                disabled={visibleLogs.length === 0}
+                aria-label="Baixar log (.log)"
+                title="Baixa as linhas visíveis como arquivo .log"
+              >
+                <Icon name="download" className="h-4 w-4" aria-hidden="true" />
+              </Button>
 
-          {/* Botão único: iniciar quando parado, parar quando em execução */}
-          {debugState === "running" ? (
-            <Button size="sm" variant="secondary" onClick={handleStopDebug} className="text-[10px]">
-              parar
-            </Button>
-          ) : (
-            <Button size="sm" variant="primary" onClick={handleStartDebug} className="text-[10px]">
-              iniciar debug
-            </Button>
-          )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLogs([])}
+                disabled={totalLines === 0}
+                aria-label="Limpar console"
+                title="Limpa as linhas recebidas"
+              >
+                <Icon name="delete" className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </div>
 
-          <ThemeToggle />
-        </div>
+            {/* Metadados técnicos: discretos, só em telas largas */}
+            <span className="hidden items-center gap-2 text-[10px] text-muted tabular-nums lg:flex">
+              <span title={subject}>seq {lastSequence ?? "--"}</span>
+              <span className="max-w-[16rem] truncate" title={subject}>
+                {subject ? `…${subject.slice(-24)}` : "subject: —"}
+              </span>
+            </span>
+          </div>
+        )}
+
+        {/* Status da cópia para leitores de tela */}
+        <span aria-live="polite" className="sr-only">
+          {copyState === "ok" ? "Logs copiados." : copyState === "error" ? "Falha ao copiar logs." : ""}
+        </span>
       </header>
-
-      {/* Search bar */}
-      {(debugState === "running" || debugState === "stopped") && (
-      <div className="flex items-center gap-2 border-b border-border bg-surface/40 px-3 py-1.5">
-        <input
-          value={messageFilter}
-          onChange={(event) => setMessageFilter(event.target.value)}
-          placeholder="Filtrar mensagens..."
-          className="h-7 flex-1 rounded border border-border bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-primary"
-        />
-        <span className="text-[10px] text-muted">
-          seq: {lastSequence ?? "--"}
-        </span>
-        <span className="text-[10px] text-muted" title={subject}>
-          {subject ? `subject: …${subject.slice(-28)}` : "subject: —"}
-        </span>
-      </div>
-      )}
 
       {/* Log area — a área de logs é o scroller da página (root com h-screen).
           O wrapper com min-h-0 garante que ela encolha quando a faixa de erro
