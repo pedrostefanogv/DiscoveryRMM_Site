@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { ApiError } from "@/api";
@@ -46,6 +47,7 @@ interface FormValues {
 }
 
 export default function SiteConfigurationPage() {
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [clientId, setClientId] = useState("");
   const [siteId, setSiteId] = useState("");
   const [inherits, setInherits] = useState<Record<string, boolean>>({});
@@ -452,21 +454,54 @@ export default function SiteConfigurationPage() {
       <ConfigurationPageHeader
         title="Configuração de Site"
         subtitle="Configurações aplicáveis ao site e aos agentes deste site."
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
         actions={
           <>
             <Button size="sm" variant="secondary" onClick={saveFull} loading={putMutation.isPending}>
-              <Icon name="save" className="h-3.5 w-3.5" />
+              <Icon name="save" className="h-3.5 w-3.5" aria-hidden="true" />
               Salvar tudo
             </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={removeLocalConfig}
-              loading={deleteMutation.isPending}
-            >
-              <Icon name="restart_alt" className="h-3.5 w-3.5" />
-              Restaurar herança
-            </Button>
+            {/* Ação destrutiva isolada no menu para não ficar ao lado do salvar */}
+            <div className="relative">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setActionsMenuOpen((open) => !open)}
+                aria-expanded={actionsMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Mais ações"
+                title="Mais ações"
+              >
+                <Icon name="more_vert" className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              {actionsMenuOpen && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default"
+                    aria-label="Fechar menu de ações"
+                    onClick={() => setActionsMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-border bg-surface py-1 text-sm shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-danger transition-colors hover:bg-danger/10"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        removeLocalConfig();
+                      }}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Icon name="restart_alt" className="h-4 w-4" aria-hidden="true" /> Restaurar herança
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </>
         }
       />

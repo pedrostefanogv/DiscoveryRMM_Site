@@ -1,4 +1,5 @@
 import { formatDateTime as formatDateTimeCanonical, formatBytes as formatBytesBase } from '@/utils/format';
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -128,7 +129,8 @@ export default function DatabaseMaintenanceSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Manutenção do Banco de Dados" description="Detecta e corrige inconsistências de dados que impedem a operação normal — por exemplo, chamados sem estado de workflow, que não podem ser fechados — e mostra a saúde física do PostgreSQL (índices inválidos, bloat, estatísticas e wraparound)." />
+      <PageHeader title="Manutenção do Banco de Dados" description="Detecta e corrige inconsistências de dados que impedem a operação normal — por exemplo, chamados sem estado de workflow, que não podem ser fechados — e mostra a saúde física do PostgreSQL (índices inválidos, bloat, estatísticas e wraparound)."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader

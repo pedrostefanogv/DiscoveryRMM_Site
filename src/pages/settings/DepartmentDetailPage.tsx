@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { DepartmentCustomFieldsSection } from "@/components/configuration/DepartmentCustomFieldsSection";
 import { InheritableFieldToggle } from "@/components/configuration/InheritableFieldToggle";
@@ -1025,6 +1025,7 @@ function handleDelete() {
       <PageHeader
         title={department.name}
         description={desc}
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       >
         <Button variant="ghost" onClick={() => navigate("/tickets/departments")}>
           <Icon name="arrow_back" className="h-4 w-4" />

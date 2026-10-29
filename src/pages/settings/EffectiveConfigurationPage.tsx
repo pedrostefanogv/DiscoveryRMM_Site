@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Loading, Select,
 PageHeader,
 } from "@/components/ui";
@@ -94,7 +95,11 @@ export default function EffectiveConfigurationPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Configuração Efetiva" description="Simulador de herança Server → Client → Site: mostra o valor efetivo e a origem de cada campo." />
+      <PageHeader
+        title="Configuração Efetiva"
+        description="Simulador de herança Server → Client → Site: mostra o valor efetivo e a origem de cada campo."
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader

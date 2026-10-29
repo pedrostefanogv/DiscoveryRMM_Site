@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from "react-router-dom";
 import toast from 'react-hot-toast';
 import {  Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader } from '@/components/ui';
 import {
@@ -449,7 +450,8 @@ export default function CustomFieldsSettings() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Custom Fields" description="Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket são preenchidos dentro do chamado." />
+        <PageHeader title="Custom Fields" description="Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket são preenchidos dentro do chamado."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => setTemplatesModalOpen(true)}>Modelos</Button>
           <Button onClick={openCreateDefinition}>Novo Campo</Button>

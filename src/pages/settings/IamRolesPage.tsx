@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import toast from "react-hot-toast";
 import { Icon,
@@ -221,7 +222,8 @@ export default function IamRolesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Roles e Permissões" description="Gerencie roles customizadas e atribua permissões do catálogo disponível na API." />
+      <PageHeader title="Roles e Permissões" description="Gerencie roles customizadas e atribua permissões do catálogo disponível na API."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader

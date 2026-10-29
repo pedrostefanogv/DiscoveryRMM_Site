@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePage from "./ProfilePage";
 
@@ -68,7 +69,7 @@ describe("ProfilePage", () => {
     };
     mocks.keys = undefined;
 
-    render(<ProfilePage />);
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
 
     expect(screen.getByText(/0 chave/)).toBeTruthy();
     expect(
@@ -77,7 +78,7 @@ describe("ProfilePage", () => {
   });
 
   it("lista as chaves do endpoint /mfa/keys", () => {
-    render(<ProfilePage />);
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
 
     expect(screen.getByText("YubiKey 5C")).toBeTruthy();
     expect(screen.getByText(/1 chave/)).toBeTruthy();
@@ -86,7 +87,7 @@ describe("ProfilePage", () => {
   it("usa security.keys como fallback quando o endpoint não devolveu chaves", () => {
     mocks.keys = [];
 
-    render(<ProfilePage />);
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
 
     expect(screen.getByText("YubiKey 5C")).toBeTruthy();
     expect(
@@ -95,7 +96,7 @@ describe("ProfilePage", () => {
   });
 
   it("mostra a política mínima de senha em vez de exigir 8 caracteres", () => {
-    render(<ProfilePage />);
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
 
     expect(screen.getByText("Mínimo de 12 caracteres.")).toBeTruthy();
   });

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import toast from "react-hot-toast";
 import { Icon,
@@ -156,7 +157,8 @@ export default function IamGroupsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Grupos de Usuários" description="Organize usuários por grupo e vincule roles por escopo para controlar acesso." />
+      <PageHeader title="Grupos de Usuários" description="Organize usuários por grupo e vincule roles por escopo para controlar acesso."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader

@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { Card, CardHeader } from "@/components/ui";
+import { Card, CardHeader, PageHeader } from "@/components/ui";
 
 interface ConfigurationPageHeaderProps {
   title: string;
   subtitle: string;
   actions?: ReactNode;
+  /** Trilha de navegação exibida acima do título. */
+  breadcrumb?: ReactNode;
 }
 
 interface ConfigurationSectionCardProps {
@@ -19,15 +21,13 @@ export function ConfigurationPageHeader({
   title,
   subtitle,
   actions,
+  breadcrumb,
 }: ConfigurationPageHeaderProps) {
+  // Reutiliza o cabeçalho padrão do app (mesma tipografia/espaçamento das demais telas).
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-        <p className="mt-1 text-sm text-muted">{subtitle}</p>
-      </div>
-      {actions && <div className="flex gap-2">{actions}</div>}
-    </div>
+    <PageHeader title={title} description={subtitle} breadcrumb={breadcrumb}>
+      {actions}
+    </PageHeader>
   );
 }
 

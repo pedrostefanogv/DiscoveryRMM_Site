@@ -1,4 +1,5 @@
 import { formatDate } from '@/utils/format';
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { Icon,
   Badge,
@@ -140,6 +141,7 @@ export default function AiCostCockpit() {
       <PageHeader
         title="Cockpit de custo IA"
         description="Consumo de tokens e custo por cliente e por ferramenta (MCP)."
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       >
         <Button
           variant="secondary"

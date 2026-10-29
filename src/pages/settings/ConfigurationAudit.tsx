@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import type { ConfigurationAuditEntry } from "@/api";
 import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Pagination, Select,
@@ -113,7 +114,8 @@ export default function ConfigurationAudit() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Auditoria de Configurações" description="Consulte alterações por período, entidade, propriedade e usuário." />
+      <PageHeader title="Auditoria de Configurações" description="Consulte alterações por período, entidade, propriedade e usuário."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader title="Filtros" subtitle="Campos opcionais, combináveis" />

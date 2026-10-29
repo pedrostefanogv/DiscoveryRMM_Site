@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Link } from "react-router-dom";
 import toast from 'react-hot-toast';
 
 import {  Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Pagination, Select, TextArea, PageHeader } from '@/components/ui';
@@ -909,7 +910,8 @@ export default function AgentLabelsSettings() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <PageHeader title="Labels Automáticas" description="Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site." />
+        <PageHeader title="Labels Automáticas" description="Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
         {viewMode === 'list' ? (
           <Button size="sm" onClick={startCreateRule}>
             Criar Regra

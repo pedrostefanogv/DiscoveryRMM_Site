@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import McpToolsSettings from "./McpToolsSettings";
 import { mcpToolsApi } from "@/api/mcp-tools";
@@ -105,9 +106,11 @@ const catalog = {
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={queryClient}>
-      <McpToolsSettings />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <McpToolsSettings />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 

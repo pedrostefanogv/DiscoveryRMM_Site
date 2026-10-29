@@ -4,11 +4,14 @@ interface CardProps {
   children: ReactNode;
   className?: string;
   padding?: boolean;
+  /** Âncora para navegação interna (ex.: índice de seções). */
+  id?: string;
 }
 
-export function Card({ children, className = '', padding = true }: CardProps) {
+export function Card({ children, className = '', padding = true, id }: CardProps) {
   return (
     <div
+      id={id}
       className={`surface-card glass-card rounded-2xl border border-border bg-surface/90 ${padding ? 'p-4 sm:p-5' : ''} ${className}`}
     >
       {children}

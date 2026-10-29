@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Icon, Button, Card, CardHeader, ErrorDisplay, Loading, Select,
 PageHeader,
@@ -194,7 +195,8 @@ export default function RemoteConsentSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Autorização de Acesso Remoto" description="Política efetiva: Servidor → Cliente → Site → Grupos → Usuário. Aplica-se somente a sessões de área de trabalho." />
+      <PageHeader title="Autorização de Acesso Remoto" description="Política efetiva: Servidor → Cliente → Site → Grupos → Usuário. Aplica-se somente a sessões de área de trabalho."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader

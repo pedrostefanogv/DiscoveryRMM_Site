@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,7 +61,7 @@ describe('WorkflowSettings', () => {
   });
 
   it('marca o estado que pausa SLA e mostra a contagem de chamados', () => {
-    render(<WorkflowSettings />);
+    render(<MemoryRouter><WorkflowSettings /></MemoryRouter>);
 
     expect(screen.getByText('Aguardando cliente')).toBeTruthy();
     expect(screen.getByText('SLA ignorado')).toBeTruthy();
@@ -69,7 +70,7 @@ describe('WorkflowSettings', () => {
   });
 
   it('oferece o filtro por cliente', () => {
-    render(<WorkflowSettings />);
+    render(<MemoryRouter><WorkflowSettings /></MemoryRouter>);
 
     const select = screen.getByLabelText('Cliente') as HTMLSelectElement;
     const options = Array.from(select.options).map((option) => option.textContent);
@@ -78,7 +79,7 @@ describe('WorkflowSettings', () => {
   });
 
   it('explica cada campo no modal de novo estado', () => {
-    render(<WorkflowSettings />);
+    render(<MemoryRouter><WorkflowSettings /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('Novo Estado'));
 
@@ -93,7 +94,7 @@ describe('WorkflowSettings', () => {
   });
 
   it('abre o modal de edição com o toggle de SLA refletindo o estado', () => {
-    render(<WorkflowSettings />);
+    render(<MemoryRouter><WorkflowSettings /></MemoryRouter>);
 
     fireEvent.click(screen.getAllByLabelText('Editar estado')[1]);
 
@@ -104,7 +105,7 @@ describe('WorkflowSettings', () => {
   });
 
   it('explica os campos no modal de nova transição', () => {
-    render(<WorkflowSettings />);
+    render(<MemoryRouter><WorkflowSettings /></MemoryRouter>);
 
     fireEvent.click(screen.getByText('Nova Transição'));
 

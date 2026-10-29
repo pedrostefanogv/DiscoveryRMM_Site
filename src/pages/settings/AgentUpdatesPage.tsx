@@ -1,4 +1,5 @@
 import { formatDate } from '@/utils/format';
+import { Link } from "react-router-dom";
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -81,6 +82,7 @@ export default function AgentUpdatesPage() {
       <PageHeader
         title="Atualizações de Agentes"
         description="Gerencie releases e acompanhe o rollout de atualizações dos agentes"
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       >
         <Button variant="secondary" onClick={handleSyncRepository} disabled={syncLoading}>
           <Icon name="refresh" className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />

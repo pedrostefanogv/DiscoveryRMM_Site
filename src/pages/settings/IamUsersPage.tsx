@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Icon,
   Badge,
@@ -192,7 +193,8 @@ export default function IamUsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Usuários e Acesso" description="Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding." />
+      <PageHeader title="Usuários e Acesso" description="Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <Card>
         <CardHeader

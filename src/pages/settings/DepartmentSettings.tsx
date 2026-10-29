@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   useDepartments,
@@ -173,6 +173,7 @@ export default function DepartmentSettings() {
       <PageHeader
         title="Departamentos"
         description="Estruture atendimento por cliente e mantenha cada departamento com uma URL própria para consulta e configuração."
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       >
         <Button onClick={() => setCreateOpen(true)}>
           <Icon name="add" className="h-4 w-4" />

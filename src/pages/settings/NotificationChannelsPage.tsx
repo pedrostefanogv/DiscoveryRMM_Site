@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from "react-router-dom";
 import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader } from '@/components/ui';
 import {
   useNotificationChannels, useCreateNotificationChannel, useUpdateNotificationChannel, useDeleteNotificationChannel,
@@ -49,6 +50,7 @@ export default function NotificationChannelsPage() {
       <PageHeader
         title="Notificações multicanal"
         description="Envie eventos de chamados para webhooks e e-mail, além do in-app."
+        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       >
         <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo canal</Button>
       </PageHeader>

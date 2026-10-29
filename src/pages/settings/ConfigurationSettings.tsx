@@ -1,7 +1,6 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Icon, Card,
-PageHeader,
-} from "@/components/ui";
+import { Icon, Card, EmptyState, Input, PageHeader } from "@/components/ui";
 
 interface SettingsCard {
   title: string;
@@ -128,43 +127,111 @@ const groups: SettingsGroup[] = [
 ];
 
 export default function ConfigurationSettings() {
+  const [query, setQuery] = useState("");
+
+  // Busca rápida por título/descrição/grupo — 18 cards exigem filtro, não rolagem.
+  const filteredGroups = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    const matches = (text: string) => text.toLowerCase().includes(term);
+    return groups
+      .map((group) => ({
+        ...group,
+        cards: term
+          ? group.cards.filter(
+              (card) =>
+                matches(card.title) ||
+                matches(card.description) ||
+                matches(group.title) ||
+                matches(group.description),
+            )
+          : group.cards,
+      }))
+      .filter((group) => group.cards.length > 0);
+  }, [query]);
+
+  const totalResults = filteredGroups.reduce((total, group) => total + group.cards.length, 0);
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Configurações" description="Gerencie Server, Client e Site com herança Server → Client → Site." />
+      <PageHeader
+        title="Configurações"
+        description="Hierarquia Server → Client → Site mais os módulos operacionais do ambiente."
+      />
 
-      {groups.map((group) => (
-        <section key={group.title} className="space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {group.title}
-            </h2>
-            <p className="text-xs text-muted">{group.description}</p>
-          </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[16rem] flex-1 sm:max-w-md">
+          <Icon
+            name="search"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+            aria-hidden="true"
+          />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar configuração (ex.: NATS, e-mail, auditoria)…"
+            aria-label="Buscar configuração"
+            className="pl-9"
+          />
+        </div>
+        <p className="text-xs text-muted" aria-live="polite">
+          {query.trim() ? `${totalResults} de ${groups.reduce((t, g) => t + g.cards.length, 0)} itens` : "Todos os módulos"}
+        </p>
+        {query.trim() && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="text-xs text-primary underline-offset-2 hover:underline"
+          >
+            limpar busca
+          </button>
+        )}
+      </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {group.cards.map((card) => (
-              <Link
-                key={card.to}
-                to={card.to}
-                className="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              >
-                <Card className="h-full transition-colors group-hover:border-border-strong">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-muted-foreground">
-                      {card.icon}
+      {filteredGroups.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title="Nenhuma configuração encontrada"
+          description={`Nada corresponde a "${query.trim()}". Tente outro termo (ex.: server, nats, workflow).`}
+        />
+      ) : (
+        filteredGroups.map((group) => (
+          <section key={group.title} className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.title}
+              </h2>
+              <p className="text-xs text-muted">{group.description}</p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {group.cards.map((card) => (
+                <Link
+                  key={card.to}
+                  to={card.to}
+                  className="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  <Card className="h-full transition-colors group-hover:border-border-strong">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-muted-foreground">
+                        {card.icon}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">{card.title}</p>
+                        <p className="mt-0.5 text-xs text-muted">{card.description}</p>
+                      </div>
+                      <Icon
+                        name="arrow_forward"
+                        className="mt-1 h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5"
+                        aria-hidden="true"
+                      />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">{card.title}</p>
-                      <p className="mt-0.5 text-xs text-muted">{card.description}</p>
-                    </div>
-                    <Icon name="arrow_forward" className="mt-1 h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
-      ))}
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))
+      )}
     </div>
   );
 }

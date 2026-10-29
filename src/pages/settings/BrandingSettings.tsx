@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading,
 PageHeader,
@@ -113,7 +114,8 @@ export default function BrandingSettings() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeader title="Branding" description="Identidade visual global. É herdada por clientes/sites e enviada aos agentes." />
+        <PageHeader title="Branding" description="Identidade visual global. É herdada por clientes/sites e enviada aos agentes."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
         <div className="flex items-center gap-2">
           <span
             className={`rounded-full border px-3 py-1 text-xs ${

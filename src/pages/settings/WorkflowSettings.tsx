@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { Link } from "react-router-dom";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -77,7 +78,8 @@ export default function WorkflowSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Workflow" description="Gerencie estados e transições de chamados" />
+      <PageHeader title="Workflow" description="Gerencie estados e transições de chamados"   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <div className="max-w-md">
         <Select

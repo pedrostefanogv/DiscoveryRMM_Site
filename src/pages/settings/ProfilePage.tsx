@@ -1,4 +1,5 @@
 import { formatDateTime } from '@/utils/format';
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select,
@@ -396,7 +397,8 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Meu perfil" description="Atualize seus dados de acesso e acompanhe o status de segurança da sua conta." />
+      <PageHeader title="Meu perfil" description="Atualize seus dados de acesso e acompanhe o status de segurança da sua conta."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-border bg-surface/40">

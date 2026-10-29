@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
@@ -21,7 +22,7 @@ import {
   unselectedIcon,
   unselectedSurface,
 } from "@/components/configuration";
-import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, PageHeader } from "@/components/ui";
 import {
   useExportServerConfig,
   useImportServerConfig,
@@ -93,6 +94,8 @@ export default function ServerConfigurationPage() {
   const testStorageMutation = useTestObjectStorage();
 
   const [confirmReset, setConfirmReset] = useState(false);
+  // Menu "Mais ações" do cabeçalho (exportar/importar/restaurar).
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
   const [confirmSave, setConfirmSave] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -107,10 +110,10 @@ export default function ServerConfigurationPage() {
     policy: false,
     remoteAccess: false,
     agent: false,
-    storage: false,
+    storage: true,
     nats: false,
-    attachments: false,
-    advanced: false,
+    attachments: true,
+    advanced: true,
   });
   const [natsTestResult, setNatsTestResult] = useState<{
     ok: boolean;
@@ -422,6 +425,15 @@ export default function ServerConfigurationPage() {
     }
   };
 
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionsMenuOpen(false);
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [actionsMenuOpen]);
+
   const toggleSection = (section: SectionKey) => {
     setCollapsedSections((current) => ({
       ...current,
@@ -429,17 +441,83 @@ export default function ServerConfigurationPage() {
     }));
   };
 
+  // Campos por seção — usado para sinalizar pendências onde elas estão.
+  const sectionFieldKeys = useMemo<Record<SectionKey, string[]>>(
+    () => ({
+      features: serverEditableFields.filter((f) => f.group === "features").map((f) => f.key),
+      policy: serverEditableFields.filter((f) => f.group === "policy").map((f) => f.key),
+      remoteAccess: serverEditableFields.filter((f) => f.group === "remoteAccess").map((f) => f.key),
+      agent: serverEditableFields.filter((f) => f.group === "agent").map((f) => f.key),
+      storage: serverEditableFields.filter((f) => f.group === "storage").map((f) => f.key),
+      nats: serverEditableFields.filter((f) => f.group === "nats").map((f) => f.key),
+      attachments: [] as string[],
+      advanced: serverEditableFields
+        .filter((f) => f.group !== "features" && f.group !== "policy" && f.group !== "remoteAccess" && f.group !== "agent" && f.group !== "storage" && f.group !== "nats")
+        .map((f) => f.key),
+    }),
+    [],
+  );
+
+  const pendingCountBySection = useMemo(() => {
+    const counts: Record<SectionKey, number> = {
+      features: 0, policy: 0, remoteAccess: 0, agent: 0, storage: 0, nats: 0, attachments: 0, advanced: 0,
+    };
+    for (const section of Object.keys(sectionFieldKeys) as SectionKey[]) {
+      counts[section] = sectionFieldKeys[section].filter((key) => pendingKeys.has(key)).length;
+    }
+    return counts;
+  }, [pendingKeys, sectionFieldKeys]);
+
+  const sectionEntries: { key: SectionKey; label: string }[] = [
+    { key: "features", label: "Funcionalidades" },
+    { key: "policy", label: "Loja de apps" },
+    { key: "remoteAccess", label: "Acesso remoto" },
+    { key: "agent", label: "Agente" },
+    { key: "storage", label: "Object storage" },
+    { key: "nats", label: "NATS" },
+    { key: "attachments", label: "Anexos" },
+    { key: "advanced", label: "Avançado" },
+  ];
+
+  const scrollToSection = (section: SectionKey) => {
+    if (collapsedSections[section]) toggleSection(section);
+    document
+      .getElementById(`server-config-${section}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const allCollapsed = Object.values(collapsedSections).every(Boolean);
+  const toggleAllSections = () => {
+    const next = !allCollapsed;
+    setCollapsedSections({
+      features: next, policy: next, remoteAccess: next, agent: next,
+      storage: next, nats: next, attachments: next, advanced: next,
+    });
+  };
+
   const renderSectionAction = (section: SectionKey) => {
     const collapsed = collapsedSections[section];
+    const pending = pendingCountBySection[section];
     return (
-      <button
-        type="button"
-        onClick={() => toggleSection(section)}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-light px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
-      >
-        {collapsed ? "Expandir" : "Recolher"}
-        {collapsed ? <Icon name="expand_more" className="h-3.5 w-3.5" /> : <Icon name="expand_less" className="h-3.5 w-3.5" />}
-      </button>
+      <div className="flex items-center gap-2">
+        {pending > 0 && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusSurface.warning}`}
+            title={`${pending} alteração(ões) pendente(s) nesta seção`}
+          >
+            {pending} pendente{pending > 1 ? "s" : ""}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => toggleSection(section)}
+          aria-expanded={!collapsed}
+          className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-light px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+        >
+          {collapsed ? "Expandir" : "Recolher"}
+          {collapsed ? <Icon name="expand_more" className="h-3.5 w-3.5" aria-hidden="true" /> : <Icon name="expand_less" className="h-3.5 w-3.5" aria-hidden="true" />}
+        </button>
+      </div>
     );
   };
 
@@ -801,73 +879,132 @@ export default function ServerConfigurationPage() {
   return (
     <>
       <div className="space-y-6">
-        {/* Page header */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Configuração Global do Servidor</h2>
-            <p className="mt-1 text-sm text-muted">
-              Valores base aplicados a todos os clientes e sites via herança.
-            </p>
+        {/* Cabeçalho padrão do app + ações primárias; secundárias no menu. */}
+        <PageHeader
+          title="Configuração do Servidor"
+          description="Valores base herdados por clientes e sites. Somente o que for alterado é enviado ao salvar."
+          breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+        >
+          <span
+            className={`rounded-full border px-3 py-1 text-xs ${
+              pendingKeys.size > 0 ? statusSurface.warning : statusSurface.neutral
+            }`}
+            aria-live="polite"
+          >
+            {pendingKeys.size > 0
+              ? `${pendingKeys.size} alteração(ões) pendente(s)`
+              : "Sem alterações pendentes"}
+          </span>
+
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={discardChanges}
+            disabled={pendingKeys.size === 0}
+            title="Descarta as alterações não salvas"
+          >
+            Descartar
+          </Button>
+
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setConfirmSave(true)}
+            disabled={pendingKeys.size === 0}
+          >
+            <Icon name="save" className="h-3.5 w-3.5" aria-hidden="true" />
+            Salvar alterações
+          </Button>
+
+          {/* Ações secundárias/destrutivas agrupadas para reduzir ruído */}
+          <div className="relative">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setActionsMenuOpen((open) => !open)}
+              aria-expanded={actionsMenuOpen}
+              aria-haspopup="menu"
+              aria-label="Mais ações"
+              title="Mais ações"
+            >
+              <Icon name="more_vert" className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            {actionsMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 cursor-default"
+                  aria-label="Fechar menu de ações"
+                  onClick={() => setActionsMenuOpen(false)}
+                />
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-surface py-1 text-sm shadow-xl"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground transition-colors hover:bg-surface-hover"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      void handleExport();
+                    }}
+                  >
+                    <Icon name="download" className="h-4 w-4" aria-hidden="true" /> Exportar
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-foreground transition-colors hover:bg-surface-hover"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      setImportPreview(null);
+                      setImportOpen(true);
+                    }}
+                  >
+                    <Icon name="upload" className="h-4 w-4" aria-hidden="true" /> Importar
+                  </button>
+                  <div className="my-1 border-t border-border" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-danger transition-colors hover:bg-danger/10"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      setResetConfirmText("");
+                      setConfirmReset(true);
+                    }}
+                  >
+                    <Icon name="restart_alt" className="h-4 w-4" aria-hidden="true" /> Restaurar padrões
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full border px-3 py-1 text-xs ${
-                pendingKeys.size > 0 ? statusSurface.warning : statusSurface.neutral
-              }`}
+        </PageHeader>
+
+        {/* Índice das seções: evita rolar 2 mil linhas para achar um bloco */}
+        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-background/85 px-2 py-1.5 backdrop-blur">
+          {sectionEntries.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => scrollToSection(entry.key)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-light hover:text-foreground"
             >
-              {pendingKeys.size > 0
-                ? `${pendingKeys.size} alteração(ões) pendente(s)`
-                : "Sem alterações pendentes"}
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={handleExport}
-              loading={exportMutation.isPending}
-            >
-              <Icon name="download" className="h-3.5 w-3.5" />
-              Exportar
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setImportPreview(null);
-                setImportOpen(true);
-              }}
-            >
-              <Icon name="upload" className="h-3.5 w-3.5" />
-              Importar
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={discardChanges}
-              disabled={pendingKeys.size === 0}
-            >
-              Descartar
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setConfirmSave(true)}
-              disabled={pendingKeys.size === 0}
-            >
-              <Icon name="save" className="h-3.5 w-3.5" />
-              Salvar alterações
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => {
-                setResetConfirmText("");
-                setConfirmReset(true);
-              }}
-            >
-              <Icon name="restart_alt" className="h-3.5 w-3.5" />
-              Restaurar padrões
-            </Button>
-          </div>
+              {entry.label}
+              {pendingCountBySection[entry.key] > 0 && (
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+              )}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={toggleAllSections}
+            className="ml-auto rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+          >
+            {allCollapsed ? "Expandir tudo" : "Recolher tudo"}
+          </button>
         </div>
 
         <Card className="border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-500/10">
@@ -908,7 +1045,7 @@ export default function ServerConfigurationPage() {
         <ConfigHealthCard config={serverQuery.data} />
 
         {/* Funcionalidades */}
-        <Card>
+        <Card id="server-config-features" className="scroll-mt-24">
           <CardHeader
             title="Funcionalidades do Sistema"
             subtitle="Ative ou desative módulos globalmente. Clique no card para alternar."
@@ -922,7 +1059,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Política de loja */}
-        <Card>
+        <Card id="server-config-policy" className="scroll-mt-24">
           <CardHeader
             title="Política da Loja de Aplicativos"
             subtitle="Define quais aplicativos podem ser instalados pelos agentes."
@@ -941,7 +1078,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Autorização de acesso remoto (desktop) */}
-        <Card>
+        <Card id="server-config-remoteAccess" className="scroll-mt-24">
           <CardHeader
             title="Autorização de Acesso Remoto"
             subtitle="Somente sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização."
@@ -978,7 +1115,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Agente */}
-        <Card>
+        <Card id="server-config-agent" className="scroll-mt-24">
           <CardHeader
             title="Intervalos e Comportamento do Agente"
             subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário."
@@ -999,7 +1136,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Object Storage */}
-        <Card>
+        <Card id="server-config-storage" className="scroll-mt-24">
           <CardHeader
             title="Armazenamento de Objetos (S3 / MinIO)"
             subtitle="Configuração do backend S3-compatível usado para arquivos de tickets e outros uploads."
@@ -1132,7 +1269,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* NATS */}
-        <Card>
+        <Card id="server-config-nats" className="scroll-mt-24">
           <CardHeader
             title="Servidor NATS"
             subtitle="Configuração exclusiva do servidor. Informe apenas host/IP; porta 4222 é fixa."
@@ -1207,13 +1344,15 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Anexos de Tickets */}
+        <div id="server-config-attachments" className="scroll-mt-24">
         <TicketAttachmentSettingsCard
           collapsed={collapsedSections.attachments}
           onToggleCollapse={() => toggleSection("attachments")}
         />
+        </div>
 
         {/* Configurações avançadas */}
-        <Card>
+        <Card id="server-config-advanced" className="scroll-mt-24">
           <CardHeader
             title="Configurações Avançadas"
             subtitle="IA, auto-update e governança de herança. Branding permanece em /settings/branding."
@@ -1426,6 +1565,31 @@ export default function ServerConfigurationPage() {
           </div>
         </div>
       </Modal>
+
+        {/* Barra fixa: mantém salvar/descartar visíveis mesmo rolando a página */}
+        {pendingKeys.size > 0 && (
+          <div className="sticky bottom-3 z-30 flex flex-wrap items-center gap-3 rounded-xl border border-primary/30 bg-surface/95 px-4 py-2.5 shadow-lg backdrop-blur">
+            <span className="text-sm text-foreground">
+              <strong className="tabular-nums">{pendingKeys.size}</strong> alteração(ões) não salva(s)
+            </span>
+            <button
+              type="button"
+              onClick={() => setConfirmSave(true)}
+              className="text-xs text-primary underline-offset-2 hover:underline"
+            >
+              revisar alterações
+            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" variant="ghost" onClick={discardChanges}>
+                Descartar
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setConfirmSave(true)}>
+                <Icon name="save" className="h-3.5 w-3.5" aria-hidden="true" />
+                Salvar alterações
+              </Button>
+            </div>
+          </div>
+        )}
 
       {/* Modal de confirmação de alterações pendentes (diff antes → depois) */}
       <Modal
