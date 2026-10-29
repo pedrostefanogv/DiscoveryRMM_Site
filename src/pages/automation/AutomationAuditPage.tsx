@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useMemo, useState } from "react";
 import {
   Badge,
@@ -93,7 +94,7 @@ export default function AutomationAuditPage() {
                     <Badge color="accent">{String(entry.changeType)}</Badge>
                     <Badge color="slate">{entity === "script" ? "Script" : "Tarefa"}</Badge>
                   </div>
-                  <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-muted">{formatDateTime(entry.changedAt)}</p>
                 </div>
                 <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
                 <p className="text-sm text-muted-foreground">Alterado por: {entry.changedBy || "-"}</p>

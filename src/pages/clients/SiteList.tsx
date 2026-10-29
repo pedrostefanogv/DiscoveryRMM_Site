@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -156,7 +157,7 @@ export default function SiteList() {
       header: 'Atualizado em',
       render: (site) => (
         <span className="text-muted">
-          {new Date(site.updatedAt).toLocaleDateString('pt-BR')}
+          {formatDate(site.updatedAt)}
         </span>
       ),
     },

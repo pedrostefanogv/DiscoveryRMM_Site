@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -126,12 +127,12 @@ export default function AutomationScriptViewPage() {
           <Input label="Status" value={detail.isActive ? "Ativo" : "Inativo"} readOnly />
           <Input
             label="Atualizado em"
-            value={new Date(detail.lastUpdatedAt).toLocaleString("pt-BR")}
+            value={formatDateTime(detail.lastUpdatedAt)}
             readOnly
           />
         </div>
         <div className="mt-3 grid gap-1 text-xs text-muted md:grid-cols-2">
-          <p>Criado em: {new Date(detail.createdAt).toLocaleString("pt-BR")}</p>
+          <p>Criado em: {formatDateTime(detail.createdAt)}</p>
           <p className="break-all font-mono">SHA-256: {detail.contentHashSha256}</p>
         </div>
       </Card>

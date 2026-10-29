@@ -1,3 +1,5 @@
+import { formatBytes as formatBytesCanonical, formatDateTime as formatDateTimeCanonical } from '@/utils/format';
+
 export interface InventoryPrinter {
   name: string;
   driverName: string | null;
@@ -11,16 +13,11 @@ export interface InventoryPrinter {
 }
 
 export function formatBytes(bytes: number | null): string {
-  if (!bytes) return "\u2014";
-  const gb = bytes / 1024 ** 3;
-  if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  const mb = bytes / 1024 ** 2;
-  return `${mb.toFixed(0)} MB`;
+  return formatBytesCanonical(bytes);
 }
 
 export function formatDate(date: string | null): string {
-  if (!date) return "\u2014";
-  return new Date(date).toLocaleString("pt-BR");
+  return formatDateTimeCanonical(date);
 }
 
 export function formatSocketFamily(family: string | null): string {

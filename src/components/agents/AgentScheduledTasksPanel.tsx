@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { Icon,
@@ -383,8 +384,8 @@ export default function AgentScheduledTasksPanel({
     const triggerLabel =
       normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
       scheduledTaskTriggerLabel(task.triggerType);
-    const nextRun = task.nextRunTime ? new Date(task.nextRunTime).toLocaleString('pt-BR') : '—';
-    const lastRun = task.lastRunTime ? new Date(task.lastRunTime).toLocaleString('pt-BR') : '—';
+    const nextRun = task.nextRunTime ? formatDateTime(task.nextRunTime) : '—';
+    const lastRun = task.lastRunTime ? formatDateTime(task.lastRunTime) : '—';
     const action = task.actionPath
       ? `${task.actionPath}${task.actionArgs ? ` ${task.actionArgs}` : ''}`
       : '—';

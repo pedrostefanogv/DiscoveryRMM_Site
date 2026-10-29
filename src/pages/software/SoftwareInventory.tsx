@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,10 +11,7 @@ import { useSoftwareInventoryList, useSoftwareInventorySnapshot, useSoftwareInst
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import type { SoftwareInventoryCatalogItem } from "@/api";
 
-function formatDate(date: string | null): string {
-  if (!date) return "\u2014";
-  return new Date(date).toLocaleString("pt-BR");
-}
+const formatDate = (date: string | null) => formatDateTime(date);
 
 export default function SoftwareInventory() {
   const navigate = useNavigate();

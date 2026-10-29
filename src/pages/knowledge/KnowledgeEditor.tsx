@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from '@/utils/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -643,7 +644,7 @@ export default function KnowledgeEditor() {
                     </p>
                     {detailQuery.data.publishedAt && (
                       <p className="text-xs text-muted">
-                        Publicado em {new Date(detailQuery.data.publishedAt).toLocaleDateString('pt-BR')}
+                        Publicado em {formatDate(detailQuery.data.publishedAt)}
                       </p>
                     )}
                   </div>
@@ -703,7 +704,7 @@ export default function KnowledgeEditor() {
                           {v.changeSummary && <span className="text-muted"> — {v.changeSummary}</span>}
                         </p>
                         <p className="text-muted">
-                          {new Date(v.createdAt).toLocaleString('pt-BR')}
+                          {formatDateTime(v.createdAt)}
                           {v.editedBy && ` por ${v.editedBy}`}
                         </p>
                       </div>

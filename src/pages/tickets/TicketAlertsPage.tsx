@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useMemo, useState } from 'react';
 
 import toast from 'react-hot-toast';
@@ -566,7 +567,7 @@ export default function TicketAlertsPage() {
                     </div>
 
                     <p className="mt-3 text-[11px] text-muted">
-                      Atualizada em {new Date(rule.updatedAt).toLocaleString('pt-BR')}
+                      Atualizada em {formatDateTime(rule.updatedAt)}
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-2">

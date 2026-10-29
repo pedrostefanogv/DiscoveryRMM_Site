@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 
 import { Icon, Card, Badge, Loading } from "@/components/ui";
 import { useReportTemplateHistory } from "@/hooks";
@@ -199,7 +200,7 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
                 </div>
               </div>
               <p className="mt-2 text-[11px] text-muted">
-                {new Date(entry.createdAt).toLocaleString("pt-BR")}
+                {formatDateTime(entry.createdAt)}
                 {entry.createdBy && ` por ${entry.createdBy}`}
               </p>
             </div>

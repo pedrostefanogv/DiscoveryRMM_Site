@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { Badge, ErrorDisplay, Loading } from "@/components/ui";
 import { useAutomationScriptAudit } from "@/hooks/useAutomation";
 import { prettyJson, scriptChangeTypeLabel } from "./automationScriptUtils";
@@ -36,7 +37,7 @@ export function AutomationScriptAuditTrail({ scriptId, limit = 50 }: AutomationS
               <div className="mb-2 flex items-center justify-between gap-2">
                 <Badge color="accent">{scriptChangeTypeLabel(entry.changeType)}</Badge>
                 <p className="text-xs text-muted">
-                  {new Date(entry.changedAt).toLocaleString("pt-BR")}
+                  {formatDateTime(entry.changedAt)}
                 </p>
               </div>
               <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>

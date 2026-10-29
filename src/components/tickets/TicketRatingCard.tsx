@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useState } from 'react';
 import { Icon, Button, Card, CardHeader, TextArea } from '@/components/ui';
 import { useRateTicket } from '@/hooks/useTickets';
@@ -76,7 +77,7 @@ export function TicketRatingCard({
             {ticket.ratingFeedback?.trim() ? ticket.ratingFeedback : 'Sem comentário.'}
           </p>
           <p className="text-xs text-muted">
-            Avaliado em {ticket.ratedAt ? new Date(ticket.ratedAt).toLocaleString('pt-BR') : '—'}
+            Avaliado em {ticket.ratedAt ? formatDateTime(ticket.ratedAt) : '—'}
             {ticket.ratedBy ? ` por ${ticket.ratedBy}` : ''}
           </p>
         </div>

@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon,
@@ -24,12 +25,7 @@ export function scoreBadgeColor(score: number): "success" | "warning" | "danger"
   return "danger";
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("pt-BR");
-}
+const formatDate = (value?: string | null) => formatDateTime(value);
 
 export default function PatchesCompliance() {
   const [selectedClientId, setSelectedClientId] = useState("");

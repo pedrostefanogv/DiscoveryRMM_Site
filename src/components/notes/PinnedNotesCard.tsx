@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Loading, TextArea } from '@/components/ui';
@@ -136,7 +137,7 @@ export function PinnedNotesCard({ agentId, onViewAll }: PinnedNotesCardProps) {
                       {note.author ?? 'Sem autor'}
                     </span>
                     <span className="ml-auto shrink-0 text-xs text-muted">
-                      {new Date(note.createdAt).toLocaleString('pt-BR')}
+                      {formatDateTime(note.createdAt)}
                     </span>
                   </div>
                   <p className="whitespace-pre-wrap text-sm text-muted-foreground">{note.content}</p>

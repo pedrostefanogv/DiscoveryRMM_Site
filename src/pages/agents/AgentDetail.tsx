@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -786,7 +787,7 @@ export default function AgentDetail() {
   const softwareTotalInstalled = softwareSnapshot.isLoading ? '\u2014' : (softwareSnapshot.data?.totalInstalled ?? softwareTotalCount);
   const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
   const softwareLastCollectedLabel = softwareLastCollectedAt
-    ? new Date(softwareLastCollectedAt).toLocaleString('pt-BR')
+    ? formatDateTime(softwareLastCollectedAt)
     : 'Sem coleta registrada';
   const manualLabelsCount = allLabels.filter((item) => item.sourceType === AgentLabelSourceType.Manual).length;
   const automaticLabelsCount = Math.max(0, allLabels.length - manualLabelsCount);
@@ -2357,7 +2358,7 @@ export default function AgentDetail() {
                                   </p>
                                 </div>
                                 <p className="mt-1 text-xs text-muted">
-                                  {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
+                                  {formatDate(ticket.createdAt)}
                                   {ticket.closedAt && '  Encerrado'}
                                 </p>
                               </div>

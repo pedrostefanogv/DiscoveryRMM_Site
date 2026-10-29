@@ -1,3 +1,4 @@
+import { formatDateCompact } from '@/utils/format';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { apiFetchResponse } from "@/api/client";
@@ -68,12 +69,7 @@ const STATUS_CLASS: Record<string, string> = {
   Ended: "border-border bg-surface-light text-muted",
 };
 
-function formatDateTime(raw?: string | null): string {
-  if (!raw) return "";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
+const formatDateTime = (raw?: string | null) => formatDateCompact(raw, "");
 
 function isOwnMessage(message: TicketChatMessage): boolean {
   return String(message.authorKind).toLowerCase() === "support";

@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useMemo, type ReactNode } from 'react';
 import { Icon,
   Badge,
@@ -224,7 +225,7 @@ export default function AgentPoliciesPanel({
         <DetailItem label='Inclui tags' value={policy.includeTags.length > 0 ? policy.includeTags.join(', ') : 'Todas'} />
         <DetailItem label='Exclui tags' value={policy.excludeTags.length > 0 ? policy.excludeTags.join(', ') : '—'} />
         <DetailItem label='Fecha processos' value={policy.closeProcesses.length > 0 ? policy.closeProcesses.join(', ') : '—'} />
-        <DetailItem label='Atualizada em' value={new Date(policy.lastUpdatedAt).toLocaleString('pt-BR')} />
+        <DetailItem label='Atualizada em' value={formatDateTime(policy.lastUpdatedAt)} />
       </div>
 
       {policy.script ? (
@@ -378,7 +379,7 @@ export default function AgentPoliciesPanel({
                 {' '}
                 O agent já recebeu esta policy
                 {policies.lastPolicySyncAt
-                  ? ` (em ${new Date(policies.lastPolicySyncAt).toLocaleString('pt-BR')})`
+                  ? ` (em ${formatDateTime(policies.lastPolicySyncAt)})`
                   : ''}
                 .
               </>

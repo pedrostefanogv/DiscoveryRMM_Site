@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon,
@@ -428,7 +429,7 @@ export default function KnowledgeList() {
       header: 'Atualizado',
       render: (article) => (
         <span className="text-xs text-muted">
-          {new Date(article.updatedAt).toLocaleDateString('pt-BR')}
+          {formatDate(article.updatedAt)}
         </span>
       ),
     },

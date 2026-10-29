@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useState } from "react";
 
 import { Icon, Button, Card, DataTable, Loading } from "@/components/ui";
@@ -72,7 +73,7 @@ export function ReportPreview({
       if (typeof value === "boolean") return value ? "Sim" : "Não";
       if (field.toLowerCase().includes("date") || field.toLowerCase().includes("at")) {
         try {
-          return new Date(value).toLocaleString("pt-BR");
+          return formatDateTime(value);
         } catch {
           return String(value);
         }

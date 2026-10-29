@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { SiteCustomFieldsCard } from '@/components/custom-fields/SiteCustomFieldsCard';
@@ -375,13 +376,13 @@ export default function SiteDetail() {
             <div>
               <dt className="text-muted">Criado em</dt>
               <dd className="mt-0.5 text-foreground">
-                {new Date(currentSite.createdAt).toLocaleDateString('pt-BR')}
+                {formatDate(currentSite.createdAt)}
               </dd>
             </div>
             <div>
               <dt className="text-muted">Atualizado em</dt>
               <dd className="mt-0.5 text-foreground">
-                {new Date(currentSite.updatedAt).toLocaleDateString('pt-BR')}
+                {formatDate(currentSite.updatedAt)}
               </dd>
             </div>
             <div className="border-t border-border pt-3" id="site-software">

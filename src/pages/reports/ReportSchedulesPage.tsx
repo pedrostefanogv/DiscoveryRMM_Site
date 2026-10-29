@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -281,7 +282,7 @@ export default function ReportSchedulesPage() {
                     </div>
                     {schedule.lastRunAt && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Última execução: {new Date(schedule.lastRunAt).toLocaleString('pt-BR')}
+                        Última execução: {formatDateTime(schedule.lastRunAt)}
                       </p>
                     )}
                   </div>

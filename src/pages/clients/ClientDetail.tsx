@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ClientCustomFieldsCard } from '@/components/custom-fields/ClientCustomFieldsCard';
@@ -356,11 +357,11 @@ export default function ClientDetail() {
             </div>
             <div>
               <dt className="text-muted">Criado em</dt>
-              <dd className="mt-0.5 text-foreground">{new Date(c.createdAt).toLocaleDateString('pt-BR')}</dd>
+              <dd className="mt-0.5 text-foreground">{formatDate(c.createdAt)}</dd>
             </div>
             <div>
               <dt className="text-muted">Atualizado em</dt>
-              <dd className="mt-0.5 text-foreground">{new Date(c.updatedAt).toLocaleDateString('pt-BR')}</dd>
+              <dd className="mt-0.5 text-foreground">{formatDate(c.updatedAt)}</dd>
             </div>
             <div className="border-t border-border pt-3" id="client-software">
               <dt className="text-muted">Inventário de software</dt>

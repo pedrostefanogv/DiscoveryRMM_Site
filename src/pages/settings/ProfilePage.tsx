@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select,
@@ -27,13 +28,8 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) {
-    return "Nunca utilizada";
-  }
-
-  return new Date(value).toLocaleString("pt-BR");
-}
+const formatDate = (value: string | null | undefined) =>
+  formatDateTime(value, "Nunca utilizada");
 
 function keyTypeLabel(type: 0 | 1) {
   return type === 0 ? "FIDO2" : "OTP/TOTP";

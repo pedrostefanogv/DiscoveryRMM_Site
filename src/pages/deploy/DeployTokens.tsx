@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
@@ -411,9 +412,9 @@ export default function DeployTokens() {
   }
 
   function handleRevokeToken(token: DeployToken) {
-    const createdAt = new Date(token.createdAt).toLocaleString('pt-BR');
+    const createdAt = formatDateTime(token.createdAt);
     const expiresAt = token.expiresAt
-      ? new Date(token.expiresAt).toLocaleString('pt-BR')
+      ? formatDateTime(token.expiresAt)
       : 'Sem expiração';
 
     const confirmation = [
@@ -762,7 +763,7 @@ export default function DeployTokens() {
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge color={statusUi.color}>{statusUi.label}</Badge>
                               <Badge color="slate">Usos: {token.usedCount ?? 0}</Badge>
-                              <Badge color="slate">Criado em {new Date(token.createdAt).toLocaleString('pt-BR')}</Badge>
+                              <Badge color="slate">Criado em {formatDateTime(token.createdAt)}</Badge>
                               <Badge color={status === 'active' ? 'warning' : 'slate'}>
                                 {formatExpiryRelative(token.expiresAt, nowMs)}
                               </Badge>

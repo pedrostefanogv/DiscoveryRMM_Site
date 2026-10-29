@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useMemo, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -195,7 +196,7 @@ export default function AutomationScriptsPage() {
         header: "Atualizado",
         sortValue: (item) => Date.parse(item.lastUpdatedAt) || 0,
         width: "18%",
-        render: (item) => new Date(item.lastUpdatedAt).toLocaleString("pt-BR"),
+        render: (item) => formatDateTime(item.lastUpdatedAt),
       },
     ],
     [clients.data],

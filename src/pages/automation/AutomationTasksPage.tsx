@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Icon,
@@ -895,7 +896,7 @@ export default function AutomationTasksPage() {
         key: "updated",
         header: "Atualizado",
         sortValue: (item) => Date.parse(item.lastUpdatedAt) || 0,
-        render: (item) => new Date(item.lastUpdatedAt).toLocaleString("pt-BR"),
+        render: (item) => formatDateTime(item.lastUpdatedAt),
       },
     ],
     [listMode],
@@ -2704,8 +2705,8 @@ export default function AutomationTasksPage() {
 
               {/* Datas */}
               <div className="grid grid-cols-2 gap-3 text-xs text-muted">
-                <p>Criado: {new Date(d.createdAt).toLocaleString("pt-BR")}</p>
-                <p>Atualizado: {new Date(d.updatedAt).toLocaleString("pt-BR")}</p>
+                <p>Criado: {formatDateTime(d.createdAt)}</p>
+                <p>Atualizado: {formatDateTime(d.updatedAt)}</p>
               </div>
 
               {/* Ações */}
@@ -2782,7 +2783,7 @@ export default function AutomationTasksPage() {
               <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Badge color="accent">{String(entry.changeType)}</Badge>
-                  <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-muted">{formatDateTime(entry.changedAt)}</p>
                 </div>
                 <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
                 <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>

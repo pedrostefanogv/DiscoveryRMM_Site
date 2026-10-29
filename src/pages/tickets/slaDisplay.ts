@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import type { SlaDetails } from '@/api';
 
 type SlaExpirySource = Pick<SlaDetails, 'slaExpiresAt' | 'effectiveSlaExpiresAt'>;
@@ -32,7 +33,7 @@ export function formatPausedDuration(seconds: number): string {
 export function describeSlaPause(sla: SlaPauseSource): string | null {
   if (!sla.onHold) return null;
   const accumulated = formatPausedDuration(sla.slaPausedSeconds ?? 0);
-  const since = sla.slaHoldStartedAt ? new Date(sla.slaHoldStartedAt).toLocaleString('pt-BR') : null;
+  const since = sla.slaHoldStartedAt ? formatDateTime(sla.slaHoldStartedAt) : null;
   const suffix = accumulated ? ` — ${accumulated} já descontados` : '';
   return since ? `SLA pausado desde ${since}${suffix}` : `SLA pausado${suffix}`;
 }

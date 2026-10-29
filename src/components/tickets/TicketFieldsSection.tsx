@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from '@/utils/format';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 
@@ -160,7 +161,7 @@ export function TicketFieldsSection({
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) {
         return dataType === CustomFieldDataType.Date
-          ? parsed.toLocaleDateString('pt-BR')
+          ? formatDate(parsed)
           : parsed.toLocaleString('pt-BR');
       }
     }
@@ -495,7 +496,7 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
               {valueItem?.updatedAt && (
                 <p className="mt-1 text-[11px] text-muted">
                   Atualizado em{' '}
-                  {new Date(valueItem.updatedAt).toLocaleString('pt-BR')}
+                  {formatDateTime(valueItem.updatedAt)}
                 </p>
               )}
             </dd>

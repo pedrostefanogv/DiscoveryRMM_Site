@@ -1,3 +1,4 @@
+import { formatDateTime as formatDateTimeCanonical } from '@/utils/format';
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -609,8 +610,5 @@ function formatBytes(bytes: number): string {
 }
 
 function formatDateTime(value: string): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return formatDateTimeCanonical(value, "-");
 }

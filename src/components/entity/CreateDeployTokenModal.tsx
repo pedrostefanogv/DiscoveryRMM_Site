@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useRef, useState } from 'react';
 import { Icon, Badge, Button, Input, Modal, Select, TextArea } from '@/components/ui';
 import { useCreateDeployToken } from '@/hooks/useDeployTokens';
@@ -138,7 +139,7 @@ export function CreateDeployTokenModal({
                 {multiUse ? 'Multiuso' : 'Uso único'}
               </Badge>
               <Badge color="slate">
-                Expira: {generated.expiresAt ? new Date(generated.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
+                Expira: {generated.expiresAt ? formatDateTime(generated.expiresAt) : 'Sem expiração'}
               </Badge>
             </div>
             <div className="flex justify-end">

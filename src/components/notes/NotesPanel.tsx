@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useMemo, useRef, useState } from "react";
 
 import { Icon, Card, CardHeader, Button, Badge, TextArea, Loading, ErrorDisplay } from "@/components/ui";
@@ -280,7 +281,7 @@ export function NotesPanel({
                             )}
                           </div>
                           <p className="text-xs text-muted">
-                            {new Date(note.createdAt).toLocaleString("pt-BR")}
+                            {formatDateTime(note.createdAt)}
                           </p>
                         </div>
                         <div className="flex items-center gap-1">

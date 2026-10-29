@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -62,10 +63,7 @@ function scopeLabel(article: KnowledgeArticle): string {
   return 'Global';
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return 'Nao informado';
-  return new Date(value).toLocaleString('pt-BR');
-}
+const formatDate = (value: string | null) => formatDateTime(value, 'Não informado');
 
 function estimateReadingMinutes(content: string | null | undefined): number {
   if (!content) return 1;

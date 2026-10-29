@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading,
@@ -320,7 +321,7 @@ function formatDeletedAt(value: string | null | undefined): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return `em ${date.toLocaleDateString('pt-BR')}`;
+  return `em ${formatDate(date)}`;
 }
 
 function countDefaultFields(json: string): number {

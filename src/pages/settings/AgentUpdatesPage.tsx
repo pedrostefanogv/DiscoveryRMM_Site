@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -150,8 +151,8 @@ export default function AgentUpdatesPage() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {release.artifactCount} artefato(s) •{' '}
                     {release.publishedAt
-                      ? new Date(release.publishedAt).toLocaleDateString('pt-BR')
-                      : new Date(release.createdAt).toLocaleDateString('pt-BR')}
+                      ? formatDate(release.publishedAt)
+                      : formatDate(release.createdAt)}
                   </p>
                 </div>
                 <div className="flex gap-1">

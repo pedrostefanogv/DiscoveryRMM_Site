@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from '@/utils/format';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -214,7 +215,7 @@ export default function TicketDetail() {
       {/* Header */}
       <PageHeader
         title={t.title}
-        description={`Criado em ${new Date(t.createdAt).toLocaleDateString('pt-BR')}${t.closedAt ? ` · Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}` : ''}`}
+        description={`Criado em ${formatDate(t.createdAt)}${t.closedAt ? ` · Encerrado em ${formatDate(t.closedAt)}` : ''}`}
         onBack={() => navigate('/tickets')}
       >
         <Badge color={p.color}>{p.label}</Badge>
@@ -1060,10 +1061,10 @@ function AutomationLinksPanel({
 
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
                       <span>Escopo: {task ? getAutomationScopeLabel(task.scopeType) : 'Desconhecido'}</span>
-                      <span>Solicitado em {new Date(link.requestedAt).toLocaleString('pt-BR')}</span>
+                      <span>Solicitado em {formatDateTime(link.requestedAt)}</span>
                       {link.requestedBy && <span>por {link.requestedBy}</span>}
                       {task?.lastUpdatedAt && (
-                        <span>Tarefa atualizada em {new Date(task.lastUpdatedAt).toLocaleString('pt-BR')}</span>
+                        <span>Tarefa atualizada em {formatDateTime(task.lastUpdatedAt)}</span>
                       )}
                     </div>
 
@@ -1075,7 +1076,7 @@ function AutomationLinksPanel({
 
                     {link.reviewedAt && (
                       <p className="mt-2 text-[11px] text-muted">
-                        Revisado em {new Date(link.reviewedAt).toLocaleString('pt-BR')}
+                        Revisado em {formatDateTime(link.reviewedAt)}
                         {link.reviewedBy ? ` por ${link.reviewedBy}` : ''}
                       </p>
                     )}
@@ -1515,11 +1516,11 @@ function TicketSummaryPanel({
         </div>
         {isFrozen ? (
           <p className="text-xs text-muted">
-            SLA congelado no fechamento{frozenAt ? ` em ${new Date(frozenAt).toLocaleString('pt-BR')}` : ''} — o tempo não continua contando.
+            SLA congelado no fechamento{frozenAt ? ` em ${formatDateTime(frozenAt)}` : ''} — o tempo não continua contando.
           </p>
         ) : expiryDisplay ? (
           <p className="text-xs text-muted">
-            Expira em {new Date(expiryDisplay).toLocaleString('pt-BR')}
+            Expira em {formatDateTime(expiryDisplay)}
             {pausedShift ? ' (já com o tempo pausado)' : ''}
           </p>
         ) : null}
@@ -1702,12 +1703,12 @@ function TicketSummaryPanel({
         </div>
         <div>
           <dt className="text-muted">Atualizado</dt>
-          <dd className="text-foreground">{new Date(updatedAt).toLocaleString('pt-BR')}</dd>
+          <dd className="text-foreground">{formatDateTime(updatedAt)}</dd>
         </div>
         {closedAt && (
           <div>
             <dt className="text-muted">Encerrado em</dt>
-            <dd className="text-foreground">{new Date(closedAt).toLocaleString('pt-BR')}</dd>
+            <dd className="text-foreground">{formatDateTime(closedAt)}</dd>
           </div>
         )}
       </dl>
@@ -1985,7 +1986,7 @@ function CommentsPanel({
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-xs text-muted">
                   <span className="text-sm font-medium text-foreground">{c.author}</span>
-                  <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
+                  <span className="text-xs text-muted">{formatDateTime(c.createdAt)}</span>
                   {c.isInternal && <Badge color="warning"><Icon name="lock" className="mr-1 h-3 w-3" />Interno</Badge>}
                   {deleted && (
                     <Badge color="danger">
@@ -2091,7 +2092,7 @@ function TimelinePanel({
                       <span className="text-sm font-medium text-foreground">{meta.label}</span>
                       <span
                         className="text-xs text-muted"
-                        title={new Date(entry.createdAt).toLocaleString('pt-BR')}
+                        title={formatDateTime(entry.createdAt)}
                       >
                         {formatRelativeTime(entry.createdAt)}
                       </span>
@@ -3123,7 +3124,7 @@ function AttachmentsPanel({
                 <p className="truncate text-sm text-foreground">{item.fileName}</p>
                 <p className="text-xs text-muted">
                   {formatBytes(item.sizeBytes)} · {item.contentType || 'desconhecido'} ·{' '}
-                  {new Date(item.createdAt).toLocaleString('pt-BR')}
+                  {formatDateTime(item.createdAt)}
                 </p>
               </div>
               {/* Origem: distingue repositório (arquivo grande) de conversa. */}

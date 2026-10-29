@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -622,9 +623,9 @@ export default function AutomationOperationsPage() {
         header: "Eventos",
         render: (item) => (
           <div className="text-xs text-muted">
-            <p>Criado: {new Date(item.createdAt).toLocaleString("pt-BR")}</p>
-            <p>Ack: {item.acknowledgedAt ? new Date(item.acknowledgedAt).toLocaleString("pt-BR") : "-"}</p>
-            <p>Resultado: {item.resultReceivedAt ? new Date(item.resultReceivedAt).toLocaleString("pt-BR") : "-"}</p>
+            <p>Criado: {formatDateTime(item.createdAt)}</p>
+            <p>Ack: {item.acknowledgedAt ? formatDateTime(item.acknowledgedAt) : "-"}</p>
+            <p>Resultado: {item.resultReceivedAt ? formatDateTime(item.resultReceivedAt) : "-"}</p>
           </div>
         ),
       },

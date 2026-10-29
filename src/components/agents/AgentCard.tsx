@@ -3,6 +3,7 @@ import { Icon, Badge, MetricBar } from '@/components/ui';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
+import { formatDateCompact } from '@/utils/format';
 
 /** Agente com cliente/site já resolvidos para exibição. */
 export type AgentCardAgent = Agent & { clientName: string; clientId: string; siteName?: string };
@@ -20,14 +21,7 @@ export function getAgentOsIcon(os: string | null | undefined) {
 }
 
 export function formatDateBrazil(value: string): string {
-  const d = new Date(value);
-  if (!Number.isFinite(d.getTime())) return value;
-  return d.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatDateCompact(value, value);
 }
 
 export function formatRelative(dateStr: string | null, now: number): { text: string; fullDate: string | null } {

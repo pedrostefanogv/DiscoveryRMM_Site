@@ -1,3 +1,4 @@
+import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -266,7 +267,7 @@ export function NotificationBell() {
                         ) : null}
                       </span>
                       <span className="shrink-0">
-                        {new Date(item.createdAt).toLocaleString("pt-BR")}
+                        {formatDateTime(item.createdAt)}
                       </span>
                     </div>
                   </div>

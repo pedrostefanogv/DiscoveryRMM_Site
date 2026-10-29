@@ -1,3 +1,4 @@
+import { formatDateTime, formatDate } from '@/utils/format';
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
@@ -236,7 +237,7 @@ function formatRelativeTime(value: string | null | undefined) {
   if (diffHours < 24) return `há ${diffHours} h`;
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 30) return `há ${diffDays} d`;
-  return date.toLocaleDateString('pt-BR');
+  return formatDate(date);
 }
 
 function TicketHoverInfo({
@@ -666,7 +667,7 @@ export default function TicketList() {
       header: 'Criado em',
       render: (ticket) => (
         <span className="text-xs text-muted">
-          {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
+          {formatDate(ticket.createdAt)}
         </span>
       ),
     },
@@ -762,7 +763,7 @@ export default function TicketList() {
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1.5">
             <Icon name="calendar_month" className="h-3.5 w-3.5" />
-            Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
+            Criado em {formatDateTime(previewTicket.createdAt)}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Icon name="schedule" className="h-3.5 w-3.5" />
@@ -1382,7 +1383,7 @@ export default function TicketList() {
                           {formatSavedViewSummary(view, clientNameMap, stateNameMap)}
                         </p>
                         <p className="mt-2 text-[11px] text-muted">
-                          Atualizada em {new Date(view.updatedAt).toLocaleString('pt-BR')}
+                          Atualizada em {formatDateTime(view.updatedAt)}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
