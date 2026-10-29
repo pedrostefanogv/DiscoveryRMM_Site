@@ -417,7 +417,17 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
       width: "11%",
       sortable: true,
       render: (update) => (
-        <Badge color={severityColor(update.severity)}>{update.severity ?? "—"}</Badge>
+        <div className="flex flex-wrap items-center gap-1">
+          <Badge color={severityColor(update.severity)}>{update.severity ?? "—"}</Badge>
+          {update.severitySource === "derived" ? (
+            <span
+              className="text-[10px] uppercase tracking-wide opacity-70"
+              title="Severidade inferida pelo agente (a Microsoft não publicou MSRC para este update); nunca acima de Important."
+            >
+              derivada
+            </span>
+          ) : null}
+        </div>
       ),
     },
     {
@@ -446,6 +456,15 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           {update.installError && (
             <p className="text-xs text-danger" title={update.installError}>{update.installError}</p>
           )}
+          {(update.attemptCount ?? 0) > 0 && update.status === "Failed" ? (
+            <p className="text-[11px] text-muted-foreground">
+              {update.attemptCount} tentativa(s)
+              {update.failureClass ? " · " + update.failureClass : ""}
+              {update.nextAttemptAt
+                ? " · próxima " + formatPatchDate(update.nextAttemptAt)
+                : " · sem retry automático"}
+            </p>
+          ) : null}
         </div>
       ),
     },
@@ -705,6 +724,12 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
               A busca do Windows Update pode deixar de listar a atualização como pendente até o reinício
               ser feito. Veja também a aba "Instaladas".
             </p>
+            {data.rebootAction && data.rebootAction !== "None" ? (
+              <p className="text-[11px] font-medium">
+                Política de reinício: {data.rebootActionReason ?? "notificar operador"}
+                {" — o reinício é sempre ação manual do operador."}
+              </p>
+            ) : null}
           </div>
         </div>
       )}

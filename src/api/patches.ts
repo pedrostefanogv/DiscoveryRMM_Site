@@ -162,6 +162,14 @@ export const patchPolicyApi = {
       rebootAllowed: boolean;
       maxInstallsPerRun: number;
       hideDeniedUpdates: boolean;
+      /** WU-04/D09: dias de retenção por idade de publicação (0 = sem deferral). */
+      deferralDays?: number;
+      /** WU-05/D03: deadline de instalação em dias (0 = sem deadline). */
+      deadlineDays?: number;
+      /** WU-19/WU-20/D22: origens habilitadas ("os"/"third_party"). */
+      sources?: string[];
+      /** Segundo consentimento para apps de terceiros. */
+      allowThirdPartyApps?: boolean;
     },
     params: { scopeType: PatchApprovalScopeType; scopeId?: string },
   ) =>

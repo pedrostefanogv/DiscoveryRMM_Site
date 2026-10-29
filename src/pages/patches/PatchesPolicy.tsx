@@ -34,6 +34,13 @@ export default function PatchesPolicy() {
   const [rebootAllowed, setRebootAllowed] = useState(false);
   const [maxInstallsPerRun, setMaxInstallsPerRun] = useState(50);
   const [hideDeniedUpdates, setHideDeniedUpdates] = useState(false);
+  // WU-04/D09 e WU-05/D03: retenção por idade e deadline de instalação.
+  const [deferralDays, setDeferralDays] = useState(0);
+  const [deadlineDays, setDeadlineDays] = useState(0);
+  // WU-19/WU-20 (D22): duplo consentimento para apps de terceiros.
+  const [allowOs, setAllowOs] = useState(true);
+  const [allowThirdParty, setAllowThirdParty] = useState(false);
+  const [allowThirdPartyApps, setAllowThirdPartyApps] = useState(false);
   const [windowDays, setWindowDays] = useState("1,2,3,4,5");
   const [windowStart, setWindowStart] = useState("22:00");
   const [windowEnd, setWindowEnd] = useState("05:00");
@@ -68,6 +75,12 @@ export default function PatchesPolicy() {
     setRebootAllowed(data.rebootAllowed);
     setMaxInstallsPerRun(data.maxInstallsPerRun ?? 50);
     setHideDeniedUpdates(data.hideDeniedUpdates);
+    setDeferralDays(data.deferralDays ?? 0);
+    setDeadlineDays(data.deadlineDays ?? 0);
+    const sources = data.sources ?? ["os"];
+    setAllowOs(sources.includes("os"));
+    setAllowThirdParty(sources.includes("third_party"));
+    setAllowThirdPartyApps(data.allowThirdPartyApps ?? false);
     if (data.maintenanceWindowJson) {
       try {
         const parsed = JSON.parse(data.maintenanceWindowJson) as {
@@ -122,6 +135,13 @@ export default function PatchesPolicy() {
           rebootAllowed,
           maxInstallsPerRun,
           hideDeniedUpdates,
+          deferralDays,
+          deadlineDays,
+          sources: [
+            ...(allowOs ? ["os"] : []),
+            ...(allowThirdParty ? ["third_party"] : []),
+          ],
+          allowThirdPartyApps,
         },
       });
       toast.success("Política de patches salva.");
@@ -191,6 +211,32 @@ export default function PatchesPolicy() {
           </Card>
 
           <Card>
+            <CardHeader
+              title="Origens de patch"
+              subtitle="Apps de terceiros (Chocolatey/winget) exigem duplo consentimento: habilitar a origem aqui e a instalação automática abaixo."
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input type="checkbox" checked={allowOs} onChange={(event) => setAllowOs(event.target.checked)} />
+                Windows Update (OS)
+              </label>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input type="checkbox" checked={allowThirdParty} onChange={(event) => setAllowThirdParty(event.target.checked)} />
+                Aplicativos de terceiros (Chocolatey/winget)
+              </label>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={allowThirdPartyApps}
+                disabled={!allowThirdParty}
+                onChange={(event) => setAllowThirdPartyApps(event.target.checked)}
+              />
+              2º consentimento: permitir auto-aprovar/instalar apps de terceiros (sem este, terceiros ficam aguardando aprovação manual)
+            </label>
+          </Card>
+
+          <Card>
             <CardHeader title="Auto-aprovação" subtitle="Aplicada quando não existe regra explícita para a atualização." />
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -248,6 +294,22 @@ export default function PatchesPolicy() {
               <input type="checkbox" checked={rebootAllowed} onChange={(event) => setRebootAllowed(event.target.checked)} />
               Autorizar reinício na janela (padrão: desligado — o operador decide)
             </label>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Retenção por idade (dias)"
+                type="number"
+                value={deferralDays}
+                onChange={(event) => setDeferralDays(Math.max(0, Math.min(365, Number(event.target.value) || 0)))}
+                hint="0 = sem retenção. Update sem data de publicação fica retido (fail-closed)."
+              />
+              <Input
+                label="Deadline de instalação (dias)"
+                type="number"
+                value={deadlineDays}
+                onChange={(event) => setDeadlineDays(Math.max(0, Math.min(365, Number(event.target.value) || 0)))}
+                hint="0 = sem prazo. Vencido o prazo, a janela é ampliada até o deadline (nunca reinicia sozinho)."
+              />
+            </div>
           </Card>
         </>
       )}

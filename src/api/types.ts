@@ -4390,6 +4390,16 @@ export interface AgentWindowsUpdate {
   isDownloaded?: boolean;
   /** Marcação de obrigatória vinda da busca WUA (campo opcional do agente). */
   isMandatory?: boolean;
+  /** Proveniência da severidade: vendor (MSRC) | derived (inferida) | unknown. */
+  severitySource?: string | null;
+  /** feature | driver | software — derivado no agente. */
+  updateType?: string | null;
+  /** Classe da última falha de instalação (WU-08). */
+  failureClass?: string | null;
+  /** Tentativas de instalação já feitas. */
+  attemptCount?: number;
+  /** Quando o backoff vence (só classe transient). */
+  nextAttemptAt?: string | null;
 }
 
 export interface AgentWindowsUpdatePage {
@@ -4495,6 +4505,12 @@ export interface AgentWindowsUpdateSnapshot {
   scanSource?: string | null;
   /** Disparo do último scan: periodic | change | command | install. */
   scanTrigger?: string | null;
+  /** Ação decidida pela política de reboot: None | NotifyOperator | NotifyWithWindowHint. */
+  rebootAction?: string | null;
+  /** Motivo legível da decisão da política de reboot. */
+  rebootActionReason?: string | null;
+  /** Quando a decisão da política de reboot foi calculada. */
+  rebootActionAt?: string | null;
 }
 
 export interface PatchInventoryGroup {
@@ -4637,6 +4653,14 @@ export interface PatchPolicy {
   rebootAllowed: boolean;
   maxInstallsPerRun: number;
   hideDeniedUpdates: boolean;
+  /** WU-04/D09: dias de retenção por idade de publicação (0 = sem deferral). */
+  deferralDays?: number;
+  /** WU-05/D03: deadline de instalação em dias desde a publicação (0 = sem). */
+  deadlineDays?: number;
+  /** WU-19/WU-20/D22: origens habilitadas ("os", "third_party"). */
+  sources?: string[];
+  /** Segundo consentimento para apps de terceiros (duplo consentimento). */
+  allowThirdPartyApps?: boolean;
   updatedBy: string | null;
   updatedAt: string;
 }
