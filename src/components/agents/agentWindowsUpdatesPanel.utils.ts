@@ -352,6 +352,44 @@ export function describePendingEmpty(
   };
 }
 
+/** Rótulos do AUOptions do Windows Update (política de atualização automática). */
+const AU_OPTIONS_LABELS: Record<number, string> = {
+  1: "desabilitada por política",
+  2: "notificar antes de baixar",
+  3: "baixar e notificar instalação",
+  4: "agendar instalação",
+  5: "permitir escolha do administrador",
+};
+
+/** Traduz o AUOptions numérico; valores desconhecidos ficam como número. */
+export function auOptionsLabel(value: number | null | undefined): string | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return AU_OPTIONS_LABELS[value] ?? `opção ${value}`;
+}
+
+/** Resumo curto do disparo do último scan, para a faixa de saúde. */
+export function describeScanTrigger(
+  trigger: string | null | undefined,
+  source: string | null | undefined,
+): string | null {
+  const triggerLabels: Record<string, string> = {
+    periodic: "rotina",
+    change: "mudança de estado",
+    command: "pedido do operador",
+    install: "pós-instalação",
+  };
+  const sourceLabels: Record<string, string> = {
+    wua: "WUA",
+    qfe: "QFE",
+  };
+  const parts: string[] = [];
+  const triggerLabel = trigger ? triggerLabels[trigger.trim().toLowerCase()] : null;
+  const sourceLabel = source ? sourceLabels[source.trim().toLowerCase()] : null;
+  if (triggerLabel) parts.push(`disparo: ${triggerLabel}`);
+  if (sourceLabel) parts.push(`origem: ${sourceLabel}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 /** Linhas de diagnóstico (serviço, WSUS, política, WUA) exibidas no painel. */
 export interface ProbeFlag {
   label: string;
@@ -382,11 +420,43 @@ export function describeProbe(
   } else if (serviceLabel) {
     const service = serviceLabel.toLowerCase();
     const tone: ScanHealthTone = service.includes("run") ? "ok" : "warning";
-    flags.push({ label: "Serviço Windows Update", tone, value: serviceLabel });
+    // A interface nunca mostra o estado cru em inglês ("running").
+    flags.push({ label: "Serviço Windows Update", tone, value: serviceStateLabel(serviceLabel) ?? serviceLabel });
+  }
+
+  if (probe?.wsusServer) {
+    flags.push({ label: "Servidor WSUS", tone: "warning", value: probe.wsusServer });
   }
 
   if (probe?.wsus === true) {
     flags.push({ label: "WSUS", tone: "warning", value: "gerenciado por servidor" });
+  }
+
+  const auOptions = auOptionsLabel(probe?.auOptions);
+  if (auOptions) {
+    const updateDisabled = probe?.auOptions === 1 || probe?.noAutoUpdate === true;
+    flags.push({
+      label: "Atualização automática",
+      tone: updateDisabled ? "danger" : "ok",
+      value: probe?.noAutoUpdate === true ? "desligada (NoAutoUpdate=1)" : auOptions,
+    });
+  }
+
+  const deferralDays = probe?.deferralDays;
+  if (typeof deferralDays === "number" && deferralDays > 0) {
+    flags.push({
+      label: "Deferral",
+      tone: "warning",
+      value: `${deferralDays} dia(s) de atraso`,
+    });
+  }
+
+  if (typeof probe?.activeHoursStart === "number" && typeof probe.activeHoursEnd === "number") {
+    flags.push({
+      label: "Horas ativas",
+      tone: "ok",
+      value: `${String(probe.activeHoursStart).padStart(2, "0")}h–${String(probe.activeHoursEnd).padStart(2, "0")}h`,
+    });
   }
 
   if (probe?.policyManaged === true) {
@@ -405,6 +475,14 @@ export function describeProbe(
     flags.push({ label: "Última instalação OK", tone: "ok", value: probe.lastInstallSuccessAt });
   }
 
+  if (typeof probe?.qfeInstalledCount === "number" && probe.qfeInstalledCount > 0) {
+    flags.push({
+      label: "KBs instaladas (CBS)",
+      tone: "ok",
+      value: String(probe.qfeInstalledCount),
+    });
+  }
+
   return flags;
 }
 
@@ -413,3 +491,105 @@ export function scanErrorCodeLabel(code: string | null | undefined): string | nu
   const normalized = (code ?? "").trim().toLowerCase();
   return normalized ? (SCAN_ERROR_LABELS[normalized] ?? null) : null;
 }
+
+/** Rótulos pt-BR para os estados crus do serviço wuauserv (chegam em inglês). */
+const SERVICE_STATE_LABELS: Record<string, string> = {
+  running: "em execução",
+  stopped: "parado",
+  disabled: "desabilitado",
+  paused: "pausado",
+  start_pending: "iniciando",
+  stop_pending: "parando",
+  continue_pending: "retomando",
+  pause_pending: "pausando",
+  not_installed: "não instalado",
+  unknown: "estado desconhecido",
+};
+
+/**
+ * Traduz o estado do serviço Windows Update. Valores desconhecidos são
+ * devolvidos como vieram (nunca "running" cru na interface).
+ */
+export function serviceStateLabel(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+  const key = value.toLowerCase().replace(/[\s-]+/g, "_");
+  return SERVICE_STATE_LABELS[key] ?? value;
+}
+
+/** Duração legível: "5,7 s", "1 min 20 s", "sem registro". */
+export function formatScanDuration(durationMs: number | null | undefined): string {
+  if (durationMs === null || durationMs === undefined) return "sem registro";
+  if (!Number.isFinite(durationMs) || durationMs < 0) return "sem registro";
+  if (durationMs < 1000) return "menos de 1 s";
+  const seconds = durationMs / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1).replace(".", ",")} s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return rest > 0 ? `${minutes} min ${rest} s` : `${minutes} min`;
+}
+
+type SummarySnapshotLike = Partial<
+  Pick<
+    AgentWindowsUpdateSnapshot,
+    "pendingCount" | "installedCount" | "deniedCount" | "approvedCount"
+  >
+>;
+
+/**
+ * Resumo de uma linha para o cabeçalho do painel. Só mostra o que existe:
+ * uma máquina em dia não ganha "0 pendentes" repetido em três lugares.
+ */
+export function describeSnapshotSummary(snapshot: SummarySnapshotLike | null | undefined): string {
+  const pending = snapshot?.pendingCount ?? 0;
+  const approved = snapshot?.approvedCount ?? 0;
+  const denied = snapshot?.deniedCount ?? 0;
+  const installed = snapshot?.installedCount ?? 0;
+  // aprovadas/recusadas são SUBCONJUNTOS das pendentes: somar tudo numa lista
+  // de "·" lia-se como 6 itens quando havia 3 pendentes. Agora elas vão entre
+  // parênteses, como detalhe do total.
+  const parts: string[] = [];
+  if (pending > 0) {
+    const detail: string[] = [];
+    if (approved > 0) detail.push(`${approved} aprovada${approved > 1 ? "s" : ""} para instalar`);
+    if (denied > 0) detail.push(`${denied} recusada${denied > 1 ? "s" : ""}`);
+    parts.push(
+      detail.length > 0
+        ? `${pending} pendente${pending > 1 ? "s" : ""} (${detail.join(", ")})`
+        : `${pending} pendente${pending > 1 ? "s" : ""}`,
+    );
+  }
+  if (parts.length === 0) {
+    return installed > 0
+      ? `Nenhuma atualização pendente · ${installed} instalada${installed > 1 ? "s" : ""} no inventário`
+      : "Nenhuma atualização pendente";
+  }
+  if (installed > 0) parts.push(`${installed} instalada${installed > 1 ? "s" : ""}`);
+  return parts.join(" · ");
+}
+
+/** Filtros ativos do painel, para o resumo de resultados e o "limpar filtros". */
+export interface PanelFilterState {
+  search: string;
+  severity: string;
+  status: string;
+}
+
+export function hasActiveFilters(filters: PanelFilterState): boolean {
+  return Boolean(filters.search.trim() || filters.severity || filters.status);
+}
+
+/** Texto do vazio quando há filtro aplicado (diferente do vazio "de verdade"). */
+export function describeFilteredEmpty(filters: PanelFilterState): { title: string; description: string } {
+  const parts: string[] = [];
+  if (filters.search.trim()) parts.push(`busca "${filters.search.trim()}"`);
+  if (filters.severity) parts.push(`severidade ${filters.severity}`);
+  if (filters.status) parts.push(`status ${filters.status}`);
+  return {
+    title: "Nenhuma atualização corresponde aos filtros",
+    description: parts.length > 0
+      ? `Filtros aplicados: ${parts.join(" · ")}. Limpe os filtros para ver a lista completa.`
+      : "Limpe os filtros para ver a lista completa.",
+  };
+}
+

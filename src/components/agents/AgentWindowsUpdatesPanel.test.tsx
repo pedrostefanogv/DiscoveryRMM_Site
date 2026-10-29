@@ -170,6 +170,25 @@ describe("AgentWindowsUpdatesPanel — aba Atualizações do agente", () => {
     expect(screen.getByText(/Component Based Servicing/)).toBeTruthy();
   });
 
+  it("não mostra percentual de download no badge de reinício pendente", () => {
+    state.snapshot = baseSnapshot({
+      pendingReboot: true,
+      pendingRebootReasons: ["cbs"],
+      probe: { downloadInProgress: false, downloadPercent: 42 },
+    });
+    renderPanel();
+
+    // O percentual é do download anterior: no badge de reboot seria mentira.
+    expect(document.body.textContent ?? "").not.toContain("42%");
+  });
+
+  it("mostra o percentual junto do badge quando o download está em andamento", () => {
+    state.snapshot = baseSnapshot({ probe: { downloadInProgress: true, downloadPercent: 42 } });
+    renderPanel();
+
+    expect(screen.getByText("42%")).toBeTruthy();
+  });
+
   it("mostra download em andamento a partir da sonda do agente", () => {
     state.snapshot = baseSnapshot({ probe: { downloadInProgress: true, downloadPercent: 40 } });
     renderPanel();
@@ -209,6 +228,101 @@ describe("AgentWindowsUpdatesPanel — aba Atualizações do agente", () => {
     state.snapshot = baseSnapshot({ pendingReboot: true });
     renderPanel();
     await waitFor(() => expect(state.snapshotOptions.at(-1)?.fastPolling).toBe(true));
+  });
+
+  it("expõe as abas como tablist acessível com o contador de cada lista", () => {
+    state.snapshot = baseSnapshot({ pendingCount: 2, installedCount: 4 });
+    renderPanel();
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+    expect(tabs[1].getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("tablist", { name: "Lista de atualizações" })).toBeTruthy();
+  });
+
+  it("mostra o resumo do cabeçalho sem repetir contadores zerados", () => {
+    state.snapshot = baseSnapshot({ pendingCount: 0, installedCount: 4 });
+    renderPanel();
+
+    expect(
+      screen.getByText("Nenhuma atualização pendente · 4 instaladas no inventário"),
+    ).toBeTruthy();
+  });
+
+  it("agrupa aprovar/recusar/forçar no menu de ações da linha", async () => {
+    state.snapshot = baseSnapshot({ pendingCount: 1 });
+    const update = {
+      id: "u1",
+      updateKey: "wu:1",
+      groupKey: "g1",
+      kbId: "KB5043131",
+      kbIds: ["KB5043131"],
+      title: "Atualização cumulativa (KB5043131)",
+      description: null,
+      classification: "Atualizações de segurança",
+      severity: "Critical",
+      isPending: true,
+      isInstalled: false,
+      isHidden: false,
+      requiresReboot: false,
+      maxDownloadSize: 1024,
+      supportUrl: null,
+      publishedAt: new Date(Date.now() - HOUR).toISOString(),
+      installedAt: null,
+      reportedAt: new Date().toISOString(),
+      approvalState: "Denied" as const,
+      approvalSource: null,
+      status: "Denied" as const,
+      installResultCode: null,
+      installError: null,
+      source: "wua",
+    };
+    state.items = [update];
+    renderPanel();
+
+    // As ações secundárias não ocupam a linha: só "Instalar" e o menu.
+    expect(screen.queryByRole("button", { name: /Aprovar Atualização/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Mais ações para Atualização cumulativa/ }));
+
+    const labels = (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
+    expect(labels.some((label) => label?.includes("Aprovar"))).toBe(true);
+    expect(labels.some((label) => label?.includes("Recusar"))).toBe(true);
+    // Recusada: o "forçar" continua acessível, mas com aviso de auditoria.
+    expect(labels.some((label) => label?.includes("Forçar instalação"))).toBe(true);
+  });
+
+  it("aplica filtro de severidade, mostra o vazio filtrado e limpa os filtros", async () => {
+    state.snapshot = baseSnapshot();
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText("Severidade"), { target: { value: "Critical" } });
+
+    // Há dois botões "Limpar filtros": na barra de abas e no vazio filtrado.
+    const clearButtons = await screen.findAllByRole("button", { name: /Limpar filtros/ });
+    expect(clearButtons.length).toBe(2);
+    const clear = clearButtons[0];
+    expect(screen.getByText("Nenhuma atualização corresponde aos filtros")).toBeTruthy();
+
+    fireEvent.click(clear);
+    await waitFor(() =>
+      expect(screen.queryByText("Nenhuma atualização corresponde aos filtros")).toBeNull(),
+    );
+    expect(screen.getByText("Nenhuma atualização PENDENTE detectada pela busca do Windows Update.")).toBeTruthy();
+  });
+
+  it("abre o painel de política do SO em vez de expor as ações na barra principal", () => {
+    state.snapshot = baseSnapshot();
+    renderPanel();
+
+    // As ações raras não ficam soltas na barra principal.
+    expect(screen.queryByRole("button", { name: "Aplicar no SO" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Política do SO/ }));
+
+    expect(screen.getByRole("button", { name: /Aplicar no SO/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Reverter SO/ })).toBeTruthy();
   });
 
   it("mantém os dados mesmo sem os campos opcionais novos da API", () => {

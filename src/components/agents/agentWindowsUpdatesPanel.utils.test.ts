@@ -1,15 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  auOptionsLabel,
   deriveScanHealth,
   deriveUpdateActivity,
+  describeFilteredEmpty,
+  describeScanTrigger,
   describePendingEmpty,
   describeProbe,
   describeScanError,
+  describeSnapshotSummary,
   formatElapsed,
+  formatScanDuration,
   formatSkippedReasons,
+  hasActiveFilters,
   isScanFailed,
   normalizeScanStatus,
   scanErrorCodeLabel,
+  serviceStateLabel,
   STALE_SCAN_THRESHOLD_MS,
   VERY_STALE_SCAN_THRESHOLD_MS,
 } from "./agentWindowsUpdatesPanel.utils";
@@ -284,10 +291,11 @@ describe("describeProbe — diagnóstico do agente", () => {
     expect(flags.find((flag) => flag.label === "Último resultado de instalação")?.tone).toBe("ok");
   });
 
-  it("aceita serviceState (nome canônico do agente) além de service", () => {
+  it("aceita serviceState (nome canônico do agente) além de service e traduz o estado", () => {
     const flags = describeProbe(snapshot({ probe: { serviceState: "stopped" } }));
     expect(flags).toEqual([
-      { label: "Serviço Windows Update", tone: "warning", value: "stopped" },
+      // O estado cru em inglês não vaza para a interface.
+      { label: "Serviço Windows Update", tone: "warning", value: "parado" },
     ]);
   });
 
@@ -298,8 +306,135 @@ describe("describeProbe — diagnóstico do agente", () => {
     ]);
   });
 
+
   it("marca WUA indisponível como perigo", () => {
     const flags = describeProbe(snapshot({ wuaAvailable: false, probe: {} }));
     expect(flags[0]).toEqual({ label: "WUA (COM)", tone: "danger", value: "indisponível" });
   });
 });
+
+describe("serviceStateLabel — estado do serviço em pt-BR", () => {
+  it("traduz os estados conhecidos do wuauserv", () => {
+    expect(serviceStateLabel("running")).toBe("em execução");
+    expect(serviceStateLabel("Stopped")).toBe("parado");
+    expect(serviceStateLabel("start_pending")).toBe("iniciando");
+    expect(serviceStateLabel("start-pending")).toBe("iniciando");
+  });
+
+  it("devolve o valor original quando desconhecido e null quando vazio", () => {
+    expect(serviceStateLabel("weird_state")).toBe("weird_state");
+    expect(serviceStateLabel(null)).toBeNull();
+    expect(serviceStateLabel("   ")).toBeNull();
+  });
+});
+
+describe("formatScanDuration — duração da varredura", () => {
+  it("formata segundos e minutos com vírgula decimal", () => {
+    expect(formatScanDuration(5745)).toBe("5,7 s");
+    expect(formatScanDuration(80_000)).toBe("1 min 20 s");
+    expect(formatScanDuration(120_000)).toBe("2 min");
+    expect(formatScanDuration(500)).toBe("menos de 1 s");
+  });
+
+  it("devolve 'sem registro' para valores ausentes ou inválidos", () => {
+    expect(formatScanDuration(null)).toBe("sem registro");
+    expect(formatScanDuration(undefined)).toBe("sem registro");
+    expect(formatScanDuration(Number.NaN)).toBe("sem registro");
+  });
+});
+
+describe("describeSnapshotSummary — resumo do cabeçalho", () => {
+  it("resume apenas o que existe, no plural certo", () => {
+    expect(
+      describeSnapshotSummary({ pendingCount: 1, approvedCount: 1, deniedCount: 0, installedCount: 4 }),
+    ).toBe("1 pendente (1 aprovada para instalar) · 4 instaladas");
+    // aprovadas/recusadas são subconjuntos das pendentes: não somam no total.
+    expect(
+      describeSnapshotSummary({ pendingCount: 3, approvedCount: 2, deniedCount: 1, installedCount: 0 }),
+    ).toBe("3 pendentes (2 aprovadas para instalar, 1 recusada)");
+    expect(
+      describeSnapshotSummary({ pendingCount: 5, approvedCount: 0, deniedCount: 0, installedCount: 2 }),
+    ).toBe("5 pendentes · 2 instaladas");
+  });
+
+  it("não repete zeros quando a máquina está em dia", () => {
+    expect(
+      describeSnapshotSummary({ pendingCount: 0, approvedCount: 0, deniedCount: 0, installedCount: 0 }),
+    ).toBe("Nenhuma atualização pendente");
+    expect(
+      describeSnapshotSummary({ pendingCount: 0, approvedCount: 0, deniedCount: 0, installedCount: 2 }),
+    ).toBe("Nenhuma atualização pendente · 2 instaladas no inventário");
+    expect(describeSnapshotSummary(undefined)).toBe("Nenhuma atualização pendente");
+  });
+});
+
+describe("describeProbe — campos novos da sonda (WSUS/AU/deferral/CBS)", () => {
+  it("mostra servidor WSUS, atualização automática, deferral, horas ativas e KBs do CBS", () => {
+    const flags = describeProbe(
+      snapshot({
+        probe: {
+          service: "running",
+          wsusServer: "http://wsus.empresa.local:8530",
+          auOptions: 4,
+          deferralDays: 7,
+          activeHoursStart: 8,
+          activeHoursEnd: 18,
+          qfeInstalledCount: 42,
+        },
+      }),
+    );
+    const byLabel = new Map(flags.map((flag) => [flag.label, flag]));
+    expect(byLabel.get("Servidor WSUS")?.value).toBe("http://wsus.empresa.local:8530");
+    expect(byLabel.get("Atualização automática")?.value).toBe("agendar instalação");
+    expect(byLabel.get("Deferral")?.value).toBe("7 dia(s) de atraso");
+    expect(byLabel.get("Horas ativas")?.value).toBe("08h–18h");
+    expect(byLabel.get("KBs instaladas (CBS)")?.value).toBe("42");
+  });
+
+  it("marca atualização automática desligada como perigo", () => {
+    const flags = describeProbe(snapshot({ probe: { auOptions: 1, noAutoUpdate: true } }));
+    const flag = flags.find((item) => item.label === "Atualização automática");
+    expect(flag?.tone).toBe("danger");
+    expect(flag?.value).toBe("desligada (NoAutoUpdate=1)");
+  });
+
+  it("não inventa linhas quando a sonda antiga não manda os campos novos", () => {
+    const flags = describeProbe(snapshot({ probe: { service: "running" } }));
+    expect(flags.map((flag) => flag.label)).toEqual(["Serviço Windows Update"]);
+  });
+});
+
+describe("auOptionsLabel / describeScanTrigger", () => {
+  it("traduz o AUOptions e devolve null para ausente", () => {
+    expect(auOptionsLabel(2)).toBe("notificar antes de baixar");
+    expect(auOptionsLabel(5)).toBe("permitir escolha do administrador");
+    expect(auOptionsLabel(9)).toBe("opção 9");
+    expect(auOptionsLabel(null)).toBeNull();
+    expect(auOptionsLabel(undefined)).toBeNull();
+  });
+
+  it("resume disparo e origem do scan", () => {
+    expect(describeScanTrigger("change", "wua")).toBe("disparo: mudança de estado · origem: WUA");
+    expect(describeScanTrigger("periodic", null)).toBe("disparo: rotina");
+    expect(describeScanTrigger(null, null)).toBeNull();
+    expect(describeScanTrigger("desconhecido", "x")).toBeNull();
+  });
+});
+
+describe("filtros do painel", () => {
+  it("detecta filtros ativos (busca com espaços não conta)", () => {
+    expect(hasActiveFilters({ search: "   ", severity: "", status: "" })).toBe(false);
+    expect(hasActiveFilters({ search: "kb50", severity: "", status: "" })).toBe(true);
+    expect(hasActiveFilters({ search: "", severity: "Critical", status: "" })).toBe(true);
+    expect(hasActiveFilters({ search: "", severity: "", status: "denied" })).toBe(true);
+  });
+
+  it("descreve o vazio filtrado citando os filtros aplicados", () => {
+    const message = describeFilteredEmpty({ search: "kb50", severity: "Critical", status: "denied" });
+    expect(message.title).toBe("Nenhuma atualização corresponde aos filtros");
+    expect(message.description).toContain('busca "kb50"');
+    expect(message.description).toContain("severidade Critical");
+    expect(message.description).toContain("status denied");
+  });
+});
+

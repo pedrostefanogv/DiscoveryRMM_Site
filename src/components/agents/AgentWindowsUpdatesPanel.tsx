@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import toast from "react-hot-toast";
-import { Icon, Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Pagination, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, ConfirmDialog, ContextMenu, DataTable, ErrorDisplay, Input, Loading, Modal, Pagination, Select, Tooltip, type Column, type ContextMenuItem } from "@/components/ui";
 import { useAuthorization } from "@/auth/authorization";
 import { usePatchesRealtime } from "@/hooks/usePatchesRealtime";
 import {
@@ -23,7 +23,6 @@ import {
   formatKbList,
   formatPatchDate,
   PATCH_SEVERITY_OPTIONS,
-  PATCH_STATUS_OPTIONS,
   rebootReasonLabel,
   severityColor,
   statusColor,
@@ -32,15 +31,23 @@ import {
 import {
   deriveScanHealth,
   deriveUpdateActivity,
+  describeFilteredEmpty,
+  describeScanTrigger,
   describePendingEmpty,
   describeProbe,
+  describeSnapshotSummary,
   formatElapsed,
+  formatScanDuration,
+  formatSkippedReasons,
+  hasActiveFilters,
   parseTimestamp,
   type ScanHealth,
 } from "./agentWindowsUpdatesPanel.utils";
 
 /** Quanto tempo o painel acompanha o agente em cadência rápida após pedir uma varredura. */
 const SCAN_FOLLOW_UP_MS = 3 * 60 * 1000;
+/** Debounce da busca: digitar já filtra, sem precisar do botão "Filtrar". */
+const SEARCH_DEBOUNCE_MS = 400;
 
 const HEALTH_TONE_CLASSES: Record<ScanHealth["tone"], string> = {
   ok: "border-success/40 bg-success/10 text-success",
@@ -54,7 +61,22 @@ const PROBE_TONE_CLASSES: Record<ScanHealth["tone"], string> = {
   danger: "text-danger",
 };
 
+const HEALTH_DOT_CLASSES: Record<ScanHealth["tone"], string> = {
+  ok: "bg-success",
+  warning: "bg-warning",
+  danger: "bg-danger",
+};
+
 type UpdateView = "pending" | "installed";
+
+/** Filtro de aprovação da aba de pendentes (vira `status` na API). */
+type ApprovalFilter = "" | "approved" | "denied";
+
+const APPROVAL_FILTER_OPTIONS = [
+  { value: "", label: "Todas as aprovações" },
+  { value: "approved", label: "Aprovadas" },
+  { value: "denied", label: "Recusadas" },
+];
 
 interface ApprovalModalState {
   update: AgentWindowsUpdate;
@@ -73,7 +95,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const [severity, setSeverity] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("");
   const [approvalModal, setApprovalModal] = useState<ApprovalModalState | null>(null);
   const [approvalScope, setApprovalScope] = useState<PatchApprovalScopeType>("Agent");
   const [approvalReason, setApprovalReason] = useState("");
@@ -81,6 +103,9 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [installReason, setInstallReason] = useState("");
   const [installPostAction, setInstallPostAction] = useState<"none" | "restart" | "shutdown">("none");
   const [confirmInstallApproved, setConfirmInstallApproved] = useState(false);
+  const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  /** Menu "⋯" da linha: aprovar/recusar/forçar/suporte sem poluir a tabela. */
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number; update: AgentWindowsUpdate } | null>(null);
   /** Momento em que a última varredura foi solicitada por este painel. */
   const [scanRequestedAt, setScanRequestedAt] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -93,7 +118,12 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const snapshot = useAgentWindowsUpdateSnapshot(agentId, { fastPolling });
   const data = snapshot.data;
 
-  const effectiveStatus = statusFilter || (view === "pending" ? "pending" : "installed");
+  /**
+   * A aba manda no status base (pendentes/instaladas); o filtro de aprovação
+   * só refina a aba de pendentes, para não existirem dois controles dizendo a
+   * mesma coisa (antes havia um select "Status" duplicando as abas).
+   */
+  const effectiveStatus = view === "installed" ? "installed" : approvalFilter || "pending";
   const pageQuery = useAgentWindowsUpdates(agentId, {
     page,
     pageSize,
@@ -165,6 +195,18 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     return () => window.clearInterval(id);
   }, [fastPolling, scanRequestedAtMs]);
 
+  // Busca com debounce: o operador digita e a lista acompanha; "Filtrar"
+  // continua existindo para quem prefere confirmar com Enter/botão.
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed === searchApplied) return;
+    const id = window.setTimeout(() => {
+      setSearchApplied(trimmed);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [searchInput, searchApplied]);
+
   const activity = useMemo(() => deriveUpdateActivity(data), [data]);
   const probeFlags = useMemo(() => describeProbe(data), [data]);
   const scanning = scan.isPending || followUpActive;
@@ -177,6 +219,11 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const followUpTimedOut =
     scanGaveUp && !health.neverScanned && !scanAnswered && scanRequestedAtMs !== null;
 
+  const summary = useMemo(() => describeSnapshotSummary(data), [data]);
+  const filters = { search: searchApplied, severity, status: approvalFilter };
+  const filtersActive = hasActiveFilters(filters);
+  const filteredEmpty = useMemo(() => describeFilteredEmpty(filters), [searchApplied, severity, approvalFilter]);
+
   const emptyMessage = useMemo(
     () =>
       describePendingEmpty(data, health, {
@@ -185,6 +232,20 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
       }),
     [data, health],
   );
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setSearchApplied("");
+    setSeverity("");
+    setApprovalFilter("");
+    setPage(1);
+  };
+
+  const selectView = (next: UpdateView) => {
+    setView(next);
+    setApprovalFilter("");
+    setPage(1);
+  };
 
   const handleScan = async (source: "toolbar" | "banner" = "toolbar") => {
     try {
@@ -280,15 +341,72 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     }
   };
 
+  /** Itens do menu "⋯" da linha — ações secundárias fora da tabela. */
+  const rowMenuItems = useMemo<ContextMenuItem[]>(() => {
+    const update = rowMenu?.update;
+    if (!update) return [];
+    const items: ContextMenuItem[] = [
+      {
+        key: "approve",
+        label: "Aprovar…",
+        icon: <Icon name="verified_user" className="h-4 w-4" />,
+        disabled: !canApprove,
+        onClick: () => openApproval(update, "approve"),
+      },
+      {
+        key: "deny",
+        label: "Recusar…",
+        icon: <Icon name="gpp_bad" className="h-4 w-4" />,
+        disabled: !canApprove,
+        danger: true,
+        onClick: () => openApproval(update, "deny"),
+      },
+    ];
+    if (update.approvalState === "Denied") {
+      items.push({
+        key: "force",
+        label: "Forçar instalação…",
+        icon: <Icon name="warning" className="h-4 w-4" />,
+        danger: true,
+        separatorBefore: true,
+        disabled: !canExecute,
+        hint: "Ignora a recusa e fica na auditoria",
+        onClick: () => openInstall(update, true),
+      });
+    }
+    if (update.supportUrl) {
+      items.push({
+        key: "support",
+        label: "Abrir página de suporte",
+        icon: <Icon name="open_in_new" className="h-4 w-4" />,
+        separatorBefore: true,
+        onClick: () => window.open(update.supportUrl ?? "", "_blank", "noopener,noreferrer"),
+      });
+    }
+    return items;
+  }, [rowMenu, canApprove, canExecute]);
+
   const columns: Column<AgentWindowsUpdate>[] = [
     {
       key: "update",
       header: "Atualização",
+      sortable: true,
+      width: "38%",
       render: (update) => (
-        <div>
-          <p className="font-medium text-foreground">{update.title}</p>
-          <p className="text-xs text-muted">
-            {formatKbList(update.kbIds)} · {update.classification ?? "Sem classificação"} · {formatBytes(update.maxDownloadSize)}
+        <div className="min-w-0">
+          <p className="truncate font-medium text-foreground" title={update.title}>{update.title}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
+            <span className="font-mono text-[11px] text-foreground/80">{formatKbList(update.kbIds)}</span>
+            <span aria-hidden>·</span>
+            <span>{update.classification ?? "Sem classificação"}</span>
+            {update.maxDownloadSize ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>{formatBytes(update.maxDownloadSize)}</span>
+              </>
+            ) : null}
+            {update.isMandatory ? <Badge color="warning">obrigatória</Badge> : null}
+            {update.isDownloaded && update.isPending ? <Badge color="primary">baixada</Badge> : null}
           </p>
         </div>
       ),
@@ -296,56 +414,93 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     {
       key: "severity",
       header: "Severidade",
-      render: (update) => <Badge color={severityColor(update.severity)}>{update.severity ?? "—"}</Badge>,
+      width: "11%",
+      sortable: true,
+      render: (update) => (
+        <Badge color={severityColor(update.severity)}>{update.severity ?? "—"}</Badge>
+      ),
     },
     {
       key: "approval",
       header: "Aprovação",
-      render: (update) => <Badge color={approvalColor(update.approvalState)}>{approvalLabel(update.approvalState)}</Badge>,
+      width: "14%",
+      render: (update) => (
+        <Badge color={approvalColor(update.approvalState)}>{approvalLabel(update.approvalState)}</Badge>
+      ),
     },
     {
       key: "status",
       header: "Status",
+      width: "14%",
       render: (update) => (
-        <div>
-          <Badge color={statusColor(update.status)}>{statusLabel(update.status)}</Badge>
-          {update.requiresReboot && <span className="ml-1 text-xs text-warning">reinício</span>}
-          {update.installError && <p className="mt-1 text-xs text-danger">{update.installError}</p>}
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-1">
+            <Badge color={statusColor(update.status)}>{statusLabel(update.status)}</Badge>
+            {update.requiresReboot && (
+              <Badge color="warning" className="gap-1">
+                <Icon name="restart_alt" className="h-3 w-3" />
+                reinício
+              </Badge>
+            )}
+          </div>
+          {update.installError && (
+            <p className="text-xs text-danger" title={update.installError}>{update.installError}</p>
+          )}
         </div>
       ),
     },
     {
       key: "dates",
-      header: "Publicada / Reportada",
+      // Na aba de instaladas a data que importa é a da instalação.
+      header: view === "installed" ? "Instalada em" : "Publicada",
+      width: "12%",
       render: (update) => (
-        <div className="text-xs text-muted">
-          <p>{formatPatchDate(update.publishedAt)}</p>
-          <p>{formatPatchDate(update.reportedAt)}</p>
-        </div>
+        <Tooltip content={
+          <span>
+            Publicada em {formatPatchDate(update.publishedAt)}
+            {update.installedAt ? ` · instalada em ${formatPatchDate(update.installedAt)}` : ""}
+            {` · reportada em ${formatPatchDate(update.reportedAt)}`}
+            {update.source ? ` · origem ${update.source}` : ""}
+          </span>
+        }>
+          <span className="cursor-help text-xs text-muted underline decoration-dotted decoration-border underline-offset-2">
+            {formatPatchDate(view === "installed" ? update.installedAt ?? update.publishedAt : update.publishedAt)}
+          </span>
+        </Tooltip>
       ),
     },
     {
       key: "actions",
       header: "",
+      width: "11%",
       className: "text-right",
       render: (update) => {
         if (update.isInstalled) return null;
+        const busy = install.isPending || approve.isPending;
         return (
-          <div className="flex flex-wrap justify-end gap-1.5">
-            <Button size="sm" variant="secondary" onClick={() => openApproval(update, "approve")} title="Aprovar" disabled={!canApprove}>
-              <Icon name="verified_user" className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => openApproval(update, "deny")} title="Recusar" disabled={!canApprove}>
-              <Icon name="gpp_bad" className="h-3.5 w-3.5" />
-            </Button>
-            <Button size="sm" onClick={() => openInstall(update, false)} disabled={install.isPending || !canExecute}>
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              size="sm"
+              onClick={() => openInstall(update, false)}
+              disabled={busy || !canExecute}
+              aria-label={`Instalar ${update.title}`}
+            >
               Instalar
             </Button>
-            {update.approvalState === "Denied" && (
-              <Button size="sm" variant="danger" onClick={() => openInstall(update, true)} disabled={install.isPending || !canExecute}>
-                Forçar
-              </Button>
-            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="px-2"
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setRowMenu({ x: rect.right - 220, y: rect.bottom + 4, update });
+              }}
+              aria-haspopup="menu"
+              aria-label={`Mais ações para ${update.title}`}
+              title="Mais ações"
+            >
+              <Icon name="more_vert" className="h-4 w-4" />
+            </Button>
           </div>
         );
       },
@@ -355,12 +510,150 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   if (pageQuery.isLoading && !pageQuery.data) return <Loading />;
   if (pageQuery.isError) return <ErrorDisplay onRetry={() => pageQuery.refetch()} />;
 
+  const scanStatusRaw = data?.scanStatus ?? "unknown";
+  const probeDetailsHidden = probeFlags.length === 0 && !data?.probe && data?.wuaAvailable == null;
+
   return (
     <div className="space-y-4">
+      {/* Cabeçalho: identidade da aba + ações primárias (as ações de política do
+          SO saem da linha principal — são raras e não devem competir com
+          "Verificar" e "Instalar"). */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-1">
+          <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground sm:text-xl">
+            <Icon name="arrow_circle_up" className="h-5 w-5 text-primary" />
+            Atualizações do Windows
+          </h3>
+          <p className="text-sm text-muted">{summary}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          {activity.key !== "idle" && (
+            <span title={activity.detail} aria-label={activity.label}>
+              <Badge color={activity.tone}>
+                {activity.key === "downloading" ? (
+                  <Icon name="progress_activity" className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Icon name="download" className="mr-1 h-3 w-3" />
+                )}
+                <span>{activity.label}</span>
+                {/* A porcentagem vem da sonda (probe.downloadPercent) desde a
+                    correção do agente. Só aparece no estado de DOWNLOAD: no badge
+                    de "Reinício pendente" o percentual é do download anterior e
+                    seria lido como progresso do reboot. */}
+                {activity.key === "downloading" &&
+                  typeof data?.probe?.downloadPercent === "number" && (
+                    <span className="ml-1 tabular-nums">{Math.round(data.probe.downloadPercent)}%</span>
+                  )}
+              </Badge>
+            </span>
+          )}
+          <Button variant="secondary" onClick={() => void handleScan("toolbar")} disabled={scanning || !canExecute}>
+            <Icon name="refresh" className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
+            {scanButtonLabel}
+          </Button>
+          <Button
+            onClick={() => setConfirmInstallApproved(true)}
+            disabled={installApproved.isPending || !canExecute || data?.approvedCount === 0}
+            title={
+              data?.approvedCount === 0
+                ? "Nenhuma atualização aprovada aguardando instalação"
+                : "Instalar todas as atualizações aprovadas deste agente"
+            }
+          >
+            <Icon name="download" className="h-4 w-4" />
+            Instalar aprovadas
+            {typeof data?.approvedCount === "number" && data.approvedCount > 0 ? (
+              <span className="rounded-full bg-black/15 px-1.5 text-xs tabular-nums">{data.approvedCount}</span>
+            ) : null}
+          </Button>
+          <Button variant="ghost" onClick={() => setPolicyModalOpen(true)} title="Aplicar ou reverter a política do Windows Update no sistema operacional">
+            <Icon name="shield" className="h-4 w-4" />
+            Política do SO
+          </Button>
+        </div>
+      </div>
+
+      {/* Faixa de saúde da varredura: um único lugar para "quando", "quão bom"
+          e "o que a sonda viu" — o diagnóstico detalhado fica recolhido. */}
+      <section
+        aria-label="Saúde da varredura do Windows Update"
+        className="rounded-xl border border-border bg-surface-light/50 px-3 py-2.5"
+      >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="inline-flex items-center gap-1.5">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${HEALTH_DOT_CLASSES[health.tone]}`} aria-hidden />
+            <span className="font-medium text-foreground">Última varredura {formatElapsed(health.ageMs)}</span>
+          </span>
+          <span className="text-muted" aria-hidden>·</span>
+          <span className="text-muted">{formatPatchDate(data?.lastCollectedAt)}</span>
+          <span className="text-muted" aria-hidden>·</span>
+          <span className="text-muted">durou {formatScanDuration(data?.scanDurationMs)}</span>
+          <span className="text-muted" aria-hidden>·</span>
+          <span className={health.failed ? "text-danger" : health.stale ? "text-warning" : "text-success"}>
+            status: {scanStatusRaw}
+          </span>
+          {data?.skippedCount ? (
+            <>
+              <span className="text-muted" aria-hidden>·</span>
+              <span className="text-muted">{data.skippedCount} resultado(s) ignorado(s)</span>
+            </>
+          ) : null}
+          {followUpActive ? (
+            <>
+              <span className="text-muted" aria-hidden>·</span>
+              <span className="inline-flex items-center gap-1 text-primary" aria-live="polite">
+                <Icon name="progress_activity" className="h-3 w-3 animate-spin" />
+                aguardando resposta da varredura solicitada
+              </span>
+            </>
+          ) : null}
+        </div>
+
+        {data?.scanError && (
+          <p className="mt-1.5 text-xs text-danger">Falha da última varredura: {data.scanError}</p>
+        )}
+        {followUpTimedOut && (
+          <p className="mt-1.5 text-xs text-warning">
+            A varredura solicitada há {formatElapsed(nowMs - (scanRequestedAtMs ?? nowMs))} ainda não retornou.
+            O agente pode estar offline ou sem permissão; o inventário exibido continua sendo o anterior.
+          </p>
+        )}
+
+        {!probeDetailsHidden && (
+          <details className="group mt-2 border-t border-border/60 pt-2 text-xs text-muted">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
+              <Icon name="expand_more" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+              Diagnóstico da sonda
+              {describeScanTrigger(data?.scanTrigger, data?.scanSource) ? (
+                <span className="font-normal">· {describeScanTrigger(data?.scanTrigger, data?.scanSource)}</span>
+              ) : null}
+              {data?.probe?.lastInstallSuccessAt ? (
+                <span className="font-normal">· última instalação OK em {formatPatchDate(data.probe.lastInstallSuccessAt)}</span>
+              ) : null}
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-4">
+              {probeFlags.length === 0 && <span>sem dados da sonda</span>}
+              {probeFlags.map((flag) => (
+                <span key={flag.label} className={PROBE_TONE_CLASSES[flag.tone]}>
+                  {flag.label}: <span className="font-medium">{flag.value}</span>
+                </span>
+              ))}
+              {data?.skippedCount ? (
+                <span className="text-muted">
+                  Resultados ignorados: <span className="font-medium text-foreground">{data.skippedCount}</span>
+                  {formatSkippedReasons(data.skippedReasons) ? ` (${formatSkippedReasons(data.skippedReasons)})` : ""}
+                </span>
+              ) : null}
+            </div>
+          </details>
+        )}
+      </section>
+
       {snapshot.isError && (
-        <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-          Não foi possível ler o snapshot do Windows Update deste agente.
-          <Button size="sm" variant="secondary" className="ml-2" onClick={() => void snapshot.refetch()}>
+        <div role="alert" className="flex flex-wrap items-center gap-2 rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+          <Icon name="warning" className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">Não foi possível ler o snapshot do Windows Update deste agente.</span>
+          <Button size="sm" variant="secondary" onClick={() => void snapshot.refetch()}>
             Tentar de novo
           </Button>
         </div>
@@ -383,7 +676,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
             {data?.scanStatus && !health.neverScanned && (
               <p className="mt-1 text-[11px] opacity-75">
                 status: {data.scanStatus}
-                {data.scanDurationMs != null ? ` · ${(data.scanDurationMs / 1000).toFixed(1)}s` : ""}
+                {data.scanDurationMs != null ? ` · ${formatScanDuration(data.scanDurationMs)}` : ""}
                 {data.scanErrorCode ? ` · código: ${data.scanErrorCode}` : ""}
               </p>
             )}
@@ -402,8 +695,8 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
 
       {data?.pendingReboot && (
         <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-          <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
+          <Icon name="restart_alt" className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
             <p className="font-medium">Reinício pendente</p>
             <p className="text-xs">
               {(data.pendingRebootReasons ?? []).map(rebootReasonLabel).join(", ") || "motivo não informado"}
@@ -416,123 +709,150 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-lg border border-border p-1">
-          <Button size="sm" variant={view === "pending" ? "primary" : "ghost"} onClick={() => { setView("pending"); setStatusFilter(""); setPage(1); }}>
-            Pendentes ({data?.pendingCount ?? 0})
-          </Button>
-          <Button size="sm" variant={view === "installed" ? "primary" : "ghost"} onClick={() => { setView("installed"); setStatusFilter(""); setPage(1); }}>
-            Instaladas ({data?.installedCount ?? 0})
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {activity.key !== "idle" && (
-            <span title={activity.detail} aria-label={activity.label}>
-              <Badge color={activity.tone}>
-                {activity.key === "downloading" ? (
-                  <Icon name="progress_activity" className="mr-1 h-3 w-3 animate-spin" />
-                ) : (
-                  <Icon name="download" className="mr-1 h-3 w-3" />
-                )}
-                {activity.label}
-              </Badge>
+      {/* Abas + filtros numa única barra: aba à esquerda, refinamentos à direita. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div
+            role="tablist"
+            aria-label="Lista de atualizações"
+            className="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-light/60 p-1"
+          >
+            <Button
+              size="sm"
+              role="tab"
+              aria-selected={view === "pending"}
+              variant={view === "pending" ? "primary" : "ghost"}
+              onClick={() => selectView("pending")}
+            >
+              Pendentes ({data?.pendingCount ?? 0})
+            </Button>
+            <Button
+              size="sm"
+              role="tab"
+              aria-selected={view === "installed"}
+              variant={view === "installed" ? "primary" : "ghost"}
+              onClick={() => selectView("installed")}
+            >
+              Instaladas ({data?.installedCount ?? 0})
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            <span>
+              {totalCount === 0
+                ? "Nenhum resultado"
+                : `${totalCount} atualizaç${totalCount === 1 ? "ão" : "ões"} · página ${page} de ${totalPages}`}
             </span>
+            {filtersActive && (
+              <Button size="sm" variant="ghost" onClick={clearFilters}>
+                <Icon name="close" className="h-3.5 w-3.5" />
+                Limpar filtros
+              </Button>
+            )}
+            {view === "pending" && items.length > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void handleApproveAllVisible()}
+                disabled={bulk.isPending || !canApprove}
+                title="Aprovar todas as atualizações pendentes listadas nesta página"
+              >
+                <Icon name="verified_user" className="h-3.5 w-3.5" />
+                Aprovar visíveis
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface-light/40 p-2.5">
+          <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+            <Input
+              label="Buscar"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  setSearchApplied(searchInput.trim());
+                  setPage(1);
+                }
+              }}
+              placeholder="KB, título ou classificação"
+            />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => { setSearchInput(""); setSearchApplied(""); setPage(1); }}
+                aria-label="Limpar busca"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <Icon name="close" className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Select
+            label="Severidade"
+            fullWidth={false}
+            value={severity}
+            onChange={(event) => { setSeverity(event.target.value); setPage(1); }}
+            options={PATCH_SEVERITY_OPTIONS}
+          />
+          {view === "pending" && (
+            <Select
+              label="Aprovação"
+              fullWidth={false}
+              value={approvalFilter}
+              onChange={(event) => { setApprovalFilter(event.target.value as ApprovalFilter); setPage(1); }}
+              options={APPROVAL_FILTER_OPTIONS}
+            />
           )}
-          <Button variant="secondary" onClick={() => void handleScan("toolbar")} disabled={scanning || !canExecute}>
-            <Icon name="refresh" className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
-            {scanButtonLabel}
-          </Button>
-          <Button onClick={() => setConfirmInstallApproved(true)} disabled={installApproved.isPending || !canExecute}>
-            <Icon name="download" className="h-4 w-4" />
-            Instalar aprovadas
-          </Button>
-          <Button variant="secondary" onClick={() => setConfirmOsPolicy("apply")} disabled={applyOsPolicy.isPending || !canExecute}>
-            Aplicar no SO
-          </Button>
-          <Button variant="ghost" onClick={() => setConfirmOsPolicy("rollback")} disabled={rollbackOsPolicy.isPending || !canExecute}>
-            Reverter SO
-          </Button>
+          {/* Dica discreta: fecha a barra e explica que a busca é incremental. */}
+          <p className="ml-auto hidden self-center text-xs text-muted lg:block">
+            A busca filtra enquanto você digita · os filtros valem só para a aba aberta
+          </p>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1 text-xs text-muted">
-        <p>
-          <span className="font-medium text-foreground">Última varredura {formatElapsed(health.ageMs)}</span>
-          {" · "}
-          {formatPatchDate(data?.lastCollectedAt)}
-          {data?.scanDurationMs != null ? ` · durou ${(data.scanDurationMs / 1000).toFixed(1)}s` : ""}
-          {" · status: "}
-          <span className={health.failed ? "text-danger" : health.stale ? "text-warning" : "text-success"}>
-            {data?.scanStatus ?? "unknown"}
-          </span>
-          {data?.skippedCount ? ` · ${data.skippedCount} resultado(s) ignorado(s)` : ""}
-          {followUpActive ? " · aguardando resposta da varredura solicitada" : ""}
-        </p>
-        {data?.scanError && (
-          <p className="text-danger">Falha da última varredura: {data.scanError}</p>
-        )}
-        {followUpTimedOut && (
-          <p className="text-warning">
-            A varredura solicitada há {formatElapsed(nowMs - (scanRequestedAtMs ?? nowMs))} ainda não retornou.
-            O agente pode estar offline ou sem permissão; o inventário exibido continua sendo o anterior.
-          </p>
-        )}
-        {data?.probe && (
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-1 text-muted">
-              <Icon name="info" className="h-3 w-3" />
-              Sonda do agente:
-            </span>
-            {probeFlags.length === 0 && <span>sem dados</span>}
-            {probeFlags.map((flag) => (
-              <span key={flag.label} className={PROBE_TONE_CLASSES[flag.tone]}>
-                {flag.label}: <span className="font-medium">{flag.value}</span>
-              </span>
-            ))}
-          </p>
-        )}
-        {data?.probe?.lastInstallSuccessAt && (
-          <p>Última instalação bem-sucedida no WU: {formatPatchDate(data.probe.lastInstallSuccessAt)}</p>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <Input
-          label="Buscar"
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              setSearchApplied(searchInput.trim());
-              setPage(1);
+      {/* Estado vazio: curto na frente, explicação longa recolhida (antes o
+          texto inteiro ficava aberto e repetia a mesma ideia três vezes). */}
+      {items.length === 0 ? (
+        filtersActive ? (
+          <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface-light/60 p-4 text-sm">
+            <p className="font-medium text-foreground">{filteredEmpty.title}</p>
+            <p className="text-xs text-muted">{filteredEmpty.description}</p>
+            <Button size="sm" variant="secondary" onClick={clearFilters}>
+              Limpar filtros
+            </Button>
+          </div>
+        ) : view === "pending" ? (
+          <div
+            className={
+              emptyMessage.suspicious
+                ? "rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
+                : "rounded-xl border border-border bg-surface-light/60 p-4 text-sm"
             }
-          }}
-          placeholder="KB, título ou classificação"
-        />
-        <Select label="Severidade" fullWidth={false} value={severity} onChange={(event) => { setSeverity(event.target.value); setPage(1); }} options={PATCH_SEVERITY_OPTIONS} />
-        <Select label="Status" fullWidth={false} value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} options={PATCH_STATUS_OPTIONS} />
-        <Button variant="secondary" onClick={() => { setSearchApplied(searchInput.trim()); setPage(1); }}>Filtrar</Button>
-        {view === "pending" && items.length > 0 && (
-          <Button variant="secondary" onClick={() => void handleApproveAllVisible()} disabled={bulk.isPending || !canApprove}>
-            Aprovar visíveis
-          </Button>
-        )}
-      </div>
-
-      {/* Estado vazio explicativo: a busca WUA padrão só lista o que ainda
-          falta baixar/instalar — vazio não significa "máquina em dia". */}
-      {items.length === 0 && view === "pending" ? (
-        <div
-          className={
-            emptyMessage.suspicious
-              ? "rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm"
-              : "rounded-xl border border-border bg-surface-light p-3 text-sm"
-          }
-        >
-          <p className="font-medium text-foreground">{emptyMessage.title}</p>
-          <p className="mt-1 text-xs text-muted">{emptyMessage.description}</p>
-          {emptyMessage.suspicious && (
-            <div className="mt-2 flex flex-wrap gap-2">
+          >
+            <div className="flex items-start gap-2">
+              <Icon
+                name={emptyMessage.suspicious ? "warning" : "verified"}
+                className={`mt-0.5 h-4 w-4 shrink-0 ${emptyMessage.suspicious ? "text-warning" : "text-success"}`}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">{emptyMessage.title}</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {emptyMessage.suspicious
+                    ? "Vazio aqui não significa máquina em dia: veja a explicação abaixo antes de concluir."
+                    : "Nada a fazer nesta máquina pela busca padrão do Windows Update."}
+                </p>
+                <details className="group mt-2 text-xs text-muted">
+                  <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
+                    <Icon name="expand_more" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                    Por que esta lista pode aparecer vazia?
+                  </summary>
+                  <p className="mt-1.5 pl-4">{emptyMessage.description}</p>
+                </details>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 pl-6">
               <Button
                 size="sm"
                 variant="secondary"
@@ -542,48 +862,103 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
                 <Icon name="refresh" className="h-3.5 w-3.5" />
                 {scanning ? "Verificando..." : "Verificar atualizações"}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => { setView("installed"); setStatusFilter(""); setPage(1); }}
-              >
+              <Button size="sm" variant="ghost" onClick={() => selectView("installed")}>
                 Ver instaladas ({data?.installedCount ?? 0})
               </Button>
             </div>
-          )}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border border-border bg-surface-light p-3 text-sm">
-          <p className="font-medium text-foreground">
-            {view === "pending"
-              ? "Nenhuma atualização pendente"
-              : "Nenhuma atualização instalada reportada"}
-          </p>
-          {view === "installed" && (
-            <p className="mt-1 text-xs text-muted">
-              O agente reporta as atualizações instaladas pela busca de KBs (Win32_QuickFixEngineering) e
-              pela busca do Windows Update. Se a lista estiver vazia após uma varredura bem-sucedida, o
-              agente pode estar sem permissão de leitura no WMI.
-            </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-surface-light/60 p-4 text-sm">
+            <p className="font-medium text-foreground">Nenhuma atualização instalada reportada</p>
+            <details className="group mt-2 text-xs text-muted">
+              <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
+                <Icon name="expand_more" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                O que alimenta esta lista?
+              </summary>
+              <p className="mt-1.5 pl-4">
+                O agente reporta as atualizações instaladas pela busca de KBs (Win32_QuickFixEngineering) e
+                pela busca do Windows Update. Se a lista estiver vazia após uma varredura bem-sucedida, o
+                agente pode estar sem permissão de leitura no WMI.
+              </p>
+            </details>
+          </div>
+        )
       ) : (
         <DataTable
           columns={columns}
           data={items}
           keyExtractor={(update) => update.id}
           showPagination={false}
+          fixedLayout
+          flush
+          defaultSort={{ key: "severity", direction: "desc" }}
           emptyMessage={view === "pending" ? emptyMessage.title : "Nenhuma atualização instalada reportada"}
         />
       )}
 
-      <Pagination
-        page={page}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        totalItems={totalCount}
-        pageSize={pageSize}
-      />
+      {totalCount > 0 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={totalCount}
+          pageSize={pageSize}
+        />
+      )}
+
+      <Modal open={policyModalOpen} onClose={() => setPolicyModalOpen(false)} title="Política do Windows Update no SO">
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            Ações raras e reversíveis que escrevem política no Windows do agente (não no servidor). Ficam
+            fora da barra principal para não competir com “Verificar” e “Instalar”.
+          </p>
+          <div className="rounded-xl border border-border bg-surface-light/60 p-3">
+            <p className="text-sm font-medium text-foreground">Aplicar enforcement</p>
+            <p className="mt-1 text-xs text-muted">
+              Oculta os KBs recusados e aplica a política de WU (notificar/deferir). Só funciona se a política
+              do escopo estiver em OsEnforced; o backup é gravado quando o agente responder.
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-2"
+              disabled={applyOsPolicy.isPending || !canExecute}
+              onClick={() => { setPolicyModalOpen(false); setConfirmOsPolicy("apply"); }}
+            >
+              <Icon name="shield" className="h-3.5 w-3.5" />
+              Aplicar no SO
+            </Button>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-light/60 p-3">
+            <p className="text-sm font-medium text-foreground">Reverter enforcement</p>
+            <p className="mt-1 text-xs text-muted">
+              Restaura a política anterior e reexibe os KBs ocultos, usando o backup gravado no resultado do
+              agente. Se o backup ainda não chegou, o servidor recusa com uma mensagem.
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mt-2"
+              disabled={rollbackOsPolicy.isPending || !canExecute}
+              onClick={() => { setPolicyModalOpen(false); setConfirmOsPolicy("rollback"); }}
+            >
+              <Icon name="undo" className="h-3.5 w-3.5" />
+              Reverter SO
+            </Button>
+          </div>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={() => setPolicyModalOpen(false)}>Fechar</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {rowMenu && (
+        <ContextMenu
+          position={{ x: rowMenu.x, y: rowMenu.y }}
+          items={rowMenuItems}
+          onClose={() => setRowMenu(null)}
+        />
+      )}
 
       <Modal open={approvalModal !== null} onClose={() => setApprovalModal(null)} title={approvalModal?.action === "deny" ? "Recusar atualização" : "Aprovar atualização"}>
         <div className="space-y-3">

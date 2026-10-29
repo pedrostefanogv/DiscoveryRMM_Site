@@ -4440,6 +4440,22 @@ export interface AgentWindowsUpdateProbe {
   downloadPercent?: number | null;
   /** Momento da última sonda de estado. */
   probedAt?: string | null;
+  /**
+   * Nome do servidor WSUS configurado na máquina (a sonda do agente lê
+   * WUServer/UpdateServiceUrlAlternate). Ausente em API/agente antigos.
+   */
+  wsusServer?: string | null;
+  /** AUOptions do Windows Update (2/3/4/5), quando a máquina tem política. */
+  auOptions?: number | null;
+  /** NoAutoUpdate=1 (atualização automática desligada por política). */
+  noAutoUpdate?: boolean | null;
+  /** DeferralQualityUpdatesPeriodInDays / DeferralFeatureUpdatesPeriodInDays. */
+  deferralDays?: number | null;
+  /** Janela de horas ativas configurada na máquina (0-23). */
+  activeHoursStart?: number | null;
+  activeHoursEnd?: number | null;
+  /** KBs instaladas contadas no registro (CBS) pela sonda. */
+  qfeInstalledCount?: number | null;
 }
 
 /**
@@ -4475,6 +4491,10 @@ export interface AgentWindowsUpdateSnapshot {
   wuaAvailable?: boolean | null;
   /** Versão do agente que gerou o último inventário. */
   agentVersion?: string | null;
+  /** Origem do último scan: wua | qfe. */
+  scanSource?: string | null;
+  /** Disparo do último scan: periodic | change | command | install. */
+  scanTrigger?: string | null;
 }
 
 export interface PatchInventoryGroup {
