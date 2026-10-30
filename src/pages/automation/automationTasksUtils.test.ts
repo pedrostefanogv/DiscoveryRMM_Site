@@ -9,6 +9,8 @@ import {
   normalizeToastTiming,
   notificationModeFromTask,
   notificationModeLabel,
+  PACKAGE_UNAUTHORIZED_DEFAULT_WARNING,
+  packageNoticeFrom,
   toastTimingLabel,
   wingetDecisionFromMetadata,
 } from './automationTasksUtils';
@@ -176,5 +178,33 @@ describe('customFieldsFromMetadata', () => {
       collected: [],
       collectorField: null,
     });
+  });
+});
+
+/**
+ * Aviso de pacote fora da App Store aprovada: policy de automação sobrepõe a
+ * loja; o aviso informa o admin e NÃO bloqueia. Campo ausente = autorizado.
+ */
+describe('packageNoticeFrom', () => {
+  it('retorna null quando autorizado, ausente ou task vazia', () => {
+    expect(packageNoticeFrom(null)).toBeNull();
+    expect(packageNoticeFrom(undefined)).toBeNull();
+    expect(packageNoticeFrom({})).toBeNull();
+    expect(packageNoticeFrom({ packageAuthorized: true })).toBeNull();
+  });
+
+  it('usa packageWarning quando presente', () => {
+    expect(
+      packageNoticeFrom({ packageAuthorized: false, packageWarning: 'Pacote customizado' }),
+    ).toBe('Pacote customizado');
+  });
+
+  it('usa o texto padrão quando packageWarning é vazio/ausente', () => {
+    expect(packageNoticeFrom({ packageAuthorized: false })).toBe(
+      PACKAGE_UNAUTHORIZED_DEFAULT_WARNING,
+    );
+    expect(packageNoticeFrom({ packageAuthorized: false, packageWarning: '   ' })).toBe(
+      PACKAGE_UNAUTHORIZED_DEFAULT_WARNING,
+    );
   });
 });

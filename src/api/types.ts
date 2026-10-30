@@ -4083,6 +4083,13 @@ export interface AutomationTaskSummary {
    */
   executionOrder: number;
   lastUpdatedAt: string;
+  /**
+   * Pacote autorizado na App Store aprovada (apenas actions de pacote).
+   * Ausente = autorizado (compatibilidade com APIs que ainda não expõem).
+   */
+  packageAuthorized?: boolean;
+  /** Aviso para o admin quando packageAuthorized=false; NÃO bloqueia a execução. */
+  packageWarning?: string | null;
 }
 
 export interface AutomationTaskDetail extends AutomationTaskSummary {

@@ -172,6 +172,29 @@ export function toastTimingLabel(value: unknown): string {
 }
 
 
+// ── Aviso de pacote fora da App Store aprovada ──────────────────────────────
+export const PACKAGE_UNAUTHORIZED_DEFAULT_WARNING =
+  "Este pacote não está na App Store aprovada. A policy de automação tem prioridade sobre a loja e instalará/atualizará o app por cima.";
+
+/**
+ * Aviso a exibir quando o backend informa `packageAuthorized=false` (resposta
+ * de create/update ou GET da task). A policy de automação sobrepõe a App Store:
+ * o aviso informa o admin e NÃO bloqueia. Campo ausente = autorizado (retorna
+ * null) para não quebrar com APIs antigas.
+ */
+export function packageNoticeFrom(
+  task:
+    | { packageAuthorized?: boolean; packageWarning?: string | null }
+    | null
+    | undefined,
+): string | null {
+  if (!task || task.packageAuthorized !== false) return null;
+  const warning =
+    typeof task.packageWarning === "string" ? task.packageWarning.trim() : "";
+  return warning || PACKAGE_UNAUTHORIZED_DEFAULT_WARNING;
+}
+
+
 // ── Descrição de cron (5 campos, dialeto robfig/cron) ───────────────────────
 const CRON_WEEKDAY_NAMES = [
   "domingo",

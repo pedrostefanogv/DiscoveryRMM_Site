@@ -38,6 +38,7 @@ import {
   notificationModeFromTask,
   notificationModeLabel,
   toastTimingLabel,
+  packageNoticeFrom,
 } from "./automationTasksUtils";
 import {
   TASK_ACTION_FILTERS,
@@ -379,6 +380,8 @@ export default function AutomationTasksPage() {
   const [cronStep, setCronStep] = useState("15");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: AutomationTaskSummary } | null>(null);
   const [triggersHelpOpen, setTriggersHelpOpen] = useState(false);
+  /** Aviso de pacote fora da App Store (create/update/GET); informativo, não bloqueia. */
+  const [packageNotice, setPackageNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setPackageSearchDebounced(packageSearch), 400);
@@ -501,6 +504,8 @@ export default function AutomationTasksPage() {
       isActive: detail.isActive,
     });
     setExecutionOrderTouched(true);
+    // Aviso informativo do backend (pacote fora da App Store aprovada).
+    setPackageNotice(packageNoticeFrom(detail));
 
     applyScopeCascade(normalizedScopeType, detail);
   }, [editingId, taskDetail.data]);
@@ -541,6 +546,7 @@ export default function AutomationTasksPage() {
     setTagSearch("");
     setCloseProcessInput("");
     setExecutionOrderTouched(false);
+    setPackageNotice(null);
     setForm(defaultForm);
   };
 
@@ -1224,7 +1230,15 @@ export default function AutomationTasksPage() {
           correlationId: buildCorrelationId("task-update"),
         },
         {
-          onSuccess: () => {
+          onSuccess: (result) => {
+            // Aviso informativo: policy de automação sobrepõe a App Store e NÃO bloqueia.
+            const notice = packageNoticeFrom(result);
+            setPackageNotice(notice);
+            if (notice) {
+              toast(notice, { icon: "⚠️" });
+              // Mantém o form aberto para o admin ler o aviso e decidir fechar.
+              return;
+            }
             toast.success("Tarefa atualizada");
             setFormOpen(false);
             setEditing(null);
@@ -1251,7 +1265,15 @@ export default function AutomationTasksPage() {
         correlationId: buildCorrelationId("task-create"),
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          // Aviso informativo: policy de automação sobrepõe a App Store e NÃO bloqueia.
+          const notice = packageNoticeFrom(result);
+          setPackageNotice(notice);
+          if (notice) {
+            toast(notice, { icon: "⚠️" });
+            // Mantém o form aberto para o admin ler o aviso e decidir fechar.
+            return;
+          }
           toast.success(
             payload.triggerImmediate
               ? "Tarefa criada — execução imediata será disparada nos agents do escopo em segundos"
@@ -1288,6 +1310,7 @@ export default function AutomationTasksPage() {
               setPackageSearch("");
               setTagSearch("");
               setExecutionOrderTouched(false);
+              setPackageNotice(null);
               setForm(defaultForm);
               setFormOpen(true);
           }}
@@ -1708,6 +1731,15 @@ export default function AutomationTasksPage() {
         {editing && taskDetail.isError && (
           <div className="mb-3">
             <ErrorDisplay onRetry={() => taskDetail.refetch()} />
+          </div>
+        )}
+        {packageNotice && (
+          <div
+            role="alert"
+            className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground"
+          >
+            <p className="font-medium">Pacote fora da App Store aprovada</p>
+            <p className="mt-1 text-muted">{packageNotice}</p>
           </div>
         )}
         <div className="grid gap-3 md:grid-cols-2">
@@ -2581,6 +2613,8 @@ export default function AutomationTasksPage() {
           const d = detailTask.data;
           const detailIsDeleted = isTaskDeleted(d);
           const detailNotificationMode = notificationModeFromTask(d.notificationMode, d.requiresApproval);
+          // Aviso informativo (policy de automação sobrepõe a App Store; não bloqueia).
+          const detailPackageNotice = packageNoticeFrom(d);
           return (
             <div className="space-y-4">
               {/* Cabeçalho */}
@@ -2604,8 +2638,19 @@ export default function AutomationTasksPage() {
                   >
                     {notificationModeLabel(detailNotificationMode)}
                   </Badge>
+                  {detailPackageNotice && <Badge color="warning">Fora da App Store</Badge>}
                 </div>
               </div>
+
+              {detailPackageNotice && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground"
+                >
+                  <p className="font-medium">Pacote fora da App Store aprovada</p>
+                  <p className="mt-1 text-muted">{detailPackageNotice}</p>
+                </div>
+              )}
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {/* Ação */}
