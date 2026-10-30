@@ -212,6 +212,8 @@ export const agentPatchesApi = {
       status?: string;
       severity?: string;
       order?: "asc" | "desc";
+      /** "windows" esconde apps de terceiros; "third-party" mostra só eles. */
+      source?: string;
     },
   ) =>
     api.get<AgentWindowsUpdatePage>(`${agentBase(agentId)}/page`, {
@@ -221,6 +223,7 @@ export const agentPatchesApi = {
       status: params?.status,
       severity: params?.severity,
       order: params?.order,
+      source: params?.source,
     }),
 
   snapshot: (agentId: string) =>

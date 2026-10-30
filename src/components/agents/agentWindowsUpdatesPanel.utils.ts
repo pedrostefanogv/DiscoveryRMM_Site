@@ -573,10 +573,12 @@ export interface PanelFilterState {
   search: string;
   severity: string;
   status: string;
+  /** Origem: "windows" / "third-party" (apps de terceiros) ou "" (todas). */
+  source?: string;
 }
 
 export function hasActiveFilters(filters: PanelFilterState): boolean {
-  return Boolean(filters.search.trim() || filters.severity || filters.status);
+  return Boolean(filters.search.trim() || filters.severity || filters.status || filters.source);
 }
 
 /** Texto do vazio quando há filtro aplicado (diferente do vazio "de verdade"). */
@@ -585,6 +587,7 @@ export function describeFilteredEmpty(filters: PanelFilterState): { title: strin
   if (filters.search.trim()) parts.push(`busca "${filters.search.trim()}"`);
   if (filters.severity) parts.push(`severidade ${filters.severity}`);
   if (filters.status) parts.push(`status ${filters.status}`);
+  if (filters.source) parts.push(`origem ${filters.source}`);
   return {
     title: "Nenhuma atualização corresponde aos filtros",
     description: parts.length > 0

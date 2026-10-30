@@ -72,6 +72,12 @@ type UpdateView = "pending" | "installed";
 /** Filtro de aprovação da aba de pendentes (vira `status` na API). */
 type ApprovalFilter = "" | "approved" | "denied";
 
+const SOURCE_FILTER_OPTIONS = [
+  { value: "", label: "Todas as origens" },
+  { value: "windows", label: "Só Windows Update" },
+  { value: "third-party", label: "Só de terceiros" },
+];
+
 const APPROVAL_FILTER_OPTIONS = [
   { value: "", label: "Todas as aprovações" },
   { value: "approved", label: "Aprovadas" },
@@ -95,6 +101,8 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const [severity, setSeverity] = useState("");
+  /** Filtro de origem: "windows" esconde apps de terceiros (já listados em Programas). */
+  const [sourceFilter, setSourceFilter] = useState<"" | "windows" | "third-party">("");
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("");
   const [approvalModal, setApprovalModal] = useState<ApprovalModalState | null>(null);
   const [approvalScope, setApprovalScope] = useState<PatchApprovalScopeType>("Agent");
@@ -130,6 +138,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     search: searchApplied,
     status: effectiveStatus,
     severity: severity || undefined,
+    source: sourceFilter || undefined,
     order: "desc",
   });
   const scan = useScanAgentWindowsUpdates();
@@ -220,9 +229,9 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     scanGaveUp && !health.neverScanned && !scanAnswered && scanRequestedAtMs !== null;
 
   const summary = useMemo(() => describeSnapshotSummary(data), [data]);
-  const filters = { search: searchApplied, severity, status: approvalFilter };
+  const filters = { search: searchApplied, severity, status: approvalFilter, source: sourceFilter };
   const filtersActive = hasActiveFilters(filters);
-  const filteredEmpty = useMemo(() => describeFilteredEmpty(filters), [searchApplied, severity, approvalFilter]);
+  const filteredEmpty = useMemo(() => describeFilteredEmpty(filters), [searchApplied, severity, approvalFilter, sourceFilter]);
 
   const emptyMessage = useMemo(
     () =>
@@ -237,6 +246,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     setSearchInput("");
     setSearchApplied("");
     setSeverity("");
+    setSourceFilter("");
     setApprovalFilter("");
     setPage(1);
   };
@@ -820,6 +830,13 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
             value={severity}
             onChange={(event) => { setSeverity(event.target.value); setPage(1); }}
             options={PATCH_SEVERITY_OPTIONS}
+          />
+          <Select
+            label="Origem"
+            fullWidth={false}
+            value={sourceFilter}
+            onChange={(event) => { setSourceFilter(event.target.value as "" | "windows" | "third-party"); setPage(1); }}
+            options={SOURCE_FILTER_OPTIONS}
           />
           {view === "pending" && (
             <Select

@@ -18,6 +18,8 @@ export function useAgentWindowsUpdates(
     status?: string;
     severity?: string;
     order?: "asc" | "desc";
+    /** "windows" esconde apps de terceiros; "third-party" mostra só eles. */
+    source?: string;
   },
 ) {
   return useQuery({
