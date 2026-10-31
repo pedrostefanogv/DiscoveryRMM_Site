@@ -43,6 +43,11 @@ export interface AgentWindowsUpdateSnapshotOptions {
   fastPolling?: boolean;
   /** Desliga o polling (útil em telas que só leem o snapshot uma vez). */
   polling?: boolean;
+  /**
+   * Filtro de origem: "windows" esconde apps de terceiros também dos
+   * CONTADORES (senão a aba anuncia 12 pendentes com a tabela mostrando 1).
+   */
+  source?: string;
 }
 
 export function useAgentWindowsUpdateSnapshot(
@@ -51,8 +56,8 @@ export function useAgentWindowsUpdateSnapshot(
 ) {
   const polling = options?.polling !== false;
   return useQuery({
-    queryKey: KEYS.snapshot(agentId ?? ""),
-    queryFn: () => agentPatchesApi.snapshot(agentId!),
+    queryKey: [...KEYS.snapshot(agentId ?? ""), options?.source ?? ""],
+    queryFn: () => agentPatchesApi.snapshot(agentId!, { source: options?.source }),
     enabled: Boolean(agentId),
     refetchInterval: !polling
       ? false

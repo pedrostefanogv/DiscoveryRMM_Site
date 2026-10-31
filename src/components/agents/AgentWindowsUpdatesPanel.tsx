@@ -123,7 +123,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
    */
   const [fastPolling, setFastPolling] = useState(false);
 
-  const snapshot = useAgentWindowsUpdateSnapshot(agentId, { fastPolling });
+  const snapshot = useAgentWindowsUpdateSnapshot(agentId, { fastPolling, source: sourceFilter });
   const data = snapshot.data;
 
   /**

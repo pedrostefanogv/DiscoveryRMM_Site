@@ -226,8 +226,10 @@ export const agentPatchesApi = {
       source: params?.source,
     }),
 
-  snapshot: (agentId: string) =>
-    api.get<AgentWindowsUpdateSnapshot>(`${agentBase(agentId)}/snapshot`),
+  snapshot: (agentId: string, params?: { source?: string }) =>
+    api.get<AgentWindowsUpdateSnapshot>(`${agentBase(agentId)}/snapshot`, {
+      source: params?.source,
+    }),
 
   /**
    * Pede uma varredura imediata ao agente. `reason` é registrado na auditoria

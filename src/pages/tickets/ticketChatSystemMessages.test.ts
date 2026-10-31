@@ -26,7 +26,9 @@ function source(name: string): string {
 describe("chat do chamado — mensagens de sistema e fim de conversa", () => {
   it("a janela ao vivo mantém a thread visível depois do encerramento", () => {
     const panel = source("SupportChatPanel.tsx");
-    expect(panel).toContain("lastSession");
+    // A sessão visível desta janela (não a "última qualquer" da máquina) é o
+    // que sustenta a thread depois do desfecho.
+    expect(panel).toContain("visibleSession");
     expect(panel).toContain("sessionEnded");
     // Nota de sistema centralizada, não bolha de conversa.
     expect(panel).toContain('toLowerCase() === "system"');

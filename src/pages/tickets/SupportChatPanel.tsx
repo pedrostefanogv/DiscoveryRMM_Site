@@ -480,6 +480,12 @@ export default function SupportChatPanel({
   // ?start=1 — inicia a conversa uma única vez, sem exigir um clique extra.
   // (Depois que o atendente encerra, não reinicia sozinho.)
   const autoStartedRef = useRef(false);
+  // Outro agent na MESMA janela/componente: o auto-start é por máquina, então
+  // libera a trava (senão a segunda máquina nunca abriria a conversa).
+  useEffect(() => {
+    autoStartedRef.current = false;
+  }, [client.key]);
+
   useEffect(() => {
     if (!autoStart || autoStartedRef.current || disabledReason || !canManage) return;
     if (current.isLoading) return;
