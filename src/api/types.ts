@@ -4383,6 +4383,8 @@ export interface AgentWindowsUpdate {
   isHidden: boolean;
   requiresReboot: boolean;
   maxDownloadSize: number | null;
+  /** Menor download possível (delta/express, bytes); null quando não reportado. */
+  minDownloadSize: number | null;
   supportUrl: string | null;
   publishedAt: string | null;
   installedAt: string | null;

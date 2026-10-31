@@ -20,6 +20,10 @@ import { useAuthorization } from "@/auth/authorization";
 import { openRemoteSessionPopup } from "@/pages/agents/remoteSessionLauncher";
 import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
 import { PopupBlockedError } from "./ticketChatLauncher";
+import {
+  isLiveSupportChatStatus,
+  shouldAdoptSupportChatSession,
+} from "./supportChatSessionVisibility";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Painel do chat de suporte (console web).
@@ -189,23 +193,44 @@ export default function SupportChatPanel({
   const current = useSupportChatCurrent(client, true, sessionPollMs);
   const activeSession = current.data?.session ?? null;
 
-  // Última sessão conhecida mantém a conversa visível enquanto a consulta não
-  // devolve nada. O status dela também decide se continuamos verificando.
-  const [lastSession, setLastSession] = useState<TicketChatSession | null>(null);
-  useEffect(() => {
-    if (activeSession) setLastSession(activeSession);
-  }, [activeSession]);
-
-  // "Aguardando confirmação" NÃO pode depender só de activeSession.
+  // Sessão visível DESTA janela.
   //
-  // BUG CORRIGIDO: a consulta da sessão corrente devolvia hasSession=false assim
-  // que a sessão saía de Pending/Active. O painel então parava de verificar a
-  // decisão do usuário e ficava congelado no último snapshot "Pending" — mesmo
-  // depois de o usuário clicar em "Agora não" na máquina. O servidor agora
-  // devolve a sessão final (Declined/Expired/Ended); enquanto a última sessão
-  // conhecida ainda estiver Pending mantemos a verificação curta, porque é
-  // justamente a janela em que a resposta pode chegar.
-  const knownStatus = activeSession?.status ?? lastSession?.status ?? null;
+  // O servidor devolve o DESFECHO (Declined/Expired/Ended) de propósito — é o
+  // que tira o painel de "Aguardando confirmação" quando o usuário clica em
+  // "Agora não". Só que o mesmo dado, ao ABRIR a janela, ressuscitava a última
+  // conversa da máquina: o atendente via o histórico anterior (de outro
+  // atendente/turno, sobre outro usuário final) e o auto-start nem disparava.
+  //
+  // Agora só adotamos sessão TERMINAL se for a MESMA sessão que esta janela já
+  // acompanhava ao vivo (ver supportChatSessionVisibility.ts). Abrir do zero
+  // ignora o histórico antigo e oferece/inicia uma conversa nova.
+  //
+  // O estado é CHAVEADO pelo client (ticket:<id> | agent:<id>): a janela/rota
+  // pode trocar de agent reutilizando o mesmo componente e, sem a chave, a
+  // sessão do agent anterior continuaria na tela (histórico de OUTRA máquina).
+  const [visible, setVisible] = useState<{ key: string; session: TicketChatSession } | null>(null);
+  useEffect(() => {
+    if (!activeSession) return;
+    setVisible((previous) => {
+      const known = previous?.key === client.key ? previous.session : null;
+      return shouldAdoptSupportChatSession(activeSession, known)
+        ? { key: client.key, session: activeSession }
+        : previous;
+    });
+  }, [activeSession, client.key]);
+
+  const visibleSession = visible?.key === client.key ? visible.session : null;
+
+  // Antes do efeito rodar, uma sessão AO VIVO já pode ser exibida (evita
+  // "Sem conversa" piscando numa conversa ativa).
+  const session =
+    visibleSession ??
+    (activeSession && isLiveSupportChatStatus(activeSession.status) ? activeSession : null);
+
+  // "Aguardando confirmação" NÃO pode depender só de activeSession — e agora
+  // também não pode depender de uma sessão terminal antiga. O status da sessão
+  // visível é o que mantém a verificação curta enquanto a resposta pode chegar.
+  const knownStatus = session?.status ?? null;
   const waitingDecision = knownStatus === "Pending";
 
   useEffect(() => {
@@ -228,12 +253,11 @@ export default function SupportChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingDecision]);
 
-  const session = activeSession ?? lastSession;
   const sessionId = session?.id;
-  // A consulta da sessão corrente devolve null quando a conversa termina, mas o
-  // último snapshot (lastSession) ainda diz "Active". Normalizar aqui é o que
-  // desabilita o compositor e esconde o "Encerrar" numa conversa já encerrada —
-  // antes o campo de texto e o botão Enviar continuavam ativos.
+  // A consulta da sessão corrente devolve null quando a conversa termina, mas a
+  // última sessão visível ainda diz "Active". Normalizar aqui é o que desabilita
+  // o compositor e esconde o "Encerrar" numa conversa já encerrada — antes o
+  // campo de texto e o botão Enviar continuavam ativos.
   const sessionEnded = !activeSession && session?.status === "Active";
   const sessionForUi = sessionEnded && session ? { ...session, status: "Ended" as const } : session;
 
@@ -461,7 +485,9 @@ export default function SupportChatPanel({
     if (current.isLoading) return;
 
     autoStartedRef.current = true;
-    if (activeSession) return;
+    // Sessão TERMINAL antiga não conta: abrir a janela com ?start=1 precisa
+    // iniciar uma conversa NOVA, não só reexibir a anterior.
+    if (session) return;
 
     start.mutate(undefined, {
       onSuccess: () => toast.success(client.startSuccessMessage),
@@ -469,7 +495,7 @@ export default function SupportChatPanel({
         toast.error(extractConflictMessage(error) ?? "Não foi possível iniciar o chat."),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, canManage, current.isLoading, activeSession, disabledReason]);
+  }, [autoStart, canManage, current.isLoading, session, disabledReason]);
 
   return (
     // Coluna flex de altura cheia: cabeçalho/estado no topo, conversa rolando no

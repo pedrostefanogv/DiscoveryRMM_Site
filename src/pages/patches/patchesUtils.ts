@@ -143,3 +143,35 @@ export const PATCH_STATUS_OPTIONS = [
 export function formatBytes(bytes: number | null | undefined): string {
   return formatBytesBase(bytes);
 }
+
+/**
+ * Tamanho máximo de download por cima do limiar de plausibilidade.
+ *
+ * O WUA devolve em MaxDownloadSize a soma de TODOS os conteúdos do pacote
+ * empacotado (UUP): numa atualização Insider Preview o mesmo update trazia
+ * 13.426 arquivos (todas as edições/idiomas) e MaxDownloadSize = 97,8 GB,
+ * enquanto o download real desta máquina era ~9,1 GB na tela do Windows.
+ * Acima de 20 GiB o número não descreve o download do dispositivo.
+ */
+export const IMPLAUSIBLE_DOWNLOAD_SIZE_BYTES = 20 * 1024 * 1024 * 1024;
+
+/**
+ * Rótulo de tamanho de download para exibição, dado o intervalo do WUA.
+ *
+ * - min > 0 e max plausível (<= 20 GiB): "a partir de X" (o download real
+ *   começa no mínimo e pode crescer até o máximo);
+ * - min = 0 e max plausível: "≈ X" (estimativa única);
+ * - max acima do limiar: null (o número não descreve este dispositivo e é
+ *   omitido em vez de exibir 91 GiB para um download real de 9 GB).
+ */
+export function formatDownloadSizeLabel(
+  minDownloadSize: number | null | undefined,
+  maxDownloadSize: number | null | undefined,
+): string | null {
+  const min = typeof minDownloadSize === "number" && Number.isFinite(minDownloadSize) ? minDownloadSize : 0;
+  const max = typeof maxDownloadSize === "number" && Number.isFinite(maxDownloadSize) ? maxDownloadSize : 0;
+  if (max <= 0) return null;
+  if (max > IMPLAUSIBLE_DOWNLOAD_SIZE_BYTES) return null;
+  if (min > 0 && min < max) return "a partir de " + formatBytes(min);
+  return "≈ " + formatBytes(max);
+}

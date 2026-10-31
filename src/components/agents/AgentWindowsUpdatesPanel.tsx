@@ -19,7 +19,7 @@ import type { AgentWindowsUpdate, PatchApprovalScopeType } from "@/api/types";
 import {
   approvalColor,
   approvalLabel,
-  formatBytes,
+  formatDownloadSizeLabel,
   formatKbList,
   formatPatchDate,
   PATCH_SEVERITY_OPTIONS,
@@ -402,24 +402,34 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
       header: "Atualização",
       sortable: true,
       width: "38%",
-      render: (update) => (
+      render: (update) => {
+        const sizeLabel = formatDownloadSizeLabel(update.minDownloadSize, update.maxDownloadSize);
+        return (
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground" title={update.title}>{update.title}</p>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
             <span className="font-mono text-[11px] text-foreground/80">{formatKbList(update.kbIds)}</span>
             <span aria-hidden>·</span>
             <span>{update.classification ?? "Sem classificação"}</span>
-            {update.maxDownloadSize ? (
+            {sizeLabel ? (
               <>
                 <span aria-hidden>·</span>
-                <span>{formatBytes(update.maxDownloadSize)}</span>
+                {/* O WUA reporta a soma de TODO o pacote empacotado (UUP): em
+                    updates Insider isso inclui todas as edições/idiomas e passa
+                    de 90 GB, enquanto o download real é ~9 GB. Acima do limiar
+                    plausível o número é omitido; com min>0 exibimos "a partir
+                    de X" (formatDownloadSizeLabel). */}
+                <span title="Estimativa de download reportada pelo Windows Update Agent (o download real pode variar)">
+                  {sizeLabel}
+                </span>
               </>
             ) : null}
             {update.isMandatory ? <Badge color="warning">obrigatória</Badge> : null}
             {update.isDownloaded && update.isPending ? <Badge color="primary">baixada</Badge> : null}
           </p>
         </div>
-      ),
+        );
+      },
     },
     {
       key: "severity",
