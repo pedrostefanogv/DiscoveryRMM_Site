@@ -2781,7 +2781,7 @@ export default function AgentDetail() {
             </>
           ) : (
             <>
-              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos. Ele está <span className="font-semibold">offline</span>, então <span className="font-semibold">não será desinstalado</span> do computador.
+              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos. Ele está <span className="font-semibold">offline</span>: o comando de desinstalação será <span className="font-semibold">agendado</span> e executado quando o agente voltar a se comunicar com o servidor.
             </>
           )
         }

@@ -468,6 +468,21 @@ export function useDeletedAgents(
   });
 }
 
+/**
+ * Reenvia o comando de desinstalacao remota (decommission) para um agente na
+ * lixeira. Uso: o primeiro envio nao chegou (agente offline no delete, NATS
+ * indisponível) e o agente continua instalado na máquina.
+ */
+export function useRequestDecommission() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => agentsApi.requestDecommission(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
 /** Tira o agente da lixeira (volta à listagem normal). */
 export function useRestoreAgent() {
   const qc = useQueryClient();

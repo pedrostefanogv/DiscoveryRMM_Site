@@ -81,6 +81,7 @@ vi.mock('@/hooks/useAgents', () => ({
   useDeleteAgent: () => ({ mutateAsync: deleteMock, isPending: false }),
   useRestoreAgent: () => ({ mutateAsync: restoreMock, isPending: false }),
   usePurgeAgent: () => ({ mutateAsync: purgeMock, isPending: false }),
+  useRequestDecommission: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeletedAgents: (params: { page?: number }) => {
     deletedParamsMock(params);
     return {

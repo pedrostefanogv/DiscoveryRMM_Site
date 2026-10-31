@@ -128,6 +128,15 @@ export const agentsApi = {
   restore: (id: string) => api.post<void>(`${BASE}/${id}/restore`),
 
   /**
+   * Reenvia o comando de desinstalacao remota (decommission). Uso: o primeiro
+   * envio nao chegou (agente offline no delete, NATS indisponivel) e o agente
+   * continua instalado na maquina. O comando e persistido como Pending e
+   * reentregue quando o agente voltar a ser visto online.
+   */
+  requestDecommission: (id: string) =>
+    api.post<void>(`${BASE}/${id}/decommission`),
+
+  /**
    * Exclusao definitiva (hard delete). force=true confirma a remocao mesmo
    * quando o agente tem chamados vinculados (o historico e preservado sem
    * vinculo).

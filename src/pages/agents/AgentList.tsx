@@ -13,7 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
-import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePurgeAgent, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePurgeAgent, useRequestDecommission, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
 import { Icon, Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, Button, ConfirmDialog, Pagination } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
@@ -140,6 +140,7 @@ export default function AgentList() {
   const deleteAgent = useDeleteAgent();
   const restoreAgent = useRestoreAgent();
   const purgeAgent = usePurgeAgent();
+  const requestDecommission = useRequestDecommission();
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
@@ -197,6 +198,7 @@ export default function AgentList() {
   // Segundo passo quando o backend responde 409 (agente com chamados vinculados).
   const [purgeForceTarget, setPurgeForceTarget] = useState<AgentWithClient | null>(null);
   const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
+  const [decommissioningAgentId, setDecommissioningAgentId] = useState<string | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
@@ -371,7 +373,7 @@ export default function AgentList() {
       toast.success(
         wasOnline
           ? `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira. Comando de desinstalação enviado.`
-          : `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira (offline — não foi desinstalado).`,
+          : `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira. Como está offline, o comando de desinstalação ficou agendado e será executado quando o agente voltar a se comunicar.`,
       );
       setDeleteConfirmAgent(null);
     } catch (error) {
@@ -427,6 +429,23 @@ export default function AgentList() {
   const handleForcePurge = async () => {
     if (!purgeForceTarget) return;
     await runPurge(purgeForceTarget, true);
+  };
+
+  // ── Reenviar desinstalação remota (decommission) na lixeira ──────────────
+  const handleRequestDecommission = async (agent: AgentWithClient) => {
+    if (decommissioningAgentId) return;
+    setDecommissioningAgentId(agent.id);
+    try {
+      await requestDecommission.mutateAsync(agent.id);
+      toast.success(
+        `Comando de desinstalação reenviado para ${agent.displayName ?? agent.hostname}. ` +
+        'Ele será executado quando o agente voltar a se comunicar com o servidor.',
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao reenviar o comando de desinstalação.');
+    } finally {
+      setDecommissioningAgentId(null);
+    }
   };
 
   const handleRestoreAgent = async (agent: AgentWithClient) => {
@@ -1155,6 +1174,16 @@ export default function AgentList() {
                             </Button>
                             <Button
                               size="sm"
+                              variant="secondary"
+                              onClick={() => { void handleRequestDecommission(trashAgent); }}
+                              loading={decommissioningAgentId === agent.id}
+                              disabled={restoreAgent.isPending || purgeAgent.isPending}
+                              title="Reenvia o comando de desinstalação remota (o agente se desinstala quando voltar a se comunicar com o servidor)"
+                            >
+                              <Icon name="refresh" className="h-4 w-4" /> Reenviar desinstalação
+                            </Button>
+                            <Button
+                              size="sm"
                               variant="danger"
                               onClick={() => openPurgeAgentModal(trashAgent)}
                               disabled={restoreAgent.isPending || purgeAgent.isPending}
@@ -1452,7 +1481,7 @@ export default function AgentList() {
             </>
           ) : (
             <>
-              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos. Ele está <span className="font-semibold">offline</span>, então <span className="font-semibold">não será desinstalado</span> do computador.
+              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos. Ele está <span className="font-semibold">offline</span>: o comando de desinstalação será <span className="font-semibold">agendado</span> e executado quando o agente voltar a se comunicar com o servidor.
             </>
           )
         }
