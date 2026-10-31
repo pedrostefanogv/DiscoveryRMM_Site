@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
-import { Icon, Badge, Button, Card, ErrorDisplay, Loading, Modal, Select } from '@/components/ui';
+import { Icon, Badge, Button, Card, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAppStoreResolvedApprovals, useDeleteApproval } from '@/hooks/useAppStore';
@@ -49,6 +49,11 @@ export function ApprovalsTab() {
   // Pacote que o modal deve pré-preencher (herdado → "Sobrescrever aqui").
   const [prefillPackageId, setPrefillPackageId] = useState('');
   const [prefillInstallationType, setPrefillInstallationType] = useState<AppInstallationType | undefined>();
+  // Valores herdados que o override começa usando (ação/auto-update vigentes).
+  const [prefillAction, setPrefillAction] = useState<AppApprovalActionType | undefined>();
+  const [prefillAutoUpdate, setPrefillAutoUpdate] = useState<boolean | undefined>();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [newRuleOpen, setNewRuleOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppApprovalResolvedRule | null>(null);
 
@@ -70,10 +75,17 @@ export function ApprovalsTab() {
   // 400 e a aba mostrava erro antes de o operador terminar o filtro.
   const scopeMissing = scopeType !== AppApprovalScopeType.Global && !scopeId;
 
+  // Busca com debounce: a filtragem é feita no servidor (com muitas regras
+  // Globais não faz sentido baixar tudo para filtrar no navegador).
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // Sempre a visão resolvida: para Client/Site/Agente ela traz a cadeia
   // completa (herdadas + próprias), não só as regras do escopo exato.
   const query = useAppStoreResolvedApprovals(
-    { scopeType, scopeId, installationType },
+    { scopeType, scopeId, installationType, search: debouncedSearch || undefined },
     { enabled: !scopeMissing },
   );
 
@@ -96,6 +108,10 @@ export function ApprovalsTab() {
     // escopo atual, porque o objetivo é criar o override aqui.
     setPrefillPackageId(rule?.packageId ?? '');
     setPrefillInstallationType(rule?.installationType);
+    // Herdado: o modal já abre com a ação/auto-update que valem hoje — o
+    // operador só ajusta o que quer sobrescrever.
+    setPrefillAction(rule?.action ?? undefined);
+    setPrefillAutoUpdate(rule?.autoUpdateEnabled);
     setNewRuleOpen(true);
   }
 
@@ -145,6 +161,14 @@ export function ApprovalsTab() {
               <div className="w-48"><Select label="Site" options={siteOptions} value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)} /></div>
             </>
           )}
+          <div className="w-64">
+            <Input
+              label="Buscar pacote"
+              placeholder="ID ou nome do pacote"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
           <div className="ml-auto"><Button onClick={() => openNewRule()}><Icon name="add" className="h-4 w-4" /> Nova Regra</Button></div>
         </div>
         {/* O seletor de agente é um bloco próprio: dentro da barra de filtros ele
@@ -176,6 +200,15 @@ export function ApprovalsTab() {
               : 'Regras de aprovação'}
           </span>
         </div>
+        {/* Política efetiva do escopo: com All/Disabled as regras abaixo são só
+            informativas — sem este aviso o operador acha que aprovou algo. */}
+        {query.data?.policy && query.data.policy !== 'PreApproved' && (
+          <div className="border-b border-border bg-warning/10 px-5 py-3 text-xs text-warning">
+            {query.data.policy === 'All'
+              ? 'A política da loja neste escopo é "All": qualquer pacote pode ser instalado e as regras abaixo NÃO estão sendo aplicadas.'
+              : 'A loja está desabilitada neste escopo: nenhuma instalação é permitida, independentemente das regras abaixo.'}
+          </div>
+        )}
         {scopeMissing && (
           <div className="flex flex-col items-center py-16 text-muted">
             <Icon name="verified_user" className="mb-3 h-10 w-10 opacity-30" />
@@ -209,7 +242,10 @@ export function ApprovalsTab() {
                       <span className="text-sm font-medium text-foreground font-mono">{rule.packageId}</span>
                       {rule.packageName && <span className="text-xs text-muted">{rule.packageName}</span>}
                       {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : rule.action === AppApprovalActionType.Deny ? <Badge color="danger">Negado</Badge> : <span className="text-xs text-muted">{'—'}</span>}
-                      {rule.autoUpdateEnabled && <Badge color="primary">Auto-update</Badge>}
+                      {/* Pacote negado não tem auto-update: o badge só confundia. */}
+                      {rule.action === AppApprovalActionType.Allow && rule.autoUpdateEnabled && (
+                        <Badge color="primary">Auto-update</Badge>
+                      )}
                       <Badge color="slate">{scopeLabel(rule.effectiveScopeType)}</Badge>
                       {rule.inherited && <Badge color="accent">Herdado</Badge>}
                       {rule.overridden && <Badge color="warning">Sobrescrito</Badge>}
@@ -262,6 +298,8 @@ export function ApprovalsTab() {
         prefillClientId={modalClientId}
         prefillSiteId={modalSiteId}
         prefillAgentId={scopeType === AppApprovalScopeType.Agent ? agentId : ''}
+        prefillAction={prefillAction}
+        prefillAutoUpdate={prefillAutoUpdate}
         // Criar uma regra Custom com o filtro em Winget deixava a lista vazia
         // logo depois de salvar: a aba passa a seguir o tipo da regra criada.
         onSaved={setInstallationType}

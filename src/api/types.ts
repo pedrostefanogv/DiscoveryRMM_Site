@@ -3874,6 +3874,13 @@ export interface AppApprovalResolvedResponse {
   scopeType: AppApprovalScopeType;
   scopeId: string | null;
   installationType: AppInstallationType;
+  /** Busca aplicada no servidor. */
+  search?: string | null;
+  /**
+   * Política efetiva da loja no escopo. Quando não é PreApproved as regras
+   * abaixo NÃO estão sendo aplicadas (All) ou a loja está desabilitada.
+   */
+  policy?: AppStorePolicyType | null;
   count: number;
   items: AppApprovalResolvedRule[];
 }

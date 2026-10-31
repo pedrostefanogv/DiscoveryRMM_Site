@@ -15,6 +15,7 @@ import type {
   AppApprovalRulesResponse,
   AppApprovalResolvedResponse,
   AppApprovalResolvedRule,
+  AppStorePolicyType,
   CreateAppApprovalRuleRequest,
   AppEffectivePage,
   AppApprovalAuditPage,
@@ -174,6 +175,30 @@ const APPROVAL_SCOPE_BY_NAME: Record<string, AppApprovalScopeType> = {
   site: AppApprovalScopeType.Site,
   agent: AppApprovalScopeType.Agent,
 };
+
+const STORE_POLICY_BY_NAME: Record<string, AppStorePolicyType> = {
+  disabled: "Disabled",
+  preapproved: "PreApproved",
+  all: "All",
+};
+
+/** Política da loja chega por NOME ("PreApproved") ou número; null se desconhecida. */
+function normalizeStorePolicy(value: unknown): AppStorePolicyType | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 0) return "Disabled";
+    if (value === 1) return "PreApproved";
+    if (value === 2) return "All";
+    return null;
+  }
+  if (typeof value === "string") {
+    const raw = value.trim();
+    const byName = STORE_POLICY_BY_NAME[raw.toLowerCase()];
+    if (byName) return byName;
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) return normalizeStorePolicy(numeric);
+  }
+  return null;
+}
 
 const APPROVAL_ACTION_BY_NAME: Record<string, AppApprovalActionType> = {
   allow: AppApprovalActionType.Allow,
@@ -392,6 +417,8 @@ function normalizeResolvedApprovalsResponse(
         ? normalizeInstallationType(page.installationType)
         : normalizeInstallationType(params.installationType),
     count: page.count ?? items.length,
+    search: page.search ?? null,
+    policy: normalizeStorePolicy(page.policy),
     items,
   };
 }
@@ -492,6 +519,8 @@ export interface ApprovalsParams {
   scopeType: AppApprovalScopeType;
   scopeId?: string | null;
   installationType?: AppInstallationType;
+  /** Busca por packageId/nome (aplicada no servidor). */
+  search?: string;
 }
 
 export interface AuditParams {

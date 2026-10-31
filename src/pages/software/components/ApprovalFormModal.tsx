@@ -25,6 +25,12 @@ interface ApprovalFormModalProps {
   prefillSiteId?: string;
   prefillAgentId?: string;
   /**
+   * Valores herdados ao criar um override ("Sobrescrever aqui"): o operador
+   * começa do estado que já vale no escopo e só ajusta o que quiser.
+   */
+  prefillAction?: AppApprovalActionType;
+  prefillAutoUpdate?: boolean;
+  /**
    * Avisa o dono da lista com o tipo de instalação da regra salva: criar uma
    * regra Custom com o filtro em Winget deixava a lista vazia logo após salvar.
    */
@@ -42,6 +48,8 @@ export function ApprovalFormModal({
   prefillClientId = '',
   prefillSiteId = '',
   prefillAgentId = '',
+  prefillAction,
+  prefillAutoUpdate,
   onSaved,
 }: ApprovalFormModalProps) {
   const isPackageIdLocked = lockPackageId || Boolean(prefillPackageId.trim());
@@ -90,6 +98,9 @@ export function ApprovalFormModal({
     setSelectedClientId(prefillClientId);
     setSelectedSiteId(prefillSiteId);
     setSelectedAgentId(prefillAgentId);
+    // Override começa com a ação/auto-update herdados; regra nova usa o padrão.
+    setAction(prefillAction ?? AppApprovalActionType.Allow);
+    setAutoUpdate(prefillAutoUpdate ?? false);
     // Motivo/erro são por abertura: sem isto, cancelar e reabrir reaproveitava o
     // motivo da tentativa anterior sem o operador perceber.
     setReason('');
@@ -102,6 +113,8 @@ export function ApprovalFormModal({
     prefillClientId,
     prefillSiteId,
     prefillAgentId,
+    prefillAction,
+    prefillAutoUpdate,
   ]);
 
   async function handleSubmit() {
