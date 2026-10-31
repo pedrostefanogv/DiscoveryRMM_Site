@@ -127,6 +127,9 @@ export function useUpsertCustomPackage() {
       Promise.all([
         qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+        // Nome do pacote exibido nas regras resolvidas vem do catálogo: renomear
+        // ou excluir um custom deixava o nome antigo na aba Aprovações.
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals-resolved"] }),
         // O DETALHE do pacote (["appStore","package",…]) é outra chave e tem
         // staleTime de 60s: sem invalidar, o modal/editor continuava mostrando
         // "sem instalador" logo depois de o arquivo ser enviado e vinculado.
@@ -145,6 +148,7 @@ export function useDeleteCustomPackage() {
         qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals-resolved"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "package"] }),
       ]),
   });
