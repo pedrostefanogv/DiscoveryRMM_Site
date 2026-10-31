@@ -44,6 +44,7 @@ import {
   TASK_ACTION_FILTERS,
   TASK_STATUS_FILTERS,
   TASK_TRIGGER_FILTERS,
+  buildTaskScopeFilter,
   statusFilterToIsActive,
   toggleFilterValue,
   type TaskStatusFilterValue,
@@ -317,10 +318,9 @@ export default function AutomationTasksPage() {
   const [searchFilter, setSearchFilter] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [scopeTypeFilter, setScopeTypeFilter] = useState("");
-  const [scopeIdFilter, setScopeIdFilter] = useState("");
-  const [filterScopeClientId, setFilterScopeClientId] = useState("");
-  const [filterScopeSiteId, setFilterScopeSiteId] = useState("");
-  const [filterScopeAgentId, setFilterScopeAgentId] = useState("");
+  // Um ÚNICO conjunto de selects de cliente/site/agente: o "Tipo de escopo"
+  // decide qual id dele vira o ScopeId da consulta (antes existiam dois blocos
+  // duplicados + um campo read-only repetindo o GUID já escolhido).
   const [filterClientId, setFilterClientId] = useState("");
   const [filterSiteId, setFilterSiteId] = useState("");
   const [filterAgentId, setFilterAgentId] = useState("");
@@ -389,17 +389,27 @@ export default function AutomationTasksPage() {
   }, [packageSearch]);
 
   const cursor = pageCursors[page - 1];
+
+  // O "Tipo de escopo" escolhe o id do escopo entre os selecionados no bloco
+  // único Cliente/Site/Agent (ver buildTaskScopeFilter).
+  const scopeFilter = buildTaskScopeFilter(
+    scopeTypeFilter,
+    filterClientId,
+    filterSiteId,
+    filterAgentId,
+  );
+
   const list = useAutomationTasks({
     search: searchFilter.trim() || undefined,
-    clientId: filterClientId || undefined,
-    siteId: filterSiteId || undefined,
-    agentId: filterAgentId || undefined,
+    clientId: scopeFilter.clientId,
+    siteId: scopeFilter.siteId,
+    agentId: scopeFilter.agentId,
     actionTypes: filterActionTypes.length ? filterActionTypes : undefined,
     triggers: filterTriggers.length ? filterTriggers : undefined,
     isActive: statusFilterToIsActive(filterStatus),
     labels: filterLabels.length ? filterLabels : undefined,
-    scopeType: scopeTypeFilter ? (Number(scopeTypeFilter) as AppApprovalScopeType) : undefined,
-    scopeId: scopeIdFilter || undefined,
+    scopeType: scopeFilter.scopeType,
+    scopeId: scopeFilter.scopeId,
     activeOnly: false,
     deletedOnly: listMode === "deleted" ? true : undefined,
     includeDeleted: listMode === "all" ? true : undefined,
@@ -419,8 +429,6 @@ export default function AutomationTasksPage() {
     [knownTags.data, filterLabelSearch],
   );
   const clients = useClients();
-  const filterScopeSites = useSites(filterScopeClientId);
-  const filterScopeAgents = useAgentsBySite(filterScopeSiteId);
   const advancedSites = useSites(filterClientId);
   const advancedAgents = useAgentsBySite(filterSiteId);
   const sites = useSites(scopeClientId);
@@ -446,25 +454,6 @@ export default function AutomationTasksPage() {
   const auditQuery = useAutomationTaskAudit(auditTaskId ?? "", 50, !!auditTaskId);
   const taskDetail = useAutomationTask(editingId);
   const detailTask = useAutomationTask(detailTaskId ?? "");
-
-  useEffect(() => {
-    const scopeType = Number(scopeTypeFilter);
-    if (!scopeTypeFilter || scopeType === AppApprovalScopeType.Global) {
-      setScopeIdFilter("");
-      return;
-    }
-    if (scopeType === AppApprovalScopeType.Client) {
-      setScopeIdFilter(filterScopeClientId);
-      return;
-    }
-    if (scopeType === AppApprovalScopeType.Site) {
-      setScopeIdFilter(filterScopeSiteId);
-      return;
-    }
-    if (scopeType === AppApprovalScopeType.Agent) {
-      setScopeIdFilter(filterScopeAgentId);
-    }
-  }, [scopeTypeFilter, filterScopeClientId, filterScopeSiteId, filterScopeAgentId]);
 
   useEffect(() => {
     if (!editingId || !taskDetail.data) return;
@@ -575,10 +564,6 @@ export default function AutomationTasksPage() {
   const clearFilters = () => {
     setSearchFilter("");
     setScopeTypeFilter("");
-    setScopeIdFilter("");
-    setFilterScopeClientId("");
-    setFilterScopeSiteId("");
-    setFilterScopeAgentId("");
     setFilterClientId("");
     setFilterSiteId("");
     setFilterAgentId("");
@@ -931,7 +916,8 @@ export default function AutomationTasksPage() {
     })),
   ];
 
-  const filterScopeClientOptions = [
+  // Opções do bloco único de escopo dos FILTROS (Cliente → Site → Agente).
+  const filterClientOptions = [
     { value: "", label: "Selecione" },
     ...(Array.isArray(clients.data) ? clients.data : []).map((item) => ({
       value: item.id,
@@ -939,25 +925,7 @@ export default function AutomationTasksPage() {
     })),
   ];
 
-  const filterScopeSiteOptions = [
-    { value: "", label: "Selecione" },
-    ...(Array.isArray(filterScopeSites.data) ? filterScopeSites.data : []).map((item) => ({
-      value: item.id,
-      label: item.name,
-    })),
-  ];
-
-  const filterScopeAgentOptions = [
-    { value: "", label: "Selecione" },
-    ...(Array.isArray(filterScopeAgents.data) ? filterScopeAgents.data : []).map((item) => ({
-      value: item.id,
-      label: item.displayName ?? item.hostname,
-    })),
-  ];
-
-  const advancedClientOptions = filterScopeClientOptions;
-
-  const advancedSiteOptions = [
+  const filterSiteOptions = [
     { value: "", label: "Selecione" },
     ...(Array.isArray(advancedSites.data) ? advancedSites.data : []).map((item) => ({
       value: item.id,
@@ -965,7 +933,7 @@ export default function AutomationTasksPage() {
     })),
   ];
 
-  const advancedAgentOptions = [
+  const filterAgentOptions = [
     { value: "", label: "Selecione" },
     ...(Array.isArray(advancedAgents.data) ? advancedAgents.data : []).map((item) => ({
       value: item.id,
@@ -1417,11 +1385,9 @@ export default function AutomationTasksPage() {
                 ]}
                 value={scopeTypeFilter}
                 onChange={(e) => {
+                  // Troca só o tipo: os selects Cliente/Site/Agente continuam
+                  // preenchidos e o id do escopo é derivado deles.
                   setScopeTypeFilter(e.target.value);
-                  setScopeIdFilter("");
-                  setFilterScopeClientId("");
-                  setFilterScopeSiteId("");
-                  setFilterScopeAgentId("");
                   resetPagination();
                 }}
               />
@@ -1440,102 +1406,13 @@ export default function AutomationTasksPage() {
               />
             </div>
 
-            {scopeTypeFilter === String(AppApprovalScopeType.Client) && (
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <Select
-                  label="Cliente do ScopeId"
-                  options={filterScopeClientOptions}
-                  value={filterScopeClientId}
-                  onChange={(e) => {
-                    setFilterScopeClientId(e.target.value);
-                    setScopeIdFilter(e.target.value);
-                    resetPagination();
-                  }}
-                />
-                <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
-              </div>
-            )}
-
-            {scopeTypeFilter === String(AppApprovalScopeType.Site) && (
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <Select
-                  label="Cliente do site"
-                  options={filterScopeClientOptions}
-                  value={filterScopeClientId}
-                  onChange={(e) => {
-                    setFilterScopeClientId(e.target.value);
-                    setFilterScopeSiteId("");
-                    setFilterScopeAgentId("");
-                    setScopeIdFilter("");
-                    resetPagination();
-                  }}
-                />
-                <Select
-                  label="Site do ScopeId"
-                  options={filterScopeSiteOptions}
-                  value={filterScopeSiteId}
-                  disabled={!filterScopeClientId}
-                  onChange={(e) => {
-                    setFilterScopeSiteId(e.target.value);
-                    setScopeIdFilter(e.target.value);
-                    resetPagination();
-                  }}
-                />
-                <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
-              </div>
-            )}
-
-            {scopeTypeFilter === String(AppApprovalScopeType.Agent) && (
-              <div className="mt-3 grid gap-3 md:grid-cols-4">
-                <Select
-                  label="Cliente do agent"
-                  options={filterScopeClientOptions}
-                  value={filterScopeClientId}
-                  onChange={(e) => {
-                    setFilterScopeClientId(e.target.value);
-                    setFilterScopeSiteId("");
-                    setFilterScopeAgentId("");
-                    setScopeIdFilter("");
-                    resetPagination();
-                  }}
-                />
-                <Select
-                  label="Site do agent"
-                  options={filterScopeSiteOptions}
-                  value={filterScopeSiteId}
-                  disabled={!filterScopeClientId}
-                  onChange={(e) => {
-                    setFilterScopeSiteId(e.target.value);
-                    setFilterScopeAgentId("");
-                    setScopeIdFilter("");
-                    resetPagination();
-                  }}
-                />
-                <Select
-                  label="Agent do ScopeId"
-                  options={filterScopeAgentOptions}
-                  value={filterScopeAgentId}
-                  disabled={!filterScopeSiteId}
-                  onChange={(e) => {
-                    setFilterScopeAgentId(e.target.value);
-                    setScopeIdFilter(e.target.value);
-                    resetPagination();
-                  }}
-                />
-                <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
-              </div>
-            )}
-
-            {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
-              <div className="mt-3 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted">
-                Escopo global não exige ScopeId.
-              </div>
-            )}
-
-            <div className="grid gap-3 md:grid-cols-4">
+            {/* Um só conjunto de selects: o "Tipo de escopo" usa o id escolhido
+                aqui (Cliente/Site/Agente) em vez de pedir as mesmas entidades de
+                novo em outro bloco. */}
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
               <Select
                 label="Cliente"
-                options={advancedClientOptions}
+                options={filterClientOptions}
                 value={filterClientId}
                 onChange={(e) => {
                   setFilterClientId(e.target.value);
@@ -1546,7 +1423,7 @@ export default function AutomationTasksPage() {
               />
               <Select
                 label="Site"
-                options={advancedSiteOptions}
+                options={filterSiteOptions}
                 value={filterSiteId}
                 disabled={!filterClientId}
                 onChange={(e) => {
@@ -1557,7 +1434,7 @@ export default function AutomationTasksPage() {
               />
               <Select
                 label="Agent"
-                options={advancedAgentOptions}
+                options={filterAgentOptions}
                 value={filterAgentId}
                 disabled={!filterSiteId}
                 onChange={(e) => {
@@ -1566,6 +1443,14 @@ export default function AutomationTasksPage() {
                 }}
               />
             </div>
+
+            <p className="mt-2 text-xs text-muted">
+              {scopeTypeFilter === String(AppApprovalScopeType.Global)
+                ? "Escopo global: as tarefas globais aparecem sem cliente/site/agente."
+                : scopeTypeFilter
+                  ? "O id do escopo é o do nível correspondente selecionado acima."
+                  : "Sem tipo de escopo, a lista mostra as tarefas que se aplicam ao cliente/site/agente selecionado (qualquer nível)."}
+            </p>
 
             <div className="space-y-2 rounded-lg border border-border bg-black/10 p-3">
               <Input
@@ -1816,7 +1701,7 @@ export default function AutomationTasksPage() {
             }}
           />
           <Select
-            label="ScopeType"
+            label="Escopo"
             options={[
               { value: String(AppApprovalScopeType.Global), label: "Global" },
               { value: String(AppApprovalScopeType.Client), label: "Client" },
@@ -1834,19 +1719,9 @@ export default function AutomationTasksPage() {
               }
             }}
           />
-          {selectedScopeType === AppApprovalScopeType.Client && (
-            <Select
-              label="Cliente alvo"
-              options={scopeClientOptions}
-              value={scopeClientId}
-              onChange={(e) => {
-                setScopeClientId(e.target.value);
-                setScopeSiteId("");
-                setScopeAgentId("");
-              }}
-            />
-          )}
-          {selectedScopeType === AppApprovalScopeType.Site && (
+          {/* Escopo em cascata única: o nível escolhido em "Escopo" define até onde
+              a cadeia aparece (Cliente → Site → Agent), sem repetir os selects. */}
+          {selectedScopeType !== AppApprovalScopeType.Global && (
             <>
               <Select
                 label="Cliente alvo"
@@ -1858,47 +1733,27 @@ export default function AutomationTasksPage() {
                   setScopeAgentId("");
                 }}
               />
-              <Select
-                label="Site alvo"
-                options={scopeSiteOptions}
-                value={scopeSiteId}
-                disabled={!scopeClientId}
-                onChange={(e) => {
-                  setScopeSiteId(e.target.value);
-                  setScopeAgentId("");
-                }}
-              />
-            </>
-          )}
-          {selectedScopeType === AppApprovalScopeType.Agent && (
-            <>
-              <Select
-                label="Cliente alvo"
-                options={scopeClientOptions}
-                value={scopeClientId}
-                onChange={(e) => {
-                  setScopeClientId(e.target.value);
-                  setScopeSiteId("");
-                  setScopeAgentId("");
-                }}
-              />
-              <Select
-                label="Site alvo"
-                options={scopeSiteOptions}
-                value={scopeSiteId}
-                disabled={!scopeClientId}
-                onChange={(e) => {
-                  setScopeSiteId(e.target.value);
-                  setScopeAgentId("");
-                }}
-              />
-              <Select
-                label="Agent alvo"
-                options={scopeAgentOptions}
-                value={scopeAgentId}
-                disabled={!scopeSiteId}
-                onChange={(e) => setScopeAgentId(e.target.value)}
-              />
+              {selectedScopeType !== AppApprovalScopeType.Client && (
+                <Select
+                  label="Site alvo"
+                  options={scopeSiteOptions}
+                  value={scopeSiteId}
+                  disabled={!scopeClientId}
+                  onChange={(e) => {
+                    setScopeSiteId(e.target.value);
+                    setScopeAgentId("");
+                  }}
+                />
+              )}
+              {selectedScopeType === AppApprovalScopeType.Agent && (
+                <Select
+                  label="Agent alvo"
+                  options={scopeAgentOptions}
+                  value={scopeAgentId}
+                  disabled={!scopeSiteId}
+                  onChange={(e) => setScopeAgentId(e.target.value)}
+                />
+              )}
             </>
           )}
         </div>

@@ -1,3 +1,5 @@
+import { AppApprovalScopeType } from "@/api/types";
+
 /**
  * Opções de filtro da listagem de tarefas em /automation/tasks.
  *
@@ -37,6 +39,64 @@ export function toggleFilterValue<T extends string>(selected: readonly T[], valu
   return selected.includes(value)
     ? selected.filter((item) => item !== value)
     : [...selected, value];
+}
+
+/** Parâmetros de escopo enviados à listagem de tarefas. */
+export interface TaskScopeFilter {
+  scopeType?: AppApprovalScopeType;
+  scopeId?: string;
+  clientId?: string;
+  siteId?: string;
+  agentId?: string;
+}
+
+/**
+ * Traduz o "Escopo" + o bloco único Cliente/Site/Agent nos parâmetros da API.
+ *
+ * Com um tipo de escopo escolhido, o id vem do nível correspondente (o backend
+ * casa `ScopeType + ScopeId`). Sem tipo, os ids viram filtro das colunas
+ * derivadas da tarefa (tarefas que se aplicam àquele cliente/site/agente,
+ * qualquer que seja o nível do escopo).
+ */
+export function buildTaskScopeFilter(
+  scopeType: string,
+  clientId: string,
+  siteId: string,
+  agentId: string,
+): TaskScopeFilter {
+  const type = scopeType ? (Number(scopeType) as AppApprovalScopeType) : undefined;
+
+  if (type === AppApprovalScopeType.Global) return { scopeType: type };
+
+  if (type === AppApprovalScopeType.Client) {
+    return { scopeType: type, clientId: clientId || undefined, scopeId: clientId || undefined };
+  }
+
+  if (type === AppApprovalScopeType.Site) {
+    return {
+      scopeType: type,
+      clientId: clientId || undefined,
+      siteId: siteId || undefined,
+      scopeId: siteId || undefined,
+    };
+  }
+
+  if (type === AppApprovalScopeType.Agent) {
+    return {
+      scopeType: type,
+      clientId: clientId || undefined,
+      siteId: siteId || undefined,
+      agentId: agentId || undefined,
+      scopeId: agentId || undefined,
+    };
+  }
+
+  // Sem tipo: filtro pelas colunas derivadas.
+  return {
+    clientId: clientId || undefined,
+    siteId: siteId || undefined,
+    agentId: agentId || undefined,
+  };
 }
 
 /** Traduz o status escolhido na UI para o parâmetro `isActive` do backend. */
