@@ -20,6 +20,27 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/hooks/useAppStore', () => ({
   useCreateApproval: () => ({ mutateAsync: mocks.createApproval, isPending: false }),
+  // Busca no catálogo: fixa para o teste não depender da API.
+  useAppStoreCatalog: () => ({
+    data: {
+      items: [
+        {
+          packageId: 'mozilla.firefox',
+          name: 'Mozilla Firefox',
+          version: '130.0',
+          installationType: 0,
+        },
+        {
+          packageId: 'google.chrome',
+          name: 'Google Chrome',
+          version: '129.0',
+          installationType: 0,
+        },
+      ],
+      count: 2,
+    },
+    isLoading: false,
+  }),
 }));
 
 vi.mock('@/hooks/useClients', () => ({
@@ -107,6 +128,33 @@ describe('ApprovalFormModal', () => {
     expect(screen.getByLabelText('Motivo (opcional)').getAttribute('maxlength')).toBe('500');
   });
 
+  it('busca pacotes no catálogo e preenche o ID ao selecionar', async () => {
+    render(<ApprovalFormModal open onClose={() => {}} />);
+
+    const input = screen.getByLabelText('Pacote') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'chrome' } });
+
+    // A busca tem debounce de 300ms antes de consultar o catálogo.
+    await waitFor(() => expect(screen.getByText('Google Chrome')).toBeTruthy(), {
+      timeout: 2000,
+    });
+
+    fireEvent.click(screen.getByText('Google Chrome'));
+
+    expect(input.value).toBe('google.chrome');
+    // A lista fecha depois de escolher.
+    expect(screen.queryByText('Mozilla Firefox')).toBeNull();
+  });
+
+  it('mantém o ID editável manualmente para pacote fora do catálogo', () => {
+    render(<ApprovalFormModal open onClose={() => {}} />);
+
+    const input = screen.getByLabelText('Pacote') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'pacote_interno_xyz' } });
+
+    expect(input.value).toBe('pacote_interno_xyz');
+  });
+
   it('avisa a lista com o tipo de instalação da regra salva', async () => {
     mocks.createApproval.mockReset();
     mocks.createApproval.mockResolvedValue({
@@ -125,7 +173,7 @@ describe('ApprovalFormModal', () => {
 
     render(<ApprovalFormModal open onClose={vi.fn()} onSaved={onSaved} />);
 
-    fireEvent.change(screen.getByLabelText('ID do Pacote'), {
+    fireEvent.change(screen.getByLabelText('Pacote'), {
       target: { value: 'foxit_editor' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar Regra' }));

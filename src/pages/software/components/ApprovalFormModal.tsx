@@ -4,6 +4,7 @@ import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useCreateApproval } from '@/hooks/useAppStore';
 import { AgentPicker } from './AgentPicker';
+import { PackageCatalogPicker } from './PackageCatalogPicker';
 import { installationTypeOptions, scopeTypeOptions, actionOptions } from '../softwareStoreUtils';
 import { AppApprovalActionType, AppApprovalScopeType, AppInstallationType, type CreateAppApprovalRuleRequest } from '@/api/types';
 
@@ -203,23 +204,15 @@ export function ApprovalFormModal({
           />
         )}
 
-        <Input
-          label="ID do Pacote"
-          placeholder="ex: Microsoft.VSCode"
-          value={packageId}
-          readOnly={isPackageIdLocked}
-          disabled={isPackageIdLocked}
-          title={isPackageIdLocked ? 'ID definido pelo pacote selecionado no catálogo' : undefined}
-          className={isPackageIdLocked ? 'cursor-not-allowed opacity-70' : ''}
-          onChange={(e) => {
-            if (isPackageIdLocked) return;
-            setPackageId(e.target.value);
-          }}
+        <PackageCatalogPicker
+          installationType={installationType}
+          packageId={packageId}
+          locked={isPackageIdLocked}
+          onChange={setPackageId}
         />
-
         {isPackageIdLocked && (
           <p className="-mt-2 text-xs text-muted">
-            Este ID foi preenchido a partir do pacote selecionado no catálogo.
+            Este ID veio do pacote selecionado e não é editável nesta regra.
           </p>
         )}
 

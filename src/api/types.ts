@@ -3834,6 +3834,50 @@ export interface AppApprovalRulesResponse {
   items: AppApprovalRule[];
 }
 
+/** Um nível da cadeia de herança de uma regra de aprovação. */
+export interface AppApprovalRuleSource {
+  ruleId: string;
+  scopeType: AppApprovalScopeType;
+  scopeId: string | null;
+  action: AppApprovalActionType | null;
+  autoUpdateEnabled: boolean | null;
+  reason: string | null;
+  updatedAt: string;
+  /** Regra que vence a herança (o nível mais específico da cadeia). */
+  isEffective: boolean;
+  /** Regra substituída por um nível mais específico. */
+  isOverridden: boolean;
+}
+
+/**
+ * Regra já resolvida para o escopo consultado (Global → Cliente → Site → Agente).
+ * Uma linha por pacote: a ação efetiva vem do nível mais específico e `sources`
+ * mostra quem definiu o quê em cada nível.
+ */
+export interface AppApprovalResolvedRule {
+  packageId: string;
+  packageName: string | null;
+  installationType: AppInstallationType;
+  action: AppApprovalActionType | null;
+  /** Auto-update efetivo (herdado do nível anterior quando o mais específico não define). */
+  autoUpdateEnabled: boolean;
+  effectiveScopeType: AppApprovalScopeType;
+  effectiveScopeId: string | null;
+  /** true quando a regra efetiva vem de outro escopo (herança). */
+  inherited: boolean;
+  /** true quando a cadeia tem mais de um nível (houve sobrescrita). */
+  overridden: boolean;
+  sources: AppApprovalRuleSource[];
+}
+
+export interface AppApprovalResolvedResponse {
+  scopeType: AppApprovalScopeType;
+  scopeId: string | null;
+  installationType: AppInstallationType;
+  count: number;
+  items: AppApprovalResolvedRule[];
+}
+
 export interface CreateAppApprovalRuleRequest {
   scopeType: AppApprovalScopeType;
   scopeId?: string | null;

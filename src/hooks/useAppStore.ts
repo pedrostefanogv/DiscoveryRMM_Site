@@ -19,15 +19,22 @@ const KEYS = {
     ["appStore", "package", packageId, installationType] as const,
   approvals: (params: ApprovalsParams) =>
     ["appStore", "approvals", params] as const,
+  resolvedApprovals: (params: ApprovalsParams) =>
+    ["appStore", "approvals-resolved", params] as const,
   audit: (params: AuditParams) => ["appStore", "audit", params] as const,
   effective: (params: EffectiveParams) =>
     ["appStore", "effective", params] as const,
 };
 
-export function useAppStoreCatalog(params: CatalogParams = {}) {
+export function useAppStoreCatalog(
+  params: CatalogParams = {},
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: KEYS.catalog(params),
     queryFn: () => appStoreApi.getCatalog(params),
+    // O seletor de pacote da aprovação só consulta quando o operador busca.
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -46,6 +53,24 @@ export function useAppStoreApprovals(params: ApprovalsParams) {
   return useQuery({
     queryKey: KEYS.approvals(params),
     queryFn: () => appStoreApi.getApprovals(params),
+  });
+}
+
+/**
+ * Regras já resolvidas para o escopo, com a cadeia de herança. É o que a aba
+ * Aprovações usa: com um cliente selecionado ela mostra também o que ele herda
+ * do Global (e do Cliente, no caso de um site).
+ */
+export function useAppStoreResolvedApprovals(
+  params: ApprovalsParams,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: KEYS.resolvedApprovals(params),
+    queryFn: () => appStoreApi.getResolvedApprovals(params),
+    // Escopo Cliente/Site/Agente sem id não tem cadeia para resolver: o
+    // endpoint responde 400 e a aba mostraria erro antes de o operador escolher.
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -71,6 +96,7 @@ export function useCreateApproval() {
     onSuccess: () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals-resolved"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "audit"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
       ]),
@@ -85,6 +111,7 @@ export function useDeleteApproval() {
     onSuccess: () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals-resolved"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "audit"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
       ]),

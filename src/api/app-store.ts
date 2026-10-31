@@ -13,6 +13,8 @@ import type {
   AppStoreCatalogPackage,
   AppApprovalRule,
   AppApprovalRulesResponse,
+  AppApprovalResolvedResponse,
+  AppApprovalResolvedRule,
   CreateAppApprovalRuleRequest,
   AppEffectivePage,
   AppApprovalAuditPage,
@@ -50,6 +52,15 @@ type RawApprovalRulesResponse = Omit<AppApprovalRulesResponse, "items"> & {
  * (array JSON), mas o envelope `{ items, count }` também é tolerado.
  */
 type RawApprovalRulesPayload = RawApprovalRulesResponse | RawApprovalRule[];
+
+/** Envelope do `GET /app-store/approvals/resolved` (uma linha por pacote). */
+type RawResolvedApprovalRule = Partial<AppApprovalResolvedRule> & {
+  sources?: AppApprovalResolvedRule["sources"];
+};
+
+type RawResolvedApprovalsPage = Partial<Omit<AppApprovalResolvedResponse, "items">> & {
+  items?: RawResolvedApprovalRule[];
+};
 
 /**
  * Entrada de auditoria como a API responde (`AppApprovalAuditEntryDto`):
@@ -326,6 +337,61 @@ function normalizeApprovalsResponse(
         ? normalizeInstallationType(envelope.installationType)
         : normalizeInstallationType(params.installationType),
     count: envelope.count ?? items.length,
+    items,
+  };
+}
+
+function normalizeResolvedApprovalRule(
+  item: RawResolvedApprovalRule,
+): AppApprovalResolvedRule {
+  const sources = (item.sources ?? []).map((source) => ({
+    ruleId: source.ruleId ?? "",
+    scopeType: normalizeApprovalScopeType(source.scopeType),
+    scopeId: source.scopeId ?? null,
+    action: normalizeApprovalActionType(source.action),
+    autoUpdateEnabled: source.autoUpdateEnabled ?? null,
+    reason: source.reason ?? null,
+    updatedAt: source.updatedAt ?? "",
+    isEffective: Boolean(source.isEffective),
+    isOverridden: Boolean(source.isOverridden),
+  }));
+
+  return {
+    packageId: item.packageId ?? "",
+    packageName: item.packageName ?? null,
+    installationType: normalizeInstallationType(item.installationType),
+    action: normalizeApprovalActionType(item.action),
+    autoUpdateEnabled: Boolean(item.autoUpdateEnabled),
+    effectiveScopeType: normalizeApprovalScopeType(item.effectiveScopeType),
+    effectiveScopeId: item.effectiveScopeId ?? null,
+    inherited: Boolean(item.inherited),
+    overridden: Boolean(item.overridden),
+    sources,
+  };
+}
+
+/**
+ * Normaliza o envelope de `/approvals/resolved`. Os enums chegam por NOME no
+ * wire ("Client"/"Allow"); sem normalizar, os badges e a comparação numérica
+ * (que decide se a regra é "herdada") ficariam errados.
+ */
+function normalizeResolvedApprovalsResponse(
+  response: RawResolvedApprovalsPage | null | undefined,
+  params: ApprovalsParams,
+): AppApprovalResolvedResponse {
+  const page = response ?? {};
+  const items = (page.items ?? []).map(normalizeResolvedApprovalRule);
+  return {
+    scopeType:
+      page.scopeType !== undefined
+        ? normalizeApprovalScopeType(page.scopeType)
+        : params.scopeType,
+    scopeId: page.scopeId ?? params.scopeId ?? null,
+    installationType:
+      page.installationType !== undefined
+        ? normalizeInstallationType(page.installationType)
+        : normalizeInstallationType(params.installationType),
+    count: page.count ?? items.length,
     items,
   };
 }
@@ -1206,6 +1272,14 @@ export const appStoreApi = {
       params as unknown as Record<string, unknown>,
     );
     return normalizeApprovalsResponse(response, params);
+  },
+
+  getResolvedApprovals: async (params: ApprovalsParams) => {
+    const response = await api.get<RawResolvedApprovalsPage>(
+      `${BASE}/approvals/resolved`,
+      params as unknown as Record<string, unknown>,
+    );
+    return normalizeResolvedApprovalsResponse(response, params);
   },
 
   createApproval: async (data: CreateAppApprovalRuleRequest) => {

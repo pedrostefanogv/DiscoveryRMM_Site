@@ -4,12 +4,37 @@ import toast from 'react-hot-toast';
 import { Icon, Badge, Button, Card, ErrorDisplay, Loading, Modal, Select } from '@/components/ui';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import { useAppStoreApprovals, useDeleteApproval } from '@/hooks/useAppStore';
+import { useAppStoreResolvedApprovals, useDeleteApproval } from '@/hooks/useAppStore';
 import { ApiError } from '@/api/client';
-import { AppApprovalActionType, AppApprovalScopeType, AppInstallationType, type AppApprovalRule } from '@/api/types';
+import {
+  AppApprovalActionType,
+  AppApprovalScopeType,
+  AppInstallationType,
+  type AppApprovalResolvedRule,
+} from '@/api/types';
 import { AgentPicker } from '../components/AgentPicker';
 import { ApprovalFormModal } from '../components/ApprovalFormModal';
-import { installationTypeOptions, scopeTypeOptions, scopeLabel, formatDate } from '../softwareStoreUtils';
+import {
+  actionBadge,
+  installationTypeOptions,
+  scopeTypeOptions,
+  scopeLabel,
+  formatDate,
+} from '../softwareStoreUtils';
+
+/**
+ * Cadeia de herança em texto: "Global: Permitido → Cliente: Permitido + Auto-update".
+ * Mostra o que o escopo herda e o que ele sobrescreve — antes a aba listava só
+ * as regras criadas no escopo exato e as Globais herdadas sumiam da tela.
+ */
+function inheritanceChain(rule: AppApprovalResolvedRule): string {
+  return rule.sources
+    .map((source) => {
+      const autoUpdate = source.autoUpdateEnabled ? ' + Auto-update' : '';
+      return `${scopeLabel(source.scopeType)}: ${actionBadge(source.action)}${autoUpdate}`;
+    })
+    .join(' → ');
+}
 
 export function ApprovalsTab() {
   const [installationType, setInstallationType] = useState(AppInstallationType.Winget);
@@ -21,8 +46,11 @@ export function ApprovalsTab() {
   // internamente, então a aba espelha aqui para repassar ao modal de nova regra.
   const [agentClientId, setAgentClientId] = useState('');
   const [agentSiteId, setAgentSiteId] = useState('');
+  // Pacote que o modal deve pré-preencher (herdado → "Sobrescrever aqui").
+  const [prefillPackageId, setPrefillPackageId] = useState('');
+  const [prefillInstallationType, setPrefillInstallationType] = useState<AppInstallationType | undefined>();
   const [newRuleOpen, setNewRuleOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<AppApprovalRule | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AppApprovalResolvedRule | null>(null);
 
   const clients = useClients();
   const sites = useSites(selectedClientId);
@@ -37,7 +65,17 @@ export function ApprovalsTab() {
           ? agentId || null
           : null;
 
-  const query = useAppStoreApprovals({ scopeType, scopeId, installationType });
+  // Escopo sem id (cliente/site/agente ainda não escolhido) não tem cadeia a
+  // resolver: a consulta só liga depois da escolha — sem isso a API devolvia
+  // 400 e a aba mostrava erro antes de o operador terminar o filtro.
+  const scopeMissing = scopeType !== AppApprovalScopeType.Global && !scopeId;
+
+  // Sempre a visão resolvida: para Client/Site/Agente ela traz a cadeia
+  // completa (herdadas + próprias), não só as regras do escopo exato.
+  const query = useAppStoreResolvedApprovals(
+    { scopeType, scopeId, installationType },
+    { enabled: !scopeMissing },
+  );
 
   const clientOptions = [
     { value: '', label: 'Selecione...' },
@@ -48,8 +86,21 @@ export function ApprovalsTab() {
     ...(sites.data ?? []).map((s) => ({ value: s.id, label: s.name })),
   ];
 
-  async function handleDelete(rule: AppApprovalRule) {
-    const ruleId = rule.ruleId ?? rule.id ?? '';
+  const modalClientId =
+    scopeType === AppApprovalScopeType.Agent ? agentClientId : selectedClientId;
+  const modalSiteId =
+    scopeType === AppApprovalScopeType.Agent ? agentSiteId : selectedSiteId;
+
+  function openNewRule(rule?: AppApprovalResolvedRule) {
+    // Sem regra: modal em branco. Com regra herdada: já vem com pacote/tipo e o
+    // escopo atual, porque o objetivo é criar o override aqui.
+    setPrefillPackageId(rule?.packageId ?? '');
+    setPrefillInstallationType(rule?.installationType);
+    setNewRuleOpen(true);
+  }
+
+  async function handleDelete(rule: AppApprovalResolvedRule) {
+    const ruleId = rule.sources.find((source) => source.isEffective)?.ruleId ?? '';
     if (!ruleId) {
       toast.error('Regra sem identificador — recarregue a lista.');
       return;
@@ -94,7 +145,7 @@ export function ApprovalsTab() {
               <div className="w-48"><Select label="Site" options={siteOptions} value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)} /></div>
             </>
           )}
-          <div className="ml-auto"><Button onClick={() => setNewRuleOpen(true)}><Icon name="add" className="h-4 w-4" /> Nova Regra</Button></div>
+          <div className="ml-auto"><Button onClick={() => openNewRule()}><Icon name="add" className="h-4 w-4" /> Nova Regra</Button></div>
         </div>
         {/* O seletor de agente é um bloco próprio: dentro da barra de filtros ele
             esticava a linha (itens alinhados pela base) e quebrava o card. */}
@@ -119,10 +170,22 @@ export function ApprovalsTab() {
 
       <Card padding={false}>
         <div className="border-b border-border px-5 py-4">
-          <span className="text-sm font-medium text-foreground">{query.data ? `${query.data.count} regra(s) — escopo ${scopeLabel(scopeType)}` : 'Regras de aprovação'}</span>
+          <span className="text-sm font-medium text-foreground">
+            {query.data
+              ? `${query.data.count} regra(s) — escopo ${scopeLabel(scopeType)}${scopeType === AppApprovalScopeType.Global ? '' : ' (inclui herdadas)'}`
+              : 'Regras de aprovação'}
+          </span>
         </div>
-        {query.isLoading && <Loading />}
-        {query.isError && <ErrorDisplay message="Erro ao carregar regras." onRetry={() => query.refetch()} />}
+        {scopeMissing && (
+          <div className="flex flex-col items-center py-16 text-muted">
+            <Icon name="verified_user" className="mb-3 h-10 w-10 opacity-30" />
+            <p className="text-sm">
+              Selecione {scopeType === AppApprovalScopeType.Client ? 'o cliente' : scopeType === AppApprovalScopeType.Site ? 'o cliente e o site' : 'o agente'} para ver as regras herdadas.
+            </p>
+          </div>
+        )}
+        {!scopeMissing && query.isLoading && <Loading />}
+        {!scopeMissing && query.isError && <ErrorDisplay message="Erro ao carregar regras." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
           <div className="flex flex-col items-center py-16 text-muted">
             <Icon name="verified_user" className="mb-3 h-10 w-10 opacity-30" />
@@ -137,30 +200,55 @@ export function ApprovalsTab() {
         )}
         {query.data && query.data.items.length > 0 && (
           <div className="divide-y divide-black/10 dark:divide-white/5">
-            {query.data.items.map((rule) => (
-              <div key={rule.ruleId ?? rule.id} className="flex items-center justify-between px-5 py-3 hover:bg-surface-light transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-foreground font-mono">{rule.packageId}</span>
-                    {rule.packageName && <span className="text-xs text-muted">{rule.packageName}</span>}
-                    {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : rule.action === AppApprovalActionType.Deny ? <Badge color="danger">Negado</Badge> : <span className="text-xs text-muted">{'\u2014'}</span>}
-                    {rule.autoUpdateEnabled && <Badge color="primary">Auto-update</Badge>}
-                    <Badge color="slate">{scopeLabel(rule.scopeType)}</Badge>
+            {query.data.items.map((rule) => {
+              const effectiveSource = rule.sources.find((source) => source.isEffective);
+              return (
+                <div key={rule.packageId} className="flex items-center justify-between px-5 py-3 hover:bg-surface-light transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-foreground font-mono">{rule.packageId}</span>
+                      {rule.packageName && <span className="text-xs text-muted">{rule.packageName}</span>}
+                      {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : rule.action === AppApprovalActionType.Deny ? <Badge color="danger">Negado</Badge> : <span className="text-xs text-muted">{'—'}</span>}
+                      {rule.autoUpdateEnabled && <Badge color="primary">Auto-update</Badge>}
+                      <Badge color="slate">{scopeLabel(rule.effectiveScopeType)}</Badge>
+                      {rule.inherited && <Badge color="accent">Herdado</Badge>}
+                      {rule.overridden && <Badge color="warning">Sobrescrito</Badge>}
+                    </div>
+                    {rule.overridden && (
+                      <p className="mt-0.5 text-xs text-muted">{inheritanceChain(rule)}</p>
+                    )}
+                    {effectiveSource?.reason && <p className="mt-0.5 text-xs text-muted">{effectiveSource.reason}</p>}
+                    {/* A data é a do nível que vence: é a regra que a API aplica. */}
+                    {effectiveSource?.updatedAt && (
+                      <p className="mt-0.5 text-xs text-muted">Atualizado em {formatDate(effectiveSource.updatedAt)}</p>
+                    )}
                   </div>
-                  {rule.reason && <p className="mt-0.5 text-xs text-muted">{rule.reason}</p>}
-                  {/* `createdAt` é exposto pela API; `updatedAt` cobre respostas antigas. */}
-                  <p className="mt-0.5 text-xs text-muted">Criado em {formatDate(rule.createdAt || rule.updatedAt)}</p>
+                  <div className="flex items-center gap-2">
+                    {/* Regra herdada não pode ser removida deste escopo: o botão
+                        de excluir só aparece para a regra que pertence a ele. */}
+                    {rule.inherited ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Sobrescrever ${rule.packageId} neste escopo`}
+                        onClick={() => openNewRule(rule)}
+                      >
+                        <Icon name="edit" className="h-4 w-4" /> Sobrescrever aqui
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        aria-label={`Remover regra ${rule.packageId}`}
+                        onClick={() => setDeleteTarget(rule)}
+                      >
+                        <Icon name="delete" className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  aria-label={`Remover regra ${rule.packageId}`}
-                  onClick={() => setDeleteTarget(rule)}
-                >
-                  <Icon name="delete" className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
@@ -168,12 +256,11 @@ export function ApprovalsTab() {
       <ApprovalFormModal
         open={newRuleOpen}
         onClose={() => setNewRuleOpen(false)}
-        prefillInstallationType={installationType}
+        prefillPackageId={prefillPackageId}
+        prefillInstallationType={prefillInstallationType ?? installationType}
         prefillScopeType={scopeType}
-        prefillClientId={
-          scopeType === AppApprovalScopeType.Agent ? agentClientId : selectedClientId
-        }
-        prefillSiteId={scopeType === AppApprovalScopeType.Agent ? agentSiteId : selectedSiteId}
+        prefillClientId={modalClientId}
+        prefillSiteId={modalSiteId}
         prefillAgentId={scopeType === AppApprovalScopeType.Agent ? agentId : ''}
         // Criar uma regra Custom com o filtro em Winget deixava a lista vazia
         // logo depois de salvar: a aba passa a seguir o tipo da regra criada.
