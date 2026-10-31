@@ -1151,6 +1151,7 @@ export default function ServerConfigurationPage() {
                     acessam o loopback: eles recebem URLs pré-assinadas com o <strong>Endpoint S3</strong> acima
                     (URL pública, ex.: https://portal.suaempresa.com.br), e o nginx encaminha /&lt;bucket&gt;/ para o storage
                     preservando o Host da assinatura.
+                    {' '}Para migrar para um provedor externo, desative “Usar RustFS interno”, preencha Conexão e Credenciais abaixo e salve — o servidor passa a usar o banco na hora, sem editar o discovery.env. Para voltar ao RustFS, basta reativar o toggle.
                   </p>
                 </div>
               )}

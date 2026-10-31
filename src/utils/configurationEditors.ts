@@ -500,7 +500,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "boolean",
     group: "storage",
     description:
-      "Liga o armazenamento interno deste servidor (RustFS). Nesse modo as credenciais e o endpoint de loopback vem da configuração do servidor (ObjectStorage__* no env) e o campo Endpoint S3 abaixo passa a ser a URL PUBLICA usada nas URLs pré-assinadas entregues ao agent e ao navegador.",
+      "Liga o armazenamento interno deste servidor (RustFS). Nesse modo as credenciais e o endpoint de loopback vem da configuração do servidor (ObjectStorage__* no env) e o campo Endpoint S3 abaixo passa a ser a URL PUBLICA usada nas URLs pré-assinadas entregues ao agent e ao navegador. Desligando, o servidor usa o provedor externo configurado nos campos abaixo (o env interno só prevalece se o banco não tiver NENHUMA configuração externa — preencha endpoint, bucket e credenciais antes de salvar).",
   },
   {
     key: "objectStorageEndpoint",
