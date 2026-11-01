@@ -468,7 +468,7 @@ export const serverEditableFields: EditableField[] = [
     label: "Janela de Manutenção (Reboot/Patches)",
     kind: "json",
     group: "policy",
-    description: "Janela em UTC em que patches e reboots podem executar; fora dela o agent adia o comando (deferred_to_window).",
+    description: "Janela (dias + horário no fuso escolhido; padrão UTC) em que patches e reboots podem executar; fora dela o agent adia o comando (deferred_to_window).",
   },
   {
     key: "mcpToolPolicyJson",

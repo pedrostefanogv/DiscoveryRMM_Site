@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
-import { Input } from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { Input, Select } from "@/components/ui";
 import {
   DAY_LABELS,
   describeMaintenanceWindow,
+  formatUtcOffset,
+  listTimeZoneOptions,
+  localTimeToUtc,
   parseMaintenanceWindow,
   serializeMaintenanceWindow,
+  timeZoneOffsetMinutes,
+  withCurrentTimeZoneOption,
   type MaintenanceWindowConfig,
 } from "./maintenancePolicy";
 import { InheritablePolicyCard } from "./InheritablePolicyCard";
@@ -36,6 +41,9 @@ export function MaintenanceWindowCard(props: Props) {
   // para o mínimo/60 no meio da digitação.
   const [durationDraft, setDurationDraft] = useState<string | null>(null);
 
+  // Lista de fusos (runtime IANA + fuso do navegador + UTC) com offset atual.
+  const timeZoneOptions = useMemo(() => listTimeZoneOptions(), []);
+
   // O card base ressincroniza o cfg quando o valor muda; o rascunho acompanha.
   useEffect(() => {
     setDurationDraft(null);
@@ -63,8 +71,12 @@ export function MaintenanceWindowCard(props: Props) {
         </label>
       )}
     >
-      {({ cfg, update, readOnly }) =>
-        cfg.enabled ? (
+      {({ cfg, update, readOnly }) => {
+        const utcMirror = localTimeToUtc(cfg.startTime, cfg.timeZone);
+        const offset = formatUtcOffset(timeZoneOffsetMinutes(cfg.timeZone || "UTC"));
+        const isUtc = (cfg.timeZone || "UTC").toUpperCase() === "UTC";
+
+        return cfg.enabled ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
               {Object.entries(DAY_LABELS).map(([day, label]) => (
@@ -89,17 +101,29 @@ export function MaintenanceWindowCard(props: Props) {
               ))}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Nenhum dia marcado = janela válida todos os dias.
+              Nenhum dia marcado = janela válida todos os dias. Os dias e o horário são{" "}
+              <strong>locais do fuso escolhido</strong> (acompanham o horário de verão).
             </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <label className="text-xs text-slate-600 dark:text-slate-300">
-                Início (UTC)
+                Início (hora local)
                 <Input
                   type="time"
-                  value={cfg.startUtc}
-                  onChange={(e) => update({ startUtc: e.target.value })}
+                  value={cfg.startTime}
+                  onChange={(e) => update({ startTime: e.target.value })}
                   disabled={readOnly}
                   className="mt-1"
+                />
+              </label>
+              <label className="text-xs text-slate-600 dark:text-slate-300 sm:col-span-2">
+                Fuso horário
+                <Select
+                  aria-label="Fuso horário da janela de manutenção"
+                  value={cfg.timeZone || "UTC"}
+                  onChange={(e) => update({ timeZone: e.target.value })}
+                  options={withCurrentTimeZoneOption(timeZoneOptions, cfg.timeZone)}
+                  disabled={readOnly}
                 />
               </label>
               <label className="text-xs text-slate-600 dark:text-slate-300">
@@ -127,6 +151,22 @@ export function MaintenanceWindowCard(props: Props) {
                   className="mt-1"
                 />
               </label>
+            </div>
+
+            <p className="rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted">
+              Janela: <strong>{cfg.startTime}</strong> {isUtc ? "UTC" : `${cfg.timeZone.replace(/_/g, " ")} (${offset})`}
+              {isUtc ? null : (
+                <>
+                  {" "}
+                  = <strong>{utcMirror} UTC</strong>
+                </>
+              )}
+              {" · "}
+              {cfg.durationMinutes} min. O agent avalia os dias e o horário no fuso escolhido; agents
+              antigos usam o espelho em UTC.
+            </p>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="text-xs text-slate-600 dark:text-slate-300">
                 Aviso de reboot (s)
                 <Input
@@ -156,8 +196,8 @@ export function MaintenanceWindowCard(props: Props) {
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Desligada: patches e reboots executam imediatamente (comportamento atual).
           </p>
-        )
-      }
+        );
+      }}
     </InheritablePolicyCard>
   );
 }

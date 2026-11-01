@@ -6,6 +6,10 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { usePatchPolicy, useUpdatePatchPolicy } from "@/hooks/usePatches";
 import type { PatchApprovalScopeType, PatchEnforcementMode, PatchRebootPolicy } from "@/api/types";
+import {
+  listTimeZoneOptions,
+  withCurrentTimeZoneOption,
+} from "@/components/configuration/maintenancePolicy";
 
 const SEVERITIES = ["Critical", "Important", "Moderate", "Low"];
 const CLASSIFICATIONS = ["Security Updates", "Critical Updates", "Definition Updates", "Update Rollups", "Updates"];
@@ -55,6 +59,13 @@ export default function PatchesPolicy() {
 
   const policy = usePatchPolicy(scopeType, scopeId);
   const updatePolicy = useUpdatePatchPolicy();
+
+  // Fusos disponíveis (IANA do runtime + UTC) com offset atual; inclui o valor
+  // salvo na política mesmo que não esteja na lista do runtime.
+  const timeZoneOptions = useMemo(
+    () => withCurrentTimeZoneOption(listTimeZoneOptions(), windowTimezone),
+    [windowTimezone],
+  );
 
   const clientOptions = useMemo(
     () => [{ value: "", label: "Selecione um cliente..." }, ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name }))],
@@ -282,7 +293,13 @@ export default function PatchesPolicy() {
               <Input label="Dias (ISO 1-7)" value={windowDays} onChange={(event) => setWindowDays(event.target.value)} hint="Ex.: 1,2,3,4,5 (seg a sex)" />
               <Input label="Início" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} hint="HH:mm" />
               <Input label="Fim" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} hint="HH:mm" />
-              <Input label="Timezone" value={windowTimezone} onChange={(event) => setWindowTimezone(event.target.value)} hint="Ex.: America/Sao_Paulo" />
+              <Select
+                label="Fuso horário"
+                value={windowTimezone}
+                onChange={(event) => setWindowTimezone(event.target.value)}
+                options={timeZoneOptions}
+                hint="Dias e horários abaixo são locais deste fuso"
+              />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Input
