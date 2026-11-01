@@ -1099,7 +1099,17 @@ export default function ServerConfigurationPage() {
         <Card id="server-config-maintenance" className="scroll-mt-32">
           <CardHeader
             title="Janela de Manutenção (Reboot/Patches)"
-            subtitle="Horário em UTC em que patches e reboots podem executar. Fora da janela o agent adia o comando (deferred_to_window). Clientes e sites podem ter janela própria."
+            subtitle={
+              <>
+                Horário em UTC em que patches e reboots podem executar. Fora da janela o agent adia o comando
+                (deferred_to_window). Clientes e sites podem ter janela própria. A política de patches
+                (escopos, auto-aprovação e reboot) fica em{" "}
+                <Link to="/patches/policy" className="font-medium text-primary hover:underline">
+                  Patches → Política
+                </Link>
+                .
+              </>
+            }
             action={renderSectionAction("maintenance")}
           />
           {!collapsedSections.maintenance && (

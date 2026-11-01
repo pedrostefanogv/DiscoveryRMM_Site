@@ -21,7 +21,8 @@ export function Card({ children, className = '', padding = true, id }: CardProps
 
 interface CardHeaderProps {
   title: string;
-  subtitle?: string;
+  /** Texto simples ou conteúdo rico (ex.: com link para outra tela). */
+  subtitle?: ReactNode;
   action?: ReactNode;
 }
 
@@ -30,7 +31,7 @@ export function CardHeader({ title, subtitle, action }: CardHeaderProps) {
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h3 className="text-lg font-semibold text-foreground sm:text-xl">{title}</h3>
-        {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+        {subtitle && <div className="text-sm text-muted">{subtitle}</div>}
       </div>
       {action}
     </div>

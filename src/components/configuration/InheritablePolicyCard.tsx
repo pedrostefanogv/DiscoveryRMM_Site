@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Icon, Button } from "@/components/ui";
+
+type IconName = ComponentProps<typeof Icon>["name"];
 
 /**
  * Base dos cards de política que suportam herança por escopo (janela de
@@ -23,7 +25,7 @@ export interface InheritablePolicyCardRenderArgs<T> {
 
 export interface InheritablePolicyCardProps<T> {
   title: string;
-  icon: string;
+  icon: IconName;
   iconClassName?: string;
   /** JSON do override local ("" / null quando o escopo herda do nível acima). */
   value: string | null | undefined;
@@ -43,8 +45,8 @@ export interface InheritablePolicyCardProps<T> {
   /** Limpa o override (volta a herdar). Só existe em cliente/site. */
   onClear?: () => void | Promise<void>;
   saveLabel: string;
-  /** Motivo que impede o salvamento (mostrado ao usuário). */
-  blockReason?: string | null;
+  /** Motivo (derivado do estado atual) que impede o salvamento. */
+  blockReasonFor?: (cfg: T) => string | null;
   /** Controle extra no cabeçalho (ex.: checkbox "Ativa"). */
   renderHeaderControl?: (args: InheritablePolicyCardRenderArgs<T>) => ReactNode;
   children: (args: InheritablePolicyCardRenderArgs<T>) => ReactNode;
@@ -65,7 +67,7 @@ export function InheritablePolicyCard<T>({
   onSave,
   onClear,
   saveLabel,
-  blockReason,
+  blockReasonFor,
   renderHeaderControl,
   children,
 }: InheritablePolicyCardProps<T>) {
@@ -95,9 +97,10 @@ export function InheritablePolicyCard<T>({
 
   const readOnly = busy || canManage === false || isInherited;
   const renderArgs: InheritablePolicyCardRenderArgs<T> = { cfg, update, readOnly };
+  const blockReason = blockReasonFor?.(cfg) ?? null;
 
   const save = async () => {
-    if (blockReason) return;
+    if (blockReasonFor?.(cfg)) return;
     setBusy(true);
     try {
       await onSave(serialize(cfg));

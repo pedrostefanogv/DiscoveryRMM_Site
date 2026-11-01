@@ -35,7 +35,12 @@ export {
 export {
   ConfigurationPageHeader,
   ConfigurationSectionCard,
-} from "./ConfigurationLayout";export { MaintenanceWindowCard } from "./MaintenanceWindowCard";
+} from "./ConfigurationLayout";export { InheritablePolicyCard } from "./InheritablePolicyCard";
+export type {
+  InheritablePolicyCardProps,
+  InheritablePolicyCardRenderArgs,
+} from "./InheritablePolicyCard";
+export { MaintenanceWindowCard } from "./MaintenanceWindowCard";
 export { McpToolPolicyCard } from "./McpToolPolicyCard";
 export {
   parseMaintenanceWindow,

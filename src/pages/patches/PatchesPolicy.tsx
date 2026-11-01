@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { Link } from "react-router-dom";
 import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
@@ -155,7 +156,7 @@ export default function PatchesPolicy() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Política de patches" description="Enforcement, auto-aprovação e janela de manutenção por escopo.">
+      <PageHeader title="Política de patches" description="Enforcement, auto-aprovação e janela de manutenção por escopo. A janela GLOBAL (UTC, patches/reboots do agente) fica em Configurações → Servidor → Janela de Manutenção; os campos abaixo definem a política POR ESCOPO.">
         <Button onClick={() => void handleSave()} disabled={!enabled || policy.isLoading || updatePolicy.isPending}>
           <Icon name="save" className="h-4 w-4" />
           {updatePolicy.isPending ? "Salvando..." : "Salvar"}
@@ -266,6 +267,13 @@ export default function PatchesPolicy() {
 
           <Card>
             <CardHeader title="Instalação automática e janela" subtitle="O job instala aprovados dentro da janela; nunca reinicia sozinho." />
+            <p className="mb-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted">
+              A janela <strong>global</strong> do agente (UTC, dias, duração e aviso de reboot) é configurada em{" "}
+              <Link to="/settings/server" className="font-medium text-primary hover:underline">
+                Configurações → Servidor → Janela de Manutenção
+              </Link>
+              ; os campos abaixo definem a janela desta política por escopo.
+            </p>
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input type="checkbox" checked={autoInstallEnabled} onChange={(event) => setAutoInstallEnabled(event.target.checked)} />
               Instalar automaticamente os aprovados dentro da janela
