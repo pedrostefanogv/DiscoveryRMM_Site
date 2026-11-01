@@ -46,6 +46,9 @@ interface FormValues {
   values: Record<string, string>;
 }
 
+/** Campos do grupo "policy" com card/seção próprios (fora do card da loja). */
+const SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson", "mcpToolPolicyJson"]);
+
 export default function SiteConfigurationPage() {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [clientId, setClientId] = useState("");
@@ -141,7 +144,7 @@ export default function SiteConfigurationPage() {
 
         const validation = validateFieldValue(field.kind, value, field.key);
         if (validation !== true) {
-          toast.error(`${field.key}: ${validation}`);
+          toast.error(`${field.label}: ${validation}`);
           return;
         }
 
@@ -225,7 +228,12 @@ export default function SiteConfigurationPage() {
   };
 
   const featureFields = siteEditableFields.filter((field) => field.group === "features");
-  const policyFields = siteEditableFields.filter((field) => field.group === "policy");
+  // Janela de manutenção e tools MCP são "policy" no catálogo, mas têm card próprio.
+  const policyFields = siteEditableFields.filter(
+    (field) => field.group === "policy" && !SEPARATE_POLICY_KEYS.has(field.key),
+  );
+  const maintenanceField = siteEditableFields.find((f) => f.key === "maintenanceWindowJson");
+  const mcpToolPolicyField = siteEditableFields.find((f) => f.key === "mcpToolPolicyJson");
   const remoteAccessFields = useMemo(
     () => siteEditableFields.filter((field) => field.group === "remoteAccess"),
     [],
@@ -387,21 +395,72 @@ export default function SiteConfigurationPage() {
     const canEditField = canEditFieldAtScope(fieldMeta, "site");
     const fieldDef = siteEditableFields.find((f) => f.key === fieldKey);
     // Janela de manutenção e política MCP: cards dedicados no modo override.
+    // Valor LOCAL do site (não o efetivo): exibir o efetivo fazia o card mostrar
+    // a política herdada como se fosse override do site.
     if (fieldKey === "maintenanceWindowJson" || fieldKey === "mcpToolPolicyJson") {
-      const isWindow = fieldKey === "maintenanceWindowJson";
-      const Card = isWindow ? MaintenanceWindowCard : McpToolPolicyCard;
-      return (
-        <Card
-          key={fieldKey}
-          value={value}
-          inheritedFrom={resolveSiteOrigin(localSiteQuery.data, localClientQuery.data, fieldKey) || "Cliente/Servidor"}
-          canManage={canEditField}
-          saving={patchMutation.isPending}
-          onSave={async (json) => {
-            setValue(`values.${fieldKey}` as never, json as never, { shouldDirty: true });
-            await savePartial(fieldKey);
-          }}
-        />
+      const rawLocal = localSiteQuery.data?.[fieldKey];
+      // Valor vazio conta como "sem override" (dados antigos podem ter "" em vez
+      // de null); só um JSON não vazio é um override de verdade.
+      const isOverride =
+        rawLocal !== null && rawLocal !== undefined && String(rawLocal).trim() !== "";
+      const localValue = isOverride ? String(rawLocal) : "";
+      const origin = resolveSiteOrigin(localSiteQuery.data, localClientQuery.data, fieldKey);
+      const inheritedLabel = isOverride
+        ? null
+        : origin === "Client"
+          ? "Cliente"
+          : origin === "Site"
+            ? "Site"
+            : "Servidor";
+
+      const saveOverride = async (json: string) => {
+        setValue(`values.${fieldKey}` as never, json as never, { shouldDirty: true });
+        try {
+          await patchMutation.mutateAsync({
+            siteId,
+            payload: { [fieldKey]: json },
+          });
+          // Override recém-criado: manter o flag coerente para o "Salvar tudo"
+          // (PUT), que manda null nos campos marcados como herdados.
+          setInherits((previous) => ({ ...previous, [fieldKey]: false }));
+          toast.success(`Campo ${fieldKey} atualizado com PATCH`);
+        } catch (error) {
+          toast.error(readEntityError(error));
+          throw error;
+        }
+      };
+
+      // "Voltar a herdar": PATCH null remove o override deste site.
+      const clearOverride = async () => {
+        try {
+          await patchMutation.mutateAsync({ siteId, payload: { [fieldKey]: null } });
+          setInherits((previous) => ({ ...previous, [fieldKey]: true }));
+          setValue(`values.${fieldKey}` as never, "" as never, { shouldDirty: true });
+          toast.success("Override removido: o campo voltou a herdar do cliente/servidor.");
+        } catch (error) {
+          toast.error(readEntityError(error));
+          throw error;
+        }
+      };
+
+      const effectiveValue = String(
+        getEffectiveValue(effectiveSiteQuery.data, fieldKey) ?? "",
+      );
+      const cardProps = {
+        key: fieldKey,
+        value: localValue,
+        effectiveValue,
+        inherited: !isOverride,
+        inheritedFrom: inheritedLabel,
+        canManage: canEditField,
+        onSave: saveOverride,
+        onClear: clearOverride,
+      } as const;
+
+      return fieldKey === "maintenanceWindowJson" ? (
+        <MaintenanceWindowCard {...cardProps} />
+      ) : (
+        <McpToolPolicyCard {...cardProps} />
       );
     }
 
@@ -595,6 +654,28 @@ export default function SiteConfigurationPage() {
                   renderFieldEditor(field.key, field.label, field.kind),
                 )}
               </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {maintenanceField && (
+            <ConfigurationSectionCard
+              title="Janela de Manutenção (Reboot/Patches)"
+              subtitle="Override da janela do cliente/servidor. Vazio herda; fora da janela o agent adia patches e reboots."
+              icon={<Icon name="schedule" className="h-4 w-4" />}
+              iconClassName={tintedIcon.violet}
+            >
+              {renderFieldEditor(maintenanceField.key, maintenanceField.label, maintenanceField.kind)}
+            </ConfigurationSectionCard>
+          )}
+
+          {mcpToolPolicyField && (
+            <ConfigurationSectionCard
+              title="Tools MCP do Chat do Agent"
+              subtitle="Allowlist de tools MCP por escopo. Vazio herda o nível superior; lista vazia = todas as tools (mode all)."
+              icon={<Icon name="verified_user" className="h-4 w-4" />}
+              iconClassName={tintedIcon.sky}
+            >
+              {renderFieldEditor(mcpToolPolicyField.key, mcpToolPolicyField.label, mcpToolPolicyField.kind)}
             </ConfigurationSectionCard>
           )}
 

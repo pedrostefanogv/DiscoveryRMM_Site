@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { ReactNode } from "react";
 import type { ConfigurationOrigin } from "@/api";
 import type { RemoteConsentMode, RemoteConsentTimeoutAction } from "@/api/remote-consent";
-import { Icon, Button, Input, TextArea } from "@/components/ui";
+import { Icon, Button, Input, Select, TextArea } from "@/components/ui";
 import {
   selectedIcon,
   selectedSurface,
@@ -107,6 +107,13 @@ const ORIGIN_LABEL: Record<ConfigurationOrigin, string> = {
   Server: "servidor",
   Client: "cliente",
   Site: "site",
+};
+
+/** Rótulo do atalho para criar override — muda conforme o escopo da tela. */
+const OVERRIDE_LABEL: Record<RemoteAccessConsentScope, string> = {
+  server: "Definir no servidor",
+  client: "Definir neste cliente",
+  site: "Definir neste site",
 };
 
 const SCOPE_CHIP_LABEL: Record<RemoteAccessConsentScope, string> = {
@@ -273,7 +280,9 @@ function FieldRow({
   children,
 }: FieldRowProps) {
   return (
-    <div className="grid gap-3 border-t border-border/60 py-4 first:border-t-0 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-6">
+    // Controle sempre abaixo do rótulo/descrição, em largura total: a coluna
+    // fixa de 18rem à direita espremia selects, textareas e os chips de preset.
+    <div className="grid gap-3 border-t border-border/60 py-4 first:border-t-0">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">{label}</p>
@@ -340,7 +349,7 @@ function FieldRow({
                 onClick={onOverride}
                 className="text-[11px] font-medium text-primary hover:underline"
               >
-                Definir neste site
+                {OVERRIDE_LABEL[scope]}
               </button>
             )}
           </div>
@@ -807,37 +816,22 @@ export function RemoteAccessConsentSection({
             onReset={() => onResetField(REMOTE_CONSENT_FIELD_KEYS.action)}
             resetLoading={resetLoading}
           >
-            <div role="radiogroup" aria-label="Ação ao fim da contagem" className="grid gap-2 sm:grid-cols-2">
-              {ACTION_OPTIONS.map((option) => {
-                const selected = timeoutAction === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    disabled={sectionDisabled || !!actionState.locked}
-                    onClick={() => chooseAction(option.value)}
-                    className={
-                      "flex items-start gap-2 rounded-xl border p-2.5 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 " +
-                      (selected ? selectedSurface : unselectedSurface)
-                    }
-                  >
-                    <span
-                      className={
-                        "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md " +
-                        (selected ? selectedIcon : unselectedIcon)
-                      }
-                    >
-                      {option.value === "Approve" ? <Icon name="check" className="h-3.5 w-3.5" /> : <Icon name="block" className="h-3.5 w-3.5" />}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-xs font-medium text-foreground">{option.title}</span>
-                      <span className="block text-[11px] leading-snug text-muted">{option.description}</span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="max-w-xl">
+              <Select
+                aria-label="Ação ao fim da contagem"
+                value={timeoutAction}
+                disabled={sectionDisabled || actionState.inherited || !!actionState.locked}
+                options={ACTION_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.title,
+                }))}
+                onChange={(event) =>
+                  chooseAction(event.target.value as RemoteConsentTimeoutAction)
+                }
+              />
+              <p className="mt-1 text-[11px] leading-snug text-muted">
+                {ACTION_OPTIONS.find((option) => option.value === timeoutAction)?.description}
+              </p>
             </div>
           </FieldRow>
 

@@ -56,9 +56,17 @@ interface FormValues {
   values: Record<string, string>;
 }
 
+/**
+ * Campos do grupo "policy" que NÃO pertencem ao card da loja de aplicativos:
+ * têm card próprio (janela de manutenção e tools MCP) e seção própria no índice.
+ */
+const SERVER_SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson", "mcpToolPolicyJson"]);
+
 type SectionKey =
   | "features"
   | "policy"
+  | "maintenance"
+  | "mcp"
   | "remoteAccess"
   | "agent"
   | "storage"
@@ -108,6 +116,8 @@ export default function ServerConfigurationPage() {
   const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>({
     features: false,
     policy: false,
+    maintenance: false,
+    mcp: false,
     remoteAccess: false,
     agent: false,
     storage: true,
@@ -445,7 +455,11 @@ export default function ServerConfigurationPage() {
   const sectionFieldKeys = useMemo<Record<SectionKey, string[]>>(
     () => ({
       features: serverEditableFields.filter((f) => f.group === "features").map((f) => f.key),
-      policy: serverEditableFields.filter((f) => f.group === "policy").map((f) => f.key),
+      policy: serverEditableFields
+        .filter((f) => f.group === "policy" && !SERVER_SEPARATE_POLICY_KEYS.has(f.key))
+        .map((f) => f.key),
+      maintenance: ["maintenanceWindowJson"],
+      mcp: ["mcpToolPolicyJson"],
       remoteAccess: serverEditableFields.filter((f) => f.group === "remoteAccess").map((f) => f.key),
       agent: serverEditableFields.filter((f) => f.group === "agent").map((f) => f.key),
       storage: serverEditableFields.filter((f) => f.group === "storage").map((f) => f.key),
@@ -460,7 +474,7 @@ export default function ServerConfigurationPage() {
 
   const pendingCountBySection = useMemo(() => {
     const counts: Record<SectionKey, number> = {
-      features: 0, policy: 0, remoteAccess: 0, agent: 0, storage: 0, nats: 0, attachments: 0, advanced: 0,
+      features: 0, policy: 0, maintenance: 0, mcp: 0, remoteAccess: 0, agent: 0, storage: 0, nats: 0, attachments: 0, advanced: 0,
     };
     for (const section of Object.keys(sectionFieldKeys) as SectionKey[]) {
       counts[section] = sectionFieldKeys[section].filter((key) => pendingKeys.has(key)).length;
@@ -471,6 +485,8 @@ export default function ServerConfigurationPage() {
   const sectionEntries: { key: SectionKey; label: string }[] = [
     { key: "features", label: "Funcionalidades" },
     { key: "policy", label: "Loja de apps" },
+    { key: "maintenance", label: "Manutenção" },
+    { key: "mcp", label: "Tools MCP" },
     { key: "remoteAccess", label: "Acesso remoto" },
     { key: "agent", label: "Agente" },
     { key: "storage", label: "Object storage" },
@@ -490,8 +506,9 @@ export default function ServerConfigurationPage() {
   const toggleAllSections = () => {
     const next = !allCollapsed;
     setCollapsedSections({
-      features: next, policy: next, remoteAccess: next, agent: next,
-      storage: next, nats: next, attachments: next, advanced: next,
+      features: next, policy: next, maintenance: next, mcp: next,
+      remoteAccess: next, agent: next, storage: next, nats: next,
+      attachments: next, advanced: next,
     });
   };
 
@@ -530,7 +547,9 @@ export default function ServerConfigurationPage() {
   }
 
   const featureFields = serverEditableFields.filter((f) => f.group === "features");
-  const policyFields = serverEditableFields.filter((f) => f.group === "policy");
+  const policyFields = serverEditableFields.filter(
+    (f) => f.group === "policy" && !SERVER_SEPARATE_POLICY_KEYS.has(f.key),
+  );
   const remoteAccessFields = serverEditableFields.filter((f) => f.group === "remoteAccess");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
   const natsFields = serverEditableFields.filter((f) => f.group === "nats");
@@ -692,6 +711,7 @@ export default function ServerConfigurationPage() {
   const renderFieldEditor = (field: EditableField) => {
     const value = formValues.values?.[field.key] ?? "";
     const error = errors.values?.[field.key]?.message;
+
     return (
       <ConfigurationFieldEditor
         key={field.key}
@@ -1068,8 +1088,72 @@ export default function ServerConfigurationPage() {
               <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
                 <Icon name="storefront" className="h-4 w-4" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 space-y-3">
                 {policyFields.map((field) => renderFieldEditor(field))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Janela de manutenção (reboot/patches) */}
+        <Card id="server-config-maintenance" className="scroll-mt-32">
+          <CardHeader
+            title="Janela de Manutenção (Reboot/Patches)"
+            subtitle="Horário em UTC em que patches e reboots podem executar. Fora da janela o agent adia o comando (deferred_to_window). Clientes e sites podem ter janela própria."
+            action={renderSectionAction("maintenance")}
+          />
+          {!collapsedSections.maintenance && (
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
+                <Icon name="schedule" className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <MaintenanceWindowCard
+                  value={String(serverQuery.data?.maintenanceWindowJson ?? "")}
+                  onSave={async (json) => {
+                    try {
+                      await patchMutation.mutateAsync({ maintenanceWindowJson: json });
+                      clearPending(["maintenanceWindowJson"]);
+                      toast.success("Janela de manutenção salva.");
+                      serverQuery.refetch();
+                    } catch (error) {
+                      toast.error(readApiError(error));
+                      throw error;
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Política de tools MCP do chat do agent */}
+        <Card id="server-config-mcp" className="scroll-mt-32">
+          <CardHeader
+            title="Tools MCP do Chat do Agent"
+            subtitle="Allowlist de tools MCP do chat do agent por escopo; lista vazia = todas as tools (mode all)."
+            action={renderSectionAction("mcp")}
+          />
+          {!collapsedSections.mcp && (
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.sky}`}>
+                <Icon name="verified_user" className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <McpToolPolicyCard
+                  value={String(serverQuery.data?.mcpToolPolicyJson ?? "")}
+                  onSave={async (json) => {
+                    try {
+                      await patchMutation.mutateAsync({ mcpToolPolicyJson: json });
+                      clearPending(["mcpToolPolicyJson"]);
+                      toast.success("Política de tools MCP salva.");
+                      serverQuery.refetch();
+                    } catch (error) {
+                      toast.error(readApiError(error));
+                      throw error;
+                    }
+                  }}
+                />
               </div>
             </div>
           )}
@@ -1421,49 +1505,6 @@ export default function ServerConfigurationPage() {
                   );
                 }
 
-                // Janela de manutenção e política MCP usam cards dedicados
-                if (field.key === "maintenanceWindowJson") {
-                  return (
-                    <div key={field.key} className="flex items-start gap-3">
-                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
-                        <Icon name="schedule" className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <MaintenanceWindowCard
-                          value={String(serverQuery.data?.maintenanceWindowJson ?? "")}
-                          saving={patchMutation.isPending}
-                          onSave={async (json) => {
-                            await patchMutation.mutateAsync({ maintenanceWindowJson: json });
-                            clearPending(["maintenanceWindowJson"]);
-                            toast.success("Janela de manutenção salva.");
-                            serverQuery.refetch();
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                }
-                if (field.key === "mcpToolPolicyJson") {
-                  return (
-                    <div key={field.key} className="flex items-start gap-3">
-                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.sky}`}>
-                        <Icon name="verified_user" className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <McpToolPolicyCard
-                          value={String(serverQuery.data?.mcpToolPolicyJson ?? "")}
-                          saving={patchMutation.isPending}
-                          onSave={async (json) => {
-                            await patchMutation.mutateAsync({ mcpToolPolicyJson: json });
-                            clearPending(["mcpToolPolicyJson"]);
-                            toast.success("Política de tools MCP salva.");
-                            serverQuery.refetch();
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                }
                 // IA usa componente dedicado
                 if (field.key === "aiIntegrationSettingsJson") {
                   return (

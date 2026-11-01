@@ -80,3 +80,25 @@ export function parseMcpToolPolicy(json: string | null | undefined): McpToolPoli
 export function serializeMcpToolPolicy(cfg: McpToolPolicyConfig): string {
   return JSON.stringify({ mode: cfg.mode, allow: cfg.allow });
 }
+/** Resumo de uma linha da janela (usado por vigência herdada e por telas de leitura). */
+export function describeMaintenanceWindow(cfg: MaintenanceWindowConfig): string {
+  if (!cfg.enabled) {
+    return "Desligada — patches e reboots executam imediatamente";
+  }
+  const days =
+    cfg.daysOfWeek.length > 0
+      ? [...cfg.daysOfWeek].sort((a, b) => a - b).map((day) => DAY_LABELS[day]).join(", ")
+      : "todos os dias";
+  return `Ativa — ${days}, ${cfg.startUtc} UTC, ${cfg.durationMinutes} min, aviso de reboot ${cfg.rebootGraceSeconds}s`;
+}
+
+/** Resumo de uma linha da política MCP (usado na vigência herdada). */
+export function describeMcpToolPolicy(cfg: McpToolPolicyConfig): string {
+  if (cfg.mode !== "allowlist") {
+    return "Todas as tools (mode all)";
+  }
+  if (cfg.allow.length === 0) {
+    return "Allowlist vazia — bloqueia todas as tools do chat";
+  }
+  return `Allowlist — ${cfg.allow.length} tool(s): ${cfg.allow.join(", ")}`;
+}

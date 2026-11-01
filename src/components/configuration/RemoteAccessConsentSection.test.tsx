@@ -184,4 +184,29 @@ describe("RemoteAccessConsentSection", () => {
 
     expect(screen.getByText(/Modo desligado: nenhum aviso, prompt, banner/)).toBeTruthy();
   });
+
+  it("oferece a ação ao fim da contagem como dropdown e propaga a escolha", () => {
+    const onChange = vi.fn();
+    renderSection(buildState(), { onChange });
+
+    const select = screen.getByLabelText("Ação ao fim da contagem") as HTMLSelectElement;
+    expect(select.value).toBe("Deny");
+    expect(
+      Array.from(select.options).map((option) => option.value),
+    ).toEqual(["Deny", "Approve"]);
+    // A descrição da opção escolhida aparece como texto de apoio.
+    expect(screen.getByText("Mais seguro: sem resposta, ninguém entra.")).toBeTruthy();
+
+    fireEvent.change(select, { target: { value: "Approve" } });
+    expect(onChange).toHaveBeenCalledWith(REMOTE_CONSENT_FIELD_KEYS.action, "Approve");
+  });
+
+  it("não deixa escolher a ação sem antes definir o override no escopo inferior", () => {
+    const state = buildState({
+      [REMOTE_CONSENT_FIELD_KEYS.action]: { value: "Deny", inherited: true, origin: "Server" },
+    });
+    renderSection(state, { scope: "site" });
+
+    expect((screen.getByLabelText("Ação ao fim da contagem") as HTMLSelectElement).disabled).toBe(true);
+  });
 });
