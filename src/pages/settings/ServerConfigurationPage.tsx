@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
@@ -7,7 +7,6 @@ import {
   RemoteAccessConsentSection,
   AiIntegrationCard,
   MaintenanceWindowCard,
-  McpToolPolicyCard,
   BackgroundProcessingCard,
   ConfigHealthCard,
   LockedFieldsEditor,
@@ -58,9 +57,14 @@ interface FormValues {
 
 /**
  * Campos do grupo "policy" que NÃO pertencem ao card da loja de aplicativos:
- * têm card próprio (janela de manutenção e tools MCP) e seção própria no índice.
+ * têm card próprio (janela de manutenção) e seção própria no índice.
+ *
+ * A política de tools MCP do chat deixou de ser configurada aqui: a única
+ * fonte de verdade é a tela de governança /settings/mcp-tools (habilitar/
+ * desabilitar por tool e por escopo, com rate limit/timeout/lock). O card
+ * "Tools MCP" desta página virou apenas um atalho para lá.
  */
-const SERVER_SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson", "mcpToolPolicyJson"]);
+const SERVER_SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson"]);
 
 type SectionKey =
   | "features"
@@ -86,6 +90,7 @@ const featureIcons: Record<string, React.ReactNode> = {
 };
 
 export default function ServerConfigurationPage() {
+  const navigate = useNavigate();
   const serverQuery = useServerConfig();
   // Metadados do servidor: origem/locks + catálogo de abas do agent (agentHomeTab).
   const serverMetadataQuery = useServerMetadata();
@@ -459,7 +464,7 @@ export default function ServerConfigurationPage() {
         .filter((f) => f.group === "policy" && !SERVER_SEPARATE_POLICY_KEYS.has(f.key))
         .map((f) => f.key),
       maintenance: ["maintenanceWindowJson"],
-      mcp: ["mcpToolPolicyJson"],
+      mcp: [] as string[],
       remoteAccess: serverEditableFields.filter((f) => f.group === "remoteAccess").map((f) => f.key),
       agent: serverEditableFields.filter((f) => f.group === "agent").map((f) => f.key),
       storage: serverEditableFields.filter((f) => f.group === "storage").map((f) => f.key),
@@ -1027,7 +1032,9 @@ export default function ServerConfigurationPage() {
           </button>
         </div>
 
-        <Card className="border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-500/10">
+        {/* Resumo do servidor — mesmo visual dos demais cards (o gradiente
+            ciano antigo destoava do fundo padrão do tema). */}
+        <Card>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl border border-border bg-surface-light p-3">
               <p className="text-xs uppercase tracking-wide text-muted">Módulos ativos</p>
@@ -1137,11 +1144,11 @@ export default function ServerConfigurationPage() {
           )}
         </Card>
 
-        {/* Política de tools MCP do chat do agent */}
+        {/* Tools MCP do chat do agent: apenas atalho para a governança */}
         <Card id="server-config-mcp" className="scroll-mt-32">
           <CardHeader
-            title="Tools MCP do Chat do Agent"
-            subtitle="Allowlist de tools MCP do chat do agent por escopo; lista vazia = todas as tools (mode all)."
+            title="Tools MCP (Ferramentas de IA)"
+            subtitle="A política das ferramentas de IA (MCP) é gerenciada em uma única tela: habilitar/desabilitar por tool e por escopo (Global → Cliente → Site → Agente), com rate limit, timeout e bloqueio de herança."
             action={renderSectionAction("mcp")}
           />
           {!collapsedSections.mcp && (
@@ -1150,20 +1157,16 @@ export default function ServerConfigurationPage() {
                 <Icon name="verified_user" className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <McpToolPolicyCard
-                  value={String(serverQuery.data?.mcpToolPolicyJson ?? "")}
-                  onSave={async (json) => {
-                    try {
-                      await patchMutation.mutateAsync({ mcpToolPolicyJson: json });
-                      clearPending(["mcpToolPolicyJson"]);
-                      toast.success("Política de tools MCP salva.");
-                      serverQuery.refetch();
-                    } catch (error) {
-                      toast.error(readApiError(error));
-                      throw error;
-                    }
-                  }}
-                />
+                <p className="text-sm text-muted-foreground">
+                  Ferramentas executadas no servidor e na máquina do cliente podem ser desabilitadas,
+                  limitadas e bloqueadas por escopo. A allowlist enviada ao agent é derivada
+                  automaticamente dessas políticas — não existe mais lista manual nesta tela.
+                </p>
+                <div className="mt-2">
+                  <Button size="sm" variant="secondary" onClick={() => navigate("/settings/mcp-tools")}>
+                    Abrir Ferramentas de IA (MCP)
+                  </Button>
+                </div>
               </div>
             </div>
           )}

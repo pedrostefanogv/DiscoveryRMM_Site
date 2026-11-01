@@ -14,6 +14,7 @@ import {
 } from '@/api/types';
 import { AgentPicker } from '../components/AgentPicker';
 import { ApprovalFormModal } from '../components/ApprovalFormModal';
+import { UpdateIntentModal } from '../components/UpdateIntentModal';
 import {
   actionBadge,
   installationTypeOptions,
@@ -55,6 +56,8 @@ export function ApprovalsTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [newRuleOpen, setNewRuleOpen] = useState(false);
+  // Simulação de intenção de atualização (nada é executado; ver modal).
+  const [updateIntentOpen, setUpdateIntentOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppApprovalResolvedRule | null>(null);
 
   const clients = useClients();
@@ -169,7 +172,12 @@ export function ApprovalsTab() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="ml-auto"><Button onClick={() => openNewRule()}><Icon name="add" className="h-4 w-4" /> Nova Regra</Button></div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setUpdateIntentOpen(true)}>
+              <Icon name="play_circle" className="h-4 w-4" /> Simular atualizações
+            </Button>
+            <Button onClick={() => openNewRule()}><Icon name="add" className="h-4 w-4" /> Nova Regra</Button>
+          </div>
         </div>
         {/* O seletor de agente é um bloco próprio: dentro da barra de filtros ele
             esticava a linha (itens alinhados pela base) e quebrava o card. */}
@@ -303,6 +311,16 @@ export function ApprovalsTab() {
         // Criar uma regra Custom com o filtro em Winget deixava a lista vazia
         // logo depois de salvar: a aba passa a seguir o tipo da regra criada.
         onSaved={setInstallationType}
+      />
+
+      {/* Simulação do que o auto-update faria com o escopo atual. */}
+      <UpdateIntentModal
+        open={updateIntentOpen}
+        onClose={() => setUpdateIntentOpen(false)}
+        scopeType={scopeType}
+        scopeId={scopeId}
+        installationType={installationType}
+        search={debouncedSearch}
       />
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remover Regra" maxWidth="max-w-sm">

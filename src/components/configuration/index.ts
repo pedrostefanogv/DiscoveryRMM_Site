@@ -41,12 +41,8 @@ export type {
   InheritablePolicyCardRenderArgs,
 } from "./InheritablePolicyCard";
 export { MaintenanceWindowCard } from "./MaintenanceWindowCard";
-export { McpToolPolicyCard } from "./McpToolPolicyCard";
 export {
   parseMaintenanceWindow,
   serializeMaintenanceWindow,
-  parseMcpToolPolicy,
-  serializeMcpToolPolicy,
   type MaintenanceWindowConfig,
-  type McpToolPolicyConfig,
 } from "./maintenancePolicy";

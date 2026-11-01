@@ -155,6 +155,16 @@ describe('ApprovalFormModal', () => {
     expect(input.value).toBe('pacote_interno_xyz');
   });
 
+  it('explica a auto-atualização abaixo do checkbox (janela de manutenção e precedência da automação)', () => {
+    render(<ApprovalFormModal open onClose={vi.fn()} />);
+
+    expect(
+      screen.getByText(
+        /Executado pelo agent dentro da janela de manutenção/,
+      ),
+    ).toBeTruthy();
+  });
+
   it('avisa a lista com o tipo de instalação da regra salva', async () => {
     mocks.createApproval.mockReset();
     mocks.createApproval.mockResolvedValue({

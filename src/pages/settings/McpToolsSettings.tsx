@@ -319,7 +319,7 @@ export default function McpToolsSettings() {
     <div className="space-y-6">
       <PageHeader
         title="Ferramentas de IA (MCP)"
-        description="Habilite ou desabilite as ferramentas que o modelo pode executar no servidor e na máquina do cliente. Sem sobrescrita local, o escopo herda a política do nível acima."
+        description="Habilite ou desabilite as ferramentas que o modelo pode executar no servidor e na máquina do cliente. Sem sobrescrita local, o escopo herda a política do nível acima. Esta tela é a única fonte de verdade: a allowlist enviada ao agent é derivada daqui."
         breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
 

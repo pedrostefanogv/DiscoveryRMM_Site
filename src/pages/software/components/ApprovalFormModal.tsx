@@ -248,6 +248,12 @@ export function ApprovalFormModal({
             </label>
           </div>
         </div>
+        {/* Contexto do que o checkbox faz: evita o operador achar que o site
+            dispara a atualização — quem roda é o agent, dentro da janela. */}
+        <p className="-mt-2 text-xs text-muted">
+          Executado pelo agent dentro da janela de manutenção (Configurações → Servidor). Se existir
+          uma automação ativa para o mesmo pacote, ela tem precedência.
+        </p>
 
         <Input
           label="Motivo (opcional)"

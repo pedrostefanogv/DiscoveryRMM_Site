@@ -8,7 +8,6 @@ import {
   ConfigurationFieldEditor,
   BackgroundProcessingCard,
   MaintenanceWindowCard,
-  McpToolPolicyCard,
   parseBackgroundProcessingSettings,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
@@ -47,9 +46,11 @@ interface FormValues {
 
 /**
  * Campos do grupo "policy" que têm card e seção próprios (não pertencem ao card
- * "Política da Loja de Aplicativos").
+ * "Política da Loja de Aplicativos"). A política de tools MCP não é mais
+ * configurada aqui: a única fonte de verdade é a tela de governança
+ * /settings/mcp-tools.
  */
-const SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson", "mcpToolPolicyJson"]);
+const SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson"]);
 
 export default function ClientConfigurationPage() {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
@@ -209,13 +210,12 @@ export default function ClientConfigurationPage() {
   };
 
   const featureFields = clientEditableFields.filter((field) => field.group === "features");
-  // Janela de manutenção e tools MCP também são "policy" no catálogo, mas têm
-  // card próprio abaixo — assim o card da loja não anuncia conteúdo que não é dele.
+  // Janela de manutenção também é "policy" no catálogo, mas tem card próprio
+  // abaixo — assim o card da loja não anuncia conteúdo que não é dele.
   const policyFields = clientEditableFields.filter(
     (field) => field.group === "policy" && !SEPARATE_POLICY_KEYS.has(field.key),
   );
   const maintenanceField = clientEditableFields.find((f) => f.key === "maintenanceWindowJson");
-  const mcpToolPolicyField = clientEditableFields.find((f) => f.key === "mcpToolPolicyJson");
   const remoteAccessFields = useMemo(
     () => clientEditableFields.filter((field) => field.group === "remoteAccess"),
     [],
@@ -353,10 +353,10 @@ export default function ClientConfigurationPage() {
     const canEditField = canEditFieldAtScope(fieldMeta, "client");
     const fieldDef = clientEditableFields.find((f) => f.key === fieldKey);
 
-    // Janela de manutenção e política MCP: cards dedicados no modo override.
+    // Janela de manutenção: card dedicado no modo override.
     // O card recebe o valor LOCAL do cliente (não o efetivo herdado): mostrar o
     // efetivo fazia o "Salvar" criar um override que o usuário não pediu.
-    if (fieldKey === "maintenanceWindowJson" || fieldKey === "mcpToolPolicyJson") {
+    if (fieldKey === "maintenanceWindowJson") {
       const rawLocal = localQuery.data?.[fieldKey];
       // Valor vazio conta como "sem override" (dados antigos podem ter "" em vez
       // de null); só um JSON não vazio é um override de verdade.
@@ -373,11 +373,7 @@ export default function ClientConfigurationPage() {
           // Salvar o card cria um override: sem isso o "Salvar tudo" (PUT) veria
           // o campo como herdado e enviaria null, apagando o valor recém-salvo.
           setInherits((previous) => ({ ...previous, [fieldKey]: false }));
-          toast.success(
-            fieldKey === "maintenanceWindowJson"
-              ? "Janela de manutenção (override) atualizada."
-              : "Política de tools MCP (override) atualizada.",
-          );
+          toast.success("Janela de manutenção (override) atualizada.");
         } catch (error) {
           toast.error(readEntityError(error, "client"));
           throw error;
@@ -412,11 +408,7 @@ export default function ClientConfigurationPage() {
         onClear: clearOverride,
       } as const;
 
-      return fieldKey === "maintenanceWindowJson" ? (
-        <MaintenanceWindowCard {...cardProps} />
-      ) : (
-        <McpToolPolicyCard {...cardProps} />
-      );
+      return <MaintenanceWindowCard {...cardProps} />;
     }
 
     // Processamento em segundo plano usa card dedicado no modo override.
@@ -606,17 +598,6 @@ export default function ClientConfigurationPage() {
               iconClassName={tintedIcon.violet}
             >
               {renderFieldEditor(maintenanceField.key, maintenanceField.label, maintenanceField.kind)}
-            </ConfigurationSectionCard>
-          )}
-
-          {mcpToolPolicyField && (
-            <ConfigurationSectionCard
-              title="Tools MCP do Chat do Agent"
-              subtitle="Allowlist de tools MCP por escopo. Vazio herda o servidor; lista vazia = todas as tools (mode all)."
-              icon={<Icon name="verified_user" className="h-4 w-4" />}
-              iconClassName={tintedIcon.sky}
-            >
-              {renderFieldEditor(mcpToolPolicyField.key, mcpToolPolicyField.label, mcpToolPolicyField.kind)}
             </ConfigurationSectionCard>
           )}
 

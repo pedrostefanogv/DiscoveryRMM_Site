@@ -3,18 +3,14 @@ import {
   DAY_LABELS,
   DEFAULT_TIME_ZONE,
   describeMaintenanceWindow,
-  describeMcpToolPolicy,
   formatUtcOffset,
   isValidTimeZone,
   listTimeZoneOptions,
   localTimeToUtc,
   parseMaintenanceWindow,
-  parseMcpToolPolicy,
   serializeMaintenanceWindow,
-  serializeMcpToolPolicy,
   timeZoneOffsetMinutes,
   type MaintenanceWindowConfig,
-  type McpToolPolicyConfig,
 } from "./maintenancePolicy";
 
 // Data de referência fixa (10/06/2026, 12:00 UTC): sem horário de verão no
@@ -204,45 +200,6 @@ describe("conversão de fuso", () => {
   });
 });
 
-describe("parseMcpToolPolicy", () => {
-  it.each([null, undefined, "", "{}"])("retorna fallback { mode: all, allow: [] } para %j", (json) => {
-    expect(parseMcpToolPolicy(json as string | null | undefined)).toEqual({ mode: "all", allow: [] });
-  });
-
-  it("faz parse de allowlist", () => {
-    expect(
-      parseMcpToolPolicy(JSON.stringify({ mode: "allowlist", allow: ["fs.read", "fs.write"] })),
-    ).toEqual({ mode: "allowlist", allow: ["fs.read", "fs.write"] });
-  });
-
-  it("mode desconhecido vira all", () => {
-    expect(parseMcpToolPolicy(JSON.stringify({ mode: "deny", allow: [] }))).toEqual({ mode: "all", allow: [] });
-  });
-
-  it("filtra itens não-string e vazios/apenas espaços do allow", () => {
-    expect(
-      parseMcpToolPolicy(JSON.stringify({ mode: "allowlist", allow: ["a", "", "   ", 42, null, "b"] })).allow,
-    ).toEqual(["a", "b"]);
-  });
-
-  it("retorna fallback para JSON inválido", () => {
-    expect(parseMcpToolPolicy("{oops")).toEqual({ mode: "all", allow: [] });
-  });
-});
-
-describe("serializeMcpToolPolicy", () => {
-  it("gera JSON no formato { mode, allow }", () => {
-    expect(serializeMcpToolPolicy({ mode: "allowlist", allow: ["fs.read"] })).toBe(
-      JSON.stringify({ mode: "allowlist", allow: ["fs.read"] }),
-    );
-  });
-
-  it("roundtrip parse(serialize(cfg)) === cfg", () => {
-    const cfg: McpToolPolicyConfig = { mode: "allowlist", allow: ["fs.read", "proc.list"] };
-    expect(parseMcpToolPolicy(serializeMcpToolPolicy(cfg))).toEqual(cfg);
-  });
-});
-
 describe("describeMaintenanceWindow", () => {
   it("janela desligada", () => {
     expect(describeMaintenanceWindow(FALLBACK_JANELA, REF)).toContain("Desligada");
@@ -272,22 +229,5 @@ describe("describeMaintenanceWindow", () => {
     expect(text).toBe(
       `Ativa — ${DAY_LABELS[1]}, ${DAY_LABELS[3]}, ${DAY_LABELS[7]}, 23:00 America/Sao Paulo (UTC-03:00) = 02:00 UTC, 120 min, aviso de reboot 15s`,
     );
-  });
-});
-
-describe("describeMcpToolPolicy", () => {
-  it("mode all", () => {
-    expect(describeMcpToolPolicy({ mode: "all", allow: [] })).toBe("Todas as tools (mode all)");
-  });
-
-  it("allowlist vazia menciona bloqueio total", () => {
-    expect(describeMcpToolPolicy({ mode: "allowlist", allow: [] })).toContain("bloqueia todas as tools");
-  });
-
-  it("allowlist com N tools mostra contagem e nomes", () => {
-    const text = describeMcpToolPolicy({ mode: "allowlist", allow: ["fs.read", "proc.list"] });
-    expect(text).toContain("2");
-    expect(text).toContain("fs.read");
-    expect(text).toContain("proc.list");
   });
 });

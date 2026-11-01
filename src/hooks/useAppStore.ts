@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { appStoreApi } from "@/api/app-store";
+import { getAppStoreUpdateIntent } from "@/api/appStoreUpdateIntent";
+import type { AppStoreUpdateIntentParams } from "@/api/appStoreUpdateIntent";
 import { AppInstallationType } from "@/api/types";
 import type {
   CreateAppApprovalRuleRequest,
@@ -24,6 +26,8 @@ const KEYS = {
   audit: (params: AuditParams) => ["appStore", "audit", params] as const,
   effective: (params: EffectiveParams) =>
     ["appStore", "effective", params] as const,
+  updateIntent: (params: AppStoreUpdateIntentParams) =>
+    ["appStore", "update-intent", params] as const,
 };
 
 export function useAppStoreCatalog(
@@ -70,6 +74,22 @@ export function useAppStoreResolvedApprovals(
     queryFn: () => appStoreApi.getResolvedApprovals(params),
     // Escopo Cliente/Site/Agente sem id não tem cadeia para resolver: o
     // endpoint responde 400 e a aba mostraria erro antes de o operador escolher.
+    enabled: options.enabled ?? true,
+  });
+}
+
+/**
+ * Simulação de intenção de atualização para o escopo (nada é executado). Só
+ * consulta quando o escopo é válido: escopo Cliente/Site/Agente sem id
+ * devolveria 400 — igual ao uso do hook vizinho de aprovações resolvidas.
+ */
+export function useAppStoreUpdateIntent(
+  params: AppStoreUpdateIntentParams,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: KEYS.updateIntent(params),
+    queryFn: () => getAppStoreUpdateIntent(params),
     enabled: options.enabled ?? true,
   });
 }

@@ -7,7 +7,6 @@ import type { ConfigurationValue } from "@/api";
 import {
   ConfigurationFieldEditor,
   MaintenanceWindowCard,
-  McpToolPolicyCard,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
   RemoteAccessConsentSection,
@@ -46,8 +45,10 @@ interface FormValues {
   values: Record<string, string>;
 }
 
-/** Campos do grupo "policy" com card/seção próprios (fora do card da loja). */
-const SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson", "mcpToolPolicyJson"]);
+/** Campos do grupo "policy" com card/seção próprios (fora do card da loja).
+ *  A política de tools MCP não é mais configurada aqui: a única fonte de
+ *  verdade é a tela de governança /settings/mcp-tools. */
+const SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson"]);
 
 export default function SiteConfigurationPage() {
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
@@ -228,12 +229,11 @@ export default function SiteConfigurationPage() {
   };
 
   const featureFields = siteEditableFields.filter((field) => field.group === "features");
-  // Janela de manutenção e tools MCP são "policy" no catálogo, mas têm card próprio.
+  // Janela de manutenção é "policy" no catálogo, mas tem card próprio.
   const policyFields = siteEditableFields.filter(
     (field) => field.group === "policy" && !SEPARATE_POLICY_KEYS.has(field.key),
   );
   const maintenanceField = siteEditableFields.find((f) => f.key === "maintenanceWindowJson");
-  const mcpToolPolicyField = siteEditableFields.find((f) => f.key === "mcpToolPolicyJson");
   const remoteAccessFields = useMemo(
     () => siteEditableFields.filter((field) => field.group === "remoteAccess"),
     [],
@@ -394,10 +394,10 @@ export default function SiteConfigurationPage() {
     const fieldMeta = getFieldMetadata(siteMetadataQuery.data?.fields, fieldKey);
     const canEditField = canEditFieldAtScope(fieldMeta, "site");
     const fieldDef = siteEditableFields.find((f) => f.key === fieldKey);
-    // Janela de manutenção e política MCP: cards dedicados no modo override.
+    // Janela de manutenção: card dedicado no modo override.
     // Valor LOCAL do site (não o efetivo): exibir o efetivo fazia o card mostrar
     // a política herdada como se fosse override do site.
-    if (fieldKey === "maintenanceWindowJson" || fieldKey === "mcpToolPolicyJson") {
+    if (fieldKey === "maintenanceWindowJson") {
       const rawLocal = localSiteQuery.data?.[fieldKey];
       // Valor vazio conta como "sem override" (dados antigos podem ter "" em vez
       // de null); só um JSON não vazio é um override de verdade.
@@ -457,11 +457,7 @@ export default function SiteConfigurationPage() {
         onClear: clearOverride,
       } as const;
 
-      return fieldKey === "maintenanceWindowJson" ? (
-        <MaintenanceWindowCard {...cardProps} />
-      ) : (
-        <McpToolPolicyCard {...cardProps} />
-      );
+      return <MaintenanceWindowCard {...cardProps} />;
     }
 
     return (
@@ -665,17 +661,6 @@ export default function SiteConfigurationPage() {
               iconClassName={tintedIcon.violet}
             >
               {renderFieldEditor(maintenanceField.key, maintenanceField.label, maintenanceField.kind)}
-            </ConfigurationSectionCard>
-          )}
-
-          {mcpToolPolicyField && (
-            <ConfigurationSectionCard
-              title="Tools MCP do Chat do Agent"
-              subtitle="Allowlist de tools MCP por escopo. Vazio herda o nível superior; lista vazia = todas as tools (mode all)."
-              icon={<Icon name="verified_user" className="h-4 w-4" />}
-              iconClassName={tintedIcon.sky}
-            >
-              {renderFieldEditor(mcpToolPolicyField.key, mcpToolPolicyField.label, mcpToolPolicyField.kind)}
             </ConfigurationSectionCard>
           )}
 

@@ -4126,6 +4126,8 @@ export interface AutomationTaskSummary {
   collectorFieldDefinitionId?: string | null;
   /** Grava a saída da execução como nota no agent. */
   writeOutputToNote?: boolean;
+  /** Opt-in: respeitar a janela de manutenção do agent nas ações de pacote. */
+  taskRespectMaintenanceWindow?: boolean;
   /** Chave padronizada (normalizada [a-z0-9_-]) da tarefa. */
   key?: string | null;
   /**
@@ -4257,6 +4259,8 @@ export interface CreateAutomationTaskRequest {
   collectorFieldDefinitionId?: string | null;
   /** Grava a saída da execução como nota no agent. */
   writeOutputToNote?: boolean;
+  /** Opt-in: respeitar a janela de manutenção do agent nas ações de pacote. Ausente = false. */
+  taskRespectMaintenanceWindow?: boolean;
   /** Chave padronizada (normalizada [a-z0-9_-]). Ausente = derivada do nome. */
   key?: string | null;
   /**

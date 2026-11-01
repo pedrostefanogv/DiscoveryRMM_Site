@@ -103,6 +103,14 @@ export {
 export { jobsApi } from "./jobs";
 export { softwareInventoryApi } from "./software-inventory";
 export { appStoreApi } from "./app-store";
+export { getAppStoreUpdateIntent } from "./appStoreUpdateIntent";
+export type {
+  AppMaintenanceWindowInfo,
+  AppStoreUpdateIntentItem,
+  AppStoreUpdateIntentPage,
+  AppStoreUpdateIntentParams,
+} from "./appStoreUpdateIntent";
+export { AppUpdateOwner } from "./appStoreUpdateIntent";
 export { automationApi } from "./automation";
 export { notificationsApi } from "./notifications";
 export type {

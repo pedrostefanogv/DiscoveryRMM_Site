@@ -237,6 +237,8 @@ type TaskFormState = {
   collectorFieldDefinitionId: string;
   /** Grava a saída da execução como nota no agent. */
   writeOutputToNote: boolean;
+  /** Opt-in: respeitar a janela de manutenção do agent nas ações de pacote. */
+  taskRespectMaintenanceWindow: boolean;
   /** Chave padronizada derivada do nome. */
   key: string;
   /** Ordem de execução (0-99) como string para casar com os Input do form. */
@@ -267,6 +269,7 @@ const defaultForm: TaskFormState = {
   promptTimeoutSeconds: 60,
   collectorFieldDefinitionId: "",
   writeOutputToNote: false,
+  taskRespectMaintenanceWindow: false,
   key: "",
   // O form começa em RunScript: a ordem inicial é o default desse tipo (40).
   executionOrder: String(DEFAULT_EXECUTION_ORDER_BY_ACTION.RunScript ?? 50),
@@ -487,6 +490,7 @@ export default function AutomationTasksPage() {
       promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
       collectorFieldDefinitionId: detail.collectorFieldDefinitionId ?? "",
       writeOutputToNote: detail.writeOutputToNote ?? false,
+      taskRespectMaintenanceWindow: detail.taskRespectMaintenanceWindow ?? false,
       key: detail.key ?? "",
       // A ordem já existe: ao trocar o ActionType não pode ser sobrescrita.
       executionOrder: String(detail.executionOrder ?? 50),
@@ -738,6 +742,7 @@ export default function AutomationTasksPage() {
       promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
       collectorFieldDefinitionId: item.collectorFieldDefinitionId ?? "",
       writeOutputToNote: item.writeOutputToNote ?? false,
+      taskRespectMaintenanceWindow: item.taskRespectMaintenanceWindow ?? false,
       key: item.key ?? "",
       executionOrder: String(item.executionOrder ?? 50),
       isActive: item.isActive,
@@ -1184,6 +1189,9 @@ export default function AutomationTasksPage() {
       collectorFieldDefinitionId:
         actionType === AutomationTaskActionType.RunScript ? form.collectorFieldDefinitionId || null : null,
       writeOutputToNote: form.writeOutputToNote,
+      // Opt-in por task de pacote: o executor do agent só roda a ação dentro
+      // da janela de manutenção efetiva (Configurações → Servidor).
+      taskRespectMaintenanceWindow: form.taskRespectMaintenanceWindow,
       key: form.key.trim() || null,
       executionOrder,
       isActive: form.isActive,
@@ -1791,6 +1799,26 @@ export default function AutomationTasksPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted">PackageId: {form.packageId || "-"}</p>
+            </div>
+          )}
+          {isPackageAction && (
+            <div className="space-y-1">
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+                  checked={form.taskRespectMaintenanceWindow}
+                  onChange={(e) => setForm((p) => ({ ...p, taskRespectMaintenanceWindow: e.target.checked }))}
+                />
+                <span>
+                  Respeitar janela de manutenção (Configurações → Servidor)
+                  <span className="block text-xs text-muted">
+                    O agent só instala/atualiza/remove o pacote DENTRO da janela de
+                    manutenção efetiva; fora dela a execução fica adiada ("deferred")
+                    e não conta como falha.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
           {selectedActionType === AutomationTaskActionType.RunScript && (

@@ -354,7 +354,8 @@ export const serverEditableFields: EditableField[] = [
     label: "Bootstrap P2P via Nuvem",
     kind: "boolean",
     group: "features",
-    description: "Permite que agentes P2P se descubram entre VLANs e multi-redes diferentes usando o servidor como ponto de bootstrap na nuvem.",
+    description:
+      "Permite que agentes P2P se descubram entre VLANs e multi-redes diferentes: cada agent obtém do servidor (ciclo automático a cada 60 min ou botão Sincronizar) a lista de peers online do cliente com endereçamento libp2p. A chegada de agentes novos continua anunciada em tempo real via heartbeat."
   },
   {
     key: "chatAIEnabled",
@@ -469,13 +470,6 @@ export const serverEditableFields: EditableField[] = [
     kind: "json",
     group: "policy",
     description: "Janela (dias + horário no fuso escolhido; padrão UTC) em que patches e reboots podem executar; fora dela o agent adia o comando (deferred_to_window).",
-  },
-  {
-    key: "mcpToolPolicyJson",
-    label: "Política de Tools MCP (Chat do Agent)",
-    kind: "json",
-    group: "policy",
-    description: "Allowlist de tools MCP do chat do agent por escopo; vazia = todas as tools (mode all).",
   },
   {
     key: "backgroundProcessingSettingsJson",
@@ -709,13 +703,6 @@ export const clientEditableFields: EditableField[] = [
     description: "Override da janela de manutenção do servidor; vazia = herda.",
   },
   {
-    key: "mcpToolPolicyJson",
-    label: "Política de Tools MCP (Chat do Agent)",
-    kind: "json",
-    group: "policy",
-    description: "Allowlist de tools MCP do chat do agent por escopo; vazia = todas as tools (mode all).",
-  },
-  {
     key: "backgroundProcessingSettingsJson",
     label: "Processamento em Segundo Plano (override)",
     kind: "json",
@@ -836,13 +823,6 @@ export const siteEditableFields: EditableField[] = [
     kind: "json",
     group: "policy",
     description: "Override da janela de manutenção do servidor; vazia = herda.",
-  },
-  {
-    key: "mcpToolPolicyJson",
-    label: "Política de Tools MCP (Chat do Agent)",
-    kind: "json",
-    group: "policy",
-    description: "Allowlist de tools MCP do chat do agent por escopo; vazia = todas as tools (mode all).",
   },
   {
     key: "lockedFieldsJson",
