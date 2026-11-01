@@ -8,6 +8,7 @@ import toast from "react-hot-toast";
 import { Icon, Button, Card, CardHeader, Input } from "@/components/ui";
 import { useAuth } from "@/auth/AuthContext";
 import { resolveLoginErrorMessage } from "@/auth/errorMessages";
+import { KeepSignedInCheckbox } from "@/components/auth/KeepSignedInCheckbox";
 
 const loginSchema = z.object({
   loginOrEmail: z.string().trim().min(1, "Informe seu login ou e-mail."),
@@ -110,6 +111,8 @@ export default function LoginPage() {
             <span>{submitError}</span>
           </div>
         )}
+
+        <KeepSignedInCheckbox disabled={isSubmitting} />
 
         <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted space-y-2">
           <div className="flex items-start gap-3">
