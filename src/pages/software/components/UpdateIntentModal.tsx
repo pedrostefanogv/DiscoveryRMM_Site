@@ -1,6 +1,6 @@
 import { Badge, Button, ErrorDisplay, Icon, Loading, Modal } from '@/components/ui';
 import { useAppStoreUpdateIntent } from '@/hooks/useAppStore';
-import { AppApprovalActionType, AppApprovalScopeType, AppInstallationType } from '@/api/types';
+import { AppApprovalScopeType, AppInstallationType } from '@/api/types';
 import {
   AppUpdateOwner,
   type AppMaintenanceWindowInfo,
@@ -89,8 +89,8 @@ export function UpdateIntentModal({
           .
         </p>
 
-        {/* Janela de manutenção vigente: com ela desligada, nada limita a hora
-            da execução — o auto-update rodaria fora da janela. */}
+        {/* Janela de manutenção vigente: com ela desligada o agent NÃO roda
+            auto-update — o aviso abaixo explica como habilitar. */}
         {window_ && (
           <div className="rounded-md border border-border bg-surface px-4 py-3 text-xs">
             <div className="flex items-center gap-2">
@@ -98,26 +98,44 @@ export function UpdateIntentModal({
               <span className="font-medium text-foreground">Janela de manutenção:</span>
               <span className="text-muted">{maintenanceWindowSummary(window_)}</span>
             </div>
+            {!window_.isOpenNow && window_.nextStartUtc && (
+              <p className="mt-1 text-xs text-muted">
+                Próxima janela abre em {window_.nextStartUtc} (UTC).
+              </p>
+            )}
             {!window_.enabled && (
               <p className="mt-1 text-xs text-warning">
-                Janela desligada: o auto-update não executaria fora da janela — na verdade, nada o limitaria.
+                Janela desligada: o auto-update NÃO é executado — configure a janela de manutenção
+                (Configurações → Servidor) para habilitá-lo.
               </p>
             )}
           </div>
         )}
 
-        {query.isLoading && <Loading />}
-        {query.isError && (
+        {/* Escopo Cliente/Site/Agente sem id não tem simulação: mostra o que
+            falta em vez de um modal praticamente vazio. */}
+        {scopeMissing && (
+          <div className="flex flex-col items-center py-10 text-muted">
+            <Icon name="verified_user" className="mb-2 h-8 w-8 opacity-30" />
+            <p className="text-sm">Selecione um cliente, site ou agente para simular.</p>
+          </div>
+        )}
+
+        {!scopeMissing && query.isLoading && <Loading />}
+        {!scopeMissing && query.isError && (
           <ErrorDisplay message="Erro ao carregar a simulação." onRetry={() => query.refetch()} />
         )}
-        {query.data && query.data.items.length === 0 && (
+        {!scopeMissing && query.data && query.data.truncated && (
+          <p className="text-xs text-warning">Simulação truncada (limite de pacotes).</p>
+        )}
+        {!scopeMissing && query.data && query.data.items.length === 0 && (
           <div className="flex flex-col items-center py-10 text-muted">
             <Icon name="verified_user" className="mb-2 h-8 w-8 opacity-30" />
             <p className="text-sm">Nenhum pacote elegível para atualização neste escopo.</p>
           </div>
         )}
 
-        {query.data && query.data.items.length > 0 && (
+        {!scopeMissing && query.data && query.data.items.length > 0 && (
           <div className="overflow-x-auto rounded-md border border-border">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-surface text-xs uppercase tracking-wide text-muted">
@@ -140,10 +158,10 @@ export function UpdateIntentModal({
                     <td className="px-3 py-2 text-xs text-muted-foreground">{ownerLabel(item)}</td>
                     <td className="px-3 py-2 text-xs text-muted">{schedulingLabel(item)}</td>
                     <td className="px-3 py-2">
+                      {/* O endpoint só simula pacotes que SERÃO atualizados (ação
+                          Allow): não há branch de "Negado" aqui de propósito. */}
                       {item.conflict ? (
                         <Badge color="warning">{item.conflictReason ?? 'Conflito'}</Badge>
-                      ) : item.action === AppApprovalActionType.Deny ? (
-                        <Badge color="slate">Negado</Badge>
                       ) : (
                         <span className="text-xs text-muted">—</span>
                       )}

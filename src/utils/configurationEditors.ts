@@ -1256,6 +1256,17 @@ export function resolveSiteOrigin(
   return "Server";
 }
 
+/**
+ * Interpreta um valor de flag de configuração como booleano.
+ * Valores do formulário são strings (buildServerDraft -> Record<string,string>),
+ * então apenas boolean true e a string exata "true" significam ligado.
+ */
+export function isConfigFlagOn(
+  value: ConfigurationValue | string | number | boolean | null | undefined,
+): boolean {
+  return value === true || value === "true";
+}
+
 export function fieldDefault(kind: EditableFieldKind): string {
   if (kind === "boolean") return "false";
   if (kind === "number") return "0";

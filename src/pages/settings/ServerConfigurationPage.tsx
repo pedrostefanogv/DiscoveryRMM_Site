@@ -38,6 +38,7 @@ import {
 import {
   buildServerDraft,
   formatFieldValue,
+  isConfigFlagOn,
   getAgentHomeTabOptions,
   getDependentsToDisable,
   getFeatureDependencyIssue,
@@ -332,9 +333,25 @@ export default function ServerConfigurationPage() {
     }
   };
 
+  // Campos de object storage realmente renderizados na seção. attachmentTicketTotalQuotaBytes
+  // é coluna long legada (não renderizada) e quebra o PATCH se enviada, então fica fora.
+  const storageSaveWhitelist = new Set([
+    "objectStorageInternal",
+    "objectStorageEndpoint",
+    "objectStorageBucketName",
+    "objectStorageRegion",
+    "objectStorageAccessKey",
+    "objectStorageSecretKey",
+    "objectStorageUrlTtlHours",
+    "objectStorageUsePathStyle",
+    "objectStorageSslVerify",
+  ]);
+
   const saveStorageFields = async () => {
     setSavingStorage(true);
-    const storageFields = serverEditableFields.filter((f) => f.group === "storage");
+    const storageFields = serverEditableFields.filter(
+      (f) => f.group === "storage" && storageSaveWhitelist.has(f.key),
+    );
     const payload: Record<string, ConfigurationValue> = {};
     for (const field of storageFields) {
       let value = String(getValues(`values.${field.key}` as never) ?? "");
@@ -568,14 +585,14 @@ export default function ServerConfigurationPage() {
   const storageToggleFields = serverEditableFields.filter(
     (f) => f.group === "storage" && f.kind === "boolean",
   );
-  const enabledFeatureCount = featureFields.filter(
-    (field) => String(formValues.values?.[field.key] ?? "false") === "true",
+  const enabledFeatureCount = featureFields.filter((field) =>
+    isConfigFlagOn(formValues.values?.[field.key]),
   ).length;
-  const natsEnabled = String(formValues.values?.natsEnabled ?? "false") === "true";
+  const natsEnabled = isConfigFlagOn(formValues.values?.natsEnabled);
   // Modo interno (RustFS do servidor): as credenciais/loopback vem do env do
   // servidor; o Endpoint S3 do formulario passa a ser a URL publica das URLs
   // pre-assinadas entregues ao agent e ao navegador.
-  const storageInternal = Boolean(formValues.values?.objectStorageInternal);
+  const storageInternal = isConfigFlagOn(formValues.values?.objectStorageInternal);
   // Endpoint de loopback NUNCA serve para as URLs pré-assinadas: o cliente
   // (agent/navegador) tentaria o SEU próprio localhost. Avisa no lugar onde o
   // admin configura, em vez de deixar o anexo falhar depois.
@@ -772,7 +789,7 @@ export default function ServerConfigurationPage() {
 
   const renderBooleanToggleCard = (field: EditableField) => {
     const rawValue = formValues.values?.[field.key];
-    const isEnabled = String(rawValue ?? "false") === "true";
+    const isEnabled = isConfigFlagOn(rawValue);
     const isToggling = togglingKey === field.key;
     const dependencyIssue = isEnabled
       ? getFeatureDependencyIssue(field.key, collectFeatureValues())

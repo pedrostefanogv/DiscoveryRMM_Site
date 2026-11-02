@@ -9,9 +9,10 @@ import type { AppStorePolicyType } from "./types";
 /**
  * Simulação de intenção de atualização (`GET /api/v1/app-store/approvals/update-intent`).
  *
- * A execução do auto-update ainda não está ativa (Fase 2): este endpoint apenas
- * simula o que aconteceria hoje — qual pacote seria atualizado, por quem
- * (manual, auto-update ou automação) e se há conflito entre donos.
+ * A execução acontece no agent, dentro da janela de manutenção do servidor;
+ * automações têm precedência. Este endpoint simula o que aconteceria hoje — qual
+ * pacote seria atualizado, por quem (manual, auto-update ou automação) e se há
+ * conflito entre donos.
  */
 
 /** Quem "dona" a atualização do pacote na simulação. */
@@ -33,6 +34,12 @@ export interface AppMaintenanceWindowInfo {
   rebootGraceSeconds: number | null;
   /** ISO weekday (1 = domingo ... 7 = sábado), conforme o contrato do servidor. */
   daysOfWeek: number[];
+  /** A janela está aberta agora? Ausente na API antiga (normalizado em false). */
+  isOpenNow: boolean;
+  /** Instante UTC da próxima abertura da janela; null quando não há próxima. */
+  nextStartUtc: string | null;
+  /** Instante UTC do fim da janela atual/próxima; null quando desconhecido. */
+  endUtc: string | null;
 }
 
 /** Uma linha da simulação: o que aconteceria com um pacote hoje. */
@@ -59,6 +66,8 @@ export interface AppStoreUpdateIntentPage {
   maintenanceWindow: AppMaintenanceWindowInfo | null;
   count: number;
   generatedAt: string | null;
+  /** A simulação foi truncada pelo limite de pacotes do servidor. */
+  truncated: boolean;
   items: AppStoreUpdateIntentItem[];
 }
 
@@ -178,6 +187,11 @@ function normalizeMaintenanceWindow(
     daysOfWeek: Array.isArray(raw.daysOfWeek)
       ? raw.daysOfWeek.filter((d): d is number => typeof d === "number")
       : [],
+    // Campos novos do contrato: a API antiga não os envia, então ausência vira
+    // false/null — nunca quebra o render.
+    isOpenNow: Boolean(raw.isOpenNow),
+    nextStartUtc: typeof raw.nextStartUtc === "string" ? raw.nextStartUtc : null,
+    endUtc: typeof raw.endUtc === "string" ? raw.endUtc : null,
   };
 }
 
@@ -216,6 +230,7 @@ function normalizeIntentPage(
     maintenanceWindow: normalizeMaintenanceWindow(page.maintenanceWindow),
     count: page.count ?? items.length,
     generatedAt: page.generatedAt ?? null,
+    truncated: Boolean(page.truncated),
     items,
   };
 }

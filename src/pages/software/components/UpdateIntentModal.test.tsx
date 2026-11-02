@@ -44,9 +44,13 @@ describe('UpdateIntentModal', () => {
           durationMinutes: 120,
           rebootGraceSeconds: 60,
           daysOfWeek: [1, 2, 3, 4, 5],
+          isOpenNow: false,
+          nextStartUtc: '2026-11-02T05:00:00Z',
+          endUtc: null,
         },
         count: 2,
         generatedAt: '2026-11-01T22:10:00Z',
+        truncated: false,
         items: [
           {
             packageId: 'Microsoft.DotNet.CodeContracts',
@@ -93,11 +97,13 @@ describe('UpdateIntentModal', () => {
     ).toBeTruthy();
     expect(screen.getByText('Microsoft.DotNet.CodeContracts')).toBeTruthy();
     expect(screen.getByText('google.chrome')).toBeTruthy();
-    // Rodapé de segurança da simulação.
+    // Próxima abertura da janela (contrato novo; ausência na API antiga não quebra).
     expect(
-      screen.getByText(
-        /Simulação — nada é executado\. A execução do auto-update ainda não está ativa \(Fase 2\)\./,
-      ),
+      screen.getByText(/Próxima janela abre em 2026-11-02T05:00:00Z \(UTC\)\./),
+    ).toBeTruthy();
+    // Rodapé de segurança: simulação não executa nada, mas o agent já executa.
+    expect(
+      screen.getByText(/Simulação — nada é executado aqui\. Quando ativo, quem executa é o agent/),
     ).toBeTruthy();
   });
 
@@ -117,9 +123,13 @@ describe('UpdateIntentModal', () => {
           durationMinutes: null,
           rebootGraceSeconds: null,
           daysOfWeek: [],
+          isOpenNow: false,
+          nextStartUtc: null,
+          endUtc: null,
         },
         count: 0,
         generatedAt: null,
+        truncated: false,
         items: [],
       },
     });
@@ -135,12 +145,76 @@ describe('UpdateIntentModal', () => {
     expect(screen.getByText('Desligada')).toBeTruthy();
     expect(
       screen.getByText(
-        /Janela desligada: o auto-update não executaria fora da janela/,
+        /Janela desligada: o auto-update NÃO é executado — configure a janela de manutenção/,
       ),
     ).toBeTruthy();
     // Estado vazio da simulação.
     expect(
       screen.getByText('Nenhum pacote elegível para atualização neste escopo.'),
     ).toBeTruthy();
+  });
+it('avisa quando a simulação foi truncada pelo limite de pacotes', () => {
+    mocks.useAppStoreUpdateIntent.mockReturnValue({
+      ...queryDefaults,
+      data: {
+        scopeType: AppApprovalScopeType.Global,
+        scopeId: null,
+        installationType: 0,
+        policy: 'PreApproved',
+        maintenanceWindow: null,
+        count: 1,
+        generatedAt: null,
+        truncated: true,
+        items: [
+          {
+            packageId: 'google.chrome',
+            packageName: 'Google Chrome',
+            action: 0,
+            autoUpdateEnabled: true,
+            owner: AppUpdateOwner.AutoUpdate,
+            automationTaskId: null,
+            automationTaskName: null,
+            automationTriggerSummary: null,
+            conflict: false,
+            conflictReason: null,
+          },
+        ],
+      },
+    });
+
+    render(
+      <UpdateIntentModal
+        open
+        onClose={vi.fn()}
+        scopeType={AppApprovalScopeType.Global}
+      />,
+    );
+
+    expect(screen.getByText('Simulação truncada (limite de pacotes).')).toBeTruthy();
+    expect(screen.getByText('Auto-update')).toBeTruthy();
+  });
+
+  it('pede o escopo quando Cliente/Site/Agente está sem id (e não consulta)', () => {
+    const hook = vi.fn().mockReturnValue({
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+      data: undefined,
+    });
+    mocks.useAppStoreUpdateIntent.mockImplementation(hook);
+
+    render(
+      <UpdateIntentModal
+        open
+        onClose={vi.fn()}
+        scopeType={AppApprovalScopeType.Client}
+      />,
+    );
+
+    expect(screen.getByText('Selecione um cliente, site ou agente para simular.')).toBeTruthy();
+    // A consulta fica desligada: escopo sem id devolveria 400 no servidor.
+    expect(hook).toHaveBeenCalledWith(expect.anything(), { enabled: false });
+    // Restaura o mock dos outros testes.
+    mocks.useAppStoreUpdateIntent.mockReset();
   });
 });
