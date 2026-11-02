@@ -1667,9 +1667,6 @@ export default function AgentDetail() {
             label="Memória RAM"
             value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
             tone="accent"
-            trend={hw.data?.memoryModules?.length
-              ? <span className="text-xs text-muted">{hw.data.memoryModules.length} módulo(s)</span>
-              : undefined}
           />
         </div>
         <Tooltip
