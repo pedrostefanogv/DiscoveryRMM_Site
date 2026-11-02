@@ -205,6 +205,10 @@ vi.mock('@/components/agents/WakeOnLanModal', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentStartupItemsPanel', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentScheduledTasksPanel', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentPoliciesPanel', () => ({ default: () => null }));
+vi.mock('@/components/agents/AgentAppInstallModal', () => ({
+  AgentAppInstallModal: ({ open }: { open?: boolean }) =>
+    open ? <div data-testid="agent-app-install-modal" /> : null,
+}));
 vi.mock('@/components/notes/NotesPanel', () => ({
   NotesPanel: () => <div data-testid="notes-panel">Notas</div>,
 }));
@@ -415,5 +419,13 @@ describe('AgentDetail — abas do agente', () => {
 
     expect(screen.getByRole('tab', { name: /Extras/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('location').textContent).toContain('tab=campos-customizados');
+  });
+
+  it('o botão de instalar aplicativo abre o modal da loja', async () => {
+    await renderPage('?tab=aplicativos');
+
+    fireEvent.click(screen.getByRole('button', { name: /Instalar aplicativo/ }));
+
+    expect(screen.getByTestId('agent-app-install-modal')).toBeTruthy();
   });
 });

@@ -31,6 +31,7 @@ import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
+import { AgentAppInstallModal } from '@/components/agents/AgentAppInstallModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
@@ -194,6 +195,8 @@ export default function AgentDetail() {
   const [pendingUnapprovedUpdate, setPendingUnapprovedUpdate] = useState<AgentSoftwareInventoryItem | null>(null);
   // App aguardando confirmação de desinstalação.
   const [pendingUninstall, setPendingUninstall] = useState<AgentSoftwareInventoryItem | null>(null);
+  // Modal de instalação de app da loja (winget/choco/custom) ainda não presente no agente.
+  const [installModalOpen, setInstallModalOpen] = useState(false);
   // Menu de contexto (botão direito) da lista de aplicativos.
   const [softwareMenu, setSoftwareMenu] = useState<{ x: number; y: number; item: AgentSoftwareInventoryItem } | null>(null);
   // App aberto no modal de detalhes (a lista ficou enxuta: o detalhe traz
@@ -2204,6 +2207,16 @@ export default function AgentDetail() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                  {/* Instala um app da loja que ainda não existe no inventário. */}
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => setInstallModalOpen(true)}
+                    title="Buscar aplicativo na loja para instalar no agente"
+                  >
+                    <Icon name="download" className="h-4 w-4" />
+                    Instalar aplicativo
+                  </Button>
                   {/* Filtro rápido: mostra só os apps com atualização pendente. */}
                   {softwareUpdatesTotal > 0 && (
                     <Button
@@ -2860,6 +2873,15 @@ export default function AgentDetail() {
           </div>
         </div>
       </Modal>
+
+      {installModalOpen && id && (
+        <AgentAppInstallModal
+          agentId={id}
+          open={installModalOpen}
+          onClose={() => setInstallModalOpen(false)}
+          onInstalled={scheduleSoftwareRefetch}
+        />
+      )}
 
       <Modal
         open={!!pendingUninstall}

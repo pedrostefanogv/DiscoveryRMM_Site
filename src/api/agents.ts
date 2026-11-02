@@ -34,6 +34,7 @@ import type {
   RemoteDebugRenewalResponse,
   RemoteDebugLevelResponse,
   RemoteDebugLogLevel,
+  AppInstallationType,
   TransferAgentRequest,
   TransferAgentResponse,
   TransferAgentBulkRequest,
@@ -367,6 +368,20 @@ export const agentsApi = {
     api.post<{ success: boolean; dispatched: boolean }>(
       `${BASE}/${id}/software/${inventoryId}/uninstall`,
       {},
+    ),
+
+  // Software — instala um app da loja que ainda não existe no agente
+  // (winget/choco/personalizado). O agente pode estar offline: o servidor
+  // aceita o pedido (202) e entrega o comando quando o agente voltar.
+  // confirmUnapproved = true quando o app não é aprovado na loja e o operador
+  // confirmou explicitamente (o servidor responde 409 sem essa confirmação).
+  installSoftware: (
+    id: string,
+    data: { packageId: string; installationType: AppInstallationType; confirmUnapproved?: boolean },
+  ) =>
+    api.post<{ success: boolean; dispatched: boolean }>(
+      `${BASE}/${id}/software/install`,
+      data,
     ),
 
   // Inicialização do Windows — habilitar/desabilitar item
