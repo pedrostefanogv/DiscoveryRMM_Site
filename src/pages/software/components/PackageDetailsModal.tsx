@@ -239,7 +239,8 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
                         <span>
                           Usa {'{{installerDir}}'}: o agent vai BAIXAR e EXTRAIR o instalador de novo
                           {details.fileSizeBytes ? ` (${formatBytes(details.fileSizeBytes)})` : ''} antes de remover o app.
-                          Aponte para o desinstalador já instalado para evitar o re-download.
+                          Se não estiver no cache P2P, o arquivo baixado é publicado no P2P (vira seed) para os outros
+                          agents. Aponte para o desinstalador já instalado para evitar o download.
                         </span>
                       </p>
                     )}

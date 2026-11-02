@@ -107,6 +107,39 @@ function PlaceholderHelp() {
         CMD/BAT</strong> ou <strong className="text-foreground">Script PowerShell</strong> para vários passos (extrair ZIP, copiar
         arquivos, registrar serviço etc.).
       </p>
+      <p className="mt-2 font-medium text-foreground">Caminhos com espaços: como preencher corretamente (instalação e desinstalação)</p>
+      <ul className="mt-1.5 list-disc space-y-1 pl-4">
+        <li>
+          Coloque <strong className="text-foreground">aspas duplas somente no caminho do executável</strong>, nunca na linha
+          toda. Correto:{' '}
+          <code className="font-mono">{'"C:\\Program Files\\Foxit Software\\Foxit PDF Reader\\uninstall.exe" /quiet'}</code>.
+          Errado (aspas envolvendo a linha toda):{' '}
+          <code className="font-mono">{'"C:\\Program Files\\...\\uninstall.exe /quiet"'}</code> — os argumentos passam a fazer
+          parte do caminho.
+        </li>
+        <li>
+          O caminho precisa <strong className="text-foreground">terminar no executável/script</strong>, com o nome do arquivo.
+          Errado (truncado):{' '}
+          <code className="font-mono">{'"C:\\Program Files\\Foxit Software\\Foxit PDF Reader\\uninstal"'}</code>.
+        </li>
+        <li>
+          Sem espaços no caminho, as aspas são dispensáveis:{' '}
+          <code className="font-mono">{'C:\\Windows\\System32\\msiexec.exe /x {GUID} /qn'}</code>.
+        </li>
+        <li>
+          Placeholders não recebem aspas automáticas: quando o caminho resolvido pode ter espaços (ex.: ZIP extraído em pasta
+          com espaço), <strong className="text-foreground">coloque aspas em volta do placeholder</strong>:{' '}
+          <code className="font-mono">{'"{{installer}}" /S'}</code> ou{' '}
+          <code className="font-mono">{'"{{installerDir}}\\setup.exe" /quiet'}</code>.
+        </li>
+        <li>
+          Em <strong className="text-foreground">Script PowerShell</strong>, caminho com espaços exige o operador de chamada:{' '}
+          <code className="font-mono">{'& "C:\\Program Files\\App\\uninstall.exe" /quiet'}</code> (sem{' '}
+          <code className="font-mono">&</code> o PowerShell trata o caminho como texto e não executa o programa). Em{' '}
+          <strong className="text-foreground">Comando único</strong> (cmd /C) e <strong className="text-foreground">Script
+          CMD/BAT</strong>, aspas normais bastam.
+        </li>
+      </ul>
     </div>
   );
 }
@@ -1694,7 +1727,13 @@ export default function CustomPackageEditorPage() {
               <p className="mt-1 text-foreground">
                 Este comando usa {'{{installerDir}}'}: ao desinstalar, o agent vai <strong>BAIXAR e EXTRAIR</strong> o
                 instalador de novo ({loaded?.fileSizeBytes ? formatBytes(loaded.fileSizeBytes) : 'arquivo publicado'})
-                antes de remover o app. Para evitar o re-download, aponte para o desinstalador já instalado — ex.:
+                antes de remover o app.
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                Se o arquivo não estiver no cache P2P do site, o agent baixa da API e <strong className="text-foreground">publica
+                o instalador no P2P</strong> (vira seed) — os outros agents que desinstalarem o mesmo app na mesma versão
+                reaproveitam esse arquivo pela rede local. Para evitar o download por completo, aponte para o desinstalador
+                já instalado — ex.:
               </p>
               <pre className="mt-2 overflow-auto rounded bg-surface-light p-2 font-mono text-[11px] text-foreground">{'"C:\\Program Files\\<Fabricante>\\<App>\\uninstall.exe" /quiet'}</pre>
             </div>
