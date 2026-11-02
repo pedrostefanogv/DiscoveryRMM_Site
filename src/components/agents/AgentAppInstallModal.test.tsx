@@ -236,4 +236,60 @@ describe('AgentAppInstallModal', () => {
     expect(onInstalled).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('mostra o ícone do app em cada resultado da loja', async () => {
+    currentCatalog = [
+      pkg({ packageId: '7zip.7zip', name: '7-Zip', icon: 'https://cdn.example.com/7zip.png' }),
+      pkg({ packageId: 'NanaZip.NanaZip', name: 'NanaZip', icon: 'https://cdn.example.com/nanazip.png' }),
+    ];
+    renderModal();
+
+    fireEvent.change(screen.getByPlaceholderText('Ex.: Firefox, 7-Zip, VLC'), {
+      target: { value: '7zip' },
+    });
+    const sevenZipButton = await screen.findByRole('button', { name: /7zip\.7zip/ });
+
+    // A loja devolve o ícone: a linha renderiza a imagem correspondente.
+    const img = sevenZipButton.querySelector('img') as HTMLImageElement | null;
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute('src')).toBe('https://cdn.example.com/7zip.png');
+    // Decorativo: o nome acessível do botão vem do texto, não da imagem.
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(img?.getAttribute('loading')).toBe('lazy');
+
+    const nanaZipButton = screen.getByRole('button', { name: /NanaZip\.NanaZip/ });
+    expect(nanaZipButton.querySelector('img')).toBeTruthy();
+  });
+
+  it('sem ícone na loja cai nas iniciais do app', async () => {
+    currentCatalog = [pkg({ packageId: '7zip.7zip', name: '7-Zip' })];
+    renderModal();
+
+    fireEvent.change(screen.getByPlaceholderText('Ex.: Firefox, 7-Zip, VLC'), {
+      target: { value: '7zip' },
+    });
+    const button = await screen.findByRole('button', { name: /7zip\.7zip/ });
+
+    expect(button.querySelector('img')).toBeNull();
+    expect(button.textContent).toContain('7Z');
+  });
+
+  it('usa as iniciais quando a imagem do ícone falha ao carregar', async () => {
+    currentCatalog = [
+      pkg({ packageId: '7zip.7zip', name: '7-Zip', icon: 'https://cdn.example.com/quebrado.png' }),
+    ];
+    renderModal();
+
+    fireEvent.change(screen.getByPlaceholderText('Ex.: Firefox, 7-Zip, VLC'), {
+      target: { value: '7zip' },
+    });
+    const button = await screen.findByRole('button', { name: /7zip\.7zip/ });
+    const img = button.querySelector('img') as HTMLImageElement;
+    expect(img).toBeTruthy();
+
+    // Erro de carregamento troca a imagem pelas iniciais (sem espaço vazio).
+    fireEvent.error(img);
+    await waitFor(() => expect(button.querySelector('img')).toBeNull());
+    expect(button.textContent).toContain('7Z');
+  });
 });

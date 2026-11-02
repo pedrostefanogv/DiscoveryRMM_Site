@@ -23,6 +23,52 @@ const INSTALL_TYPE_OPTIONS = [
   { value: String(AppInstallationType.Custom), label: 'Personalizado' },
 ];
 
+/** Iniciais do pacote usadas quando a loja não fornece ícone. */
+function packageInitials(item: AppStoreCatalogPackage): string {
+  const label = packageLabel(item);
+  const parts = label.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return label.slice(0, 2).toUpperCase();
+}
+
+/**
+ * Ícone do pacote na lista de busca: imagem da loja quando existe e, na
+ * ausência (ou em erro de carregamento), as iniciais do nome num quadrado
+ * neutro — assim toda linha da lista tem um ícone no mesmo lugar.
+ */
+function PackageIcon({ item }: { item: AppStoreCatalogPackage }) {
+  const [failed, setFailed] = useState(false);
+  const src = item.icon?.trim() || null;
+
+  // Troca de pacote (mesma posição na lista) reinicia o estado de erro.
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  const box =
+    'inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-surface-light align-middle';
+
+  if (!src || failed) {
+    return (
+      <span className={box} aria-hidden="true">
+        <span className="text-xs font-semibold text-muted">{packageInitials(item)}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className={box}>
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        className="h-6 w-6 object-contain"
+        onError={() => setFailed(true)}
+      />
+    </span>
+  );
+}
 /** Nome exibido do pacote (nome amigável, senão o ID). */
 function packageLabel(item: AppStoreCatalogPackage): string {
   return item.name?.trim() || item.packageId;
@@ -170,7 +216,8 @@ export function AgentAppInstallModal({
 
         {selectedPackage && (
           <p className="text-xs text-muted">
-            Selecionado: <span className="font-medium text-foreground">{packageLabel(selectedPackage)}</span>{' '}
+            Selecionado: <PackageIcon item={selectedPackage} />{' '}
+            <span className="font-medium text-foreground">{packageLabel(selectedPackage)}</span>{' '}
             <span className="font-mono">({selectedPackage.packageId})</span>
           </p>
         )}
@@ -224,13 +271,16 @@ export function AgentAppInstallModal({
                             : 'hover:bg-surface-light')
                       }
                     >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-foreground">
-                          {packageLabel(item)}
-                        </span>
-                        <span className="block truncate font-mono text-xs text-muted">
-                          {item.packageId}
-                          {item.version ? ` · v${item.version}` : ''}
+                      <span className="flex min-w-0 items-center gap-3">
+                        <PackageIcon item={item} />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {packageLabel(item)}
+                          </span>
+                          <span className="block truncate font-mono text-xs text-muted">
+                            {item.packageId}
+                            {item.version ? ` · v${item.version}` : ''}
+                          </span>
                         </span>
                       </span>
                       {alreadyInstalled ? (
