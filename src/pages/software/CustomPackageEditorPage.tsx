@@ -474,6 +474,10 @@ export default function CustomPackageEditorPage() {
   // objectKeys dos assets cujo vínculo automático pós-upload já foi tentado: uma
   // tentativa por asset (uma falha não entra em laço, e o "Salvar" continua lá).
   const autoLinkAttemptedRef = useRef<Set<string>>(new Set());
+  // Marca se o usuário já digitou manualmente no "ID do pacote": enquanto falso,
+  // o ID é gerado automaticamente (slug seguro) a partir do Título; após a
+  // primeira edição manual, o preenchimento automático para de sobrescrever.
+  const packageIdTouchedRef = useRef(false);
 
   // Sair da página no meio de um envio de vários GiB: aborta em vez de deixar o
   // XHR terminar "invisível" (poderia publicar um objeto sem vínculo). O abort
@@ -550,6 +554,16 @@ export default function CustomPackageEditorPage() {
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  /** Some com o erro do ID assim que ele volta a ter valor (só reaparece ao salvar). */
+  function clearPackageIdError() {
+    setErrors((prev) => {
+      if (!prev.packageId) return prev;
+      const rest = { ...prev };
+      delete rest.packageId;
+      return rest;
+    });
   }
 
   /**
@@ -1266,7 +1280,16 @@ export default function CustomPackageEditorPage() {
                 disabled={submitting}
                 maxLength={500}
                 placeholder="Ex.: Sistema de Gestão XPTO"
-                onChange={(event) => update('name', event.target.value)}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  if (isEditing || packageIdTouchedRef.current) {
+                    update('name', name);
+                    return;
+                  }
+                  // ID gerado automaticamente a partir do título (ainda editável).
+                  setForm((prev) => ({ ...prev, name, packageId: slugifyPackageId(name) }));
+                  if (slugifyPackageId(name)) clearPackageIdError();
+                }}
               />
               <Input
                 label="ID do pacote"
@@ -1275,11 +1298,25 @@ export default function CustomPackageEditorPage() {
                 disabled={isEditing || submitting}
                 maxLength={300}
                 placeholder="Ex.: xpto-gestao"
-                hint={isEditing ? 'O ID não pode ser alterado.' : 'Identificador único (sem espaços).'}
-                onChange={(event) => update('packageId', event.target.value)}
+                hint={
+                  isEditing
+                    ? 'O ID não pode ser alterado.'
+                    : 'Gerado automaticamente pelo título — pode ser editado até salvar.'
+                }
+                onChange={(event) => {
+                  packageIdTouchedRef.current = true;
+                  // Mesmo comportamento das demais chaves do produto: minúsculas.
+                  const value = event.target.value.toLowerCase();
+                  update('packageId', value);
+                  if (value.trim()) clearPackageIdError();
+                }}
                 onBlur={() => {
-                  if (!form.packageId.trim() && form.name.trim()) {
-                    update('packageId', slugifyPackageId(form.name));
+                  // Normaliza o que foi digitado à mão (maiúsculas, espaços,
+                  // acentos) para o padrão seguro; campo vazio deriva do título.
+                  const safe = slugifyPackageId(form.packageId.trim() || form.name);
+                  if (safe && safe !== form.packageId) {
+                    update('packageId', safe);
+                    clearPackageIdError();
                   }
                 }}
               />

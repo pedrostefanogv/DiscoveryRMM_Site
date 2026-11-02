@@ -502,7 +502,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "string",
     group: "storage",
     description:
-      "URL base do servidor S3-compatível (ex.: https://s3.us-east-1.amazonaws.com). Com o RustFS interno ligado, informe aqui a URL PUBLICA do servidor (ex.: https://portal.suaempresa.com.br) — o anexo entra por /<bucket>/. Deixe em branco para desabilitar o armazenamento.",
+      "URL base do servidor S3-compatível, sem o bucket no caminho (ex.: https://s3.us-east-1.amazonaws.com; Cloudflare R2: https://<accountid>.r2.cloudflarestorage.com). Com o RustFS interno ligado, informe aqui a URL PUBLICA do servidor (ex.: https://portal.suaempresa.com.br) — o anexo entra por /<bucket>/. Deixe em branco para desabilitar o armazenamento.",
   },
   {
     key: "objectStorageBucketName",
@@ -516,7 +516,8 @@ export const serverEditableFields: EditableField[] = [
     label: "Região",
     kind: "string",
     group: "storage",
-    description: "Região do bucket (ex.: us-east-1, sa-east-1).",
+    description:
+      "Região do bucket (ex.: us-east-1, sa-east-1). Pode ficar EM BRANCO: Cloudflare R2 não tem região (o servidor usa \"auto\"), a região da AWS é deduzida do endpoint e MinIO/RustFS ignoram o valor.",
   },
   {
     key: "objectStorageAccessKey",
