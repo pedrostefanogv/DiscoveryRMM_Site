@@ -5,6 +5,7 @@ import {
   AppApprovalScopeType,
   AppInstallationType,
 } from "@/api/types";
+import type { AppApprovalResolvedRule } from "@/api/types";
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -155,6 +156,41 @@ export function formatDate(d: string | null) {
 /** Tamanho em bytes no formato curto (ex.: "12,3 MB"). Vazio quando inválido. */
 export function formatBytes(value?: number | null): string {
   return formatBytesCanonical(value, "");
+}
+
+/**
+ * O comando de desinstalação referencia o instalador publicado? Mesmos tokens
+ * do agent: {{installer}}, {{installerDir}}, %INSTALLER% e %INSTALLER_DIR%
+ * (case-sensitive). Quando sim, o agent BAIXA E EXTRAI o instalador de novo
+ * antes de remover o app — a UI avisa e sugere apontar para o desinstalador
+ * já instalado. Caminho absoluto: não há download extra.
+ */
+export function uninstallCommandNeedsInstaller(command: string): boolean {
+  if (!command) return false;
+  return /\{\{installer(Dir)?\}\}|%INSTALLER(_DIR)?%/.test(command);
+}
+
+/**
+ * A regra de aprovação ficou órfã (o pacote custom não existe mais)?
+ *
+ * Prioridade: os flags `hasPackage`/`orphanPackage` do enriquecimento do
+ * servidor. Quando não vêm (versões antigas), o tipo Custom compara o packageId
+ * com a lista de pacotes custom carregada — Winget/Chocolatey nunca são órfãos.
+ */
+export function isOrphanApprovalRule(
+  rule: Pick<AppApprovalResolvedRule, "hasPackage" | "orphanPackage" | "installationType" | "packageId">,
+  customPackageIds?: string[],
+): boolean {
+  if (rule.hasPackage === false) return true;
+  if (rule.orphanPackage === true) return true;
+  if (
+    customPackageIds &&
+    rule.installationType === AppInstallationType.Custom
+  ) {
+    const target = rule.packageId.trim().toLowerCase();
+    return !customPackageIds.some((id) => id.trim().toLowerCase() === target);
+  }
+  return false;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isConfigFlagOn } from "./configurationEditors";
+import { isConfigFlagOn, validateFieldValue } from "./configurationEditors";
 
 describe("isConfigFlagOn", () => {
   it("string \"true\" esta ligada", () => {
@@ -24,5 +24,16 @@ describe("isConfigFlagOn", () => {
     expect(isConfigFlagOn("")).toBe(false);
     expect(isConfigFlagOn(0)).toBe(false);
     expect(isConfigFlagOn(1)).toBe(false);
+  });
+});
+describe("objectStorageRegion (compatibilidade Cloudflare R2)", () => {
+  it("aceita regiao em branco — R2 nao tem regiao", () => {
+    expect(validateFieldValue("string", "", "objectStorageRegion")).toBe(true);
+    expect(validateFieldValue("string", "   ", "objectStorageRegion")).toBe(true);
+  });
+
+  it("aceita regiao explicita e 'auto'", () => {
+    expect(validateFieldValue("string", "auto", "objectStorageRegion")).toBe(true);
+    expect(validateFieldValue("string", "sa-east-1", "objectStorageRegion")).toBe(true);
   });
 });

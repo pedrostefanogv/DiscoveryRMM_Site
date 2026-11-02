@@ -599,6 +599,12 @@ export default function ServerConfigurationPage() {
   const storageEndpointRaw = String(formValues.values?.objectStorageEndpoint ?? "").trim().toLowerCase();
   const storageEndpointIsLoopback =
     /(^|:\/\/)(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/.test(storageEndpointRaw);
+  // Origem que o navegador usa nos PUTs pré-assinados (mensagem de CORS da seção).
+  const corsOriginLabel =
+    typeof window !== "undefined" ? window.location.origin : "https://<seu-console>";
+  const corsPolicyExample =
+    `[{"AllowedOrigins":["${corsOriginLabel}"],"AllowedMethods":["PUT","GET","HEAD"],` +
+    `"AllowedHeaders":["*"],"ExposeHeaders":["ETag"],"MaxAgeSeconds":3600}]`;
   const storageConfigured =
     String(formValues.values?.objectStorageEndpoint ?? "").trim().length > 0 &&
     String(formValues.values?.objectStorageBucketName ?? "").trim().length > 0;
@@ -1318,6 +1324,19 @@ export default function ServerConfigurationPage() {
                   </div>
                 </div>
               </div>
+
+              {!storageInternal && (
+                <div className="rounded-lg border border-border bg-surface-light p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">CORS do bucket (uploads diretos)</p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    Pacotes e anexos grandes vão do <strong>navegador direto para o bucket</strong> (PUT pré-assinado). O bucket precisa de uma regra
+                    de CORS com a origem <code>{corsOriginLabel}</code>, métodos <code>PUT</code>, <code>GET</code> e <code>HEAD</code>,
+                    headers <code>content-type</code> (ou <code>*</code>) e <code>ETag</code> em <em>ExposeHeaders</em> — sem o ETag exposto o
+                    multipart não fecha. Exemplo (Cloudflare R2):
+                    <code className="mt-1 block whitespace-pre-wrap break-all">{corsPolicyExample}</code>
+                  </p>
+                </div>
+              )}
 
               {storageToggleFields.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2">

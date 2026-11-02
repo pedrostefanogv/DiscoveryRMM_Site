@@ -3,10 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { Icon,
-  Badge, Button, Card, ConfirmDialog, ContextMenu, ErrorDisplay, Input, Loading, Modal, Select,
+  Badge, Button, Card, ContextMenu, ErrorDisplay, Input, Loading, Modal, Select,
   type ContextMenuItem,
 } from '@/components/ui';
-import { useAppStoreCatalog, useDeleteCustomPackage, useSyncCatalog } from '@/hooks/useAppStore';
+import { useAppStoreCatalog, useSyncCatalog } from '@/hooks/useAppStore';
 import { appStoreApi } from '@/api/app-store';
 import {
   AppInstallationType,
@@ -14,6 +14,8 @@ import {
   type SyncChocolateyCatalogResponse,
 } from '@/api/types';
 import { PackageIcon } from '../components/PackageIcon';
+import { DeleteCustomPackageModal } from '../components/DeleteCustomPackageModal';
+import { CustomTrashPanel } from './CustomTrashPanel';
 import { MarkdownDescription } from '../components/MarkdownDescription';
 import { Highlight } from '../components/Highlight';
 import { ApprovalFormModal } from '../components/ApprovalFormModal';
@@ -47,7 +49,8 @@ export function CatalogTab() {
   const [syncConfirmValue, setSyncConfirmValue] = useState('');
   const [syncConfirmTouched, setSyncConfirmTouched] = useState(false);
   const [deletingCustom, setDeletingCustom] = useState<AppStoreCatalogPackage | null>(null);
-  const deleteCustomPackage = useDeleteCustomPackage();
+  // Aba/segmento interno do catálogo Custom: listagem normal ou lixeira.
+  const [customView, setCustomView] = useState<'catalog' | 'trash'>('catalog');
   // Cadastro/edição de pacotes custom acontece na tela dedicada (rota própria).
   const navigate = useNavigate();
   const [lastSyncByType, setLastSyncByType] = useState<
@@ -367,6 +370,18 @@ export function CatalogTab() {
               <Icon name="add" className="h-4 w-4" /> Novo modelo custom
             </Button>
           )}
+          {isCustom && (
+            <div className="flex overflow-hidden rounded-lg border border-border">
+              <button type="button" onClick={() => setCustomView('catalog')} title="Pacotes publicados"
+                className={`flex items-center gap-1 px-3 py-2 transition-colors ${customView === 'catalog' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-light hover:text-foreground'}`}>
+                <Icon name="inventory_2" className="h-4 w-4" /> Catálogo
+              </button>
+              <button type="button" onClick={() => setCustomView('trash')} title="Pacotes excluídos"
+                className={`flex items-center gap-1 px-3 py-2 transition-colors ${customView === 'trash' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-light hover:text-foreground'}`}>
+                <Icon name="delete" className="h-4 w-4" /> Lixeira
+              </button>
+            </div>
+          )}
           {(isChocolatey || isWinget) && (
             <Button variant="primary" onClick={handleSyncRequest} loading={isSyncingThis} disabled={syncingType !== null && !isSyncingThis} title={`Sincronizar catálogo ${syncLabel}`}>
               <Icon name="refresh" className="h-4 w-4" /> {isSyncingThis ? 'Sincronizando...' : 'Sincronizar Catálogo'}
@@ -390,6 +405,9 @@ export function CatalogTab() {
         )}
       </Card>
 
+      {isCustom && customView === 'trash' && <CustomTrashPanel />}
+
+      {!(isCustom && customView === 'trash') && (
       <Card padding={false}>
         <div className="border-b border-border px-5 py-3 flex items-center justify-between">
           <span className="text-sm font-medium text-foreground">
@@ -509,6 +527,7 @@ export function CatalogTab() {
           </div>
         )}
       </Card>
+      )}
 
       {contextMenu && (
         <ContextMenu
@@ -529,30 +548,14 @@ export function CatalogTab() {
         onDelete={openDetailsDelete}
       />
 
-      <ConfirmDialog
+      {/* Soft delete com confirmação digitada: as aprovações são apagadas
+          definitivamente — o modal deixa isso explícito antes do clique. */}
+      <DeleteCustomPackageModal
         open={!!deletingCustom}
-        title="Excluir pacote custom"
-        message={
-          <span>
-            Remover <strong>{deletingCustom?.name ?? deletingCustom?.packageId}</strong> da loja? O instalador e o ícone são
-            apagados do object storage. Regras de aprovação existentes deixam de ter efeito.
-          </span>
-        }
-        confirmLabel="Excluir"
-        tone="danger"
-        isLoading={deleteCustomPackage.isPending}
+        packageId={deletingCustom?.packageId ?? ''}
+        name={deletingCustom?.name}
         onClose={() => setDeletingCustom(null)}
-        onConfirm={async () => {
-          if (!deletingCustom) return;
-          try {
-            await deleteCustomPackage.mutateAsync(deletingCustom.packageId);
-            toast.success('Pacote custom excluído.');
-            setDeletingCustom(null);
-            void query.refetch();
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Falha ao excluir o pacote custom.');
-          }
-        }}
+        onDeleted={() => void query.refetch()}
       />
     </div>
   );

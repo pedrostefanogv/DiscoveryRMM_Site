@@ -89,6 +89,8 @@ vi.mock('@/hooks/useAppStore', () => ({
     };
   },
   useDeleteApproval: () => ({ mutateAsync: mocks.deleteMutate, isPending: false }),
+  useAppStoreUpdateIntent: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
+  useCleanupOrphanApprovalRules: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCreateApproval: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAppStoreCatalog: () => ({ data: { items: [], count: 0 }, isLoading: false }),
 }));

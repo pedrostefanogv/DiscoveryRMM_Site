@@ -7,7 +7,7 @@ import {
 } from '@/api/types';
 import { PackageIcon } from './PackageIcon';
 import { MarkdownDescription } from './MarkdownDescription';
-import { normalizeInstallationType } from '../softwareStoreUtils';
+import { normalizeInstallationType, uninstallCommandNeedsInstaller } from '../softwareStoreUtils';
 
 /** Rótulo curto do tipo de comando gravado no pacote custom. */
 function commandKindLabel(kind: number | undefined): string {
@@ -230,6 +230,18 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
                       </pre>
                     ) : (
                       <p className="mt-1 text-sm text-muted-foreground">Sem comando de desinstalação.</p>
+                    )}
+                    {/* Comando que referencia o instalador publicado força o agent
+                        a rebaixá-lo/extrai-lo antes de remover — aviso 1 linha. */}
+                    {uninstallCommandNeedsInstaller(details.uninstallCommand ?? '') && (
+                      <p className="flex items-start gap-1.5 rounded-lg border border-warning/40 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+                        <Icon name="warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span>
+                          Usa {'{{installerDir}}'}: o agent vai BAIXAR e EXTRAIR o instalador de novo
+                          {details.fileSizeBytes ? ` (${formatBytes(details.fileSizeBytes)})` : ''} antes de remover o app.
+                          Aponte para o desinstalador já instalado para evitar o re-download.
+                        </span>
+                      </p>
                     )}
                   </div>
                 </div>

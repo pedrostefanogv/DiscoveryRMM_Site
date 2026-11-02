@@ -3810,6 +3810,72 @@ export interface SyncChocolateyCatalogResponse {
   error?: string | null;
 }
 
+/** Item da lixeira de pacotes custom (soft delete). */
+export interface CustomPackageTrashItem {
+  id: string;
+  packageId: string;
+  name: string;
+  publisher?: string | null;
+  version?: string | null;
+  description?: string | null;
+  fileName?: string | null;
+  fileSizeBytes?: number | null;
+  hasFile: boolean;
+  hasIcon: boolean;
+  deletedAt: string;
+  deletedBy?: string | null;
+  deleteReason?: string | null;
+  purgeFailedAt?: string | null;
+  purgeError?: string | null;
+}
+
+/** Pagina da lixeira (cursor). */
+export interface CustomPackageTrashPage {
+  items: CustomPackageTrashItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/** Resposta do POST /app-store/custom/{packageId}/restore. */
+export interface RestoreCustomPackageResponse {
+  packageId: string;
+  restored: boolean;
+  message: string;
+}
+
+/** Corpo do DELETE /app-store/custom/{packageId}: confirmacao digitada na UI. */
+export interface DeleteCustomPackageRequest {
+  confirm: string;
+  reason?: string;
+}
+
+/** Corpo de 409 da exclusao definitiva: falhou ao apagar o objeto do storage. */
+export interface CustomPackagePurgeFailure {
+  purgeFailed: boolean;
+  objectKey?: string;
+  error: string;
+}
+
+/** Regra de aprovacao cujo pacote custom nao existe mais. */
+export interface AppApprovalOrphanRule {
+  ruleId: string;
+  installationType: number;
+  packageId: string;
+  scopeType: number;
+  clientId?: string | null;
+  siteId?: string | null;
+  agentId?: string | null;
+  action: number | null;
+  reason?: string | null;
+  updatedAt: string;
+}
+
+/** Resposta de POST /app-store/approvals/orphans/cleanup (dry-run ou nao). */
+export interface AppApprovalOrphanCleanupResponse {
+  orphans: AppApprovalOrphanRule[];
+  removed?: number;
+}
+
 export interface AppApprovalRule {
   ruleId: string;
   id?: string;
@@ -3867,6 +3933,13 @@ export interface AppApprovalResolvedRule {
   inherited: boolean;
   /** true quando a cadeia tem mais de um nível (houve sobrescrita). */
   overridden: boolean;
+  /**
+   * Enriquecimento do servidor para pacotes CUSTOM: o pacote ainda existe no
+   * catálogo? `undefined` quando o servidor não envia o flag.
+   */
+  hasPackage?: boolean;
+  /** true quando a regra ficou órfã (o pacote custom foi excluído). */
+  orphanPackage?: boolean;
   sources: AppApprovalRuleSource[];
 }
 

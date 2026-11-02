@@ -676,7 +676,20 @@ export function putPresignedPart(
       );
     };
 
-    xhr.onerror = () => reject(new ApiError(0, "Falha de rede ao enviar o bloco direto ao storage."));
+    // xhr.onerror aqui quase sempre é CORS (o navegador bloqueia o PUT
+    // pré-assinado): a política do BUCKET precisa liberar a origem do console,
+    // o método PUT, o header content-type e EXPOR o ETag (sem ele o multipart não
+    // fecha). Sem essa dica o operador só via "falha de rede".
+    xhr.onerror = () =>
+      reject(
+        new ApiError(
+          0,
+          "Falha de rede ao enviar o bloco direto ao storage. Causa mais provável: CORS do bucket. " +
+            "Configure no bucket a origem " +
+            (typeof window !== "undefined" ? window.location.origin : "<URL do console>") +
+            " com os métodos PUT, GET e HEAD, os headers content-type (*) e expondo o header ETag.",
+        ),
+      );
     xhr.onabort = () => reject(new ApiError(0, "Upload cancelado."));
     xhr.ontimeout = () => reject(new ApiError(0, "O bloco excedeu o tempo limite."));
 

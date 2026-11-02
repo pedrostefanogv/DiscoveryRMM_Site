@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { Icon, Badge, Button, Card, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import { useAppStoreResolvedApprovals, useDeleteApproval } from '@/hooks/useAppStore';
+import { useAppStoreResolvedApprovals, useAppStoreCatalog, useDeleteApproval } from '@/hooks/useAppStore';
 import { ApiError } from '@/api/client';
 import {
   AppApprovalActionType,
@@ -21,7 +21,9 @@ import {
   scopeTypeOptions,
   scopeLabel,
   formatDate,
+  isOrphanApprovalRule,
 } from '../softwareStoreUtils';
+import { OrphanCleanupModal } from '../components/OrphanCleanupModal';
 
 /**
  * Cadeia de herança em texto: "Global: Permitido → Cliente: Permitido + Auto-update".
@@ -59,6 +61,8 @@ export function ApprovalsTab() {
   // Simulação de intenção de atualização (nada é executado; ver modal).
   const [updateIntentOpen, setUpdateIntentOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppApprovalResolvedRule | null>(null);
+  // Limpeza de regras órfãs (pacotes custom que não existem mais).
+  const [orphanCleanupOpen, setOrphanCleanupOpen] = useState(false);
 
   const clients = useClients();
   const sites = useSites(selectedClientId);
@@ -91,6 +95,15 @@ export function ApprovalsTab() {
     { scopeType, scopeId, installationType, search: debouncedSearch || undefined },
     { enabled: !scopeMissing },
   );
+
+  // Comparação local para o badge "Pacote inexistente": quando o servidor não
+  // manda hasPackage/orphanPackage, a aba compara as regras CUSTOM com os
+  // pacotes do catálogo custom carregado.
+  const customCatalogQuery = useAppStoreCatalog(
+    { installationType: AppInstallationType.Custom, limit: 100 },
+    { enabled: installationType === AppInstallationType.Custom },
+  );
+  const customPackageIds = customCatalogQuery.data?.items.map((p) => p.packageId);
 
   const clientOptions = [
     { value: '', label: 'Selecione...' },
@@ -173,6 +186,11 @@ export function ApprovalsTab() {
             />
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {installationType === AppInstallationType.Custom && (
+              <Button variant="secondary" onClick={() => setOrphanCleanupOpen(true)} title="Remove regras de aprovação de pacotes custom que não existem mais">
+                <Icon name="delete" className="h-4 w-4" /> Limpar regras órfãs
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => setUpdateIntentOpen(true)}>
               <Icon name="play_circle" className="h-4 w-4" /> Simular atualizações
             </Button>
@@ -243,11 +261,19 @@ export function ApprovalsTab() {
           <div className="divide-y divide-black/10 dark:divide-white/5">
             {query.data.items.map((rule) => {
               const effectiveSource = rule.sources.find((source) => source.isEffective);
+              // Órfã: o servidor sinaliza por hasPackage/orphanPackage; sem os
+              // flags, compara o packageId com o catálogo custom carregado.
+              const orphan = isOrphanApprovalRule(rule, customPackageIds);
               return (
                 <div key={rule.packageId} className="flex items-center justify-between px-5 py-3 hover:bg-surface-light transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-foreground font-mono">{rule.packageId}</span>
+                      {orphan && (
+                        <Badge color="danger">
+                          <Icon name="error" className="h-3 w-3" /> Pacote inexistente
+                        </Badge>
+                      )}
                       {rule.packageName && <span className="text-xs text-muted">{rule.packageName}</span>}
                       {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : rule.action === AppApprovalActionType.Deny ? <Badge color="danger">Negado</Badge> : <span className="text-xs text-muted">{'—'}</span>}
                       {/* Pacote negado não tem auto-update: o badge só confundia. */}
@@ -321,6 +347,13 @@ export function ApprovalsTab() {
         scopeId={scopeId}
         installationType={installationType}
         search={debouncedSearch}
+      />
+
+      {/* Regras de pacotes custom removidos: dry-run + remoção definitiva. */}
+      <OrphanCleanupModal
+        open={orphanCleanupOpen}
+        onClose={() => setOrphanCleanupOpen(false)}
+        onCleaned={() => void query.refetch()}
       />
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remover Regra" maxWidth="max-w-sm">

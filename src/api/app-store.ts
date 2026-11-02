@@ -24,6 +24,11 @@ import type {
   SyncChocolateyCatalogResponse,
   CustomPackageAsset,
   UpsertCustomPackageRequest,
+  CustomPackageTrashItem,
+  CustomPackageTrashPage,
+  DeleteCustomPackageRequest,
+  RestoreCustomPackageResponse,
+  AppApprovalOrphanCleanupResponse,
 } from "./types";
 
 const BASE = "/api/v1/app-store";
@@ -391,6 +396,11 @@ function normalizeResolvedApprovalRule(
     effectiveScopeId: item.effectiveScopeId ?? null,
     inherited: Boolean(item.inherited),
     overridden: Boolean(item.overridden),
+    // Enriquecimento de órfãs (pacotes custom removidos): só definido quando o
+    // servidor manda o flag — versões antigas não o têm e o consumidor compara
+    // com o catálogo carregado.
+    hasPackage: typeof item.hasPackage === "boolean" ? item.hasPackage : undefined,
+    orphanPackage: typeof item.orphanPackage === "boolean" ? item.orphanPackage : undefined,
     sources,
   };
 }
@@ -505,6 +515,36 @@ function normalizeSyncStatus(
       ? normalizeSyncResponse(lastRaw as Record<string, unknown>)
       : null,
   };
+}
+
+/**
+ * Normaliza um item da lixeira. A API responde camelCase; campos nulos/ausentes
+ * viram `null`/`undefined` consistentes com o contrato do front.
+ */
+function normalizeTrashItem(item: Partial<CustomPackageTrashItem>): CustomPackageTrashItem {
+  return {
+    id: item.id ?? "",
+    packageId: item.packageId ?? "",
+    name: item.name ?? "",
+    publisher: item.publisher ?? null,
+    version: item.version ?? null,
+    description: item.description ?? null,
+    fileName: item.fileName ?? null,
+    fileSizeBytes: item.fileSizeBytes ?? null,
+    hasFile: Boolean(item.hasFile),
+    hasIcon: Boolean(item.hasIcon),
+    deletedAt: item.deletedAt ?? "",
+    deletedBy: item.deletedBy ?? null,
+    deleteReason: item.deleteReason ?? null,
+    purgeFailedAt: item.purgeFailedAt ?? null,
+    purgeError: item.purgeError ?? null,
+  };
+}
+
+export interface CustomTrashParams {
+  search?: string;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface CatalogParams {
@@ -1388,9 +1428,61 @@ export const appStoreApi = {
   upsertCustomPackage: (data: UpsertCustomPackageRequest) =>
     api.post<AppStoreCatalogPackage>(`${BASE}/custom`, data),
 
-  /** Remove um pacote custom. */
-  deleteCustomPackage: (packageId: string) =>
-    api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}`),
+  /**
+   * Soft delete de um pacote custom (vai para a lixeira). O corpo exige a
+   * confirmação digitada pelo operador; a API compara case-insensitivamente com
+   * o packageId e responde 400 quando não casa. As aprovações do pacote são
+   * apagadas DEFINITIVAMENTE.
+   */
+  deleteCustomPackage: (packageId: string, confirm: string, reason?: string) =>
+    api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}`, {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm, reason } satisfies DeleteCustomPackageRequest),
+    }),
+
+  /** Restaura um pacote custom da lixeira (as aprovações NÃO voltam). */
+  restoreCustomPackage: (packageId: string) =>
+    api.post<RestoreCustomPackageResponse>(
+      `${BASE}/custom/${encodeURIComponent(packageId)}/restore`,
+    ),
+
+  /** Lista os pacotes custom na lixeira (cursor + busca). */
+  getCustomTrash: async (params: CustomTrashParams = {}): Promise<CustomPackageTrashPage> => {
+    const response = await api.get<Partial<CustomPackageTrashPage> & Record<string, unknown>>(
+      `${BASE}/custom/trash`,
+      { search: params.search || undefined, cursor: params.cursor || undefined, limit: params.limit },
+    );
+    const items = Array.isArray(response.items) ? response.items : [];
+    return {
+      items: items.map((item) => normalizeTrashItem(item ?? {})),
+      nextCursor: response.nextCursor ?? null,
+      hasMore: Boolean(response.hasMore) || Boolean(response.nextCursor),
+    };
+  },
+
+  /**
+   * Exclusão DEFINITIVA em 2 passos: `confirm` digitado e `force` opcional.
+   * A API responde 409 (falha ao apagar o objeto no storage) e o operador pode
+   * repetir com force=true — a linha é removida e o arquivo fica para o
+   * varredor de órfãos.
+   */
+  permanentlyDeleteCustomPackage: (
+    packageId: string,
+    confirm: string,
+    force: boolean,
+  ) =>
+    api.del<void>(
+      `${BASE}/custom/${encodeURIComponent(packageId)}/permanent?confirm=${encodeURIComponent(confirm)}&force=${force}`,
+    ),
+
+  /**
+   * Regras de aprovação de pacotes custom que não existem mais.
+   * `dryRun: true` só reporta; sem dryRun remove as regras órfãs.
+   */
+  cleanupOrphanApprovalRules: (dryRun: boolean) =>
+    api.post<AppApprovalOrphanCleanupResponse>(
+      `${BASE}/approvals/orphans/cleanup?dryRun=${dryRun}`,
+    ),
 
   /**
    * Apaga APENAS o instalador publicado do pacote custom (metadados continuam).

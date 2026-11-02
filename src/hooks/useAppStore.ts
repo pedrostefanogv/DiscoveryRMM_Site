@@ -6,16 +6,21 @@ import { AppInstallationType } from "@/api/types";
 import type {
   CreateAppApprovalRuleRequest,
   UpsertCustomPackageRequest,
+  AppApprovalOrphanCleanupResponse,
+  RestoreCustomPackageResponse,
 } from "@/api/types";
 import type {
   CatalogParams,
   ApprovalsParams,
   AuditParams,
   EffectiveParams,
+  CustomTrashParams,
 } from "@/api/app-store";
 
 const KEYS = {
   all: ["appStore"] as const,
+  trash: (params: CustomTrashParams) =>
+    ["appStore", "custom-trash", params] as const,
   catalog: (params: CatalogParams) => ["appStore", "catalog", params] as const,
   package: (packageId: string, installationType?: number) =>
     ["appStore", "package", packageId, installationType] as const,
@@ -158,11 +163,15 @@ export function useUpsertCustomPackage() {
   });
 }
 
+/**
+ * Soft delete: o pacote vai para a lixeira e as aprovações dele são apagadas
+ * definitivamente. Exige a confirmação digitada (a API compara com o packageId).
+ */
 export function useDeleteCustomPackage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (packageId: string) =>
-      appStoreApi.deleteCustomPackage(packageId),
+    mutationFn: ({ packageId, confirm, reason }: { packageId: string; confirm: string; reason?: string }) =>
+      appStoreApi.deleteCustomPackage(packageId, confirm, reason),
     onSuccess: () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
@@ -170,9 +179,72 @@ export function useDeleteCustomPackage() {
         qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "approvals-resolved"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "package"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "custom-trash"] }),
       ]),
   });
 }
+
+/** Pacotes custom na lixeira. */
+export function useCustomTrash(params: CustomTrashParams = {}) {
+  return useQuery({
+    queryKey: KEYS.trash(params),
+    queryFn: () => appStoreApi.getCustomTrash(params),
+  });
+}
+
+/** Restaura um pacote da lixeira (as aprovações não voltam). */
+export function useRestoreCustomPackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) => appStoreApi.restoreCustomPackage(packageId),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "custom-trash"] }),
+      ]),
+  });
+}
+
+/**
+ * Exclusão definitiva (2 passos). O 409 de purge sobe como erro para o
+ * componente decidir repetir com force=true.
+ */
+export function usePermanentDeleteCustomPackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ packageId, confirm, force }: { packageId: string; confirm: string; force: boolean }) =>
+      appStoreApi.permanentlyDeleteCustomPackage(packageId, confirm, force),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "custom-trash"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+      ]),
+  });
+}
+
+/** Limpa regras de aprovação órfãs (dryRun reporta; sem dryRun remove). */
+export function useCleanupOrphanApprovalRules() {
+  const qc = useQueryClient();
+  return useMutation<
+    AppApprovalOrphanCleanupResponse,
+    Error,
+    { dryRun: boolean }
+  >({
+    mutationFn: ({ dryRun }) => appStoreApi.cleanupOrphanApprovalRules(dryRun),
+    onSuccess: (_data, { dryRun }) => {
+      if (dryRun) return;
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals-resolved"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "audit"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+      ]);
+    },
+  });
+}
+
+export type { RestoreCustomPackageResponse };
 
 export function useDeleteCustomPackageIcon() {
   const qc = useQueryClient();

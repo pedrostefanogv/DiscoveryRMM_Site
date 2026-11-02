@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
 import { Icon, Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea,
 PageHeader,
 } from '@/components/ui';
@@ -25,7 +26,7 @@ import { SCRIPT_LANGUAGES, type ScriptLanguage } from '@/components/script/scrip
 import { validateScriptSyntax } from '@/components/script/scriptValidation';
 import { MarkdownField } from './components/MarkdownField';
 import { SoftwareInventoryPicker, type InventorySoftwareSelection } from './components/SoftwareInventoryPicker';
-import { STORE_PATH, buildStorePath, formatBytes, formatEta, slugifyPackageId } from './softwareStoreUtils';
+import { STORE_PATH, buildStorePath, formatBytes, formatEta, slugifyPackageId, uninstallCommandNeedsInstaller } from './softwareStoreUtils';
 
 /**
  * Volta para a loja já na listagem Custom: o editor só trata pacotes custom e,
@@ -445,6 +446,46 @@ function AssetUploadPanel({
  * Rotas: `/software/store/custom/new` (cadastro) e
  * `/software/store/custom/:packageId/edit` (edição).
  */
+/**
+ * Banner do editor aberto para um pacote que está na LIXEIRA (soft delete):
+ * a consulta normal do pacote responde 404, então mostra o estado e o caminho
+ * de volta em vez de um erro seco.
+ */
+function TrashedPackageBanner({ packageId }: { packageId: string }) {
+  const trashQuery = useQuery({
+    queryKey: ['appStore', 'custom-trash', 'banner', packageId],
+    queryFn: () => appStoreApi.getCustomTrash({ search: packageId, limit: 20 }),
+    enabled: Boolean(packageId),
+    staleTime: 60_000,
+  });
+  const item = trashQuery.data?.items.find(
+    (entry) => entry.packageId.toLowerCase() === packageId.trim().toLowerCase(),
+  );
+  if (!item) return null;
+
+  return (
+    <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
+      <p className="flex items-center gap-2 font-medium text-warning">
+        <Icon name="delete" className="h-4 w-4" /> Este pacote está na lixeira da loja
+      </p>
+      <p className="mt-1 text-muted-foreground">
+        Ele foi excluído em {formatDateSafe(item.deletedAt)}
+        {item.deletedBy ? ` por ${item.deletedBy}` : ''} e não aparece mais no catálogo. Restaure-o na loja
+        (catálogo Custom → Lixeira) para editá-lo — as aprovações anteriores NÃO voltam.
+      </p>
+    </div>
+  );
+}
+
+function formatDateSafe(value: string | null): string {
+  if (!value) return 'recentemente';
+  try {
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
 export default function CustomPackageEditorPage() {
   const { packageId } = useParams<{ packageId?: string }>();
   const navigate = useNavigate();
@@ -1217,6 +1258,9 @@ export default function CustomPackageEditorPage() {
   if (isEditing && packageQuery.isError) {
     return (
       <div className="space-y-4">
+        {/* Pacote não carrega porque está na lixeira (soft delete): explica e
+            oferece o caminho de volta em vez de mostrar só um erro genérico. */}
+        <TrashedPackageBanner packageId={packageId!} />
         <ErrorDisplay
           message="Não foi possível carregar o pacote custom."
           onRetry={() => packageQuery.refetch()}
@@ -1639,6 +1683,22 @@ export default function CustomPackageEditorPage() {
               />
             )}
           </div>
+
+          {/* Aviso de custo de desinstalação: referenciar {{installerDir}} faz o
+              agent BAIXAR E EXTRAIR o instalador de novo antes de remover. */}
+          {uninstallCommandNeedsInstaller(form.uninstallCommand) && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+              <p className="flex items-center gap-1.5 font-medium text-warning">
+                <Icon name="warning" className="h-4 w-4" /> Download extra na desinstalação
+              </p>
+              <p className="mt-1 text-foreground">
+                Este comando usa {'{{installerDir}}'}: ao desinstalar, o agent vai <strong>BAIXAR e EXTRAIR</strong> o
+                instalador de novo ({loaded?.fileSizeBytes ? formatBytes(loaded.fileSizeBytes) : 'arquivo publicado'})
+                antes de remover o app. Para evitar o re-download, aponte para o desinstalador já instalado — ex.:
+              </p>
+              <pre className="mt-2 overflow-auto rounded bg-surface-light p-2 font-mono text-[11px] text-foreground">{'"C:\\Program Files\\<Fabricante>\\<App>\\uninstall.exe" /quiet'}</pre>
+            </div>
+          )}
         </div>
       </Card>
 
