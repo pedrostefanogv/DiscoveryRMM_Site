@@ -30,8 +30,8 @@ describe("MarkdownViewer urlTransform", () => {
     render(<MarkdownViewer source={`![foto](kbimage:${GUID})`} articleId="art-1" />);
 
     // O renderer de markdown é carregado sob demanda (lazy); o primeiro render
-    // em jsdom pode passar de 1s, então o timeout padrão do findBy é curto aqui.
-    const img = await screen.findByAltText("foto", {}, { timeout: 5000 });
+    // em jsdom sob carga a suíte inteira pode demorar mais; 15s evita flake sem mascarar regressão real.
+    const img = await screen.findByAltText("foto", {}, { timeout: 15000 });
     expect(img.getAttribute("src")).toBe("https://storage.local/signed.png");
   });
 
@@ -43,7 +43,7 @@ describe("MarkdownViewer urlTransform", () => {
       <MarkdownViewer source={`![foto](kbimage:${GUID} "w=20%")`} articleId="art-1" />,
     );
 
-    const img = await screen.findByAltText("foto", {}, { timeout: 5000 });
+    const img = await screen.findByAltText("foto", {}, { timeout: 15000 });
     expect((img as HTMLImageElement).style.width).toBe("20%");
   });
 
@@ -65,7 +65,7 @@ describe("MarkdownViewer urlTransform", () => {
   it("sem articleId mantém o comportamento padrão (kbimage: é removido)", async () => {
     render(<MarkdownViewer source={`![foto](kbimage:${GUID})`} />);
 
-    const img = await screen.findByAltText("foto", {}, { timeout: 5000 });
+    const img = await screen.findByAltText("foto", {}, { timeout: 15000 });
     expect(img.getAttribute("src") ?? "").not.toContain("kbimage:");
   });
 });

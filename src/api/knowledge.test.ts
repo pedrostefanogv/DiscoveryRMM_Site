@@ -127,7 +127,8 @@ describe("knowledgeApi imagens privadas", () => {
 
     const result = await knowledgeApi.downloadImage("art-1", "att-1");
 
-    expect(result).toBeInstanceOf(Blob);
+    // vmThreads roda o módulo em outro realm: instanceof Blob falha cross-context.
+    expect(Object.prototype.toString.call(result)).toBe("[object Blob]");
     const [url] = firstCall(fetchMock);
     expect(url).toContain("/api/v1/knowledge/art-1/images/att-1");
   });

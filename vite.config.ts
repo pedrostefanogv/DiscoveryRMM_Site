@@ -180,5 +180,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // jsdom era recriado por arquivo (172x, ~64% do tempo total do vitest).
+    // vmThreads reusa o ambiente por worker mantendo isolamento de módulos.
+    pool: "vmThreads",
   },
 });

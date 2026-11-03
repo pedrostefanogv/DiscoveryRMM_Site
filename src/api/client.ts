@@ -332,6 +332,14 @@ export async function apiFetchResponse(
   return response;
 }
 
+/**
+ * Checagem de Blob resistente a realms (vmThreads/iframes): instanceof falha
+ * quando o Blob veio de outro contexto JS. Usa a brand tag do Object.prototype.
+ */
+function isBlob(value: unknown): value is Blob {
+  return Object.prototype.toString.call(value) === "[object Blob]";
+}
+
 async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const method = (init?.method ?? "GET").toUpperCase();
@@ -345,7 +353,7 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
     const hasRawBody =
       init?.body instanceof FormData ||
       init?.body instanceof URLSearchParams ||
-      init?.body instanceof Blob;
+      isBlob(init?.body);
     if (!hasRawBody) {
       headers.set("Content-Type", "application/json");
     }
@@ -710,7 +718,7 @@ export const api = {
     const isRawBody =
       body instanceof FormData ||
       body instanceof URLSearchParams ||
-      body instanceof Blob ||
+      isBlob(body) ||
       body instanceof ArrayBuffer ||
       ArrayBuffer.isView(body);
 
