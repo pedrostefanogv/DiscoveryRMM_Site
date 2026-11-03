@@ -42,6 +42,7 @@ describe("agentDetailTabSlug", () => {
       autostart: "execucao-automatica",
       windowsUpdates: "atualizacoes",
       policies: "politicas",
+      sensors: "sensores",
       logs: "logs",
     });
   });
@@ -85,6 +86,10 @@ describe("agentDetailTabFromSlug", () => {
     expect(agentDetailTabFromSlug("inicializacao")).toBe("autostart");
     expect(agentDetailTabFromSlug("tarefas-agendadas")).toBe("autostart");
     expect(agentDetailTabFromSlug("execucao-automatica")).toBe("autostart");
+  });
+
+  it("resolve o deep link da aba Sensores", () => {
+    expect(agentDetailTabFromSlug("sensores")).toBe("sensors");
   });
 
   it("cai no padrão para slug desconhecido (URL antiga/inválida)", () => {

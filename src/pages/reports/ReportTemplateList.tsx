@@ -41,6 +41,7 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.AutomaticLabelRules]: "Regras de Labels",
   [ReportDatasetType.AutomationExecutions]: "Execuções de Automação",
   [ReportDatasetType.AgentMonitoringEvents]: "Eventos de Monitoramento",
+  [ReportDatasetType.AgentSensors]: "Sensores (estado e métricas)",
   [ReportDatasetType.AgentAlerts]: "Alertas de Agentes",
   [ReportDatasetType.P2pTelemetry]: "Telemetria P2P",
   [ReportDatasetType.AgentDisks]: "Discos de Agentes",
@@ -83,6 +84,8 @@ function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
       "agent-hardware": "Hardware de Agentes",
       agentlabels: "Labels de Agentes",
       "agent-labels": "Labels de Agentes",
+      agentsensors: "Sensores (estado e métricas)",
+      "agent-sensors": "Sensores (estado e métricas)",
       knowledgebase: "Base de Conhecimento",
       "knowledge-base": "Base de Conhecimento",
     };

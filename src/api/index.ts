@@ -77,6 +77,12 @@ export { workflowProfilesApi } from "./workflowProfiles";
 export { deployTokensApi } from "./deploy-tokens";
 export { apiTokensApi } from "./api-tokens";
 export { monitoringEventsApi } from "./monitoring-events";
+export { sensorsApi, isSensorOfflineError, describeSensorsError } from "./sensors";
+export type {
+  SensorSeriesParams,
+  SensorEventsParams,
+  SensorFleetSummaryParams,
+} from "./sensors";
 export { backgroundServicesApi } from "./background-services";
 export {
   databaseSanitizationApi,

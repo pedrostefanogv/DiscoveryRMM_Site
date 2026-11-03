@@ -574,6 +574,9 @@ export type AgentDetailDataTab =
   | "autostart"
   | "windowsUpdates"
   | "policies"
+  // Sensores: monitoramento por dispositivo (estado + métricas) — fica ao lado
+  // de "Políticas", que é o que o agent recebe no check-in.
+  | "sensors"
   | "logs";
 
 /**
@@ -614,6 +617,7 @@ export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
   autostart: "execucao-automatica",
   windowsUpdates: "atualizacoes",
   policies: "politicas",
+  sensors: "sensores",
   logs: "logs",
 };
 

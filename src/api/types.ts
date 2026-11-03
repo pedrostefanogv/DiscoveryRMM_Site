@@ -3024,6 +3024,8 @@ export enum ReportDatasetType {
   PatchApprovals = 26,
   PatchApprovalAudit = 27,
   Agents = 28,
+  // Estado e métricas dos sensores (aba "Sensores" do agente / página de frota).
+  AgentSensors = 29,
 }
 
 export enum ReportFormat {
@@ -4834,3 +4836,369 @@ export interface ValidateTransferResponse {
   previousClientName: string | null;
   targetClientName: string | null;
 }
+
+// ── Sensores (monitoramento por dispositivo) ────────────────────────────────
+// Contrato: Discovery.Core/DTOs/SensorDtos.cs. A API serializa enums como NOME
+// (JsonStringEnumConverter global), por isso os tipos abaixo são unions de
+// string; os normalizadores de api/sensors.ts aceitam também o valor numérico
+// (respostas antigas/cache) e convertem para o nome.
+
+/** Estado de saúde de um sensor (servidor é a fonte única de verdade). */
+export type SensorStatus = "Passing" | "Warning" | "Failing" | "Pending" | "Unknown";
+
+/** Severidade de um alerta de sensor. "Info" nunca alerta. */
+export type SensorSeverity = "Info" | "Warning" | "Critical";
+
+/** Tipo de coleta do sensor (built-in) ou Script para métricas customizadas. */
+export type SensorType =
+  | "DiskSpace"
+  | "Cpu"
+  | "Memory"
+  | "Uptime"
+  | "Service"
+  | "Process"
+  | "Ping"
+  | "TcpPort"
+  | "HttpProbe"
+  | "HttpThroughput"
+  | "DnsLatency"
+  | "Bandwidth"
+  | "DiskIo"
+  | "EventLogRate"
+  | "SmartStatus"
+  | "CertificateExpiry"
+  | "DefenderStatus"
+  | "BitLocker"
+  | "Script";
+
+/** Unidade de um canal/limiar. */
+export type SensorChannelUnit =
+  | "Percent"
+  | "Bytes"
+  | "BytesPerSecond"
+  | "Milliseconds"
+  | "Seconds"
+  | "Count"
+  | "Boolean"
+  | "MegabitsPerSecond"
+  | "Days"
+  | "Celsius";
+
+/** Direção da comparação dos limiares. */
+export type SensorComparison = "LowerIsWorse" | "HigherIsWorse";
+
+/** Tipo do evento do histórico do sensor. */
+export type SensorEventKind =
+  | "FirstRun"
+  | "StatusChanged"
+  | "SeverityChanged"
+  | "AlertRaised"
+  | "AlertResolved"
+  | "RunError"
+  | "Reset";
+
+/** Canal numérico declarado por um sensor (built-in ou script). */
+export interface SensorChannel {
+  key: string;
+  label: string;
+  unit: SensorChannelUnit;
+  /** chart | gauge | badge | sparkline */
+  display: string;
+  isPrimary: boolean;
+}
+
+/** Definição completa do sensor (CRUD e listagens). */
+export interface SensorDefinition {
+  id: string;
+  key: string | null;
+  name: string;
+  description: string | null;
+  sensorType: SensorType;
+  scopeType: AppApprovalScopeType;
+  clientId: string | null;
+  siteId: string | null;
+  agentId: string | null;
+  includeTags: string[];
+  excludeTags: string[];
+  target: string | null;
+  warningThreshold: number | null;
+  criticalThreshold: number | null;
+  thresholdUnit: SensorChannelUnit;
+  comparison: SensorComparison;
+  optionsJson: string | null;
+  scriptId: string | null;
+  scriptName: string | null;
+  channels: SensorChannel[];
+  extractorsJson: string | null;
+  exitCodeMapJson: string | null;
+  chartJson: string | null;
+  intervalSeconds: number;
+  timeoutSeconds: number;
+  storeSamples: boolean;
+  failsBeforeAlert: number;
+  minSeverityToAlert: SensorSeverity;
+  severityWhenFailing: SensorSeverity;
+  alertOnSensorError: boolean;
+  displayOrder: number;
+  isPinned: boolean;
+  isActive: boolean;
+  lastUpdatedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  createdBy: string | null;
+  /** True quando o sensor vem de um escopo superior (não é do próprio agente). */
+  isInherited: boolean;
+  sourceScope: AppApprovalScopeType | null;
+}
+
+/** Contadores por estado usados nos chips da aba. */
+export interface SensorCounts {
+  total: number;
+  passing: number;
+  warning: number;
+  failing: number;
+  pending: number;
+  unknown: number;
+  stale: number;
+}
+
+/** Item da aba "Sensores" do detalhe do agente (definição + estado atual). */
+export interface SensorItem {
+  sensorId: string;
+  key: string | null;
+  name: string;
+  description: string | null;
+  sensorType: SensorType;
+  target: string | null;
+  targetKey: string;
+  scopeType: AppApprovalScopeType;
+  isInherited: boolean;
+  sourceScope: AppApprovalScopeType | null;
+  warningThreshold: number | null;
+  criticalThreshold: number | null;
+  thresholdUnit: SensorChannelUnit;
+  comparison: SensorComparison;
+  channels: SensorChannel[];
+  currentChannels: Record<string, number>;
+  primaryChannel: string | null;
+  primaryValue: number | null;
+  sparkline: Record<string, number[]>;
+  status: SensorStatus;
+  severity: SensorSeverity | null;
+  message: string | null;
+  isStale: boolean;
+  exitCode: number | null;
+  durationMs: number | null;
+  outputExcerpt: string | null;
+  consecutiveFailures: number;
+  totalRuns: number;
+  totalFailures: number;
+  lastRunAt: string | null;
+  lastStatusChangedAt: string | null;
+  lastAlertedAt: string | null;
+  intervalSeconds: number;
+  timeoutSeconds: number;
+  failsBeforeAlert: number;
+  minSeverityToAlert: SensorSeverity;
+  scriptId: string | null;
+  scriptName: string | null;
+  chartJson: string | null;
+  /**
+   * JSON livre de opções do sensor. Carrega a histerese (`sustainSamples`) e
+   * o reinício automático de serviço (`restartIfStopped`), que não têm coluna
+   * própria no contrato.
+   */
+  optionsJson: string | null;
+  displayOrder: number;
+  isPinned: boolean;
+}
+
+/** Payload completo da aba "Sensores" de um agente. */
+export interface AgentSensorsPayload {
+  agentId: string;
+  sensorFingerprint: string;
+  lastSyncedSensorFingerprint: string | null;
+  lastSensorSyncAt: string | null;
+  /** O agent já está com o conjunto de sensores vigente. */
+  upToDate: boolean;
+  generatedAt: string | null;
+  defaultIntervalSeconds: number;
+  /** Acima disto um sensor sem resultado é considerado "sem dados recentes". */
+  staleAfterSeconds: number;
+  counts: SensorCounts;
+  items: SensorItem[];
+}
+
+export interface SensorSeriesPoint {
+  /** Instante do ponto (ISO). */
+  t: string;
+  v: number | null;
+  min: number | null;
+  max: number | null;
+}
+
+export interface SensorSeriesStats {
+  min: number | null;
+  avg: number | null;
+  max: number | null;
+  p95: number | null;
+  last: number | null;
+  count: number;
+}
+
+export interface SensorSeriesChannel {
+  key: string;
+  label: string;
+  unit: SensorChannelUnit;
+  points: SensorSeriesPoint[];
+  stats: SensorSeriesStats;
+}
+
+/** Faixa contínua de status usada na barra colorida abaixo do eixo do gráfico. */
+export interface SensorStatusStrip {
+  from: string;
+  to: string;
+  status: SensorStatus;
+}
+
+/** Série temporal de um sensor (gráfico). */
+export interface SensorSeries {
+  agentId: string;
+  sensorId: string;
+  targetKey: string;
+  from: string;
+  to: string;
+  /** raw | hourly | daily */
+  resolution: string;
+  stepSeconds: number;
+  warningThreshold: number | null;
+  criticalThreshold: number | null;
+  comparison: SensorComparison;
+  thresholdUnit: SensorChannelUnit;
+  channels: SensorSeriesChannel[];
+  statusStrips: SensorStatusStrip[];
+}
+
+/** Evento do histórico do sensor (mudança de estado, alerta, erro, reset). */
+export interface SensorEvent {
+  id: string;
+  targetKey: string;
+  kind: SensorEventKind;
+  status: SensorStatus;
+  severity: SensorSeverity | null;
+  previousStatus: SensorStatus | null;
+  previousSeverity: SensorSeverity | null;
+  message: string | null;
+  exitCode: number | null;
+  occurredAt: string | null;
+}
+
+export interface SensorEventPage {
+  items: SensorEvent[];
+  nextCursor: string | null;
+}
+
+/** Resposta do "executar agora" (um comando por agente). */
+export interface SensorRunResponse {
+  commandId: string | null;
+  dispatched: boolean;
+  sensorCount: number;
+  message: string | null;
+}
+
+/** Creação/edição de sensor. Campos não informados mantêm o valor atual no update. */
+export interface SensorUpsertRequest {
+  key?: string | null;
+  name?: string | null;
+  description?: string | null;
+  sensorType?: SensorType;
+  scopeType?: AppApprovalScopeType;
+  clientId?: string | null;
+  siteId?: string | null;
+  agentId?: string | null;
+  includeTags?: string[] | null;
+  excludeTags?: string[] | null;
+  target?: string | null;
+  warningThreshold?: number | null;
+  criticalThreshold?: number | null;
+  thresholdUnit?: SensorChannelUnit | null;
+  comparison?: SensorComparison | null;
+  optionsJson?: string | null;
+  scriptId?: string | null;
+  channels?: SensorChannel[] | null;
+  extractorsJson?: string | null;
+  exitCodeMapJson?: string | null;
+  chartJson?: string | null;
+  intervalSeconds?: number | null;
+  timeoutSeconds?: number | null;
+  storeSamples?: boolean | null;
+  failsBeforeAlert?: number | null;
+  minSeverityToAlert?: SensorSeverity | null;
+  severityWhenFailing?: SensorSeverity | null;
+  alertOnSensorError?: boolean | null;
+  displayOrder?: number | null;
+  isPinned?: boolean | null;
+  isActive?: boolean | null;
+}
+
+/** Filtros da listagem de definições (GET /api/v1/sensors). */
+export interface SensorListParams {
+  scopeType?: AppApprovalScopeType;
+  clientId?: string;
+  siteId?: string;
+  agentId?: string;
+  includeInactive?: boolean;
+}
+
+// ── Frota de sensores (página "Sensores") ───────────────────────────────────
+// Contrato: Discovery.Core/DTOs/SensorDtos.cs (SensorFleetSummaryDto). Os
+// contadores por STATUS somam "total"; "stale" é uma dimensão SEPARADA (linhas
+// sem dado recente) — stale ≤ total e NÃO entra na soma dos status.
+
+/** Contadores da frota inteira (ou do filtro cliente/site). */
+export interface SensorFleetCounts {
+  total: number;
+  passing: number;
+  warning: number;
+  failing: number;
+  pending: number;
+  unknown: number;
+  /** Sensores sem dado recente (dimensão à parte dos status). */
+  stale: number;
+  /** Agentes distintos com pelo menos um sensor em falha. */
+  agentsWithFailing: number;
+}
+
+/** Agregado por tipo de sensor (para a tabela "por tipo"). */
+export interface SensorFleetByType {
+  sensorType: SensorType;
+  total: number;
+  warning: number;
+  failing: number;
+}
+
+/** Agente do "top" da frota (mais sensores fora do normal). */
+export interface SensorFleetAgent {
+  agentId: string;
+  hostname: string;
+  displayName: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  siteId: string | null;
+  siteName: string | null;
+  failing: number;
+  warning: number;
+  worstSeverity: SensorSeverity | null;
+}
+
+/** Resposta de GET /api/v1/sensors/summary?clientId=&siteId=. */
+export interface SensorFleetSummary {
+  generatedAt: string | null;
+  clientId: string | null;
+  siteId: string | null;
+  counts: SensorFleetCounts;
+  byType: SensorFleetByType[];
+  top: SensorFleetAgent[];
+}
+
+

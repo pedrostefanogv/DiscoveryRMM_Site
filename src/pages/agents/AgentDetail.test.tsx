@@ -146,6 +146,36 @@ vi.mock('@/hooks/useCustomFields', () => ({
   useUpsertAgentCustomFieldValue: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+// Aba "Sensores": o painel e os hooks usam react-query; o teste de abas só
+// precisa que o painel exista como aba (o fetch seria undefined de qualquer forma).
+vi.mock('@/hooks/useSensors', () => ({
+  useAgentSensors: () => ({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+  useRunSensors: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSyncSensorsNow: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateSensor: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateSensor: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteSensor: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useResetSensorState: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSensorDefinitions: () => ({ data: [], isLoading: false }),
+  useSensorEvents: () => ({ data: { items: [] }, isLoading: false, isError: false }),
+  useSensorsFleetSummary: () => ({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+}));
+
+// Realtime da aba Sensores usa useQueryClient (o teste não monta QueryClientProvider).
+vi.mock('@/hooks/useSensorsRealtime', () => ({ useSensorsRealtime: () => {} }));
+
 vi.mock('@/hooks/useAutomation', () => ({
   useForceAutomationSync: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAgentAutomationPolicies: () => ({
@@ -205,6 +235,7 @@ vi.mock('@/components/agents/WakeOnLanModal', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentStartupItemsPanel', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentScheduledTasksPanel', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentPoliciesPanel', () => ({ default: () => null }));
+vi.mock('@/components/agents/AgentSensorsPanel', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentAppInstallModal', () => ({
   AgentAppInstallModal: ({ open }: { open?: boolean }) =>
     open ? <div data-testid="agent-app-install-modal" /> : null,
@@ -257,9 +288,9 @@ describe('AgentDetail — abas do agente', () => {
     // As abas mostram apenas o título — sem contadores ao lado do rótulo.
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toBe('Aplicativos');
     expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toBe('Labels');
-    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 12 abas
-    // (incluindo "Extras" e a nova "Atualizações").
-    expect(screen.getAllByRole('tab')).toHaveLength(12);
+    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 13 abas
+    // (incluindo "Extras", "Atualizações" e "Sensores").
+    expect(screen.getAllByRole('tab')).toHaveLength(13);
   });
 
   it('mostra o usuário logado no card Informações', async () => {
@@ -371,6 +402,14 @@ describe('AgentDetail — abas do agente', () => {
     const tab = screen.getByRole('tab', { name: /Políticas/ });
     expect(tab.getAttribute('aria-selected')).toBe('true');
     expect(tab.textContent).toBe('Políticas');
+  });
+
+  it('abre a aba Sensores pelo deep link', async () => {
+    await renderPage('?tab=sensores');
+
+    const tab = screen.getByRole('tab', { name: /Sensores/ });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.textContent).toBe('Sensores');
   });
 
   it('troca para Tarefas Agendadas dentro da aba Autoruns', async () => {

@@ -42,6 +42,7 @@ const PatchesInventory = lazy(() => import('@/pages/patches/PatchesInventory'));
 const PatchesPending = lazy(() => import('@/pages/patches/PatchesPending'));
 const PatchesApprovals = lazy(() => import('@/pages/patches/PatchesApprovals'));
 const PatchesPolicy = lazy(() => import('@/pages/patches/PatchesPolicy'));
+const SensorsFleetPage = lazy(() => import('@/pages/sensors/SensorsFleetPage'));
 const PatchesCompliance = lazy(() => import('@/pages/patches/PatchesCompliance'));
 const ServiceBoardPage = lazy(() => import('@/pages/service-board/ServiceBoardPage'));
 const AiCostCockpit = lazy(() => import('@/pages/settings/AiCostCockpit'));
@@ -393,6 +394,15 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
             <LazyPage><PatchesOverview /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        // Visão de frota do monitoramento (aba "Sensores" continua no agente).
+        path: 'sensors',
+        element: (
+          <PermissionGate anyOf={['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']}>
+            <LazyPage><SensorsFleetPage /></LazyPage>
           </PermissionGate>
         ),
       },

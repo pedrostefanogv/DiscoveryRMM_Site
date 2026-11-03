@@ -32,6 +32,7 @@ import AgentNotificationModal, { type AgentNotificationPayload } from '@/compone
 import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
+import AgentSensorsPanel from '@/components/agents/AgentSensorsPanel';
 import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
 import { AgentAppInstallModal } from '@/components/agents/AgentAppInstallModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
@@ -41,8 +42,8 @@ import { AgentCustomFieldsCard } from '@/components/custom-fields/AgentCustomFie
 import { AgentPinnedCustomFields } from '@/components/custom-fields/AgentPinnedCustomFields';
 import { useAgentCustomFieldSchema } from '@/hooks/useCustomFields';
 import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
-import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, StartupItemInfo } from '@/api';
-import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
+import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, SensorUpsertRequest, StartupItemInfo } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi, describeSensorsError } from '@/api';
 import { getLogLevelMeta, getTicketPriorityMeta } from '@/utils/labels';
 import {
   LISTENING_PORTS_BACKEND_LIMIT,
@@ -62,6 +63,17 @@ import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { useAgentAutomationPolicies, useForceAutomationSync } from '@/hooks/useAutomation';
+import {
+  useAgentSensors,
+  useCreateSensor,
+  useDeleteSensor,
+  useResetSensorState,
+  useRunSensors,
+  useSyncSensorsNow,
+  useUpdateSensor,
+} from '@/hooks/useSensors';
+import { useSensorsRealtime } from '@/hooks/useSensorsRealtime';
+import { buildRecommendedSensorRequests } from '@/components/agents/sensorUtils';
 import { buildCorrelationId } from '@/pages/automation/automationTasksUtils';
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
@@ -99,6 +111,9 @@ function buildAgentDetailTabs(): DetailTab<AgentDetailDataTab>[] {
       icon: "bolt",
     },
     { id: 'policies', label: 'Políticas', icon: "verified_user" },
+    // "Sensores" fica ao lado de "Políticas": as duas descrevem o que o agent
+    // recebe no check-in (uma para automação, a outra para monitoramento).
+    { id: 'sensors', label: 'Sensores', icon: "monitoring" },
     { id: 'logs', label: 'Logs', icon: "article" },
   ];
 }
@@ -320,6 +335,41 @@ export default function AgentDetail() {
     'automation.*',
     'admin.*',
   ]);
+  // A aba "Sensores" consulta endpoints que exigem Sensors.View (com o fallback
+  // curinga do módulo, como já é padrão nas outras abas).
+  const canViewSensors = hasAnyPermission([
+    'Sensors.View',
+    'sensors.view',
+    'sensors.*',
+    'admin.*',
+  ]);
+  // Executar agora / forçar sincronização exigem Sensors.Execute.
+  const canRunSensors = hasAnyPermission([
+    'Sensors.Execute',
+    'sensors.execute',
+    'Sensors.Edit',
+    'sensors.edit',
+    'sensors.*',
+    'admin.*',
+  ]);
+  // O CRUD de definições tem permissões próprias no backend (Sensors.Create e
+  // Sensors.Edit/Delete) — os botões seguem o que a API vai aceitar.
+  const canCreateSensors = hasAnyPermission([
+    'Sensors.Create',
+    'sensors.create',
+    'Sensors.Edit',
+    'sensors.edit',
+    'sensors.*',
+    'admin.*',
+  ]);
+  const canManageSensors = hasAnyPermission([
+    'Sensors.Edit',
+    'sensors.edit',
+    'Sensors.Delete',
+    'sensors.delete',
+    'sensors.*',
+    'admin.*',
+  ]);
   const deleteAgent = useDeleteAgent();
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
@@ -367,6 +417,181 @@ export default function AgentDetail() {
       toast.error(msg);
     }
   }, [id, forcePolicySync, agentPolicies]);
+
+  // ── Sensores (aba "Sensores") ─────────────────────────────────────────────
+  // Mesma armadilha do bloco acima: todos os hooks ficam ACIMA dos early returns
+  // de carregamento/erro (React #310). O fetch do payload só liga quando a aba
+  // está ativa e o usuário tem Sensors.View; as mutações só rodam por ação.
+  const agentSensors = useAgentSensors(id!, canViewSensors && activeDataTab === 'sensors');
+  const runSensors = useRunSensors();
+  const syncSensorsNow = useSyncSensorsNow();
+  const createSensor = useCreateSensor();
+  const updateSensor = useUpdateSensor();
+  const deleteSensor = useDeleteSensor();
+  const resetSensorState = useResetSensorState();
+
+  // Tempo real da aba: assina "SensorStatusChanged" no NATS e invalida o payload
+  // do agente. Só assina com a aba ativa (Sensors.View); o polling de 30s de
+  // useAgentSensors continua como fallback quando o NATS não está disponível.
+  useSensorsRealtime(
+    canViewSensors && activeDataTab === 'sensors' ? id : null,
+    canViewSensors && activeDataTab === 'sensors',
+    agent.data?.clientId ?? null,
+    agent.data?.siteId ?? null,
+  );
+
+  // Progresso do CTA "Adicionar sensores recomendados" (4 POSTs sequenciais).
+  const [recommendedSensorsProgress, setRecommendedSensorsProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+
+  const handleRunSensors = useCallback(
+    async (sensorIds?: string[]) => {
+      if (!id) return;
+      try {
+        const result = await runSensors.mutateAsync({ agentId: id, sensorIds });
+        if (result.dispatched) {
+          toast.success(
+            result.message ?? `Coleta solicitada ao agent (${result.sensorCount} sensor(es)).`,
+          );
+        } else {
+          toast.error(result.message ?? 'O agent não aceitou a coleta agora.');
+        }
+      } catch (error) {
+        // 409 = comando não despachado (agent offline); describeSensorsError usa
+        // a mensagem do servidor quando ela existe.
+        toast.error(describeSensorsError(error, 'Falha ao solicitar a coleta dos sensores.'));
+      }
+    },
+    [id, runSensors],
+  );
+
+  const handleSyncSensors = useCallback(async () => {
+    if (!id) return;
+    try {
+      await syncSensorsNow.mutateAsync({ agentId: id });
+      toast.success('Sincronização de sensores solicitada ao agent.');
+      // O agent responde logo em seguida; recarrega para refletir o que chegou.
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      await agentSensors.refetch();
+    } catch (error) {
+      toast.error(describeSensorsError(error, 'Falha ao solicitar sincronização de sensores.'));
+    }
+  }, [id, syncSensorsNow, agentSensors]);
+
+  const handleSaveSensor = useCallback(
+    async (data: SensorUpsertRequest, sensorId?: string) => {
+      try {
+        if (sensorId) await updateSensor.mutateAsync({ id: sensorId, data });
+        else await createSensor.mutateAsync(data);
+        toast.success(sensorId ? 'Sensor atualizado.' : 'Sensor criado.');
+        await agentSensors.refetch();
+      } catch (error) {
+        toast.error(describeSensorsError(error, 'Falha ao salvar o sensor.'));
+        // Repassa para o formulário exibir a mensagem dentro do modal.
+        throw error;
+      }
+    },
+    [updateSensor, createSensor, agentSensors],
+  );
+
+  const handleDeleteSensor = useCallback(
+    async (sensorId: string) => {
+      try {
+        await deleteSensor.mutateAsync({ sensorId });
+        toast.success('Sensor excluído.');
+        await agentSensors.refetch();
+      } catch (error) {
+        toast.error(describeSensorsError(error, 'Falha ao excluir o sensor.'));
+      }
+    },
+    [deleteSensor, agentSensors],
+  );
+
+  // ── Reset de estado (menu da linha e "todos" do cabeçalho) ─────────────────
+  const handleResetSensorState = useCallback(
+    async (sensorId: string) => {
+      if (!id) return;
+      try {
+        await resetSensorState.mutateAsync({ agentId: id, sensorId });
+        toast.success('Estado do sensor reiniciado.');
+        await agentSensors.refetch();
+      } catch (error) {
+        toast.error(describeSensorsError(error, 'Falha ao reiniciar o estado do sensor.'));
+      }
+    },
+    [id, resetSensorState, agentSensors],
+  );
+
+  const handleResetAllSensors = useCallback(async () => {
+    if (!id) return;
+    const sensors = agentSensors.data?.items ?? [];
+    if (sensors.length === 0) return;
+    let done = 0;
+    const failed: string[] = [];
+    let lastError: unknown = null;
+    for (const sensor of sensors) {
+      try {
+        await resetSensorState.mutateAsync({ agentId: id, sensorId: sensor.sensorId });
+        done += 1;
+      } catch (error) {
+        failed.push(sensor.name);
+        lastError = error;
+      }
+    }
+    if (failed.length === 0) {
+      toast.success(`Estado de ${done} sensor(es) reiniciado.`);
+    } else {
+      toast.error(
+        `${failed.length} sensor(es) não puderam ser reiniciados (${failed
+          .slice(0, 2)
+          .join(', ')}${failed.length > 2 ? '…' : ''}): ` +
+          describeSensorsError(lastError, 'falha inesperada.'),
+      );
+    }
+    await agentSensors.refetch();
+  }, [id, resetSensorState, agentSensors]);
+
+  // ── CTA do estado vazio: cria as 4 definições recomendadas ────────────────
+  const handleAddRecommendedSensors = useCallback(async () => {
+    if (!id) return;
+    const requests = buildRecommendedSensorRequests(id);
+    setRecommendedSensorsProgress({ done: 0, total: requests.length });
+    let created = 0;
+    const failed: string[] = [];
+    let lastError: unknown = null;
+    try {
+      for (const request of requests) {
+        try {
+          await createSensor.mutateAsync(request);
+          created += 1;
+        } catch (error) {
+          failed.push(request.name ?? 'sensor');
+          lastError = error;
+        } finally {
+          // Progresso visível durante a criação (o CTA fica desabilitado).
+          setRecommendedSensorsProgress({
+            done: created + failed.length,
+            total: requests.length,
+          });
+        }
+      }
+    } finally {
+      setRecommendedSensorsProgress(null);
+      await agentSensors.refetch();
+    }
+    if (failed.length === 0) {
+      toast.success(`${created} sensores recomendados criados — o agent os recebe no próximo check-in.`);
+    } else if (created > 0) {
+      toast.error(
+        `${created} sensor(es) criado(s); falhou: ${failed.join(', ')} — ` +
+          describeSensorsError(lastError, 'tente novamente.'),
+      );
+    } else {
+      toast.error(describeSensorsError(lastError, 'Falha ao criar os sensores recomendados.'));
+    }
+  }, [id, createSensor, agentSensors]);
 
   // Payload pesado (impressoras/portas/conexões/discos) carregado apenas
   // quando uma aba que o consome está ativa (P1.2 — abas sob demanda).
@@ -2733,6 +2958,41 @@ export default function AgentDetail() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeDataTab === 'sensors' && (
+              // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+              // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+              <div className='w-full min-w-0 max-w-full'>
+                <AgentSensorsPanel
+                  agentId={id!}
+                  canView={canViewSensors}
+                  canExecute={canRunSensors}
+                  canCreate={canCreateSensors}
+                  canManage={canManageSensors}
+                  payload={agentSensors.data}
+                  isLoading={agentSensors.isLoading}
+                  isError={Boolean(agentSensors.isError)}
+                  isFetching={agentSensors.isFetching}
+                  onRetry={() => void agentSensors.refetch()}
+                  onRefresh={() => void agentSensors.refetch()}
+                  isForcing={syncSensorsNow.isPending}
+                  onForceSync={() => void handleSyncSensors()}
+                  isRunning={runSensors.isPending}
+                  onRun={handleRunSensors}
+                  isSaving={createSensor.isPending || updateSensor.isPending}
+                  onSaveSensor={handleSaveSensor}
+                  onDeleteSensor={handleDeleteSensor}
+                  onResetSensor={handleResetSensorState}
+                  onResetAllSensors={handleResetAllSensors}
+                  isResetting={resetSensorState.isPending}
+                  onAddRecommended={handleAddRecommendedSensors}
+                  isAddingRecommended={recommendedSensorsProgress !== null}
+                  recommendedProgress={recommendedSensorsProgress}
+                  clientId={agent.data?.clientId ?? null}
+                  siteId={agent.data?.siteId ?? null}
+                />
               </div>
             )}
 

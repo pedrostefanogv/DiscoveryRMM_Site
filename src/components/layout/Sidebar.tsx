@@ -9,6 +9,8 @@ const mainLinks: { to: string; icon: MaterialSymbolName; label: string }[] = [
   { to: '/', icon: "dashboard", label: 'Dashboard' },
   { to: '/service-board', icon: "dashboard", label: 'Service Board' },
   { to: '/agents', icon: "desktop_windows", label: 'Agentes' },
+  // Visão de frota do monitoramento (a aba "Sensores" continua no detalhe).
+  { to: '/sensors', icon: "sensors", label: 'Sensores' },
   { to: '/tickets', icon: "confirmation_number", label: 'Suporte' },
   { to: '/logs', icon: "article", label: 'Logs' },
   { to: '/deploy', icon: "key", label: 'Deploy' },
@@ -40,7 +42,6 @@ const automationLinks = [
   { to: '/automation/tasks', label: 'Tarefas' },
   { to: '/automation/operations', label: 'Operações' },
   { to: '/automation/audit', label: 'Auditoria' },
-  { to: '/settings/agent-labels', label: 'Labels Automáticas' },
 ];
 
 const reportsLinks = [
@@ -70,6 +71,7 @@ const settingsLinks = [
   { to: '/settings/effective', label: 'Config. Efetiva' },
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/notifications', label: 'Notificações' },
+  { to: '/settings/agent-labels', label: 'Labels Automáticas' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },
   { to: '/settings/mcp-tools', label: 'Ferramentas de IA (MCP)' },
   { to: '/settings/agent-updates', label: 'Agent Updates' },
@@ -134,8 +136,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     location.pathname.startsWith('/clients') || location.pathname.startsWith('/sites');
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
   const patchesIsActive = location.pathname.startsWith('/patches');
-  const automationIsActive =
-    location.pathname.startsWith('/automation') || location.pathname.startsWith('/settings/agent-labels');
+  const automationIsActive = location.pathname.startsWith('/automation');
   const reportsIsActive = location.pathname.startsWith('/reports');
   const ticketsIsActive =
     location.pathname.startsWith('/tickets') || location.pathname.startsWith('/knowledge');
@@ -169,11 +170,6 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const settingsOpen = openSection === 'settings';
 
   const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
-  const canViewAgentLabels = hasAnyPermission(['settings.*', 'settings.read', 'admin.*']);
-  const canViewAutomationMenu = canViewAutomation || canViewAgentLabels;
-  const visibleAutomationLinks = canViewAgentLabels
-    ? automationLinks
-    : automationLinks.filter(({ to }) => to !== '/settings/agent-labels');
   const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
   const canViewWorkflowProfiles = hasAnyPermission(['workflow-profiles.*', 'settings.*', 'settings.read', 'admin.*']);
   let visibleTicketsLinks = canViewDepartments
@@ -183,6 +179,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     ? visibleTicketsLinks
     : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
   const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
+  const canViewSensors = hasAnyPermission(['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']);
   const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);
   const canViewClients = hasAnyPermission(['Clients.View', 'clients.*', 'admin.*']);
   const canViewSites = hasAnyPermission(['Sites.View', 'sites.*', 'admin.*']);
@@ -195,6 +192,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
       if (to === '/tickets') return false;
       if (to === '/deploy') return canViewDeploy;
       if (to === '/logs') return canViewLogs;
+      if (to === '/sensors') return canViewSensors;
       return true;
     });
 
@@ -492,13 +490,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           </>
         )}
 
-        {canViewAutomationMenu && (
+        {canViewAutomation && (
           <>
             <button
               type="button"
               onClick={() => {
                 if (effectiveCollapsed) {
-                  navigate(visibleAutomationLinks[0]?.to ?? '/automation');
+                  navigate('/automation');
                   return;
                 }
                 setOpenSection((prev) => (prev === 'automation' ? null : 'automation'));
@@ -525,7 +523,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             {!effectiveCollapsed && (
               <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen} inert={!automationOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {visibleAutomationLinks.map(({ to, label }) => (
+                  {automationLinks.map(({ to, label }) => (
                     <NavLink
                       key={to}
                       to={to}
