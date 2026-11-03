@@ -87,6 +87,16 @@ export default function PowerActionModal({
           </p>
         </div>
 
+        {/* Janela de manutenção NÃO bloqueia comando manual (decisão de produto):
+            o defer_to_window do agent vale para automação/patch — um comando
+            disparado daqui executa sempre, mesmo fora da janela. */}
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-50 p-3 dark:border-blue-500/20 dark:bg-blue-500/10">
+          <Icon name="schedule" className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <p className="text-xs text-blue-800 dark:text-blue-300">
+            A janela de manutenção vale para automação e patches e <strong>não adia este comando</strong>:{" "}
+            {isRestart ? "a reinicialização" : "o desligamento"} manual executa sempre, mesmo fora da janela.
+          </p>
+        </div>
         {/* Delay */}
         <div className="mb-4">
           <label className="mb-1.5 block text-sm font-medium text-muted-foreground">

@@ -15,6 +15,8 @@ import {
   formatBytes,
   formatDate,
   formatSocketFamily,
+  awaitAgentCommandById,
+  notifyAgentCommandOutcome,
   type AgentAutostartView,
   type AgentDetailDataTab,
   type AgentNetworkView,
@@ -1087,11 +1089,12 @@ export default function AgentDetail() {
   const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string; notifyUser: boolean }) => {
     if (!id || !powerAction) return;
 
-    if (powerAction === 'restart') {
-      await restartAgent.mutateAsync({ id, data });
-    } else {
-      await shutdownAgent.mutateAsync({ id, data });
-    }
+    // O POST devolve commandId: confirma só o despacho. O desfecho real vem do
+    // histórico de comandos — polling único em background (helper compartilhado).
+    const response = powerAction === 'restart'
+      ? await restartAgent.mutateAsync({ id, data })
+      : await shutdownAgent.mutateAsync({ id, data });
+    void awaitAgentCommandById(id, response.commandId).then(notifyAgentCommandOutcome);
 
     await agent.refetch();
   };

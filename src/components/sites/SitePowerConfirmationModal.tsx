@@ -80,6 +80,9 @@ export default function SitePowerConfirmationModal({
               <p className="mt-1 text-xs text-muted">
                 Total de agentes no site: {totalCount}
               </p>
+              <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">
+                A janela de manutenção vale para automação e patches e <strong>não adia este comando</strong>: o fan-out manual executa sempre, mesmo fora da janela.
+              </p>
             </div>
           </div>
         </div>

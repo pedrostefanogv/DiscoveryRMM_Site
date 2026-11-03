@@ -11,6 +11,7 @@ import { useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent,
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
 import { isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
+import { awaitAgentCommandById, notifyAgentCommandOutcome } from '@/pages/agents/agentDetailUtils';
 import { openRemoteDebugPopup } from '@/pages/agents/remoteDebugLauncher';
 import { openRemoteSessionPopup } from '@/pages/agents/remoteSessionLauncher';
 import { openAgentSupportChatWindow } from '@/pages/agents/agentSupportChatLauncher';
@@ -144,11 +145,13 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
 
   const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string; notifyUser: boolean }) => {
     if (!powerActionAgent) return;
-    if (powerActionAgent.action === 'restart') {
-      await restartAgent.mutateAsync({ id: powerActionAgent.agent.id, data });
-    } else {
-      await shutdownAgent.mutateAsync({ id: powerActionAgent.agent.id, data });
-    }
+    const { agent, action } = powerActionAgent;
+    // O POST devolve commandId: confirma só o despacho. O desfecho real vem do
+    // histórico de comandos — polling único em background (helper compartilhado).
+    const response = action === 'restart'
+      ? await restartAgent.mutateAsync({ id: agent.id, data })
+      : await shutdownAgent.mutateAsync({ id: agent.id, data });
+    void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
   };
 
   const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {

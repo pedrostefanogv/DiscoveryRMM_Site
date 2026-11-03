@@ -1,4 +1,5 @@
 import { formatBytes as formatBytesCanonical, formatDateTime as formatDateTimeCanonical } from '@/utils/format';
+import toast from 'react-hot-toast';
 
 export interface InventoryPrinter {
   name: string;
@@ -236,12 +237,233 @@ export interface AgentCommandOutcome {
   message: string;
 }
 
+/** Status terminais do comando (nada mais vai chegar do agent). "deferred" é
+ * o status novo da API para comandos adiado pelo agent. */
+const TERMINAL_COMMAND_STATUSES = new Set(["completed", "failed", "cancelled", "timeout", "deferred"]);
+
+/** Mensagem enquanto o agent ainda não respondeu (pending/sent/running). */
+const PENDING_COMMAND_OUTCOME: AgentCommandOutcome = {
+  ok: true,
+  message: "Comando enviado ao agent — o resultado aparece quando o agent responder.",
+};
+
+/**
+ * Status da saída JSON declarativa do comando de power — contrato de UMA linha
+ * que agora é a fonte de verdade nas 3 camadas (agent Go, API C#, Site):
+ *   {"status":"executed"|"scheduled"|"deferred_by_user"|"deferred_to_window"|"denied"|"failed", ...}
+ * Exit codes mantidos: executed/scheduled/deferred_*=0; denied=10; failed=1 —
+ * então status/exit code sozinhos mentem: o output é quem descreve o desfecho.
+ */
+export type AgentPowerStatus =
+  | "executed"
+  | "scheduled"
+  | "deferred_by_user"
+  | "deferred_to_window"
+  | "denied"
+  | "failed";
+
+const POWER_OUTPUT_STATUS_VALUES = new Set<string>([
+  "executed",
+  "scheduled",
+  "deferred_by_user",
+  "deferred_to_window",
+  "denied",
+  "failed",
+]);
+
+interface AgentPowerOutput {
+  status: AgentPowerStatus | null;
+  action: string | null;
+  message: string | null;
+  delaySeconds: number | null;
+  defer: { current: number | null; max: number | null; minutes: number | null } | null;
+  nextRunAt: string | null;
+}
+
+const EMPTY_POWER_OUTPUT: AgentPowerOutput = {
+  status: null,
+  action: null,
+  message: null,
+  delaySeconds: null,
+  defer: null,
+  nextRunAt: null,
+};
+
+/** Extrai o primeiro objeto JSON válido do output (JSON puro ou embutido no texto). */
+function parseEmbeddedJson(result: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(result);
+    if (isRecord(parsed)) return parsed;
+  } catch {
+    // Não é JSON puro — procura um objeto embutido no texto.
+  }
+  const start = result.indexOf("{");
+  const end = result.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed: unknown = JSON.parse(result.slice(start, end + 1));
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Extrai o nextRunAt do output do agent: JSON do contrato, JSON embutido ou
+ * marcador textual legado (`nextRunAt=...`), null quando ausente/ilegível. */
+export function extractDeferredNextRunAt(result: string | null | undefined): string | null {
+  if (!result) return null;
+  const parsed = parseEmbeddedJson(result);
+  if (parsed) {
+    const nextRunAt = parsed.nextRunAt ?? parsed.next_run_at;
+    if (typeof nextRunAt === "string" && nextRunAt.trim()) return nextRunAt;
+    if (typeof nextRunAt === "number" && Number.isFinite(nextRunAt)) return String(nextRunAt);
+    return null;
+  }
+  // Textual legado: "deferred_to_window nextRunAt=2026-11-03T05:00:00Z"
+  const match = /next_?run_?at\s*[=:]\s*"?(?<when>[^"\s,;}]+)"?/i.exec(result);
+  return match?.groups?.when ?? null;
+}
+
+function describeDeferredMessage(result: string): string {
+  const nextRunAt = extractDeferredNextRunAt(result);
+  if (!nextRunAt) {
+    return "Comando aceito, mas adiado para a janela de manutenção. Nada foi executado na máquina.";
+  }
+  const parsed = new Date(nextRunAt);
+  const when = Number.isNaN(parsed.getTime()) ? nextRunAt : formatDateTimeCanonical(nextRunAt);
+  return `Comando aceito, mas adiado para a janela de manutenção (executa em ${when}). Nada foi executado na máquina.`;
+}
+
+/**
+ * Lê o output do comando e devolve o status do contrato. Fontes, em ordem:
+ * 1. JSON do contrato (puro ou embutido no texto);
+ * 2. marcadores textuais case-insensitive de agents antigos ("deferred_to_window",
+ *    "adiado pelo usuário", "agendado silenciosamente" — diacríticos ignorados,
+ *    pois o output do PowerShell pode chegar corrompido pela code page OEM);
+ * 3. nada reconhecido → null (a classificação cai no status/exit code).
+ */
+function parsePowerOutput(result: string): AgentPowerOutput {
+  if (!result) return EMPTY_POWER_OUTPUT;
+  const parsed = parseEmbeddedJson(result);
+  if (parsed) {
+    const rawStatus = typeof parsed.status === "string" ? parsed.status.trim().toLowerCase() : "";
+    if (rawStatus && POWER_OUTPUT_STATUS_VALUES.has(rawStatus)) {
+      const deferRaw = isRecord(parsed.defer) ? parsed.defer : {};
+      const current = typeof deferRaw.current === "number" ? deferRaw.current : null;
+      const max = typeof deferRaw.max === "number" ? deferRaw.max : null;
+      const minutes = typeof deferRaw.minutes === "number" ? deferRaw.minutes : null;
+      const nextRunAtRaw = parsed.nextRunAt ?? parsed.next_run_at;
+      return {
+        status: rawStatus as AgentPowerStatus,
+        action: typeof parsed.action === "string" ? parsed.action : null,
+        message: typeof parsed.message === "string" ? parsed.message : null,
+        delaySeconds: typeof parsed.delaySeconds === "number" ? parsed.delaySeconds : null,
+        defer:
+          current !== null || max !== null || minutes !== null
+            ? { current, max, minutes }
+            : null,
+        nextRunAt:
+          typeof nextRunAtRaw === "string" && nextRunAtRaw.trim() ? nextRunAtRaw.trim() : null,
+      };
+    }
+  }
+  const normalized = result
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized.includes("deferred_to_window")) {
+    return { ...EMPTY_POWER_OUTPUT, status: "deferred_to_window" };
+  }
+  if (normalized.includes("adiado pelo usuario")) {
+    return { ...EMPTY_POWER_OUTPUT, status: "deferred_by_user" };
+  }
+  if (normalized.includes("agendado silenciosamente")) {
+    return { ...EMPTY_POWER_OUTPUT, status: "scheduled" };
+  }
+  return EMPTY_POWER_OUTPUT;
+}
+
+function describeFailedOutcome(
+  exitCode: number | null,
+  errorMessage: string | null | undefined,
+): AgentCommandOutcome {
+  const exitInfo = exitCode !== null && exitCode !== 0 ? `Código de saída ${exitCode}. ` : "";
+  const detail = errorMessage?.trim();
+  const detailInfo = detail ? `${detail} ` : "";
+  return {
+    ok: false,
+    message: `O agent não conseguiu concluir a ação. ${exitInfo}${detailInfo}Verifique os logs do agent ou tente novamente (algumas ações exigem privilégio administrativo).`,
+  };
+}
+
+/**
+ * Traduz o comando devolvido pela API no desfecho exibível ao operador.
+ * Classifica PRIMEIRO pelo JSON de status do contrato; deferral/denial nunca
+ * viram "sucesso", mesmo com exit code 0 (confirmação antecipada do agent).
+ */
+export function describeAgentCommandOutcome(command: {
+  status?: string | null;
+  result?: string | null;
+  exitCode?: number | null;
+  errorMessage?: string | null;
+}): AgentCommandOutcome {
+  const status = String(command.status ?? "").toLowerCase();
+  const result = command.result ?? "";
+  const exitCode = command.exitCode ?? null;
+  const info = parsePowerOutput(result);
+
+  switch (info.status) {
+    case "executed":
+      return { ok: true, message: "Ação executada com sucesso no agent." };
+    case "scheduled": {
+      const delay = info.delaySeconds !== null ? ` (${info.delaySeconds} s)` : "";
+      return {
+        ok: true,
+        message: `Comando aceito — a ação foi agendada e ainda não foi executada${delay}.`,
+      };
+    }
+    case "deferred_by_user": {
+      const defer = info.defer;
+      if (defer && defer.current !== null && defer.max !== null) {
+        const minutes = defer.minutes !== null ? `, ${defer.minutes} min` : "";
+        return {
+          ok: false,
+          message: `Adiado pelo usuário (${defer.current}/${defer.max}${minutes}) — nada foi executado agora.`,
+        };
+      }
+      return { ok: false, message: "Adiado pelo usuário — nada foi executado agora." };
+    }
+    case "deferred_to_window":
+      return { ok: false, message: describeDeferredMessage(result) };
+    case "denied":
+      return { ok: false, message: "O usuário negou a ação." };
+    case "failed":
+      return describeFailedOutcome(exitCode, command.errorMessage);
+  }
+
+  // Status "deferred" (novo) sem output legível: terminal e NÃO é sucesso.
+  if (status === "deferred") {
+    return { ok: false, message: "Comando adiado pelo agent — nada foi executado agora." };
+  }
+
+  if (status === "completed" && (exitCode === null || exitCode === 0)) {
+    return { ok: true, message: "Ação executada com sucesso no agent." };
+  }
+
+  if (status === "failed" || status === "cancelled" || status === "timeout" || (exitCode !== null && exitCode !== 0)) {
+    return describeFailedOutcome(exitCode, command.errorMessage);
+  }
+
+  return { ...PENDING_COMMAND_OUTCOME };
+}
+
 /**
  * Aguarda o resultado de um comando despachado ao agent (StartupItem/
  * ScheduledTask): faz polling do histórico de comandos até que o comando
  * mais recente do tipo informado saia de Pending/Sent/Running ou até
- * esgotar o timeout (~20s). O DTO de comandos não expõe result, então a
- * mensagem é derivada do status final.
+ * esgotar o timeout (~20s). A mensagem é derivada de status + result +
+ * exitCode (o DTO expõe os três), para que adiamento/negativa não sejam
+ * reportados como sucesso.
  */
 export async function awaitAgentCommandResult(
   agentId: string,
@@ -265,25 +487,66 @@ export async function awaitAgentCommandResult(
       if (candidates.length === 0) continue;
       const latest = candidates[0];
       const status = String(latest.status ?? "").toLowerCase();
-      if (status === "completed") {
-        return { ok: true, message: "Ação executada com sucesso no agent." };
-      }
-      if (status === "failed" || status === "cancelled" || status === "timeout") {
-        return {
-          ok: false,
-          message:
-            "O agent não conseguiu concluir a ação. Verifique os logs do agent ou tente novamente (algumas ações exigem privilégio administrativo).",
-        };
+      if (TERMINAL_COMMAND_STATUSES.has(status)) {
+        return describeAgentCommandOutcome(latest);
       }
       // Pending/Sent/Running — continua aguardando
     } catch {
       // Falha transitória de rede — tenta novamente
     }
   }
-  return {
-    ok: true,
-    message: "Comando enviado ao agent — o resultado aparece quando o agent responder.",
-  };
+  return { ...PENDING_COMMAND_OUTCOME };
+}
+
+/** Intervalo entre consultas do histórico no polling por commandId. */
+export const AGENT_COMMAND_POLL_INTERVAL_MS = 2000;
+/** Tentativas do polling por commandId (~20s no total). */
+export const AGENT_COMMAND_MAX_ATTEMPTS = 10;
+
+export interface AwaitAgentCommandOptions {
+  maxAttempts?: number;
+  pollIntervalMs?: number;
+}
+
+/**
+ * Helper ÚNICO de desfecho por commandId — usado pelo fluxo de power em
+ * AgentContextMenu, AgentList e AgentDetail (não duplicar esse polling).
+ * Após o POST de restart/shutdown (a API agora devolve commandId), consulta
+ * agentsApi.listCommands até o comando com aquele id ficar terminal (~10×2s)
+ * e devolve o desfecho classificado. Sem commandId (API antiga) ou esgotado o
+ * polling, devolve o desfecho "Comando enviado…" — nunca inventa resultado.
+ */
+export async function awaitAgentCommandById(
+  agentId: string,
+  commandId: string | null | undefined,
+  options?: AwaitAgentCommandOptions,
+): Promise<AgentCommandOutcome> {
+  if (!commandId) return { ...PENDING_COMMAND_OUTCOME };
+  const { agentsApi } = await import("@/api");
+  const maxAttempts = options?.maxAttempts ?? AGENT_COMMAND_MAX_ATTEMPTS;
+  const pollIntervalMs = options?.pollIntervalMs ?? AGENT_COMMAND_POLL_INTERVAL_MS;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    try {
+      const commands = await agentsApi.listCommands(agentId, 30);
+      const command = commands.find((cmd) => cmd.id === commandId);
+      if (!command) continue;
+      const commandStatus = String(command.status ?? "").toLowerCase();
+      if (TERMINAL_COMMAND_STATUSES.has(commandStatus)) {
+        return describeAgentCommandOutcome(command);
+      }
+      // Pending/Sent/Running — continua aguardando
+    } catch {
+      // Falha transitória de rede — tenta novamente
+    }
+  }
+  return { ...PENDING_COMMAND_OUTCOME };
+}
+
+/** Toast único do desfecho: verde para ok, vermelho para o resto. */
+export function notifyAgentCommandOutcome(outcome: AgentCommandOutcome): void {
+  if (outcome.ok) toast.success(outcome.message);
+  else toast.error(outcome.message);
 }
 
 export function nodeLinkStatusColor(

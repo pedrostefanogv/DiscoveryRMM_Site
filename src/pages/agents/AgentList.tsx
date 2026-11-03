@@ -30,6 +30,7 @@ import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heart
 import { useAuthorization } from '@/auth/authorization';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
+import { awaitAgentCommandById, notifyAgentCommandOutcome } from './agentDetailUtils';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
@@ -543,11 +544,12 @@ export default function AgentList() {
   const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string; notifyUser: boolean }) => {
     if (!powerActionAgent) return;
     const { agent, action } = powerActionAgent;
-    if (action === "restart") {
-      await restartAgent.mutateAsync({ id: agent.id, data });
-    } else {
-      await shutdownAgent.mutateAsync({ id: agent.id, data });
-    }
+    // O POST devolve commandId: confirma só o despacho. O desfecho real vem do
+    // histórico de comandos — polling único em background (helper compartilhado).
+    const response = action === "restart"
+      ? await restartAgent.mutateAsync({ id: agent.id, data })
+      : await shutdownAgent.mutateAsync({ id: agent.id, data });
+    void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
   };
 
   const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {

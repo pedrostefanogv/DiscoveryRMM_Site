@@ -533,12 +533,19 @@ export interface AgentToken {
 export interface AgentCommand {
   id: string;
   agentId: string;
-  commandType: CommandType;
-  payload: string;
+  /** A API serializa o tipo com ToString() — o enum numérico era mentira. */
+  commandType: string;
+  /** Payload bruto não é exposto pelo endpoint de listagem de comandos. */
+  payload?: string;
   status: string;
+  /** Output bruto do agente (pode conter JSON, ex.: deferred_to_window + nextRunAt). */
   result: string | null;
   createdAt: string;
   completedAt: string | null;
+  /** Exit code reportado pelo agente; null enquanto não há resultado. */
+  exitCode?: number | null;
+  /** Erro reportado pelo agente, quando houver. */
+  errorMessage?: string | null;
 }
 
 export type RemoteDebugLogLevel = "trace" | "debug" | "info" | "warn" | "error";
