@@ -203,6 +203,282 @@ export const SENSOR_PRIMARY_CHANNEL: Record<SensorType, string | null> = {
   Script: null,
 };
 
+/** Guia de autoria por tipo: alvo, campos que importam e exemplos reais. */
+export interface SensorTypeGuide {
+  /** O que colocar no campo Alvo (vazio = comportamento padrao do coletor). */
+  targetHint: string;
+  /** Campos do formulario que mudam de sentido neste tipo. */
+  relatedFields: string[];
+  /** Exemplos de alvo clicaveis no formulario. */
+  examples: string[];
+  /** Exemplo de JSON para o campo de opcoes, quando o tipo aceita um. */
+  optionsExample?: string;
+}
+
+const GUIDE_BASE_FIELDS: readonly string[] = [
+  "Alvo",
+  "Intervalo e timeout",
+  "Severidade mínima para alertar",
+];
+
+function guide(
+  targetHint: string,
+  relatedFields: string[],
+  examples: string[],
+  optionsExample?: string,
+): SensorTypeGuide {
+  return {
+    targetHint,
+    relatedFields: [...GUIDE_BASE_FIELDS, ...relatedFields],
+    examples,
+    ...(optionsExample ? { optionsExample } : {}),
+  };
+}
+
+/**
+ * Guia por tipo usado no formulário de sensor. É um Record TOTAL: incluir um
+ * tipo novo em SensorType sem preencher aqui quebra o typecheck de propósito.
+ */
+export const SENSOR_TYPE_GUIDE: Record<SensorType, SensorTypeGuide> = {
+  DiskSpace: guide(
+    "Volume a medir. Vazio = todos os volumes (o pior decide).",
+    [
+      "Unidade do limiar",
+      "Limiares de atenção e crítico",
+      "Direção da comparação (padrão: quanto menor, pior)",
+    ],
+    [
+      "C:",
+      "D:",
+      "",
+    ],
+  ),
+  Cpu: guide(
+    "Vazio = uso total do processador. Aceita o número do núcleo lógico.",
+    [
+      "Unidade do limiar",
+      "Limiares de atenção e crítico (padrão: uso %)",
+    ],
+    [
+      "",
+      "0",
+      "1",
+    ],
+  ),
+  Memory: guide(
+    "Vazio = memória física total.",
+    [
+      "Unidade do limiar",
+      "Limiares de atenção e crítico (padrão: uso %)",
+    ],
+    [
+      "",
+    ],
+  ),
+  Uptime: guide(
+    "Vazio = tempo desde o último boot do sistema.",
+    [
+      "Unidade do limiar (segundos)",
+      "Limiares de atenção e crítico",
+    ],
+    [
+      "",
+    ],
+  ),
+  Service: guide(
+    "Nome EXATO do serviço do Windows, como aparece em services.msc.",
+    [
+      "Reiniciar se parado",
+      "Limiar (o servidor decide pelo estado do serviço)",
+    ],
+    [
+      "Spooler",
+      "W32Time",
+      "wuauserv",
+    ],
+    "{\"restartIfStopped\":true,\"restartWaitMs\":5000}",
+  ),
+  Process: guide(
+    "Nome do executável, sem caminho e sem .exe quando possível.",
+    [
+      "Limiar (o servidor decide pela presença do processo)",
+    ],
+    [
+      "explorer",
+      "MsMpEng",
+    ],
+  ),
+  Ping: guide(
+    "Host ou IP alcançável pela rede.",
+    [
+      "Limiares de atenção e crítico (ms)",
+      "Direção da comparação (padrão: quanto maior, pior)",
+    ],
+    [
+      "8.8.8.8",
+      "gateway.interno.local",
+    ],
+  ),
+  TcpPort: guide(
+    "host:porta — sem esquema e sem caminho.",
+    [
+      "Timeout em segundos",
+      "Limiar (o servidor decide pela abertura da porta)",
+    ],
+    [
+      "10.0.0.1:443",
+      "srv-arquivos:445",
+    ],
+  ),
+  HttpProbe: guide(
+    "URL completa, com esquema http:// ou https://.",
+    [
+      "Timeout em segundos",
+      "Limiares de atenção e crítico (ms)",
+    ],
+    [
+      "https://intranet.local",
+      "http://10.0.0.5/health",
+    ],
+  ),
+  HttpThroughput: guide(
+    "URL usada para medir download/upload.",
+    [
+      "Unidade do limiar (Mbps)",
+      "Intervalo (afeta a média)",
+      "Limiares de atenção e crítico",
+    ],
+    [
+      "https://speed.interno.local/10MB.bin",
+    ],
+  ),
+  DnsLatency: guide(
+    "Nome a resolver (não use IP).",
+    [
+      "Timeout em segundos",
+      "Limiares de atenção e crítico (ms)",
+    ],
+    [
+      "exemplo.com",
+      "intranet.local",
+    ],
+  ),
+  Bandwidth: guide(
+    "Adaptador/interface de rede. Vazio = soma de todas.",
+    [
+      "Unidade do limiar (bps)",
+      "Intervalo (define a janela da amostra)",
+      "Limiares de atenção e crítico",
+    ],
+    [
+      "Ethernet",
+      "Intel(R) I219-V",
+    ],
+    "{\"sampleMs\":1000}",
+  ),
+  DiskIo: guide(
+    "Disco a observar. Vazio = todos os discos físicos.",
+    [
+      "Unidade do limiar (percentual de tempo ocupado)",
+      "Limiares de atenção e crítico",
+    ],
+    [
+      "C:",
+      "0",
+    ],
+    "{\"disk\":\"C:\"}",
+  ),
+  EventLogRate: guide(
+    "Log de eventos a contar (nome exato do canal). Vazio = System.",
+    [
+      "Unidade do limiar (eventos)",
+      "Intervalo (define a janela de contagem)",
+      "Limiares de atenção e crítico",
+    ],
+    [
+      "System",
+      "Application",
+    ],
+    "{\"logName\":\"System\",\"levels\":[1,2],\"windowMinutes\":60}",
+  ),
+  SmartStatus: guide(
+    "Disco físico. Vazio = todos os discos (o pior decide).",
+    [
+      "Limiar (o servidor traduz o estado SMART)",
+    ],
+    [
+      "\\\\\\\\.\\\\PhysicalDrive0",
+      "0",
+      "C:",
+    ],
+    "{\"disk\":\"\\\\\\\\.\\\\PhysicalDrive0\"}",
+  ),
+  CertificateExpiry: guide(
+    "Host do certificado. A porta padrão é 443.",
+    [
+      "Unidade do limiar (dias)",
+      "Direção da comparação (padrão: quanto menor, pior)",
+    ],
+    [
+      "example.com",
+      "intranet.local:8443",
+    ],
+    "{\"host\":\"example.com\",\"port\":443}",
+  ),
+  DefenderStatus: guide(
+    "Vazio = estado geral do Defender no agente.",
+    [
+      "Limiar (o servidor traduz o estado da proteção)",
+    ],
+    [
+      "",
+    ],
+    "{}",
+  ),
+  BitLocker: guide(
+    "Volume a verificar. Vazio = volume do sistema.",
+    [
+      "Limiar (o servidor traduz o estado da proteção)",
+    ],
+    [
+      "C:",
+      "D:",
+    ],
+    "{\"drive\":\"C:\"}",
+  ),
+  Script: guide(
+    "Valor repassado ao script (opcional).",
+    [
+      "Script do catálogo",
+      "Canais de métrica",
+      "Extratores (JSON)",
+      "Mapa de exit codes (JSON)",
+    ],
+    [
+      "",
+      "C:",
+    ],
+    "{\"parametro\":\"valor\"}",
+  ),
+};
+
+/** Rótulo curto do limiar deste tipo, para o bloco de orientação. */
+export function sensorThresholdHint(sensorType: SensorType): string {
+  if (SENSOR_NO_THRESHOLD_TYPES.has(sensorType)) {
+    return "Este tipo não usa limiar numérico: o servidor decide o status pelo estado coletado (aberto/parado/em execução).";
+  }
+  if (SENSOR_THRESHOLD_REQUIRED_TYPES.has(sensorType)) {
+    return "Este tipo exige ao menos um limiar numérico (atenção ou crítico).";
+  }
+  return "Limiar opcional: sem números o status vem direto do coletor.";
+}
+
+/** Exemplos que preenchem o Alvo; o vazio (padrão) vem por último. */
+export function sensorGuideExamples(sensorType: SensorType): string[] {
+  const examples = SENSOR_TYPE_GUIDE[sensorType]?.examples ?? [];
+  return [...examples.filter((value) => value !== ""), ""];
+}
+
 /** Unidade sugerida para o limiar quando o tipo é escolhido. */
 export function defaultThresholdUnit(sensorType: SensorType): SensorChannelUnit {
   switch (sensorType) {

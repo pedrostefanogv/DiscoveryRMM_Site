@@ -43,6 +43,8 @@ const PatchesPending = lazy(() => import('@/pages/patches/PatchesPending'));
 const PatchesApprovals = lazy(() => import('@/pages/patches/PatchesApprovals'));
 const PatchesPolicy = lazy(() => import('@/pages/patches/PatchesPolicy'));
 const SensorsFleetPage = lazy(() => import('@/pages/sensors/SensorsFleetPage'));
+const SensorsManagePage = lazy(() => import('@/pages/sensors/SensorsManagePage'));
+const ScriptSensorEditorPage = lazy(() => import('@/pages/sensors/ScriptSensorEditorPage'));
 const PatchesCompliance = lazy(() => import('@/pages/patches/PatchesCompliance'));
 const ServiceBoardPage = lazy(() => import('@/pages/service-board/ServiceBoardPage'));
 const AiCostCockpit = lazy(() => import('@/pages/settings/AiCostCockpit'));
@@ -403,6 +405,26 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']}>
             <LazyPage><SensorsFleetPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        // Gerenciamento das DEFINIÇÕES de sensor (editar/excluir/ativar) fora
+        // do detalhe do agente. Mesma permissão da frota.
+        path: 'sensors/manage',
+        element: (
+          <PermissionGate anyOf={['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']}>
+            <LazyPage><SensorsManagePage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        // Editor completo de autoria do sensor de script (o modal do agente
+        // mantém só o essencial e envia para cá).
+        path: 'sensors/script',
+        element: (
+          <PermissionGate anyOf={['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']}>
+            <LazyPage><ScriptSensorEditorPage /></LazyPage>
           </PermissionGate>
         ),
       },

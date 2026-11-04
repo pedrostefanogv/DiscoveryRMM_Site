@@ -192,7 +192,10 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
       if (to === '/tickets') return false;
       if (to === '/deploy') return canViewDeploy;
       if (to === '/logs') return canViewLogs;
-      if (to === '/sensors') return canViewSensors;
+      // '/sensors' e TODAS as subrotas (ex.: '/sensors/manage') exigem a
+      // permissão de Sensores — comparar só a igualdade deixaria uma subrota
+      // nova visível para quem não tem o recurso.
+      if (to === '/sensors' || to.startsWith('/sensors/')) return canViewSensors;
       return true;
     });
 

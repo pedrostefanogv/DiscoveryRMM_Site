@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button, Icon, Input, Loading, Modal, Select, TextArea } from "@/components/ui";
 import { AppApprovalScopeType } from "@/api/types";
 import { describeSensorsError } from "@/api/sensors";
@@ -21,6 +22,9 @@ import {
   SENSOR_NO_THRESHOLD_TYPES,
   SENSOR_PRIMARY_CHANNEL,
   SENSOR_SEVERITY_OPTIONS,
+  SENSOR_TYPE_GUIDE,
+  sensorGuideExamples,
+  sensorThresholdHint,
   SENSOR_THRESHOLD_REQUIRED_TYPES,
   SENSOR_TYPE_LABELS,
   SENSOR_TYPE_OPTIONS,
@@ -37,9 +41,14 @@ import {
   mergeSensorOptionsJson,
   sensorOptionsFromJson,
   sensorScopeLabel,
-  validateSensorChannelRows,
   type SensorChannelRow,
-} from "./sensorUtils";
+  validateSensorChannelRows,
+} from "@/components/agents/sensorUtils";
+import {
+  validateExitCodeMap,
+  validateExtractors,
+  type ScriptValidationResult,
+} from "@/utils/sensorScriptValidation";
 
 /** Intervalo/limites espelhados de SensorDefaults/SensorDefinitionService no backend. */
 const MIN_INTERVAL_SECONDS = 30;
@@ -49,25 +58,6 @@ const MAX_TIMEOUT_SECONDS = 3_600;
 const MIN_FAILS_BEFORE_ALERT = 1;
 const MAX_FAILS_BEFORE_ALERT = 100;
 const MAX_NAME_LENGTH = 200;
-
-/** Dica de alvo por tipo — o backend não valida o formato, o operador precisa da pista. */
-const TARGET_HINTS: Partial<Record<SensorType, string>> = {
-  DiskSpace: "Volume (ex.: C:). Vazio = todos os volumes.",
-  Service: "Nome do serviço do Windows (ex.: Spooler).",
-  Process: "Nome do processo (ex.: explorer).",
-  Ping: "Host ou IP (ex.: 8.8.8.8).",
-  TcpPort: "host:porta (ex.: 10.0.0.1:443).",
-  HttpProbe: "URL completa (https://...).",
-  HttpThroughput: "URL usada para medir download/upload.",
-  DnsLatency: "Nome a resolver (ex.: exemplo.com).",
-  Bandwidth: "Adaptador/interface (opcional).",
-  EventLogRate: "Log/ canal de eventos (ex.: System).",
-  SmartStatus: "Disco físico (ex.: 0 ou C:).",
-  CertificateExpiry: "Host:porta ou nome do certificado.",
-  DefenderStatus: "Vazio = estado geral do Defender.",
-  BitLocker: "Volume (ex.: C:).",
-  Script: "Alvo repassado ao script (opcional).",
-};
 
 interface FormValues {
   name: string;
@@ -320,25 +310,28 @@ function validate(values: FormValues, channelRows: SensorChannelRow[]): FormErro
     // valida chave obrigatória (e chaves repetidas) antes de montar o request.
     const channelsError = validateSensorChannelRows(channelRows);
     if (channelsError) errors.channels = channelsError;
-    const extractorsError = validateJsonArray(values.extractorsJson);
+    const extractorsError = firstError(
+      validateExtractors(
+        values.extractorsJson,
+        channelRows.map((row) => row.key.trim()),
+      ),
+    );
     if (extractorsError) errors.extractorsJson = extractorsError;
-    const exitMapError = validateJsonArray(values.exitCodeMapJson);
+    const exitMapError = firstError(validateExitCodeMap(values.exitCodeMapJson));
     if (exitMapError) errors.exitCodeMapJson = exitMapError;
   }
 
   return errors;
 }
 
-/** Campo JSON opcional: quando preenchido precisa ser uma lista (array). */
-function validateJsonArray(raw: string): string | null {
-  const text = raw.trim();
-  if (!text) return null;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return Array.isArray(parsed) ? null : "Use uma lista JSON (array).";
-  } catch {
-    return "JSON inválido.";
-  }
+/**
+ * Extratores/exit codes são validados pelas mesmas regras que o editor
+ * dedicado usa (utils/sensorScriptValidation), em vez do antigo
+ * "é uma lista JSON?": o agente descarta extrator malformado em silêncio,
+ * então o erro precisa aparecer aqui, antes de salvar.
+ */
+function firstError(result: ScriptValidationResult): string | null {
+  return result.errors[0] ?? null;
 }
 
 function buildRequest(
@@ -431,6 +424,7 @@ export default function SensorFormModal({
   isSaving,
   onSave,
 }: SensorFormModalProps) {
+  const navigate = useNavigate();
   const [values, setValues] = useState<FormValues>(() => emptyValues(clientId, siteId));
   // O editor de canais trabalha com LINHAS (key/label/unit/isPrimary) e converte
   // para o contrato da API só no submit — ver sensorChannelsFromRows.
@@ -473,6 +467,20 @@ export default function SensorFormModal({
     setChannelRows(sensorChannelRowsFromChannels(sensor.channels));
   }, [open, sensor, definition, definitions.isLoading, clientId, siteId]);
 
+  /**
+   * Leva o estado atual do formulário para /sensors/script: o editor dedicado
+   * recebe os JSONs já digitados, então nada do que foi preenchido se perde.
+   */
+  function abrirEditorCompleto() {
+    const params = new URLSearchParams();
+    if (values.scriptId.trim()) params.set("scriptId", values.scriptId.trim());
+    if (values.extractorsJson.trim()) params.set("extractorsJson", values.extractorsJson);
+    if (values.exitCodeMapJson.trim()) params.set("exitCodeMapJson", values.exitCodeMapJson);
+    const chaves = channelRows.map((row) => row.key.trim()).filter(Boolean);
+    if (chaves.length > 0) params.set("channels", chaves.join(","));
+    navigate(`/sensors/script?` + params.toString());
+  }
+
   const setField = <K extends keyof FormValues>(key: K, value: FormValues[K]) => {
     setValues((current) => ({ ...current, [key]: value }));
   };
@@ -490,6 +498,11 @@ export default function SensorFormModal({
         : current.criticalThreshold,
     }));
   };
+
+  // Guia do tipo escolhido: alimenta o bloco de orientação abaixo do select.
+  const guide = SENSOR_TYPE_GUIDE[values.sensorType];
+  const guideExamples = sensorGuideExamples(values.sensorType);
+  const thresholdHint = sensorThresholdHint(values.sensorType);
 
   const scopeOptions = [
     { value: String(AppApprovalScopeType.Agent), label: sensorScopeLabel(AppApprovalScopeType.Agent) },
@@ -665,8 +678,63 @@ export default function SensorFormModal({
                 label="Alvo"
                 value={values.target}
                 onChange={(event) => setField("target", event.target.value)}
-                hint={TARGET_HINTS[values.sensorType] ?? "Alvo opcional para este tipo."}
+                hint={guide.targetHint}
               />
+              <div
+                className="space-y-3 rounded-lg border border-border bg-surface-light/60 p-3 sm:col-span-2"
+                data-testid="sensor-type-guide"
+              >
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Alvo esperado
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{guide.targetHint}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Campos relacionados
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-1.5">
+                    {guide.relatedFields.map((field) => (
+                      <li
+                        key={field}
+                        className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground"
+                      >
+                        {field}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[11px] text-muted">{thresholdHint}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Exemplos — clique para preencher o alvo
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {guideExamples.map((example) => (
+                      <button
+                        key={example || "__padrao__"}
+                        type="button"
+                        onClick={() => setField("target", example)}
+                        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                        aria-label={`Usar exemplo de alvo ${example || "padrão"}`}
+                      >
+                        {example || "(vazio = padrão)"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {guide.optionsExample ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Opções (optionsJson)
+                    </p>
+                    <code className="mt-1 block overflow-x-auto rounded border border-border bg-surface px-2 py-1 text-[11px] text-muted-foreground">
+                      {guide.optionsExample}
+                    </code>
+                  </div>
+                ) : null}
+              </div>
               <Input
                 label="Intervalo (segundos)"
                 type="number"
@@ -926,6 +994,20 @@ export default function SensorFormModal({
                 error={errors.exitCodeMapJson}
                 hint="Regras de status/severidade por código de saída (status/severity por exit code)."
               />
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-light/60 p-3">
+                <p className="text-xs text-muted-foreground">
+                  Presets de exit code, exemplos de extrator por tipo e o protocolo MDZ
+                  ficam no editor completo.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={abrirEditorCompleto}
+                >
+                  <Icon name="open_in_new" className="h-4 w-4" />
+                  Abrir editor completo
+                </Button>
+              </div>
             </FormSection>
           ) : null}
 

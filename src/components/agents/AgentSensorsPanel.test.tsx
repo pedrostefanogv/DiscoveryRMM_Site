@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import { AppApprovalScopeType } from "@/api/types";
@@ -150,7 +150,11 @@ function renderPanel(over: Partial<ComponentProps<typeof AgentSensorsPanel>> = {
   return render(<AgentSensorsPanel {...props} />);
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // O teste do card de hover usa timers falsos (rowHoverDelayMs do DataTable).
+  vi.useRealTimers();
+});
 
 describe("AgentSensorsPanel", () => {
   it("explica a falta de permissão sem consultar/mostrar vazio", () => {
@@ -367,5 +371,45 @@ describe("AgentSensorsPanel", () => {
     expect(screen.getByText("Mudança de estado")).toBeTruthy();
     expect(screen.getByText("Estado zerado")).toBeTruthy();
     expect(screen.getByText(/Fim do histórico/)).toBeTruthy();
+  });
+
+  it("hover-card mostra valores completos (sem truncate) e liga o modo clamp", async () => {
+    vi.useFakeTimers();
+    renderPanel({
+      payload: payload({
+        items: [sensor({ outputExcerpt: "linha 1\nlinha 2\nlinha 3" })],
+      }),
+    });
+
+    const row = screen
+      .getAllByRole("row")
+      .find((candidate) => candidate.querySelector("td")) as HTMLElement;
+    fireEvent.mouseOver(row);
+    await act(async () => {
+      // Delay configurado no painel (rowHoverDelayMs=1200) + rAF de ajuste.
+      await vi.advanceTimersByTimeAsync(1200);
+      await vi.advanceTimersByTimeAsync(32);
+    });
+
+    const dialog = screen.getByRole("dialog");
+    // O painel é o consumidor que ativa o modo opt-in (card rola em vez de ser
+    // recortado no fim da área visível).
+    expect(dialog.className).toContain("overflow-y-auto");
+    expect(dialog.className).toContain("pointer-events-auto");
+
+    // DetailItem sem truncate: o valor quebra a linha e aparece completo.
+    const label = within(dialog).getByText("Limiares");
+    const value = (label.parentElement as HTMLElement).querySelectorAll("p")[1] as HTMLElement;
+    expect(value.textContent).toContain("atenção 15%");
+    expect(value.className).not.toContain("truncate");
+    expect(value.className).toContain("break-words");
+    // O title antigo só existia para valores string (ReactNode ficava sem
+    // alternativa): com a quebra de linha ele deixou de ser necessário.
+    expect(value.getAttribute("title")).toBeNull();
+
+    // "Saída (trecho)" ganhou mais altura antes de rolar (era max-h-24).
+    const pre = dialog.querySelector("pre") as HTMLElement;
+    expect(pre.className).not.toContain("max-h-24");
+    expect(pre.className).toContain("max-h-64");
   });
 });

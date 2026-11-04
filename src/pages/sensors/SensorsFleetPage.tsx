@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Badge,
   Button,
@@ -44,6 +44,7 @@ const WORST_SEVERITY_META: Record<
  * SEPARADA (sensores sem dado recente) e não entra nessa soma.
  */
 export default function SensorsFleetPage() {
+  const navigate = useNavigate();
   /**
    * Os filtros vivem na URL (`?clientId=...&siteId=...`): o link da frota
    * filtrada fica compartilhável e sobrevive ao F5 — antes o estado era só
@@ -206,6 +207,12 @@ export default function SensorsFleetPage() {
         >
           <Icon name="refresh" className="h-4 w-4" />
           Atualizar
+        </Button>
+        {/* Gerenciamento das DEFINIÇÕES (editar/excluir/ativar). A frota mostra
+            o estado agregado; o CRUD vive em /sensors/manage. */}
+        <Button variant="primary" onClick={() => navigate("/sensors/manage")}>
+          <Icon name="settings" className="h-4 w-4" />
+          Gerenciar
         </Button>
       </PageHeader>
 

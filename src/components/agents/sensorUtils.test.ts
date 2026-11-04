@@ -5,8 +5,13 @@ import {
   DEFAULT_SUSTAIN_SAMPLES,
   MAX_SUSTAIN_SAMPLES,
   MIN_SUSTAIN_SAMPLES,
+  SENSOR_NO_THRESHOLD_TYPES,
+  SENSOR_THRESHOLD_REQUIRED_TYPES,
   SENSOR_TYPE_CHANNEL_FALLBACK,
+  SENSOR_TYPE_GUIDE,
   buildRecommendedSensorRequests,
+  sensorGuideExamples,
+  sensorThresholdHint,
   defaultComparison,
   defaultThresholdUnit,
   describeSustainSamples,
@@ -304,3 +309,79 @@ describe("exportação CSV do gráfico", () => {
     expect(nome).not.toMatch(/[\s\u00C0-\u00FF]/);
   });
 });
+
+describe("guia por tipo (SENSOR_TYPE_GUIDE)", () => {
+  const todos = Object.keys(SENSOR_TYPE_GUIDE) as Array<keyof typeof SENSOR_TYPE_GUIDE>;
+
+  it("cobre TODOS os tipos conhecidos e nenhum a mais", () => {
+    // SENSOR_TYPE_GUIDE é Record total, mas o guard também vale em runtime:
+    // um tipo novo em SensorType precisa de entrada aqui para o guia aparecer.
+    const labels = Object.keys(sensorTypeLabelAll());
+    expect([...todos].sort()).toEqual([...labels].sort());
+    expect(todos).toContain("Cpu");
+    expect(todos).toContain("Memory");
+    expect(todos).toContain("Uptime");
+    expect(todos).toContain("DiskIo");
+  });
+
+  it("todo tipo tem dica de alvo, campos relacionados e ao menos um exemplo", () => {
+    for (const tipo of todos) {
+      const guia = SENSOR_TYPE_GUIDE[tipo];
+      expect(guia.targetHint.length, tipo).toBeGreaterThan(0);
+      expect(guia.relatedFields.length, tipo).toBeGreaterThan(0);
+      expect(guia.examples.length, tipo).toBeGreaterThan(0);
+    }
+  });
+
+  it("os exemplos refletem o contrato real do coletor", () => {
+    expect(SENSOR_TYPE_GUIDE.Bandwidth.optionsExample).toBe(jsonOf({ sampleMs: 1000 }));
+    expect(SENSOR_TYPE_GUIDE.DiskIo.optionsExample).toBe(jsonOf({ disk: "C:" }));
+    expect(SENSOR_TYPE_GUIDE.EventLogRate.optionsExample).toBe(
+      jsonOf({ logName: "System", levels: [1, 2], windowMinutes: 60 }),
+    );
+    expect(SENSOR_TYPE_GUIDE.SmartStatus.optionsExample).toBe(
+      jsonOf({ disk: "\\\\.\\PhysicalDrive0" }),
+    );
+    expect(SENSOR_TYPE_GUIDE.CertificateExpiry.optionsExample).toBe(
+      jsonOf({ host: "example.com", port: 443 }),
+    );
+    expect(SENSOR_TYPE_GUIDE.DefenderStatus.optionsExample).toBe(jsonOf({}));
+    expect(SENSOR_TYPE_GUIDE.BitLocker.optionsExample).toBe(jsonOf({ drive: "C:" }));
+    expect(SENSOR_TYPE_GUIDE.Service.optionsExample).toBe(
+      jsonOf({ restartIfStopped: true, restartWaitMs: 5000 }),
+    );
+    expect(SENSOR_TYPE_GUIDE.Service.examples).toContain("Spooler");
+    expect(SENSOR_TYPE_GUIDE.TcpPort.examples).toContain("10.0.0.1:443");
+  });
+
+  it("sinaliza quando o tipo não usa limiar e quando ele é obrigatório", () => {
+    for (const tipo of SENSOR_NO_THRESHOLD_TYPES) {
+      expect(sensorThresholdHint(tipo), tipo).toContain("não usa limiar");
+    }
+    for (const tipo of SENSOR_THRESHOLD_REQUIRED_TYPES) {
+      expect(sensorThresholdHint(tipo), tipo).toContain("exige ao menos um limiar");
+    }
+  });
+
+  it("deixa o vazio (padrão) como última opção clicável", () => {
+    const exemplos = sensorGuideExamples("DiskSpace");
+    expect(exemplos[exemplos.length - 1]).toBe("");
+    expect(exemplos).toContain("C:");
+    // Sem duplicar o vazio, mesmo quando o tipo o declara nos examples.
+    expect(sensorGuideExamples("Cpu").filter((v) => v === "").length).toBe(1);
+  });
+});
+/** Chaves de rótulo: fonte independente do SensorType, para o guard de cobertura. */
+function sensorTypeLabelAll(): Record<string, string> {
+  return {
+    DiskSpace: "1", Cpu: "1", Memory: "1", Uptime: "1", Service: "1",
+    Process: "1", Ping: "1", TcpPort: "1", HttpProbe: "1", HttpThroughput: "1",
+    DnsLatency: "1", Bandwidth: "1", DiskIo: "1", EventLogRate: "1",
+    SmartStatus: "1", CertificateExpiry: "1", DefenderStatus: "1",
+    BitLocker: "1", Script: "1",
+  };
+}
+
+function jsonOf(value: unknown): string {
+  return JSON.stringify(value);
+}

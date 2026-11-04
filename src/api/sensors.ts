@@ -440,6 +440,10 @@ function normalizeSensorDefinition(raw: unknown): SensorDefinition {
     clientId: asNullableString(pick(record, "clientId")),
     siteId: asNullableString(pick(record, "siteId")),
     agentId: asNullableString(pick(record, "agentId")),
+    // Nomes resolvidos em lote pela API: a tabela mostra nome, não GUID.
+    clientName: asNullableString(pick(record, "clientName")),
+    siteName: asNullableString(pick(record, "siteName")),
+    agentName: asNullableString(pick(record, "agentName")),
     includeTags: asStringList(pick(record, "includeTags")),
     excludeTags: asStringList(pick(record, "excludeTags")),
     target: asNullableString(pick(record, "target")),

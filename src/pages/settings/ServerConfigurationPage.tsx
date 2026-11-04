@@ -38,14 +38,19 @@ import {
 import {
   buildServerDraft,
   formatFieldValue,
+  isBooleanToggleField,
   isConfigFlagOn,
   getAgentHomeTabOptions,
   getDependentsToDisable,
   getFeatureDependencyIssue,
   parseFieldValue,
   serverEditableFields,
+  toPatchPayloadValue,
   validateFieldValue,
 } from "@/utils/configurationEditors";
+import SensorsSettingsEditor, {
+  SENSORS_SETTINGS_FIELD_KEY,
+} from "@/components/settings/SensorsSettingsEditor";
 import { parseAIIntegrationSettings } from "@/services/configurationApi";
 import { ApiError } from "@/api";
 import type { ConfigurationValue, TicketAttachmentSettings } from "@/api";
@@ -177,6 +182,18 @@ export default function ServerConfigurationPage() {
     });
   };
 
+  /**
+   * Valor de um campo no corpo do PATCH.
+   *
+   * As propriedades *Json do servidor são `string` e o backend chama
+   * JsonElement.GetString(): um objeto até passa (vira GetRawText), mas um
+   * BOOLEANO derruba a requisição com 400. Serializar aqui, no ponto de
+   * MONTAGEM do payload, corrige a origem sem mudar parseFieldValue (que
+   * continua devolvendo o valor já parseado para o formulário).
+   */
+  const buildPatchValue = (field: EditableField, rawValue: string): ConfigurationValue =>
+    toPatchPayloadValue(field.kind, parseFieldValue(field.kind, rawValue, field.key));
+
   // Ref evita que o reseed por refetch (ex.: após salvar) sobrescreva edições pendentes.
   const pendingKeysRef = useRef(pendingKeys);
   useEffect(() => {
@@ -212,7 +229,7 @@ export default function ServerConfigurationPage() {
         toast.error(`${field.label}: ${validation}`);
         return;
       }
-      payload[field.key] = parseFieldValue(field.kind, value, field.key);
+      payload[field.key] = buildPatchValue(field, value);
     }
 
     try {
@@ -324,7 +341,7 @@ export default function ServerConfigurationPage() {
     const value = getValues(`values.${field.key}` as never) ?? "";
     try {
       await patchMutation.mutateAsync({
-        [field.key]: parseFieldValue(field.kind, String(value), field.key),
+        [field.key]: buildPatchValue(field, String(value)),
       });
       clearPending([field.key]);
       toast.success(`"${field.label}" atualizado.`);
@@ -356,7 +373,7 @@ export default function ServerConfigurationPage() {
     for (const field of storageFields) {
       let value = String(getValues(`values.${field.key}` as never) ?? "");
       if (field.kind === "boolean" && value === "") value = "false";
-      payload[field.key] = parseFieldValue(field.kind, value, field.key);
+      payload[field.key] = buildPatchValue(field, value);
     }
     try {
       await patchMutation.mutateAsync(payload);
@@ -382,7 +399,7 @@ export default function ServerConfigurationPage() {
         setSavingNats(false);
         return;
       }
-      payload[field.key] = parseFieldValue(field.kind, value, field.key);
+      payload[field.key] = buildPatchValue(field, value);
     }
     try {
       await patchNatsMutation.mutateAsync(payload);
@@ -568,7 +585,15 @@ export default function ServerConfigurationPage() {
     return <ErrorDisplay message={readApiError(serverQuery.error)} onRetry={serverQuery.refetch} />;
   }
 
+  // O grupo "features" MISTURA toggles (kind boolean) com blob JSON
+  // (SensorsSettingsJson, kind json). Roteirizar o render pelo GROUP fazia o
+  // campo JSON virar switch e o PATCH mandava `true` para uma propriedade
+  // string — 400 do backend em JsonElement.GetString(). Por isso a divisão por
+  // KIND: os booleanos continuam como switch cards; os JSON ganham editor
+  // tipado e o contador de "módulos ativos" só considera toggles.
   const featureFields = serverEditableFields.filter((f) => f.group === "features");
+  const featureToggleFields = featureFields.filter((field) => isBooleanToggleField(field));
+  const featureJsonFields = featureFields.filter((field) => field.kind === "json");
   const policyFields = serverEditableFields.filter(
     (f) => f.group === "policy" && !SERVER_SEPARATE_POLICY_KEYS.has(f.key),
   );
@@ -585,7 +610,8 @@ export default function ServerConfigurationPage() {
   const storageToggleFields = serverEditableFields.filter(
     (f) => f.group === "storage" && f.kind === "boolean",
   );
-  const enabledFeatureCount = featureFields.filter((field) =>
+  // Só toggles booleanos entram na contagem: o campo JSON não é um "módulo".
+  const enabledFeatureCount = featureToggleFields.filter((field) =>
     isConfigFlagOn(formValues.values?.[field.key]),
   ).length;
   const natsEnabled = isConfigFlagOn(formValues.values?.natsEnabled);
@@ -634,7 +660,7 @@ export default function ServerConfigurationPage() {
         toast.error(field.label + ": " + validation);
         return;
       }
-      payload[field.key] = parseFieldValue(field.kind, value, field.key);
+      payload[field.key] = buildPatchValue(field, value);
     }
 
     if (Object.keys(payload).length === 0) return;
@@ -836,7 +862,11 @@ export default function ServerConfigurationPage() {
       setTogglingKey(field.key);
       try {
         const payload: Record<string, ConfigurationValue> = {
-          [field.key]: parseFieldValue("boolean", next, field.key),
+          // field.kind (e não o literal "boolean"): renderBooleanToggleCard só é
+          // chamado para campos booleanos, mas usar o literal escondia o bug de
+          // roteamento por GROUP — um campo JSON desenhado como switch enviava
+          // `true` para uma propriedade string e o PATCH voltava 400.
+          [field.key]: parseFieldValue(field.kind, next, field.key),
         };
         for (const dependent of dependents) {
           payload[dependent] = false;
@@ -1062,7 +1092,7 @@ export default function ServerConfigurationPage() {
             <div className="rounded-xl border border-border bg-surface-light p-3">
               <p className="text-xs uppercase tracking-wide text-muted">Módulos ativos</p>
               <p className="mt-1 text-lg font-semibold text-foreground">
-                {enabledFeatureCount}/{featureFields.length}
+                {enabledFeatureCount}/{featureToggleFields.length}
               </p>
               <p className="text-xs text-muted">Funcionalidades globais habilitadas</p>
             </div>
@@ -1100,9 +1130,35 @@ export default function ServerConfigurationPage() {
             action={renderSectionAction("features")}
           />
           {!collapsedSections.features && (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {featureFields.map((field) => renderBooleanToggleCard(field))}
-            </div>
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {featureToggleFields.map((field) => renderBooleanToggleCard(field))}
+              </div>
+              {featureJsonFields.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {featureJsonFields.map((field) =>
+                    field.key === SENSORS_SETTINGS_FIELD_KEY ? (
+                      <SensorsSettingsEditor
+                        key={field.key}
+                        value={String(formValues.values?.[field.key] ?? "")}
+                        onChange={(nextJson) => {
+                          // Mesmo caminho de save das outras seções: marca o
+                          // campo como pendente e o saveChanges monta o PATCH.
+                          markPending(field.key);
+                          setValue(`values.${field.key}` as never, nextJson as never, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                      />
+                    ) : (
+                      renderFieldEditor(field)
+                    ),
+                  )}
+                </div>
+              )}
+            </>
           )}
         </Card>
 

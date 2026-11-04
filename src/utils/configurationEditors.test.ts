@@ -10,9 +10,11 @@ import {
   getAgentHomeTabOptions,
   getDependentsToDisable,
   getFeatureDependencyIssue,
+  isBooleanToggleField,
   parseFieldValue,
   serverEditableFields,
   siteEditableFields,
+  toPatchPayloadValue,
   validateFieldValue,
 } from "./configurationEditors";
 
@@ -364,3 +366,72 @@ describe("configuração global dos sensores (SensorsSettingsJson)", () => {
     expect(parseFieldValue("json", "", "SensorsSettingsJson")).toEqual({});
   });
 });
+
+/**
+ * Bug de produção (HTTP 400 no toggle de "Sensores de Monitoramento"):
+ * o grupo "features" mistura switches (kind boolean) com blob JSON
+ * (SensorsSettingsJson, kind json). A página roteava o render por GROUP e
+ * desenhava o campo JSON como switch; ao alternar, o PATCH mandava `true`
+ * para uma propriedade string e o backend explodia em JsonElement.GetString().
+ */
+describe("campos do grupo features com kind json nao sao toggles", () => {
+  const featureFields = serverEditableFields.filter((field) => field.group === "features");
+  const featureToggleFields = featureFields.filter((field) => isBooleanToggleField(field));
+  const featureJsonFields = featureFields.filter((field) => field.kind === "json");
+  const sensorsField = serverEditableFields.find(
+    (field) => field.key === "SensorsSettingsJson",
+  );
+
+  it("isBooleanToggleField aceita só kind boolean", () => {
+    expect(sensorsField).toBeDefined();
+    expect(isBooleanToggleField(sensorsField!)).toBe(false);
+
+    const recoveryField = serverEditableFields.find((field) => field.key === "recoveryEnabled");
+    expect(recoveryField).toBeDefined();
+    expect(isBooleanToggleField(recoveryField!)).toBe(true);
+  });
+
+  it("SensorsSettingsJson cai em featureJsonFields e nunca em featureToggleFields", () => {
+    expect(featureJsonFields.map((field) => field.key)).toContain("SensorsSettingsJson");
+    expect(featureToggleFields.map((field) => field.key)).not.toContain("SensorsSettingsJson");
+    // O contador de "módulos ativos" só considera toggles: o blob JSON fica fora.
+    expect(featureToggleFields.length).toBe(featureFields.length - featureJsonFields.length);
+  });
+
+  it("serializa o payload do campo JSON como STRING para o PATCH", () => {
+    const parsed = parseFieldValue(
+      "json",
+      JSON.stringify({
+        enabled: false,
+        defaultIntervalSeconds: 600,
+        autoTicketEnabled: true,
+        notifyEnabled: false,
+      }),
+      "SensorsSettingsJson",
+    );
+
+    // parseFieldValue continua devolvendo OBJETO (contrato do formulário).
+    expect(typeof parsed).toBe("object");
+
+    const payload = toPatchPayloadValue("json", parsed);
+    expect(typeof payload).toBe("string");
+    expect(JSON.parse(payload as string)).toEqual({
+      enabled: false,
+      defaultIntervalSeconds: 600,
+      autoTicketEnabled: true,
+      notifyEnabled: false,
+    });
+  });
+
+  it("não re-serializa strings já prontas (lockedFieldsJson) e preserva booleanos", () => {
+    // lockedFieldsJson sai STRING de parseFieldValue: re-encodar gravaria "[]" literal.
+    const locked = parseFieldValue("json", "", "lockedFieldsJson");
+    expect(locked).toBe("[]");
+    expect(toPatchPayloadValue("json", locked)).toBe("[]");
+
+    // Toggles continuam indo como booleano (não viram "true" string).
+    expect(toPatchPayloadValue("boolean", true)).toBe(true);
+    expect(toPatchPayloadValue("number", 30)).toBe(30);
+  });
+});
+

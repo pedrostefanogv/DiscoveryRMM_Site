@@ -1131,6 +1131,49 @@ export function validateFieldValue(
   return true;
 }
 
+/**
+ * Um campo só pode ser desenhado como switch (ligado/desligado) quando o kind é
+ * boolean.
+ *
+ * O grupo "features" MISTURA toggles com blob JSON (SensorsSettingsJson): a
+ * página roteava por GROUP em vez de KIND e desenhava o campo JSON como switch.
+ * Ao alternar, o PATCH ia com `true` para uma propriedade que a API declara
+ * como string — o backend chama JsonElement.GetString() em um valor True e
+ * devolve 400 ("The requested operation requires an element of type 'String',
+ * but the target element has type 'True'.").
+ */
+export function isBooleanToggleField(field: EditableField): boolean {
+  return field.kind === "boolean";
+}
+
+/**
+ * Valor enviado no PATCH para um campo do formulário.
+ *
+ * As propriedades *Json do servidor são string e o backend chama
+ * JsonElement.GetString(): um objeto até é aceito (vira GetRawText), mas um
+ * booleano derruba a requisição com 400. Serializar no ponto de MONTAGEM do
+ * payload garante o tipo que a API espera sem mexer em parseFieldValue — que
+ * continua devolvendo o valor já parseado (objeto) para o formulário, conforme
+ * os testes de parseFieldValue("json", "").
+ *
+ * Strings não são re-serializadas: lockedFieldsJson já sai como "[]" de
+ * parseFieldValue e re-encodar gravaria a string literal "\"[]\"".
+ */
+export function toPatchPayloadValue(
+  kind: EditableFieldKind,
+  value: ConfigurationValue,
+): ConfigurationValue {
+  if (kind !== "json") {
+    return value;
+  }
+
+  if (value === null || value === undefined || typeof value === "string") {
+    return value;
+  }
+
+  return JSON.stringify(value);
+}
+
 export function parseFieldValue(
   kind: EditableFieldKind,
   value: string,

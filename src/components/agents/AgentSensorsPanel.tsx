@@ -89,14 +89,19 @@ function shortFingerprint(value: string | null | undefined): string {
   const raw = (value ?? "").trim();
   return raw.length > 12 ? `${raw.slice(0, 12)}…` : raw || "—";
 }
-/** Linha rótulo/valor do card de detalhes exibido no hover. */
+/**
+ * Linha rótulo/valor do card de detalhes exibido no hover.
+ *
+ * O valor QUEBRA a linha (break-words) em vez de ser truncado: o card mostra o
+ * conteúdo completo — inclusive limiares e mensagens longas. O `title` antigo só
+ * existia quando o valor era string (valores ReactNode ficavam sem alternativa),
+ * então foi removido junto com o truncate.
+ */
 function DetailItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2">
       <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-0.5 truncate text-sm text-foreground" title={typeof value === "string" ? value : undefined}>
-        {value}
-      </p>
+      <p className="mt-0.5 break-words text-sm text-foreground">{value}</p>
     </div>
   );
 }
@@ -230,7 +235,7 @@ export default function AgentSensorsPanel({
         {sensor.outputExcerpt ? (
           <div className="min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2">
             <p className="text-[11px] uppercase tracking-wide text-muted">Saída (trecho)</p>
-            <pre className="mt-0.5 max-h-24 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] text-muted-foreground">
+            <pre className="mt-0.5 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
               {sensor.outputExcerpt}
             </pre>
           </div>
@@ -605,6 +610,9 @@ export default function AgentSensorsPanel({
           keyExtractor={(sensor) => sensor.sensorId}
           rowHoverCard={renderDetails}
           rowHoverDelayMs={1200}
+          // Opt-in: o card de detalhes desta aba é alto (canais, limiares,
+          // saída) e era recortado no fim da área visível.
+          hoverCardClamp
           pageSize={15}
           emptyMessage="Nenhum sensor encontrado"
           maxHeight="min(560px, 52vh)"

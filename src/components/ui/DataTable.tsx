@@ -4,6 +4,23 @@ import { Icon } from "@/components/ui";
 import { EmptyState } from './EmptyState';
 import { Pagination } from './Pagination';
 
+/**
+ * Modo "clamp" do card de hover (opt-in via `hoverCardClamp`): o card nunca é
+ * recortado — a altura é limitada ao espaço REAL disponível e o conteúdo rola
+ * dentro dele.
+ *
+ * Os outros consumidores de `rowHoverCard` (TicketList, AgentPoliciesPanel,
+ * AgentScheduledTasksPanel, AgentStartupItemsPanel) não passam a prop e mantêm
+ * exatamente o comportamento anterior.
+ */
+const HOVER_CARD_CLAMP_MAX_HEIGHT = 420;
+const HOVER_CARD_CLAMP_MIN_HEIGHT = 160;
+/**
+ * Estimativa do primeiro frame, ANTES de medir o card: o card pode chegar ao
+ * teto, então usar o teto é conservador (melhor abrir para o lado que cabe).
+ */
+const HOVER_CARD_CLAMP_ESTIMATED_HEIGHT = 320;
+
 interface Column<T> {
   key: string;
   header: string;
@@ -59,6 +76,18 @@ interface DataTableProps<T> {
   flush?: boolean;
   /** Ordenação inicial da tabela (o usuário pode trocar clicando no cabeçalho). */
   defaultSort?: { key: string; direction: 'asc' | 'desc' };
+  /**
+   * Modo "clamp" do card de hover (OPT-IN, padrão desligado).
+   *
+   * Ligado: a posição considera a altura real do card e também os limites do
+   * container (não só a viewport), a altura é limitada ao espaço disponível e o
+   * conteúdo passa a rolar dentro do card — em vez de ser recortado no fim da
+   * área visível.
+   *
+   * Desligado: comportamento legado preservado (os cards de hover das outras
+   * telas continuam iguais; veja DataTable.test.tsx).
+   */
+  hoverCardClamp?: boolean;
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -84,6 +113,7 @@ export function DataTable<T>({
   fixedLayout = false,
   flush = false,
   defaultSort,
+  hoverCardClamp = false,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(() => {
     if (!defaultSort) return null;
@@ -99,7 +129,14 @@ export function DataTable<T>({
   });
   const [page, setPage] = useState(1);
   const [activeHover, setActiveHover] = useState<{ key: string; item: T } | null>(null);
-  const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  // `maxHeight` só existe no modo clamp (opt-in); no modo legado o card mantém
+  // exatamente o estilo de antes.
+  const [popoverPosition, setPopoverPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight?: number;
+  } | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -187,8 +224,53 @@ export function DataTable<T>({
     const rowRect = rowElement.getBoundingClientRect();
     const rowTop = rowRect.top - containerRect.top;
     const rowBottom = rowRect.bottom - containerRect.top;
-    const estimatedHeight = popoverRef.current?.offsetHeight ?? 220;
     const viewportPadding = 12;
+
+    if (hoverCardClamp) {
+      // Modo opt-in ("clamp"): o card inteiro nunca é recortado.
+      //
+      // (c) A altura REAL medida no frame anterior entra na decisão; no primeiro
+      // frame (card ainda não montado) usamos a estimativa conservadora. O
+      // useLayoutEffect + rAF logo abaixo medem de novo antes da pintura.
+      const measuredHeight = popoverRef.current?.offsetHeight ?? 0;
+      const cardHeight = measuredHeight > 0 ? measuredHeight : HOVER_CARD_CLAMP_ESTIMATED_HEIGHT;
+
+      // (b) Espaço disponível = menor entre a viewport e o CONTAINER: o card é
+      // absolute dentro do container e pode ser recortado por um ancestral com
+      // overflow-hidden (Card/Modal), então comparar só com window.innerHeight
+      // não basta.
+      const spaceBelow = Math.min(
+        window.innerHeight - viewportPadding - rowRect.bottom - offset,
+        containerRect.bottom - viewportPadding - rowRect.bottom - offset,
+      );
+      const spaceAbove = Math.min(
+        rowRect.top - viewportPadding - offset,
+        rowRect.top - containerRect.top - viewportPadding - offset,
+      );
+
+      // Abre para o lado em que o card INTEIRO cabe; se nenhum comportar, fica
+      // no lado mais espaçoso (o conteúdo rola dentro do card).
+      const canShowBelow = cardHeight <= spaceBelow || spaceBelow >= spaceAbove;
+      const availableSpace = canShowBelow ? spaceBelow : spaceAbove;
+
+      // (a) max-height limitado ao espaço real (e ao teto do modo clamp).
+      const maxHeight = Math.max(
+        HOVER_CARD_CLAMP_MIN_HEIGHT,
+        Math.min(HOVER_CARD_CLAMP_MAX_HEIGHT, availableSpace),
+      );
+
+      const top = canShowBelow
+        ? rowBottom + offset
+        : Math.max(0, rowTop - Math.min(cardHeight, Math.max(availableSpace, 0)) - offset);
+
+      const left = Math.max(0, Math.min(rowRect.left - containerRect.left + 8, containerRect.width - width));
+
+      setPopoverPosition({ top, left, width, maxHeight: Math.round(maxHeight) });
+      return;
+    }
+
+    // ── Modo legado (padrão): comportamento anterior preservado ─────────────
+    const estimatedHeight = popoverRef.current?.offsetHeight ?? 220;
 
     const canShowBelow = rowRect.bottom + offset + estimatedHeight <= window.innerHeight - viewportPadding;
     const top = canShowBelow
@@ -198,7 +280,7 @@ export function DataTable<T>({
     const left = Math.max(0, Math.min(rowRect.left - containerRect.left + 8, containerRect.width - width));
 
     setPopoverPosition({ top, left, width });
-  }, [activeHover, rowHoverCard]);
+  }, [activeHover, rowHoverCard, hoverCardClamp]);
 
   const closeHoverCard = () => {
     if (!rowHoverCard) return;
@@ -258,6 +340,31 @@ export function DataTable<T>({
       window.cancelAnimationFrame(rafId);
     };
   }, [activeHover, rowHoverCard, updateHoverPopoverPosition]);
+
+  /**
+   * (c) Mede a altura REAL do card assim que ele entra no DOM e refaz a posição
+   * ANTES da pintura — o primeiro frame usa a estimativa porque o card ainda
+   * não existe. Roda a cada commit (sem deps), mas só age no modo opt-in e
+   * quando a altura medida MUDOU: sem essa guarda, medir/reposicionar a cada
+   * render viraria loop.
+   */
+  const measuredPopoverRef = useRef<{ key: string; height: number }>({ key: '', height: 0 });
+  useLayoutEffect(() => {
+    if (!rowHoverCard || !activeHover || !hoverCardClamp) return;
+    const popover = popoverRef.current;
+    if (!popover) return;
+
+    const measuredHeight = popover.offsetHeight;
+    if (measuredHeight <= 0) return;
+
+    const previous = measuredPopoverRef.current;
+    // Mesma linha e mesma altura: a posição já está correta. Medir de novo a
+    // cada render (inclusive os ticks de relógio do painel) viraria loop.
+    if (previous.key === activeHover.key && previous.height === measuredHeight) return;
+
+    measuredPopoverRef.current = { key: activeHover.key, height: measuredHeight };
+    updateHoverPopoverPosition();
+  });
 
   useEffect(() => {
     if (!rowHoverCard || !activeHover) return;
@@ -389,11 +496,17 @@ export function DataTable<T>({
       {rowHoverCard && activeHover && popoverPosition && (
         <div
           ref={popoverRef}
-          className="pointer-events-none absolute z-50"
+          // Modo legado: pointer-events-none (card só visual). Modo clamp: o
+          // card rola e aceita ponteiro para o operador conseguir ler tudo.
+          className={`absolute z-50 ${
+            hoverCardClamp ? "pointer-events-auto overflow-y-auto" : "pointer-events-none"
+          }`}
           style={{
             top: popoverPosition.top,
             left: popoverPosition.left,
             width: popoverPosition.width,
+            // Só o modo clamp define max-height (no legado fica undefined).
+            maxHeight: popoverPosition.maxHeight,
           }}
           role="dialog"
           aria-live="polite"

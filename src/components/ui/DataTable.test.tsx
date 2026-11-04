@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataTable, type Column } from './DataTable';
 
 interface Row {
@@ -98,3 +98,175 @@ describe('DataTable — ordenação', () => {
     expect(bodyOrder()).toEqual(['Dez10RunScript', 'Dois2InstallPackage']);
   });
 });
+
+/**
+ * Card de hover (`rowHoverCard`): o modo "clamp" é OPT-IN.
+ *
+ * Os outros 4 consumidores (TicketList, AgentPoliciesPanel, AgentScheduledTasks-
+ * Panel e AgentStartupItemsPanel) NÃO passam `hoverCardClamp` — estes testes
+ * travam o comportamento legado para que o fix da aba Sensores não mude nada lá.
+ */
+describe('DataTable — card de hover (rowHoverCard)', () => {
+  let offsetHeightDescriptor: PropertyDescriptor | undefined;
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    // jsdom não implementa offsetHeight: quando o teste injeta um valor, restaura.
+    if (offsetHeightDescriptor) {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeightDescriptor);
+      offsetHeightDescriptor = undefined;
+    }
+  });
+
+  function hoverCard(row: Row) {
+    return <div>Detalhes de {row.label}</div>;
+  }
+
+  function renderWithHover(
+    props: Partial<React.ComponentProps<typeof DataTable<Row>>> = {},
+  ) {
+    return render(
+      <DataTable
+        columns={columns}
+        data={rows}
+        keyExtractor={(r) => r.id}
+        showPagination={false}
+        rowHoverCard={hoverCard}
+        rowHoverDelayMs={0}
+        {...props}
+      />,
+    );
+  }
+
+  const firstBodyRow = () =>
+    screen.getAllByRole('row').find((row) => row.querySelector('td')) as HTMLElement;
+
+  /** Rect controlado: jsdom devolve zeros, então o posicionamento é simulado. */
+  function rect(top: number, bottom: number, width = 800): DOMRect {
+    return {
+      x: 0,
+      y: top,
+      top,
+      bottom,
+      left: 0,
+      right: width,
+      width,
+      height: bottom - top,
+      toJSON: () => ({}),
+    } as DOMRect;
+  }
+
+  /**
+   * Container (div "relative space-y-3") e linhas (`tr`) recebem rects
+   * previsíveis; o resto continua zerado.
+   */
+  function mockRects(options: { containerBottom: number; rowTop: number; rowBottom: number }) {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.tagName === 'TR') return rect(options.rowTop, options.rowBottom);
+        if (
+          typeof this.className === 'string' &&
+          this.className.includes('relative space-y-3')
+        ) {
+          return rect(0, options.containerBottom);
+        }
+        return rect(0, 0);
+      },
+    );
+  }
+
+  async function hoverFirstRow(options: { delayMs?: number; clamp?: boolean } = {}) {
+    const delayMs = options.delayMs ?? 0;
+    vi.useFakeTimers();
+    renderWithHover({
+      rowHoverDelayMs: delayMs,
+      hoverCardClamp: options.clamp,
+    });
+    fireEvent.mouseOver(firstBodyRow());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(delayMs);
+      // Deixa o layout effect + rAF de reposicionamento rodarem.
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    return screen.getByRole('dialog');
+  }
+
+  it('renderiza o card apenas depois do delay configurado', async () => {
+    vi.useFakeTimers();
+    renderWithHover({ rowHoverDelayMs: 500 });
+    fireEvent.mouseOver(firstBodyRow());
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(499);
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.getByRole('dialog').textContent).toContain('Detalhes de Dez');
+  });
+
+  it('modo legado (sem hoverCardClamp) preserva o card e a posição anterior', async () => {
+    mockRects({ containerBottom: 600, rowTop: 100, rowBottom: 130 });
+    const dialog = await hoverFirstRow();
+
+    // Debounce/render do card continuam iguais ao comportamento anterior.
+    expect(dialog.textContent).toContain('Detalhes de Dez');
+
+    // Sem max-height e sem rolagem: o card é apenas visual.
+    expect(dialog.className).toContain('pointer-events-none');
+    expect(dialog.className).not.toContain('overflow-y-auto');
+    expect(dialog.className).not.toContain('pointer-events-auto');
+    expect(dialog.style.maxHeight).toBe('');
+
+    // Matemática legada (estimativa fixa de 220px): abre abaixo da linha.
+    expect(dialog.style.top).toBe('140px');
+    expect(dialog.style.left).toBe('8px');
+    expect(dialog.style.width).toBe('460px');
+  });
+
+  it('modo clamp aplica max-height/overflow calculados pelo espaçamento real', async () => {
+    mockRects({ containerBottom: 600, rowTop: 100, rowBottom: 130 });
+    const dialog = await hoverFirstRow({ clamp: true });
+
+    // O modo opt-in liga a rolagem interna e aceita ponteiro (ler tudo).
+    expect(dialog.className).toContain('overflow-y-auto');
+    expect(dialog.className).toContain('pointer-events-auto');
+    expect(dialog.className).not.toContain('pointer-events-none');
+
+    // Espaço abaixo = min(viewport, container) = 448px → teto de 420px.
+    expect(dialog.style.maxHeight).toBe('420px');
+    expect(dialog.style.top).toBe('140px');
+  });
+
+  it('reposiciona acima quando o card não cabe abaixo (e mede a altura real)', async () => {
+    // Container/linha no rodapé da viewport: só 8px abaixo da linha.
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
+    mockRects({ containerBottom: 600, rowTop: 540, rowBottom: 570 });
+
+    // O card "mede" 300px (jsdom não calcula offsetHeight).
+    offsetHeightDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetHeight',
+    );
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 300,
+    });
+
+    const dialog = await hoverFirstRow({ clamp: true });
+
+    // Acima da linha: 540 (topo) - 300 (altura MEDIDA) - 10 (offset) = 230.
+    expect(dialog.style.top).toBe('230px');
+    // 230 < topo da linha (540): o card não desce sobre o rodapé cortado.
+    expect(Number.parseInt(dialog.style.top, 10)).toBeLessThan(540);
+    // Sem espaço abaixo, o max-height fica limitado ao espaço de cima (518px)
+    // mas nunca acima do teto do modo clamp.
+    expect(dialog.style.maxHeight).toBe('420px');
+  });
+});
+

@@ -4918,6 +4918,16 @@ export interface SensorDefinition {
   clientId: string | null;
   siteId: string | null;
   agentId: string | null;
+  /**
+   * Nome do cliente do escopo, resolvido em lote pela API (evita N+1 no front).
+   * Null quando o escopo não tem cliente ou o registro não existe mais — a UI
+   * cai para o GUID curto.
+   */
+  clientName: string | null;
+  /** Nome do site do escopo, resolvido em lote pela API. */
+  siteName: string | null;
+  /** Nome de exibição do agente do escopo (fallback: hostname). */
+  agentName: string | null;
   includeTags: string[];
   excludeTags: string[];
   target: string | null;
@@ -5148,6 +5158,15 @@ export interface SensorListParams {
   siteId?: string;
   agentId?: string;
   includeInactive?: boolean;
+  /** Busca textual (nome/chave/alvo) aplicada no servidor. */
+  search?: string;
+  /** Recorte por tipo de sensor. */
+  sensorType?: SensorType;
+  /** Recorte por ativo/inativo (ausente = ambos, com includeInactive). */
+  isActive?: boolean;
+  /** Página (1-based) e tamanho da página. */
+  page?: number;
+  pageSize?: number;
 }
 
 // ── Frota de sensores (página "Sensores") ───────────────────────────────────
