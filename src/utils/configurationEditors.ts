@@ -480,6 +480,14 @@ export const serverEditableFields: EditableField[] = [
       "Ciclos agendados: métricas por atendente (intervalo mínimo de 10 min) e triagem por IA em lotes. Clientes herdam estes valores e podem sobrescrever campo a campo.",
   },
   {
+    key: "SensorsSettingsJson",
+    label: "Sensores de Monitoramento",
+    kind: "json",
+    group: "features",
+    description:
+      "Configuração global dos sensores: enabled (kill switch do sync — desligado entrega 0 sensores aos agentes), defaultIntervalSeconds (30..86400, usado por sensores com intervalSeconds = 0), autoTicketEnabled (dispara auto-ticket a partir dos eventos de sensor) e notifyEnabled (notificações de e-mail/webhook/in-app dos alertas).",
+  },
+  {
     key: "lockedFieldsJson",
     label: "Campos Bloqueados para Herança",
     kind: "json",

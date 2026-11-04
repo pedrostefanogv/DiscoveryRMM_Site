@@ -327,4 +327,40 @@ describe("validação de TicketAttachmentSettingsJson", () => {
       ),
     ).toBe(true);
   });
+
+});
+
+describe("configuração global dos sensores (SensorsSettingsJson)", () => {
+  it("expõe o campo no escopo do servidor como JSON", () => {
+    const field = serverEditableFields.find(
+      (candidate) => candidate.key === "SensorsSettingsJson",
+    );
+
+    expect(field).toBeDefined();
+    expect(field?.kind).toBe("json");
+  });
+
+  it("aceita o payload completo dos sensores", () => {
+    const payload = JSON.stringify({
+      enabled: true,
+      defaultIntervalSeconds: 300,
+      autoTicketEnabled: true,
+      notifyEnabled: true,
+    });
+
+    expect(validateFieldValue("json", payload, "SensorsSettingsJson")).toBe(
+      true,
+    );
+  });
+
+  it("rejeita JSON sintaticamente inválido", () => {
+    expect(
+      validateFieldValue("json", "{ enabled: true }", "SensorsSettingsJson"),
+    ).not.toBe(true);
+  });
+
+  it("interpreta campo vazio como objeto vazio", () => {
+    // parseFieldValue devolve o valor JÁ parseado (objeto), não a string JSON.
+    expect(parseFieldValue("json", "", "SensorsSettingsJson")).toEqual({});
+  });
 });
