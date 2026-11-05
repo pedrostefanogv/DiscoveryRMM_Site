@@ -99,13 +99,112 @@ const DEFAULT_PREVIEW_FIELDS: Partial<Record<ReportDatasetType, string[]>> = {
   [ReportDatasetType.TicketActivity]: ["ticketId", "action", "changedBy", "createdAt"],
   [ReportDatasetType.TicketEscalations]: ["name", "escalationLevel", "isActive"],
   [ReportDatasetType.CustomFields]: ["entityName", "fieldName", "valueType"],
+  [ReportDatasetType.TicketAnswers]: [
+    "ticketId",
+    "ticketTitle",
+    "questionLabel",
+    "valueText",
+    "createdAt",
+  ],
   [ReportDatasetType.KnowledgeBase]: [
     "title",
     "category",
     "author",
     "updatedAt",
   ],
+  // ── Patches do Windows (WUA) e inventário/estado dos agentes ──
+  [ReportDatasetType.WindowsUpdates]: [
+    "agentHostname",
+    "kbIds",
+    "title",
+    "classification",
+    "severity",
+    "approvalState",
+    "status",
+    "requiresReboot",
+    "reportedAt",
+  ],
+  [ReportDatasetType.PatchCompliance]: [
+    "agentHostname",
+    "clientName",
+    "siteName",
+    "osName",
+    "pendingCount",
+    "criticalCount",
+    "deniedCount",
+    "approvedCount",
+    "installedCount",
+    "pendingReboot",
+    "scanStatus",
+    "lastScanAt",
+  ],
+  [ReportDatasetType.PatchApprovals]: [
+    "scopeType",
+    "updateKey",
+    "kbId",
+    "action",
+    "reason",
+    "updatedBy",
+    "updatedAt",
+  ],
+  [ReportDatasetType.PatchApprovalAudit]: [
+    "changedAt",
+    "changeType",
+    "scopeType",
+    "updateKey",
+    "oldAction",
+    "newAction",
+    "reason",
+    "changedBy",
+    "ipAddress",
+  ],
+  [ReportDatasetType.Agents]: [
+    "hostname",
+    "clientName",
+    "siteName",
+    "status",
+    "osName",
+    "osVersion",
+    "agentVersion",
+    "loggedUser",
+    "lastSeenAt",
+    "pendingReboot",
+  ],
+  [ReportDatasetType.AgentSensors]: [
+    "agentHostname",
+    "sensorName",
+    "sensorType",
+    "target",
+    "status",
+    "severity",
+    "primaryValue",
+    "unit",
+    "message",
+    "consecutiveFailures",
+    "lastRunAt",
+  ],
 };
+
+/**
+ * Campos de preview/colunas padrao de um dataset.
+ *
+ * Exposto para teste: a paridade com o enum ReportDatasetType e verificada em
+ * reports.datasets.test.ts, que falha quando um dataset novo entra no enum e
+ * ninguem mapeia os campos (o wizard abriria a tabela de campos vazia).
+ */
+export function getDefaultPreviewFields(
+  datasetType: ReportDatasetType | undefined | null,
+): string[] {
+  if (datasetType === undefined || datasetType === null) return [];
+  return DEFAULT_PREVIEW_FIELDS[datasetType] ?? [];
+}
+
+/** Datasets do enum que ainda NAO tem campos de preview mapeados. */
+export function getDatasetsMissingPreviewFields(): ReportDatasetType[] {
+  return Object.values(ReportDatasetType)
+    .filter((value): value is ReportDatasetType => typeof value === "number")
+    .filter((value) => getDefaultPreviewFields(value).length === 0);
+}
 
 /**
  * O titulo do relatorio chega percent-encoded em X-Report-Title (headers HTTP

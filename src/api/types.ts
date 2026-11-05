@@ -3333,6 +3333,15 @@ export interface ReportLayoutDataSourceDefinition {
   datasetType: ReportDatasetTypeValue;
   alias: string;
   join?: ReportLayoutDataSourceJoinDefinition;
+  /**
+   * Marca esta fonte como a PRINCIPAL (a base) do layout multi-source.
+   *
+   * Aditivo: layouts antigos nao trazem a marca e o backend mantem
+   * dataSources[0] como base. A marca existe porque, sem ela, reordenar as
+   * fontes no wizard mudava o significado do relatorio em silencio.
+   * Emitida apenas na fonte marcada (nunca "base": false).
+   */
+  base?: boolean;
 }
 
 export interface ReportLayoutStyleDefinition {

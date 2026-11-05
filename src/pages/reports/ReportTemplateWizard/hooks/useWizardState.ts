@@ -6,6 +6,13 @@ import type {
   ReportLayoutDetailDefinition,
   DatasetCatalogItem,
 } from "@/api/types";
+import {
+  findCommonJoinKeys,
+  getDatasetKey,
+  getDefaultAlias,
+  indexCatalogByKey,
+  pickPreferredJoinKey,
+} from "./joinKeys";
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -33,6 +40,48 @@ export interface SubTable {
   title: string;
   sourceAlias: string;
   columns: LayoutColumn[];
+}
+
+/** Coluna de layout aceita na reidratacao (subconjunto do layout salvo). */
+export interface HydratableColumn {
+  field?: unknown;
+  header?: unknown;
+  format?: unknown;
+  align?: unknown;
+  width?: unknown;
+}
+
+/** Secao (sub-tabela) aceita na reidratacao. */
+export interface HydratableSection {
+  title?: unknown;
+  source?: unknown;
+  columns?: HydratableColumn[];
+}
+
+/**
+ * Forma minima de um layout salvo aceita pela reidratacao do editor.
+ * Estruturalmente compativel com ReportLayoutDefinition, mas tolerante a
+ * campos ausentes/parciais vindos de templates antigos.
+ */
+export interface HydratableLayout {
+  dataSources?: Array<{
+    datasetType?: unknown;
+    alias?: string;
+    /** Marca da fatia D: fonte principal explicita do layout multi-source. */
+    base?: boolean;
+    join?: {
+      joinToAlias?: string;
+      sourceKey?: string;
+      targetKey?: string;
+      joinType?: string;
+    } | null;
+  }>;
+  columns?: HydratableColumn[];
+  sections?: HydratableSection[];
+  groupBy?: string;
+  summaries?: ReportLayoutSummaryDefinition[];
+  groupSummaries?: ReportLayoutSummaryDefinition[];
+  groupDetails?: ReportLayoutDetailDefinition[];
 }
 
 export interface WizardState {
@@ -66,68 +115,19 @@ export interface WizardState {
   createdBy: string;
 }
 
-// ── Join compatibility matrix ─────────────────────────────
+// ── Join: chaves derivadas do catalogo ────────────────────
+//
+// Nao existe mais matriz estatica aqui. As chaves vem de
+// catalogItem.joinCapabilities e catalogItem.fieldMetadata[].isJoinKey
+// (ver hooks/joinKeys.ts). A matriz antiga omitia 7 datasets e por isso
+// "Sensores (estado e metricas)" nunca achava chave comum com "Hardware".
 
-const JOIN_KEYS: Record<string, string[]> = {
-  softwareInventory: ["agentId", "clientId", "siteId", "softwareName"],
-  agentHardware: ["agentId", "clientId", "siteId"],
-  agentLabels: ["agentId", "clientId", "siteId", "labelName"],
-  automaticLabelRules: ["labelName", "ruleId"],
-  logs: ["agentId", "clientId", "siteId"],
-  tickets: ["agentId", "clientId", "siteId"],
-  configurationAudit: ["agentId", "clientId", "siteId"],
-  automationExecutions: ["agentId"],
-  agentInventoryComposite: ["agentId", "clientId", "siteId"],
-  agentMonitoringEvents: ["agentId", "clientId", "siteId"],
-  agentAlerts: ["clientId"],
-  p2pTelemetry: ["agentId", "clientId", "siteId"],
-  agentDisks: ["agentId", "clientId", "siteId"],
-  networkAdapters: ["agentId", "clientId", "siteId"],
-  listeningPorts: ["agentId", "clientId", "siteId"],
-  printers: ["agentId", "clientId", "siteId"],
-  softwareCatalog: ["clientId"],
-  automationScripts: ["clientId"],
-  appPackages: ["clientId"],
-  ticketActivity: ["clientId"],
-  ticketEscalations: ["clientId"],
-  customFields: ["clientId"],
-  knowledgeBase: ["clientId"],
-};
-
-const DATASET_ALIASES: Record<string, string> = {
-  softwareInventory: "sw",
-  agentHardware: "hw",
-  agentLabels: "lbl",
-  automaticLabelRules: "rule",
-  logs: "log",
-  tickets: "tk",
-  configurationAudit: "audit",
-  automationExecutions: "auto",
-  agentInventoryComposite: "inv",
-  agentMonitoringEvents: "mon",
-  agentAlerts: "alrt",
-  p2pTelemetry: "p2p",
-  agentDisks: "dsk",
-  networkAdapters: "net",
-  listeningPorts: "prt",
-  printers: "prn",
-  softwareCatalog: "swc",
-  automationScripts: "scr",
-  appPackages: "app",
-  ticketActivity: "tka",
-  ticketEscalations: "esc",
-  customFields: "cf",
-  knowledgeBase: "kb",
-};
-
-// ── Helpers ───────────────────────────────────────────────
-
-function getDatasetKey(item: DatasetCatalogItem): string {
-  return item.key ?? item.type ?? "";
-}
-
-function getDefaultAlias(key: string): string {
-  return DATASET_ALIASES[key] ?? key.substring(0, 3);
+/** Chaves comuns entre dois itens do catalogo (derivado, nunca hardcoded). */
+export function findJoinKeys(
+  source: DatasetCatalogItem | undefined | null,
+  target: DatasetCatalogItem | undefined | null,
+): string[] {
+  return findCommonJoinKeys(source, target);
 }
 
 function normalizeFieldReference(field: string, sourceAlias?: string): string {
@@ -153,21 +153,36 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function findJoinKeys(sourceKey: string, targetKey: string): string[] {
-  const source = JOIN_KEYS[sourceKey] ?? [];
-  const target = JOIN_KEYS[targetKey] ?? [];
-  return source.filter((k) => target.includes(k));
+/**
+ * Alias unico dentro da selecao. Nomes puros de campo do layout dependem de
+ * aliases distintos, entao colisao (hw, hw2) tem de ser evitada.
+ */
+function getUniqueAlias(base: string, existing: SelectedDataset[]): string {
+  const taken = new Set(existing.map((d) => d.alias));
+  const candidate = base || "ds";
+  if (!taken.has(candidate)) return candidate;
+  let suffix = 2;
+  while (taken.has(`${candidate}${suffix}`)) suffix += 1;
+  return `${candidate}${suffix}`;
 }
 
-function suggestJoinKey(
-  sourceKey: string,
-  targetKey: string,
+/**
+ * isPrimary e SEMPRE derivado do indice do array. Assim reordenar, remover
+ * ou reidratar nunca deixa duas fontes marcadas como principal (ou nenhuma).
+ */
+export function withDerivedPrimary(datasets: SelectedDataset[]): SelectedDataset[] {
+  return datasets.map((ds, index) => {
+    const isPrimary = index === 0;
+    return ds.isPrimary === isPrimary ? ds : { ...ds, isPrimary };
+  });
+}
+
+/** Sugere a chave preferida entre os dois datasets do catalogo. */
+export function suggestJoinKey(
+  source: DatasetCatalogItem,
+  target: DatasetCatalogItem,
 ): string | undefined {
-  const common = findJoinKeys(sourceKey, targetKey);
-  if (common.includes("agentId")) return "agentId";
-  if (common.includes("clientId")) return "clientId";
-  if (common.includes("siteId")) return "siteId";
-  return common[0];
+  return pickPreferredJoinKey(findCommonJoinKeys(source, target));
 }
 
 // ── Default layout per dataset ───────────────────────────
@@ -288,6 +303,80 @@ const DEFAULT_COLUMNS: Record<string, LayoutColumn[]> = {
     { field: "category", header: "Categoria", format: "text", align: "left" },
     { field: "updatedAt", header: "Atualizado em", format: "datetime", align: "left" },
   ],
+  ticketAnswers: [
+    { field: "ticketId", header: "Chamado", format: "text", align: "left" },
+    { field: "ticketTitle", header: "Título do chamado", format: "text", align: "left" },
+    { field: "questionLabel", header: "Pergunta", format: "text", align: "left" },
+    { field: "valueText", header: "Resposta", format: "text", align: "left" },
+    { field: "createdAt", header: "Respondido em", format: "datetime", align: "left" },
+  ],
+  // ── Patches do Windows (WUA) e inventário/estado dos agentes ──
+  windowsUpdates: [
+    { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
+    { field: "kbIds", header: "KB", format: "text", align: "left" },
+    { field: "title", header: "Atualização", format: "text", align: "left" },
+    { field: "classification", header: "Classificação", format: "text", align: "left" },
+    { field: "severity", header: "Severidade", format: "text", align: "center" },
+    { field: "approvalState", header: "Aprovação", format: "text", align: "center" },
+    { field: "status", header: "Status", format: "text", align: "center" },
+    { field: "requiresReboot", header: "Reinício", format: "text", align: "center" },
+    { field: "reportedAt", header: "Reportada", format: "datetime", align: "left" },
+  ],
+  patchCompliance: [
+    { field: "agentHostname", header: "Agente", format: "text", align: "left" },
+    { field: "clientName", header: "Cliente", format: "text", align: "left" },
+    { field: "siteName", header: "Site", format: "text", align: "left" },
+    { field: "osName", header: "SO", format: "text", align: "left" },
+    { field: "pendingCount", header: "Pendentes", format: "number", align: "right" },
+    { field: "criticalCount", header: "Críticas", format: "number", align: "right" },
+    { field: "deniedCount", header: "Recusadas", format: "number", align: "right" },
+    { field: "approvedCount", header: "Aprovadas", format: "number", align: "right" },
+    { field: "installedCount", header: "Instaladas", format: "number", align: "right" },
+    { field: "pendingReboot", header: "Reinício pendente", format: "text", align: "center" },
+    { field: "scanStatus", header: "Scan", format: "text", align: "center" },
+    { field: "lastScanAt", header: "Último scan", format: "datetime", align: "left" },
+  ],
+  patchApprovals: [
+    { field: "scopeType", header: "Escopo", format: "text", align: "left" },
+    { field: "updateKey", header: "Atualização", format: "text", align: "left" },
+    { field: "kbId", header: "KB", format: "text", align: "left" },
+    { field: "action", header: "Ação", format: "text", align: "center" },
+    { field: "reason", header: "Motivo", format: "text", align: "left" },
+    { field: "updatedBy", header: "Alterado por", format: "text", align: "left" },
+    { field: "updatedAt", header: "Atualizada em", format: "datetime", align: "left" },
+  ],
+  patchApprovalAudit: [
+    { field: "changedAt", header: "Quando", format: "datetime", align: "left" },
+    { field: "changeType", header: "Mudança", format: "text", align: "center" },
+    { field: "scopeType", header: "Escopo", format: "text", align: "left" },
+    { field: "updateKey", header: "Atualização", format: "text", align: "left" },
+    { field: "oldAction", header: "Ação anterior", format: "text", align: "left" },
+    { field: "newAction", header: "Nova ação", format: "text", align: "left" },
+    { field: "reason", header: "Motivo", format: "text", align: "left" },
+    { field: "changedBy", header: "Por", format: "text", align: "left" },
+    { field: "ipAddress", header: "IP", format: "text", align: "left" },
+  ],
+  agents: [
+    { field: "hostname", header: "Hostname", format: "text", align: "left" },
+    { field: "clientName", header: "Cliente", format: "text", align: "left" },
+    { field: "siteName", header: "Site", format: "text", align: "left" },
+    { field: "status", header: "Status", format: "text", align: "center" },
+    { field: "osName", header: "SO", format: "text", align: "left" },
+    { field: "osVersion", header: "Versão SO", format: "text", align: "left" },
+    { field: "agentVersion", header: "Agente", format: "text", align: "left" },
+    { field: "loggedUser", header: "Usuário", format: "text", align: "left" },
+    { field: "lastSeenAt", header: "Último contato", format: "datetime", align: "left" },
+    { field: "pendingReboot", header: "Reinício pendente", format: "text", align: "center" },
+  ],
+  agentSensors: [
+    { field: "sensorName", header: "Sensor", format: "text", align: "left" },
+    { field: "sensorType", header: "Tipo", format: "text", align: "left" },
+    { field: "status", header: "Status", format: "text", align: "center" },
+    { field: "severity", header: "Severidade", format: "text", align: "center" },
+    { field: "primaryValue", header: "Valor", format: "number", align: "right" },
+    { field: "unit", header: "Unidade", format: "text", align: "left" },
+    { field: "lastRunAt", header: "Última coleta", format: "datetime", align: "left" },
+  ],
 };
 
 // ── Hook ──────────────────────────────────────────────────
@@ -332,16 +421,16 @@ export function useWizardState(initialState?: Partial<WizardState>) {
     setState((prev) => {
       const key = getDatasetKey(item);
       const isPrimary = prev.selectedDatasets.length === 0;
-      const alias = getDefaultAlias(key);
+      const alias = getUniqueAlias(getDefaultAlias(item), prev.selectedDatasets);
 
-      // If not primary, auto-suggest join
+      // Se nao for a principal, sugere o join a partir do CATALOGO
+      // (joinCapabilities/fieldMetadata), nunca de uma matriz estatica.
       let joinToAlias: string | undefined;
       let joinSourceKey: string | undefined;
       let joinTargetKey: string | undefined;
       if (!isPrimary && prev.selectedDatasets.length > 0) {
         const primary = prev.selectedDatasets[0];
-        const primaryKey = getDatasetKey(primary.catalogItem);
-        const suggestedKey = suggestJoinKey(key, primaryKey);
+        const suggestedKey = suggestJoinKey(item, primary.catalogItem);
         if (suggestedKey) {
           joinToAlias = primary.alias;
           joinSourceKey = suggestedKey;
@@ -396,13 +485,102 @@ export function useWizardState(initialState?: Partial<WizardState>) {
 
   const removeDataset = useCallback((alias: string) => {
     setState((prev) => {
-      const newDatasets = prev.selectedDatasets.filter((d) => d.alias !== alias);
+      const newDatasets = withDerivedPrimary(
+        prev.selectedDatasets.filter((d) => d.alias !== alias),
+      );
       const newSubTables = prev.subTables.filter((st) => st.sourceAlias !== alias);
       return {
         ...prev,
         selectedDatasets: newDatasets,
         subTables: newSubTables,
       };
+    });
+  }, []);
+
+  /**
+   * Atualiza o join de uma fonte. Campos ausentes no patch sao preservados,
+   * entao o usuario pode montar o par origem/destino em qualquer ordem.
+   */
+  const setJoin = useCallback(
+    (
+      alias: string,
+      patch: {
+        joinToAlias?: string;
+        joinSourceKey?: string;
+        joinTargetKey?: string;
+        joinType?: "left" | "inner";
+      },
+    ) => {
+      setState((prev) => ({
+        ...prev,
+        selectedDatasets: prev.selectedDatasets.map((ds) => {
+          if (ds.alias !== alias) return ds;
+          const joinToAlias = patch.joinToAlias ?? ds.joinToAlias;
+          const joinSourceKey = patch.joinSourceKey ?? ds.joinSourceKey;
+          const joinTargetKey = patch.joinTargetKey ?? ds.joinTargetKey;
+          const joinType = patch.joinType ?? ds.joinType ?? "left";
+          return { ...ds, joinToAlias, joinSourceKey, joinTargetKey, joinType };
+        }),
+      }));
+    },
+    [],
+  );
+
+  /**
+   * Move uma fonte na cadeia. A ordem define a fonte principal (indice 0),
+   * portanto mover tambem redireciona os joins que apontavam para a antiga
+   * principal para o novo alias base.
+   */
+  const moveDataset = useCallback((alias: string, direction: "up" | "down") => {
+    setState((prev) => {
+      const index = prev.selectedDatasets.findIndex((d) => d.alias === alias);
+      if (index === -1) return prev;
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.selectedDatasets.length) {
+        return prev;
+      }
+
+      const reordered = [...prev.selectedDatasets];
+      const [moved] = reordered.splice(index, 1);
+      reordered.splice(targetIndex, 0, moved);
+
+      // A fonte principal e SEMPRE reordered[0]. Ao mover, ela muda, e duas
+      // coisas precisam de reparo:
+      //   1. quem apontava para a antiga principal passa a apontar para a nova;
+      //   2. a fonte que PERDEU o posto de principal (e agora e secundaria)
+      //      pode nao ter join nenhum - ela viraria uma fonte orfa. Nesse caso
+      //      derivamos um join a partir do catalogo.
+      const previousPrimaryAlias = prev.selectedDatasets[0]?.alias;
+      const nextPrimaryAlias = reordered[0]?.alias;
+
+      const repaired = reordered.map((ds, i) => {
+        if (i === 0) return { ...ds, joinToAlias: undefined, joinSourceKey: undefined, joinTargetKey: undefined };
+
+        let next = ds;
+        if (
+          previousPrimaryAlias &&
+          previousPrimaryAlias !== nextPrimaryAlias &&
+          ds.joinToAlias === previousPrimaryAlias
+        ) {
+          next = { ...next, joinToAlias: nextPrimaryAlias };
+        }
+
+        if (!next.joinToAlias || next.joinToAlias === ds.alias) {
+          const newPrimary = reordered[0];
+          const suggested = newPrimary ? suggestJoinKey(next.catalogItem, newPrimary.catalogItem) : undefined;
+          next = {
+            ...next,
+            joinToAlias: newPrimary?.alias,
+            joinSourceKey: suggested ?? next.joinSourceKey,
+            joinTargetKey: suggested ?? next.joinTargetKey,
+            joinType: next.joinType ?? "left",
+          };
+        }
+
+        return next;
+      });
+
+      return { ...prev, selectedDatasets: withDerivedPrimary(repaired) };
     });
   }, []);
 
@@ -550,13 +728,28 @@ export function useWizardState(initialState?: Partial<WizardState>) {
         )
         : state.groupTitleTemplate;
 
+    // A fonte principal e SEMPRE o indice 0 (isPrimary derivado). Em
+    // multi-source a marca "base" e serializada para o backend nao depender de
+    // "dataSources[0] = base": sem ela, reordenar as fontes no wizard mudava o
+    // significado do relatorio em silencio (a Fatia D criou a marca justamente
+    // para isso, mas o wizard nunca a emitia).
+    const isMultiSourceLayout = state.selectedDatasets.length > 1;
+
     const dataSources: ReportLayoutDataSourceDefinition[] =
-      state.selectedDatasets.map((ds) => {
+      state.selectedDatasets.map((ds, index) => {
         const dsType = ds.catalogItem.datasetType ?? ds.catalogItem.type;
         const def: ReportLayoutDataSourceDefinition = {
           datasetType: dsType ?? "",
           alias: ds.alias,
         };
+
+        // Somente na fonte marcada, e somente com mais de uma fonte. Nas
+        // demais a propriedade e OMITIDA (nunca "base": false) para manter o
+        // JSON limpo e compativel com layouts antigos.
+        if (isMultiSourceLayout && index === 0) {
+          def.base = true;
+        }
+
         if (ds.joinToAlias) {
           def.join = {
             joinToAlias: ds.joinToAlias,
@@ -649,6 +842,152 @@ export function useWizardState(initialState?: Partial<WizardState>) {
     return JSON.stringify(layout);
   }, [state]);
 
+  /**
+   * Reidrata a selecao a partir de um layout salvo (fluxo de edicao).
+   * Recebe o catalogo ja carregado e mapeia dataSources -> catalogItem por
+   * datasetType, preservando alias e o join gravado.
+   */
+  const hydrateFromLayout = useCallback(
+    (layout: HydratableLayout, catalog: DatasetCatalogItem[]) => {
+      const byType = indexCatalogByKey(catalog);
+      const sources = Array.isArray(layout.dataSources) ? layout.dataSources : [];
+      if (sources.length === 0) return;
+
+      const restored: SelectedDataset[] = [];
+      // Alias da fonte marcada com base=true no layout salvo (fatia D).
+      let markedBaseAlias: string | undefined;
+
+      for (const source of sources) {
+        const typeKey =
+          source?.datasetType === undefined || source?.datasetType === null
+            ? ""
+            : String(source.datasetType);
+        const catalogItem = byType.get(typeKey);
+        if (!catalogItem) continue;
+
+        const alias = (source.alias ?? "").trim() || getDefaultAlias(catalogItem);
+        if (restored.some((d) => d.alias === alias)) continue;
+
+        if (source.base === true && markedBaseAlias === undefined) {
+          markedBaseAlias = alias;
+        }
+
+        restored.push({
+          catalogItem,
+          alias,
+          joinToAlias: source.join?.joinToAlias,
+          joinSourceKey: source.join?.sourceKey,
+          joinTargetKey: source.join?.targetKey,
+          joinType: source.join?.joinType === "inner" ? "inner" : "left",
+          isPrimary: false,
+        });
+      }
+
+      if (restored.length === 0) return;
+
+      // A base marcada vira a posicao 0. Sem marca, mantem dataSources[0]
+      // (comportamento dos layouts antigos).
+      const ordered = markedBaseAlias
+        ? (() => {
+            const index = restored.findIndex((d) => d.alias === markedBaseAlias);
+            if (index <= 0) return restored;
+            const reordered = [...restored];
+            const [moved] = reordered.splice(index, 1);
+            reordered.unshift(moved);
+            return reordered;
+          })()
+        : restored;
+
+      const aliases = new Set(ordered.map((d) => d.alias));
+      const primaryAlias = ordered[0].alias;
+
+      // "hw.agentId" -> "agentId"; nome puro -> ele mesmo.
+      const splitReference = (
+        value: unknown,
+      ): { alias?: string; field: string } => {
+        const raw = typeof value === "string" ? value.trim() : "";
+        if (!raw) return { field: "" };
+        const dot = raw.indexOf(".");
+        if (dot < 0) return { alias: primaryAlias, field: raw };
+        const prefix = raw.slice(0, dot);
+        return aliases.has(prefix)
+          ? { alias: prefix, field: raw.slice(dot + 1) }
+          : { alias: primaryAlias, field: raw };
+      };
+
+      const toColumn = (
+        value: HydratableColumn,
+        fallbackAlias: string,
+      ): LayoutColumn | null => {
+        const parsed = splitReference(value.field);
+        const field = parsed.field;
+        if (!field) return null;
+        const sourceAlias = parsed.alias ?? fallbackAlias;
+        return {
+          field,
+          header:
+            typeof value.header === "string" && value.header.trim()
+              ? value.header
+              : field,
+          format: (value.format as LayoutColumn["format"]) ?? "text",
+          align: (value.align as LayoutColumn["align"]) ?? "left",
+          width: typeof value.width === "string" ? value.width : undefined,
+          sourceAlias,
+        };
+      };
+
+      const columns = (layout.columns ?? [])
+        .map((column) => toColumn(column, primaryAlias))
+        .filter((column): column is LayoutColumn => column !== null);
+
+      // Secao sem nenhuma coluna valida e invalida no backend: descartar.
+      const subTables = (layout.sections ?? [])
+        .map((section, index) => {
+          const sectionAlias =
+            typeof section.source === "string" && aliases.has(section.source)
+              ? section.source
+              : primaryAlias;
+          const sectionColumns = (Array.isArray(section.columns) ? section.columns : [])
+            .map((column) => toColumn(column, sectionAlias))
+            .filter((column): column is LayoutColumn => column !== null);
+
+          if (sectionColumns.length === 0) return null;
+
+          return {
+            id: `sub-restored-${index}`,
+            title:
+              typeof section.title === "string" && section.title.trim()
+                ? section.title
+                : sectionAlias,
+            sourceAlias: sectionAlias,
+            columns: sectionColumns,
+          } satisfies SubTable;
+        })
+        .filter((subTable): subTable is SubTable => subTable !== null);
+
+      const normalizedGroupBy = splitReference(layout.groupBy).field;
+
+      const toDetail = (
+        item: ReportLayoutDetailDefinition,
+      ): ReportLayoutDetailDefinition => ({
+        ...item,
+        field: splitReference(item.field).field,
+      });
+
+      setState((prev) => ({
+        ...prev,
+        selectedDatasets: withDerivedPrimary(ordered),
+        columns: columns.length > 0 ? columns : prev.columns,
+        subTables,
+        groupBy: normalizedGroupBy,
+        summaries: layout.summaries ?? [],
+        groupSummaries: layout.groupSummaries ?? [],
+        groupDetails: (layout.groupDetails ?? []).map(toDetail),
+      }));
+    },
+    [],
+  );
+
   // ── Build request payload ─────────────────────────────
 
   const buildRequest = useCallback(
@@ -683,6 +1022,9 @@ export function useWizardState(initialState?: Partial<WizardState>) {
     // Dataset
     addDataset,
     removeDataset,
+    setJoin,
+    moveDataset,
+    hydrateFromLayout,
     // Columns
     columns: state.columns,
     setColumns,

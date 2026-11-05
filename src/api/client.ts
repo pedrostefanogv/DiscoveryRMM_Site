@@ -27,13 +27,35 @@ const defaultApiClientConfig: ApiClientConfig = {
 let apiClientConfig = defaultApiClientConfig;
 let refreshInFlight: Promise<string | null> | null = null;
 
+/**
+ * Um erro de validacao estruturado devolvido pelo backend.
+ * Shape do fio: { errors: [{ code, message, field }] }.
+ */
+export interface ApiValidationError {
+  code?: string;
+  field?: string;
+  message: string;
+}
+
 class ApiError extends Error {
+  /**
+   * Lista ESTRUTURADA de erros de validacao, quando o backend a fornece.
+   *
+   * Aditivo: `.message` continua exatamente com o formato antigo (as mensagens
+   * concatenadas com "; "), porque e contrato publico consumido em toasts e
+   * logs. A lista existe para quem precisa de cada erro separado, sem ter de
+   * fazer engenharia reversa do texto.
+   */
+  public errors?: ApiValidationError[];
+
   constructor(
     public status: number,
     message: string,
+    errors?: ApiValidationError[],
   ) {
     super(message);
     this.name = "ApiError";
+    this.errors = errors;
   }
 }
 
@@ -89,7 +111,20 @@ function normalizeErrorDetails(details: unknown): string | null {
   return null;
 }
 
+/**
+ * Mensagem achatada (contrato historico) + lista estruturada dos erros de
+ * validacao. A string e montada exatamente como antes; a lista e ADITIVA.
+ */
+interface ParsedErrorBody {
+  message: string;
+  errors?: ApiValidationError[];
+}
+
 async function parseErrorMessage(res: Response): Promise<string> {
+  return (await parseErrorBody(res)).message;
+}
+
+async function parseErrorBody(res: Response): Promise<ParsedErrorBody> {
   const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
 
   // Lê o corpo uma única vez: tentar res.json() e depois res.text() falha
@@ -114,7 +149,9 @@ async function parseErrorMessage(res: Response): Promise<string> {
             title?: unknown;
           }
         | string;
-      if (typeof payload === "string" && payload.trim()) return payload;
+      if (typeof payload === "string" && payload.trim()) {
+        return { message: payload };
+      }
       if (payload && typeof payload === "object") {
         const detailsMessage = normalizeErrorDetails(payload.details);
 
@@ -124,41 +161,87 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
           // Shape da API: { errors: [{ code, message, field }] }
           if (Array.isArray(errorsValue)) {
-            const itemMessages = errorsValue
-              .map((item) => {
-                if (typeof item === "string") return item;
-                const obj = item as { message?: unknown; field?: unknown };
-                const field = typeof obj.field === "string" ? obj.field : null;
-                const message =
-                  typeof obj.message === "string" && obj.message.trim()
-                    ? obj.message
-                    : null;
-                if (field && message) return `${field}: ${message}`;
-                return message ?? field ?? null;
-              })
-              .filter((m): m is string => typeof m === "string" && m.trim() !== "");
-            if (itemMessages.length) return itemMessages.join("; ");
+            // Constroi a lista estruturada e a string achatada em paralelo,
+            // a partir do MESMO dado — a string nao muda de formato.
+            const structured: ApiValidationError[] = [];
+            const itemMessages: string[] = [];
+
+            for (const item of errorsValue) {
+              if (typeof item === "string") {
+                if (item.trim()) {
+                  structured.push({ message: item });
+                  itemMessages.push(item);
+                }
+                continue;
+              }
+              if (typeof item !== "object" || item === null) continue;
+
+              const obj = item as {
+                code?: unknown;
+                message?: unknown;
+                field?: unknown;
+              };
+              const field =
+                typeof obj.field === "string" && obj.field.trim()
+                  ? obj.field
+                  : undefined;
+              const message =
+                typeof obj.message === "string" && obj.message.trim()
+                  ? obj.message
+                  : undefined;
+              const code =
+                typeof obj.code === "string" && obj.code.trim()
+                  ? obj.code
+                  : undefined;
+
+              if (message) {
+                structured.push({ message, field, code });
+              } else if (field) {
+                structured.push({ message: field, field, code });
+              } else {
+                continue;
+              }
+
+              if (field && message) itemMessages.push(`${field}: ${message}`);
+              else itemMessages.push(message ?? field!);
+            }
+
+            if (itemMessages.length) {
+              return {
+                message: itemMessages.join("; "),
+                errors: structured,
+              };
+            }
           }
 
           // Shape FluentValidation: { errors: { Campo: ["mensagem"] } }
+          const fluentStructured: ApiValidationError[] = [];
           const fieldErrors = Object.entries(
             errorsValue as Record<string, unknown>,
           )
             .flatMap(([field, msgs]) => {
               if (Array.isArray(msgs))
-                return msgs.map((m: unknown) => `${field}: ${String(m)}`);
+                return msgs.map((m: unknown) => {
+                  fluentStructured.push({ field, message: String(m) });
+                  return `${field}: ${String(m)}`;
+                });
+              fluentStructured.push({ field, message: String(msgs) });
               return [`${field}: ${String(msgs)}`];
             })
             .join("; ");
-          if (fieldErrors) return fieldErrors;
+          if (fieldErrors) {
+            return { message: fieldErrors, errors: fluentStructured };
+          }
         }
 
         // { code, message } combo
         if (payload.code && payload.message) {
           const baseMessage = `[${String(payload.code)}] ${String(payload.message)}`;
-          return detailsMessage
-            ? `${baseMessage}. ${detailsMessage}`
-            : baseMessage;
+          return {
+            message: detailsMessage
+              ? `${baseMessage}. ${detailsMessage}`
+              : baseMessage,
+          };
         }
 
         const message =
@@ -168,10 +251,12 @@ async function parseErrorMessage(res: Response): Promise<string> {
           payload.title ??
           res.statusText;
         if (typeof message === "string" && message.trim()) {
-          return detailsMessage ? `${message}. ${detailsMessage}` : message;
+          return {
+            message: detailsMessage ? `${message}. ${detailsMessage}` : message,
+          };
         }
 
-        if (detailsMessage) return detailsMessage;
+        if (detailsMessage) return { message: detailsMessage };
       }
     } catch {
       // Fallback para parse de texto/status abaixo.
@@ -180,14 +265,15 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
   if (rawBody !== null) {
     const text = rawBody.trim();
-    if (text && !text.startsWith("<")) return rawBody;
+    if (text && !text.startsWith("<")) return { message: rawBody };
   }
 
-  return (
-    STATUS_FALLBACK_MESSAGE[res.status] ??
-    res.statusText ??
-    "Erro de requisição"
-  );
+  return {
+    message:
+      STATUS_FALLBACK_MESSAGE[res.status] ??
+      res.statusText ??
+      "Erro de requisição",
+  };
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -365,8 +451,8 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const message = await parseErrorMessage(res);
-    throw new ApiError(res.status, message);
+    const parsed = await parseErrorBody(res);
+    throw new ApiError(res.status, parsed.message, parsed.errors);
   }
 
   if (res.status === 204 || res.headers.get("content-length") === "0") {

@@ -765,38 +765,48 @@ export function getAutoJoinSuggestion(params: {
     return joinSuggestions[0];
   }
 
-  const sourceJoinKeys = sourceKeyOptions
-    .filter((field) => field.isJoinKey)
-    .map((field) => field.reference ?? field.field ?? "")
-    .filter(Boolean);
-  const targetJoinKeys = new Set(
-    targetKeyOptions
-      .filter((field) => field.isJoinKey)
-      .map((field) => field.reference ?? field.field ?? "")
-      .filter(Boolean),
+  // Os dois lados precisam ser comparados na MESMA forma. O seletor usa
+  // "alias.field", mas fieldMetadata[].reference as vezes vem sem alias
+  // ("agentId"), e por isso a interseccao antiga era sempre vazia.
+  const normalizeKey = (value: unknown): string =>
+    typeof value === "string" ? value.trim() : "";
+  const baseName = (value: string): string => {
+    const dot = value.indexOf(".");
+    return dot >= 0 ? value.slice(dot + 1) : value;
+  };
+  const optionValue = (field: ReportDatasetFieldMetadata | undefined): string =>
+    normalizeKey(field?.reference ?? field?.field);
+
+  const sourceJoinOptions = sourceKeyOptions.filter(
+    (field) => field.isJoinKey && optionValue(field),
+  );
+  const targetJoinOptions = targetKeyOptions.filter(
+    (field) => field.isJoinKey && optionValue(field),
   );
 
-  const common = sourceJoinKeys.find((key) => targetJoinKeys.has(key));
-  if (common) {
-    return {
-      sourceKey: common,
-      targetKey: common,
-    };
+  // Compara pelo nome base (sem alias) e devolve cada lado na sua propria
+  // forma, preservando o alias de cada dataset.
+  const targetByBase = new Map<string, string>();
+  for (const field of targetJoinOptions) {
+    const value = optionValue(field);
+    const base = baseName(value);
+    if (base && !targetByBase.has(base)) targetByBase.set(base, value);
+  }
+
+  for (const field of sourceJoinOptions) {
+    const value = optionValue(field);
+    const match = targetByBase.get(baseName(value));
+    if (match) {
+      return { sourceKey: value, targetKey: match };
+    }
   }
 
   const firstSource =
-    sourceJoinKeys[0] ??
-    sourceKeyOptions[0]?.reference ??
-    sourceKeyOptions[0]?.field ??
-    "";
+    optionValue(sourceJoinOptions[0]) ||
+    optionValue(sourceKeyOptions[0]);
   const firstTarget =
-    targetKeyOptions
-      .filter((field) => field.isJoinKey)
-      .map((field) => field.reference ?? field.field ?? "")
-      .find(Boolean) ??
-    targetKeyOptions[0]?.reference ??
-    targetKeyOptions[0]?.field ??
-    "";
+    optionValue(targetJoinOptions[0]) ||
+    optionValue(targetKeyOptions[0]);
 
   if (!firstSource || !firstTarget) {
     return null;

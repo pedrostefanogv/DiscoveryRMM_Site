@@ -1,21 +1,38 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loading, ErrorDisplay, EmptyState } from "@/components/ui";
 import { useReportDatasets } from "@/hooks/useReportDatasets";
 import { useCreateReportTemplate, useUpdateReportTemplate } from "@/hooks/useReportTemplates";
-import { useWizardState, WizardState } from "./hooks/useWizardState";
+import {
+  useWizardState,
+  WizardState,
+  type HydratableLayout,
+} from "./hooks/useWizardState";
 import { StepDataSources } from "./StepDataSources";
 import { StepLayout } from "./StepLayout";
 import { StepMetadata } from "./StepMetadata";
+import {
+  extractValidationErrors,
+  type TemplateValidationError,
+} from "./validationErrors";
 import { buildRunReportPath, resolveBuiltInTemplateId } from "../builtInTemplates";
 
 interface Props {
   initialTemplate?: Partial<WizardState>;
   /** Quando presente, o wizard atualiza o template existente em vez de criar um novo. */
   templateId?: string;
+  /**
+   * Layout salvo do template em edicao. A reidratacao das fontes depende do
+   * catalogo, que so chega depois, entao ela roda em um efeito abaixo.
+   */
+  initialLayout?: HydratableLayout | null;
 }
 
-export function ReportTemplateWizard({ initialTemplate, templateId }: Props) {
+export function ReportTemplateWizard({
+  initialTemplate,
+  templateId,
+  initialLayout,
+}: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const clientIdParam = searchParams.get("clientId");
@@ -24,6 +41,10 @@ export function ReportTemplateWizard({ initialTemplate, templateId }: Props) {
       ? clientIdParam
       : undefined;
   const [step, setStep] = useState(0);
+  // Erros de validacao devolvidos pelo backend (400 em layoutJson). Ficam em
+  // estado para serem exibidos no passo de metadados sem perder o que o
+  // usuario ja preencheu.
+  const [submitErrors, setSubmitErrors] = useState<TemplateValidationError[]>([]);
   const {
     data: datasets = [],
     isLoading,
@@ -41,8 +62,27 @@ export function ReportTemplateWizard({ initialTemplate, templateId }: Props) {
     navigate(buildRunReportPath(legacyBuiltInTemplateId, clientId), { replace: true });
   }, [legacyBuiltInTemplateId, clientId, navigate]);
 
+  // Reidrata fontes/colunas/agrupamento do template salvo. Depende do catalogo
+  // (datasetType -> catalogItem), que chega de forma assincrona: por isso o
+  // gatilho e "datasets.length", nao apenas a montagem do componente.
+  //
+  // Roda UMA vez por carregamento: o catalogo pode ser refetchado, e reidratar
+  // de novo descartaria as edicoes que o usuario ja fez na tela.
+  const { hydrateFromLayout } = wizard;
+  const hydratedLayoutRef = useRef<HydratableLayout | null>(null);
+  useEffect(() => {
+    if (!initialLayout || datasets.length === 0) return;
+    if (hydratedLayoutRef.current === initialLayout) return;
+    hydratedLayoutRef.current = initialLayout;
+    hydrateFromLayout(initialLayout, datasets);
+  }, [initialLayout, datasets, hydrateFromLayout]);
+
   const handleCreate = useCallback(async () => {
     const request = wizard.buildRequest();
+    // Limpa erros anteriores: sem isso uma tentativa antiga continuaria na tela
+    // mesmo depois de o usuario corrigir o problema.
+    setSubmitErrors([]);
+
     try {
       // Edicao: atualiza o template existente. Novo: mantem o create.
       if (templateId) {
@@ -63,8 +103,23 @@ export function ReportTemplateWizard({ initialTemplate, templateId }: Props) {
       } else {
         navigate(basePath);
       }
-    } catch {
-      // Error handled by mutation
+    } catch (error) {
+      // O backend valida o layout no create/update e devolve 400 com
+      // "errors": [{ code, message, field }]. Antes este catch engolia a
+      // excecao e o usuario clicava em "Criar" sem ver nada acontecer.
+      const errors = extractValidationErrors(error);
+      setSubmitErrors(
+        errors.length > 0
+          ? errors
+          : [
+              {
+                message:
+                  "Não foi possível salvar o template. Tente novamente em instantes.",
+              },
+            ],
+      );
+      // Mantem o usuario na tela, com o estado do wizard intacto: nao navega
+      // e nao reseta nenhum passo.
     }
   }, [wizard, createMutation, updateMutation, templateId, navigate, clientId]);
 
@@ -161,6 +216,8 @@ export function ReportTemplateWizard({ initialTemplate, templateId }: Props) {
             onBack={() => setStep(1)}
             onCreate={handleCreate}
             isCreating={createMutation.isPending || updateMutation.isPending}
+            submitErrors={submitErrors}
+            isEditing={Boolean(templateId)}
           />
         )}
       </div>

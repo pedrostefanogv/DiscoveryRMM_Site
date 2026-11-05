@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import * as reportsApi from "@/api/reports";
+import { normalizeApiError } from "@/pages/reports/report-template-form/utils";
 import type {
   CreateReportTemplateRequest,
   CursorPageDto,
@@ -49,6 +51,13 @@ export function useCreateReportTemplate() {
     mutationFn: (data: CreateReportTemplateRequest) =>
       reportsApi.createReportTemplate(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    // Rede de seguranca: sem isto uma rejeicao do backend (400 de validacao
+    // do layout) ficava invisivel fora de quem consome a mutation. O wizard
+    // exibe os erros inline; aqui garantimos que a falha nunca passe em
+    // silencio, seguindo o padrao de toast ja usado em ReportTemplateForm.
+    onError: (error) => {
+      toast.error(normalizeApiError(error, "Erro ao criar template."));
+    },
   });
 }
 
@@ -63,6 +72,9 @@ export function useUpdateReportTemplate() {
       data: UpdateReportTemplateRequest;
     }) => reportsApi.updateReportTemplate(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onError: (error) => {
+      toast.error(normalizeApiError(error, "Erro ao atualizar template."));
+    },
   });
 }
 

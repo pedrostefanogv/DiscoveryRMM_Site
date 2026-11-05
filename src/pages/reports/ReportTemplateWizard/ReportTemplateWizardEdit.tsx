@@ -60,14 +60,20 @@ export function ReportTemplateWizardEdit() {
     },
     // Layout fields
     orientation: layout.orientation === "portrait" ? "portrait" : "landscape",
-    groupBy: layout.groupBy ?? "",
     groupTitleTemplate: layout.groupTitleTemplate ?? "",
     hideGroupColumn: Boolean(layout.hideGroupColumn),
-    // Note: full dataset/column parsing requires loading datasets catalog
-    // For edit in the legacy flow, use /reports/templates/:id/edit
   };
 
-  return <ReportTemplateWizard initialTemplate={initial} templateId={id} />;
+  // As fontes (dataSources), colunas e agrupamento dependem do CATALOGO para
+  // serem traduzidos de volta em selectedDatasets. O wizard carrega o catalogo
+  // e reidrata em um efeito proprio quando os datasets chegam.
+  return (
+    <ReportTemplateWizard
+      initialTemplate={initial}
+      templateId={id}
+      initialLayout={layout}
+    />
+  );
 }
 
 export default ReportTemplateWizardEdit;

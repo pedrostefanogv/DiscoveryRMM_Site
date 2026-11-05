@@ -127,3 +127,133 @@ describe("client.ts — correções B1/B11/B12/O1", () => {
     expect(error.name).toBe("ApiError");
   });
 });
+
+describe("client.ts — erros de validação estruturados (Fatia I)", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** 400 no shape da API: { errors: [{ code, message, field }] }. */
+  function validationResponse(errors: unknown[]): Response {
+    return jsonResponse({ errors }, 400);
+  }
+
+  it("expõe ApiError.errors com code/message/field e mantém .message igual", async () => {
+    fetchMock.mockResolvedValue(
+      validationResponse([
+        {
+          code: "Validation",
+          field: "layoutJson",
+          message: "o campo 'hw.agentIde' nao existe em nenhuma fonte do layout.",
+        },
+        {
+          code: "Validation",
+          field: "dataSources[1].join.sourceKey",
+          message: "a chave de origem e obrigatoria a partir da segunda fonte.",
+        },
+      ]),
+    );
+
+    let caught: unknown;
+    try {
+      await api.post("/api/v1/reports/templates", { a: 1 });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ApiError);
+    const apiError = caught as ApiError;
+
+    // CONTRATO PÚBLICO PRESERVADO: formato exato de antes.
+    expect(apiError.message).toBe(
+      "layoutJson: o campo 'hw.agentIde' nao existe em nenhuma fonte do layout.; " +
+        "dataSources[1].join.sourceKey: a chave de origem e obrigatoria a partir da segunda fonte.",
+    );
+
+    // Campo NOVO, aditivo.
+    expect(apiError.errors).toHaveLength(2);
+    expect(apiError.errors?.[0]).toEqual({
+      code: "Validation",
+      field: "layoutJson",
+      message: "o campo 'hw.agentIde' nao existe em nenhuma fonte do layout.",
+    });
+    expect(apiError.errors?.[1].field).toBe("dataSources[1].join.sourceKey");
+  });
+
+  it("mensagem que CONTÉM '; ' chega INTEIRA na lista estruturada", async () => {
+    // Este é o bug que a fatia fecha: no caminho achatado a mensagem seria
+    // partida em duas por causa do delimitador.
+    const mensagemComPontoEVirgula =
+      "o join por 'agentId' nao casou nenhuma linha; verifique se o agente reportou sensores.";
+    fetchMock.mockResolvedValue(
+      validationResponse([
+        { code: "Validation", field: "layoutJson", message: mensagemComPontoEVirgula },
+      ]),
+    );
+
+    let caught: unknown;
+    try {
+      await api.post("/api/v1/reports/templates", { a: 1 });
+    } catch (error) {
+      caught = error;
+    }
+
+    const apiError = caught as ApiError;
+    expect(apiError.errors).toHaveLength(1);
+    expect(apiError.errors?.[0].message).toBe(mensagemComPontoEVirgula);
+  });
+
+  it("shape FluentValidation ({ Campo: [msg] }) continua funcionando", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ errors: { Name: ["Nome é obrigatório."] } }, 400),
+    );
+
+    let caught: unknown;
+    try {
+      await api.post("/api/v1/reports/templates", { a: 1 });
+    } catch (error) {
+      caught = error;
+    }
+
+    const apiError = caught as ApiError;
+    expect(apiError.message).toBe("Name: Nome é obrigatório.");
+    expect(apiError.errors).toEqual([
+      { field: "Name", message: "Nome é obrigatório." },
+    ]);
+  });
+
+  it("400 sem 'errors' mantém o fallback e não inventa lista", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ message: "Requisição inválida" }, 400),
+    );
+
+    let caught: unknown;
+    try {
+      await api.post("/api/v1/reports/templates", { a: 1 });
+    } catch (error) {
+      caught = error;
+    }
+
+    const apiError = caught as ApiError;
+    expect(apiError.message).toBe("Requisição inválida");
+    expect(apiError.errors).toBeUndefined();
+  });
+
+  it("erro sem corpo cai no fallback de status e segue sem lista", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => "",
+    } as unknown as Response);
+
+    await expect(
+      api.post("/api/v1/reports/templates", { a: 1 }),
+    ).rejects.toMatchObject({ status: 503, message: "Serviço indisponível" });
+  });
+});

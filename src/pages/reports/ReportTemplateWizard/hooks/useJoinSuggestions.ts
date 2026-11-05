@@ -1,6 +1,14 @@
 import { useMemo } from "react";
 import type { SelectedDataset } from "./useWizardState";
 import type { DatasetCatalogItem } from "@/api/types";
+import {
+  findCommonJoinKeys,
+  getDatasetKey,
+  getJoinKeys,
+  getJoinFieldOptions,
+  pickPreferredJoinKey,
+  stripAlias,
+} from "./joinKeys";
 
 export interface JoinSuggestion {
   sourceKey: string;
@@ -12,126 +20,136 @@ export interface JoinSuggestion {
   isDirectMatch: boolean;
 }
 
-function getDatasetKey(item: DatasetCatalogItem): string {
-  return item.key ?? item.type ?? "";
+export interface JoinIssue {
+  /** Alias da fonte com problema (permite ancorar o aviso na UI). */
+  alias: string;
+  message: string;
 }
 
-const JOIN_KEYS: Record<string, string[]> = {
-  softwareInventory: ["agentId", "clientId", "siteId", "softwareName"],
-  agentHardware: ["agentId", "clientId", "siteId"],
-  agentLabels: ["agentId", "clientId", "siteId", "labelName"],
-  automaticLabelRules: ["labelName", "ruleId"],
-  logs: ["agentId", "clientId", "siteId"],
-  tickets: ["agentId", "clientId", "siteId"],
-  configurationAudit: ["agentId", "clientId", "siteId"],
-  automationExecutions: ["agentId"],
-  agentInventoryComposite: ["agentId", "clientId", "siteId"],
-  agentMonitoringEvents: ["agentId", "clientId", "siteId"],
-  agentAlerts: ["clientId"],
-  p2pTelemetry: ["agentId", "clientId", "siteId"],
-  agentDisks: ["agentId", "clientId", "siteId"],
-  networkAdapters: ["agentId", "clientId", "siteId"],
-  listeningPorts: ["agentId", "clientId", "siteId"],
-  printers: ["agentId", "clientId", "siteId"],
-  softwareCatalog: ["clientId"],
-  automationScripts: ["clientId"],
-  appPackages: ["clientId"],
-  ticketActivity: ["clientId"],
-  ticketEscalations: ["clientId"],
-  customFields: ["clientId"],
-  knowledgeBase: ["clientId"],
-};
+function datasetLabel(item: DatasetCatalogItem): string {
+  return item.name ?? (getDatasetKey(item) || "dataset");
+}
 
+/**
+ * Valida a cadeia de joins e propoe combinacoes.
+ *
+ * Tudo e derivado do catalogo (joinCapabilities + fieldMetadata[].isJoinKey).
+ * Nao existe mais matriz estatica de chaves: era ela que omitia 7 datasets e
+ * fazia "Sensores (estado e metricas)" parecer incompativel com "Hardware".
+ */
 export function useJoinSuggestions(
   selectedDatasets: SelectedDataset[],
   availableDatasets: DatasetCatalogItem[],
-): { suggestions: JoinSuggestion[]; warnings: string[] } {
+): { suggestions: JoinSuggestion[]; warnings: string[]; issues: JoinIssue[] } {
   return useMemo(() => {
-    if (selectedDatasets.length === 0) return { suggestions: [], warnings: [] };
+    if (selectedDatasets.length === 0) {
+      return { suggestions: [], warnings: [], issues: [] };
+    }
 
     const suggestions: JoinSuggestion[] = [];
-    const warnings: string[] = [];
+    const issues: JoinIssue[] = [];
     const selectedKeys = new Set(
       selectedDatasets.map((ds) => getDatasetKey(ds.catalogItem)),
     );
 
-    // Validate: all non-primary datasets must have a join defined
-    for (const ds of selectedDatasets) {
-      if (ds.isPrimary) continue;
-      if (!ds.joinSourceKey || !ds.joinToAlias) {
-        warnings.push(
-          `"${ds.catalogItem.name ?? getDatasetKey(ds.catalogItem)}" não tem join configurado. Configure a chave de ligação.`,
-        );
-      } else {
-        // Validate the join key exists in both datasets
-        const dsKey = getDatasetKey(ds.catalogItem);
-        const dsKeys = JOIN_KEYS[dsKey] ?? [];
-        if (!dsKeys.includes(ds.joinSourceKey)) {
-          warnings.push(
-            `"${ds.joinSourceKey}" não é uma chave válida para "${ds.catalogItem.name ?? dsKey}". Chaves disponíveis: ${dsKeys.join(", ")}`,
-          );
-        }
-        const targetDs = selectedDatasets.find((d) => d.alias === ds.joinToAlias);
-        if (targetDs) {
-          const targetKey = getDatasetKey(targetDs.catalogItem);
-          const targetKeys = JOIN_KEYS[targetKey] ?? [];
-          if (!targetKeys.includes(ds.joinTargetKey ?? ds.joinSourceKey)) {
-            warnings.push(
-              `"${ds.joinTargetKey ?? ds.joinSourceKey}" não é uma chave válida para "${targetDs.catalogItem.name ?? targetKey}". Chaves disponíveis: ${targetKeys.join(", ")}`,
-            );
-          }
-        }
+    // ── Validacao das fontes nao-principais ──────────────
+    for (const [index, ds] of selectedDatasets.entries()) {
+      if (index === 0) continue;
+
+      const label = datasetLabel(ds.catalogItem);
+
+      if (!ds.joinToAlias) {
+        issues.push({
+          alias: ds.alias,
+          message: `"${label}" não tem join configurado. Escolha a chave de ligação.`,
+        });
+        continue;
+      }
+
+      const targetDs = selectedDatasets.find((d) => d.alias === ds.joinToAlias);
+      if (!targetDs) {
+        issues.push({
+          alias: ds.alias,
+          message: `"${label}" aponta para a fonte "${ds.joinToAlias}", que não está mais selecionada. Escolha outra fonte.`,
+        });
+        continue;
+      }
+
+      // O backend exige que joinToAlias aponte para uma fonte ANTERIOR na
+      // cadeia. Permitir uma fonte posterior geraria 400 no create/update.
+      const targetIndex = selectedDatasets.findIndex(
+        (candidate) => candidate.alias === ds.joinToAlias,
+      );
+      if (targetIndex >= index) {
+        issues.push({
+          alias: ds.alias,
+          message: `"${label}" não pode se ligar a "${ds.joinToAlias}", que vem depois dela na ordem. Escolha uma fonte anterior.`,
+        });
+        continue;
+      }
+
+      const sourceKey = stripAlias(ds.joinSourceKey);
+      const targetKey = stripAlias(ds.joinTargetKey) || sourceKey;
+
+      if (!sourceKey || !targetKey) {
+        issues.push({
+          alias: ds.alias,
+          message: `"${label}" não tem a chave de ligação definida. Escolha as chaves de origem e destino.`,
+        });
+        continue;
+      }
+
+      const sourceKeys = getJoinKeys(ds.catalogItem);
+      const targetKeys = getJoinKeys(targetDs.catalogItem);
+
+      if (!sourceKeys.includes(sourceKey)) {
+        issues.push({
+          alias: ds.alias,
+          message: `"${sourceKey}" não é uma chave válida para "${label}". Chaves disponíveis: ${sourceKeys.join(", ") || "nenhuma"}`,
+        });
+      }
+      if (!targetKeys.includes(targetKey)) {
+        issues.push({
+          alias: ds.alias,
+          message: `"${targetKey}" não é uma chave válida para "${datasetLabel(targetDs.catalogItem)}". Chaves disponíveis: ${targetKeys.join(", ") || "nenhuma"}`,
+        });
       }
     }
 
+    // ── Sugestoes de combinacao ──────────────────────────
     for (const ds of selectedDatasets) {
-      const dsKey = getDatasetKey(ds.catalogItem);
-      const dsKeys = JOIN_KEYS[dsKey] ?? [];
-
       for (const available of availableDatasets) {
         const avKey = getDatasetKey(available);
         if (selectedKeys.has(avKey)) continue;
 
-        const avKeys = JOIN_KEYS[avKey] ?? [];
-        const common = dsKeys.filter((k) => avKeys.includes(k));
+        const common = findCommonJoinKeys(ds.catalogItem, available);
+        if (common.length === 0) continue;
 
-        if (common.length > 0) {
-          const preferredKey = common.includes("agentId")
-            ? "agentId"
-            : common.includes("clientId")
-              ? "clientId"
-              : common.includes("siteId")
-                ? "siteId"
-                : common[0];
-
-          suggestions.push({
-            sourceKey: dsKey,
-            targetKey: avKey,
-            sourceDatasetName: ds.catalogItem.name ?? dsKey,
-            targetDatasetName: available.name ?? avKey,
-            commonKeys: common,
-            preferredKey,
-            isDirectMatch: common.length >= 3,
-          });
-        }
+        const preferredKey = pickPreferredJoinKey(common) ?? common[0];
+        suggestions.push({
+          sourceKey: ds.alias,
+          targetKey: avKey,
+          sourceDatasetName: datasetLabel(ds.catalogItem),
+          targetDatasetName: datasetLabel(available),
+          commonKeys: common,
+          preferredKey,
+          isDirectMatch: common.length >= 3,
+        });
       }
     }
 
-    // Check for datasets that cannot be joined with anything (dead ends)
-    for (const ds of selectedDatasets) {
-      if (ds.isPrimary) continue;
-      const dsKey = getDatasetKey(ds.catalogItem);
-      const dsKeys = JOIN_KEYS[dsKey] ?? [];
+    // ── Fontes isoladas (sem chave comum com nenhuma outra) ──
+    for (const [index, ds] of selectedDatasets.entries()) {
+      if (index === 0) continue;
       const canJoin = selectedDatasets.some((other) => {
         if (other.alias === ds.alias) return false;
-        const otherKey = getDatasetKey(other.catalogItem);
-        const otherKeys = JOIN_KEYS[otherKey] ?? [];
-        return dsKeys.some((k) => otherKeys.includes(k));
+        return findCommonJoinKeys(ds.catalogItem, other.catalogItem).length > 0;
       });
       if (!canJoin) {
-        warnings.push(
-          `"${ds.catalogItem.name ?? dsKey}" não compartilha chaves com nenhum outro dataset selecionado. Remova ou escolha outro dataset.`,
-        );
+        issues.push({
+          alias: ds.alias,
+          message: `"${datasetLabel(ds.catalogItem)}" não compartilha chaves com nenhum outro dataset selecionado.`,
+        });
       }
     }
 
@@ -144,7 +162,13 @@ export function useJoinSuggestions(
             ) === i,
         )
         .sort((a, b) => b.commonKeys.length - a.commonKeys.length),
-      warnings,
+      warnings: issues.map((issue) => issue.message),
+      issues,
     };
   }, [selectedDatasets, availableDatasets]);
+}
+
+/** Opcoes de chave por dataset para os seletores do wizard. */
+export function getJoinKeyOptions(item: DatasetCatalogItem | undefined | null) {
+  return getJoinFieldOptions(item);
 }

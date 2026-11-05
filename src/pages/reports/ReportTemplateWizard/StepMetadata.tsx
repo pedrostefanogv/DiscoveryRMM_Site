@@ -1,5 +1,9 @@
 import { Button } from "@/components/ui";
 import { LiveMarkdownPreview } from "./components/LiveMarkdownPreview";
+import {
+  describeValidationField,
+  type TemplateValidationError,
+} from "./validationErrors";
 
 const REPORT_FONT_OPTIONS = [
   { label: "Segoe UI (padrão)", value: "Segoe UI, sans-serif" },
@@ -29,9 +33,20 @@ interface Props {
   onBack: () => void;
   onCreate: () => void;
   isCreating: boolean;
+  /** Erros de validacao devolvidos pelo backend na ultima tentativa de salvar. */
+  submitErrors?: TemplateValidationError[];
+  /** Fluxo de edicao (templateId presente): muda o rotulo do botao. */
+  isEditing?: boolean;
 }
 
-export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
+export function StepMetadata({
+  wizard,
+  onBack,
+  onCreate,
+  isCreating,
+  submitErrors = [],
+  isEditing = false,
+}: Props) {
   const { state, setField } = wizard;
   const logoPreviewUrl = normalizeLogoPreviewUrl(state.logoUrl);
   const watermarkLogoPreviewUrl = normalizeLogoPreviewUrl(state.watermarkLogoUrl);
@@ -404,13 +419,63 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
         </div>
       </div>
 
+      {/* Erros de validacao do backend: uma linha por erro, com o campo
+          ancorado no contexto quando o backend informa qual e. */}
+      {submitErrors.length > 0 && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-xl border border-danger/30 bg-danger/5 p-4"
+        >
+          <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-danger">
+            <span aria-hidden="true">⚠️</span>
+            {isEditing
+              ? "Não foi possível salvar as alterações"
+              : "Não foi possível criar o template"}
+          </h3>
+          <ul className="space-y-2">
+            {submitErrors.map((error, index) => {
+              const fieldLabel = describeValidationField(error.field);
+              return (
+                <li
+                  key={`${error.field ?? "erro"}-${index}`}
+                  className="text-xs text-danger/90"
+                >
+                  <span className="mr-1" aria-hidden="true">
+                    •
+                  </span>
+                  {fieldLabel && (
+                    <span className="font-semibold">{fieldLabel}: </span>
+                  )}
+                  <span>{error.message}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-[11px] text-danger/80">
+            Corrija os itens acima e tente novamente. Nada foi perdido: revise as
+            etapas anteriores se o problema for de fontes ou colunas.
+          </p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex justify-between">
         <Button onClick={onBack} variant="secondary">
           ← Voltar
         </Button>
-        <Button onClick={onCreate} disabled={!state.name || isCreating} variant="primary">
-          {isCreating ? "Criando..." : "💾 Criar Template"}
+        <Button
+          onClick={onCreate}
+          disabled={!state.name || isCreating}
+          variant="primary"
+        >
+          {isCreating
+            ? isEditing
+              ? "Salvando..."
+              : "Criando..."
+            : isEditing
+              ? "💾 Salvar Alterações"
+              : "💾 Criar Template"}
         </Button>
       </div>
     </div>
