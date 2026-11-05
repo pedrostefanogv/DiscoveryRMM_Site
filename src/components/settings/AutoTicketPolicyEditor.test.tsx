@@ -193,6 +193,38 @@ describe('AutoTicketPolicyEditor', () => {
     const payload = saveClientPolicyMock.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.aiAllowEquipmentContext).toBe(false);
   });
+
+  // O kill switch depende de `false` sobreviver ao descarte de "vazios".
+  // Um descarte por falsy generico apagaria o desligamento silenciosamente.
+  it('preserva false e 0 no payload — o kill switch depende disso', async () => {
+    renderEditor();
+    await screen.findByText(/Política efetiva/);
+
+    fireEvent.change(screen.getByLabelText('Habilitado'), { target: { value: 'false' } });
+    fireEvent.change(screen.getByLabelText(/Teto de chamados por hora/), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar política deste nível/ }));
+
+    await waitFor(() => expect(saveClientPolicyMock).toHaveBeenCalled());
+    const payload = saveClientPolicyMock.mock.calls[0][1] as Record<string, unknown>;
+
+    expect(payload.enabled).toBe(false);
+    expect(payload.maxCreatedTicketsPerHourPerAlertCode).toBe(0);
+  });
+
+  it('envia apenas o que foi preenchido, mantendo o resto em herança', async () => {
+    renderEditor();
+    await screen.findByText(/Política efetiva/);
+
+    fireEvent.change(screen.getByLabelText(/Duração mínima em falha/), { target: { value: '1200' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar política deste nível/ }));
+
+    await waitFor(() => expect(saveClientPolicyMock).toHaveBeenCalled());
+    const payload = saveClientPolicyMock.mock.calls[0][1] as Record<string, unknown>;
+
+    expect(payload.minDurationSeconds).toBe(1200);
+    // Nao tocado => ausente => herda do nivel superior.
+    expect(payload).not.toHaveProperty('dedupWindowMinutes');
+  });
 });
 
 describe('AutoTicketScopeSelector', () => {
