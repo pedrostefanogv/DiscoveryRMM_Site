@@ -189,6 +189,21 @@ export const remoteSessionsApi = {
         api.post<void>(`${BASE}/${agentId}/${sessionId}/recording/delete`),
 
     /** Altera qualidade/codec/FPS de uma sessão ativa. */
+    /**
+     * Politica de teto de banda configurada no servidor (presets e limites).
+     * A UI usa para montar o seletor sem hardcode de valores.
+     */
+    getBandwidthPolicy: (): Promise<BandwidthPolicy> =>
+        api.get<BandwidthPolicy>(`${BASE}/bandwidth-policy`),
+
+    /**
+     * Troca a POLITICA DE TETO DE BANDA em runtime (janela do visualizador).
+     * Separado de changeQuality: um freia a PRODUCAO de frames, o outro reduz
+     * a compressao.
+     */
+    changeBandwidth: (agentId: string, sessionId: string, request: ChangeBandwidthRequest): Promise<void> =>
+        api.post<void>(`${BASE}/${agentId}/${sessionId}/bandwidth`, request, { retryOnAuthError: false }),
+
     changeQuality: (agentId: string, sessionId: string, request: ChangeQualityRequest): Promise<RemoteSessionResponse> =>
         api.put<RemoteSessionResponse>(`${BASE}/${agentId}/${sessionId}/quality`, request),
 
@@ -213,4 +228,61 @@ export interface ChangeQualityRequest {
     imageQuality?: number;
     maxFps?: number;
     auto?: boolean;
+}
+
+/**
+ * Modo do TETO DE BANDA do stream de tela. Espelha os modos da janela:
+ *   - 'auto':   o agente ajusta o teto sozinho conforme o bitrate que o viewer
+ *               efetivamente recebe (dentro de [autoMinKbps, autoMaxKbps]);
+ *   - 'hd':     SEM teto - prioriza fluidez/fidelidade;
+ *   - 'manual': teto FIXO escolhido pelo operador (preset).
+ *
+ * O teto e um controle SEPARADO da qualidade: a qualidade reduz a compressao, o
+ * teto freia a PRODUCAO de frames quando o link nao escoa.
+ */
+export type BandwidthMode = 'auto' | 'hd' | 'manual';
+
+/** Opcao pre-definida de teto de banda (vem da configuracao do servidor). */
+export interface BandwidthPreset {
+    id: string;
+    label: string;
+    /** Teto em kbps. 0 = sem limite. */
+    kbps: number;
+}
+
+/**
+ * Politica de teto de banda configurada no servidor.
+ * Exposta pela API para a UI montar o seletor sem hardcode de valores.
+ */
+export interface BandwidthPolicy {
+    defaultMode: BandwidthMode;
+    manualDefaultKbps: number;
+    manualPresets: BandwidthPreset[];
+    autoMinKbps: number;
+    autoMaxKbps: number;
+    autoStepKbps: number;
+    serverMaxKbps: number;
+}
+
+/** Pedido de troca da politica de banda em runtime. */
+export interface ChangeBandwidthRequest {
+    mode: BandwidthMode;
+    /** Teto em kbps (modo manual). 0 = sem limite. */
+    ceilingKbps?: number;
+    autoMinKbps?: number;
+    autoMaxKbps?: number;
+    autoStepKbps?: number;
+    serverMaxKbps?: number;
+}
+
+/** Estado corrente do gate de banda, reportado pelo agente. */
+export interface BandwidthState {
+    mode: BandwidthMode;
+    /** Teto corrente em kbps (no modo auto, e o valor ajustado). 0 = sem teto. */
+    ceilingKbps: number;
+    paused: boolean;
+    closes: number;
+    opens: number;
+    autoAdjusts: number;
+    lastKbps: number;
 }
