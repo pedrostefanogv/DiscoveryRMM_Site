@@ -8,6 +8,14 @@ import {
     type NatsService,
 } from '@/api/nats';
 
+/**
+ * Versão do protocolo do canal de terminal, enviada no hello ("pv").
+ * Deve espelhar `termProtocolVersion` em
+ * Discovery/src/app/core/remotesession/session_terminal.go.
+ * pv maior que a do agente ⇒ erro explícito "protocol_version_mismatch".
+ */
+export const TERM_PROTOCOL_VERSION = 1;
+
 interface UseTerminalStreamOptions {
     natsSubject: string;
     natsUrl: string;
@@ -352,6 +360,12 @@ export function useTerminalStream({
         const hello: Record<string, unknown> = {
             hello: true,
             lastSeq: lastSeqRef.current,
+            // Versão do protocolo do canal de terminal. O agente compara com a
+            // dele: pv MAIOR que a do agente recebe erro EXPLÍCITO
+            // ("protocol_version_mismatch") em vez de falhar em silêncio.
+            // Ao mudar o significado de um campo existente do handshake,
+            // incremente aqui E em session_terminal.go (termProtocolVersion).
+            pv: TERM_PROTOCOL_VERSION,
         };
         if (lastDimsRef.current) {
             hello.cols = lastDimsRef.current.cols;

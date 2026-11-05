@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalErrorInfo, TerminalReadyInfo, TerminalStatsInfo } from './useTerminalStream';
-import { chunkUtf8, useTerminalStream } from './useTerminalStream';
+import { TERM_PROTOCOL_VERSION, chunkUtf8, useTerminalStream } from './useTerminalStream';
 import type { CompletionResponse } from './terminalInput';
 import { NatsCredentialsResponse } from '@/api/nats';
 
@@ -200,6 +200,10 @@ describe('useTerminalStream — handshake e ready', () => {
         const helloFrames = hellos(service);
         expect(helloFrames).toHaveLength(1);
         expect(helloFrames[0].data.lastSeq).toBe(-1);
+        // Versão do protocolo: o agente recusa com erro EXPLÍCITO um viewer
+        // com pv MAIOR que o dele. Enviar sempre o pv permite detectar a
+        // incompatibilidade em vez de falhar em silêncio.
+        expect(helloFrames[0].data.pv).toBe(TERM_PROTOCOL_VERSION);
         // O resize acontece DEPOIS do connect (o hook conecta no mount): vai
         // como mensagem própria de term.in, não embutida no hello.
         const resizes = service.pubs(TERM_IN).filter((p) => p.data.cols === 120);

@@ -2,15 +2,33 @@ import { api } from './client';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/**
+ * Codec aceito pelo runtime do agent.
+ *
+ * 'h264' NÃO é válido para novas sessões: o transporte WebRTC (único que o
+ * suportava) foi removido e o agent desativou o encoder por licença/patente AVC
+ * (Discovery/src/app/core/remotesession/codec_selector.go; a API rejeita via
+ * QualityProfileMapping.IsCodecValidForTransport).
+ */
+export type RemoteCodecInput = 'jpeg' | 'webp';
+
+/**
+ * Transporte aceito para novas sessões.
+ *
+ * 'webrtc' NÃO é válido: o agent normaliza qualquer pedido de webrtc (ou vazio)
+ * para NATS (Discovery/src/app/core/remotesession/manager.go, normalizeTransport).
+ */
+export type RemoteTransportInput = 'nats' | 'http';
+
 export interface StartRemoteSessionRequest {
     agentId: string;
     userId?: string;
     tenantId?: string;
     siteId?: string;
     kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'all';
-    transport: 'webrtc' | 'nats' | 'http';
+    transport: RemoteTransportInput;
     quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
-    codec: 'jpeg' | 'webp' | 'h264';
+    codec: RemoteCodecInput;
     durationMinutes: number;
     /** Sobrepõe sessões ativas existentes (fecha e cria nova). */
     force?: boolean;
@@ -191,7 +209,7 @@ export const remoteSessionsApi = {
 
 export interface ChangeQualityRequest {
     quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
-    codec?: 'jpeg' | 'webp' | 'h264';
+    codec?: RemoteCodecInput;
     imageQuality?: number;
     maxFps?: number;
     auto?: boolean;
