@@ -2,6 +2,8 @@ import { ApiError, api } from "./client";
 import { AppApprovalScopeType } from "./types";
 import type {
   AgentSensorsPayload,
+  AutoTicketImpact,
+  SensorAutoTicketPolicy,
   SensorChannel,
   SensorChannelUnit,
   SensorComparison,
@@ -173,6 +175,21 @@ const UNIT_NAMES: readonly SensorChannelUnit[] = [
   "Celsius",
 ];
 const COMPARISON_NAMES: readonly SensorComparison[] = ["LowerIsWorse", "HigherIsWorse"];
+
+/** Vínculo do sensor com o auto-ticket. OnEscalation é o default do backend. */
+const AUTO_TICKET_POLICY_NAMES: readonly SensorAutoTicketPolicy[] = [
+  "Never",
+  "OnEscalation",
+  "Always",
+];
+
+/** Impacto do sensor (magnitude), usado pela escada de decisão. */
+const AUTO_TICKET_IMPACT_NAMES: readonly AutoTicketImpact[] = [
+  "Low",
+  "Medium",
+  "High",
+  "Critical",
+];
 const EVENT_KIND_NAMES: readonly SensorEventKind[] = [
   "FirstRun",
   "StatusChanged",
@@ -307,6 +324,20 @@ function normalizeSensorItem(raw: unknown): SensorItem {
       pick(record, "minSeverityToAlert"),
       SEVERITY_NAMES,
       "Warning",
+    ),
+    autoTicketPolicy: normalizeEnum(
+      pick(record, "autoTicketPolicy"),
+      AUTO_TICKET_POLICY_NAMES,
+      "OnEscalation",
+    ),
+    autoTicketMinDurationSeconds: asInteger(
+      pick(record, "autoTicketMinDurationSeconds"),
+      0,
+    ),
+    autoTicketImpact: normalizeEnum(
+      pick(record, "autoTicketImpact"),
+      AUTO_TICKET_IMPACT_NAMES,
+      "Medium",
     ),
     scriptId: asNullableString(pick(record, "scriptId")),
     scriptName: asNullableString(pick(record, "scriptName")),
@@ -473,6 +504,20 @@ function normalizeSensorDefinition(raw: unknown): SensorDefinition {
       "Critical",
     ),
     alertOnSensorError: asBoolean(pick(record, "alertOnSensorError")),
+    autoTicketPolicy: normalizeEnum(
+      pick(record, "autoTicketPolicy"),
+      AUTO_TICKET_POLICY_NAMES,
+      "OnEscalation",
+    ),
+    autoTicketMinDurationSeconds: asInteger(
+      pick(record, "autoTicketMinDurationSeconds"),
+      0,
+    ),
+    autoTicketImpact: normalizeEnum(
+      pick(record, "autoTicketImpact"),
+      AUTO_TICKET_IMPACT_NAMES,
+      "Medium",
+    ),
     displayOrder: asInteger(pick(record, "displayOrder")),
     isPinned: asBoolean(pick(record, "isPinned")),
     isActive: pick(record, "isActive") === undefined ? true : asBoolean(pick(record, "isActive")),

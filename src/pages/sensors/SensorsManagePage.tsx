@@ -133,6 +133,10 @@ function sensorItemFromDefinition(definition: SensorDefinition): SensorItem {
     intervalSeconds: definition.intervalSeconds,
     timeoutSeconds: definition.timeoutSeconds,
     failsBeforeAlert: definition.failsBeforeAlert,
+    // Vínculo com o auto-ticket: propagado da definição (não é estado).
+    autoTicketPolicy: definition.autoTicketPolicy,
+    autoTicketMinDurationSeconds: definition.autoTicketMinDurationSeconds,
+    autoTicketImpact: definition.autoTicketImpact,
     minSeverityToAlert: definition.minSeverityToAlert,
     scriptId: definition.scriptId,
     scriptName: definition.scriptName,

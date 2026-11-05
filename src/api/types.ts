@@ -4849,6 +4849,15 @@ export type SensorStatus = "Passing" | "Warning" | "Failing" | "Pending" | "Unkn
 /** Severidade de um alerta de sensor. "Info" nunca alerta. */
 export type SensorSeverity = "Info" | "Warning" | "Critical";
 
+/**
+ * Vínculo do sensor com o auto-ticket. Never vence as listas da política
+ * hierárquica; OnEscalation é o default (preserva o comportamento anterior).
+ */
+export type SensorAutoTicketPolicy = "Never" | "OnEscalation" | "Always";
+
+/** Impacto do sensor: alimenta a escada e serve de piso para a prioridade da IA. */
+export type AutoTicketImpact = "Low" | "Medium" | "High" | "Critical";
+
 /** Tipo de coleta do sensor (built-in) ou Script para métricas customizadas. */
 export type SensorType =
   | "DiskSpace"
@@ -4949,6 +4958,9 @@ export interface SensorDefinition {
   minSeverityToAlert: SensorSeverity;
   severityWhenFailing: SensorSeverity;
   alertOnSensorError: boolean;
+  autoTicketPolicy: SensorAutoTicketPolicy;
+  autoTicketMinDurationSeconds: number;
+  autoTicketImpact: AutoTicketImpact;
   displayOrder: number;
   isPinned: boolean;
   isActive: boolean;
@@ -5021,6 +5033,11 @@ export interface SensorItem {
   optionsJson: string | null;
   displayOrder: number;
   isPinned: boolean;
+  /** Vínculo com o auto-ticket. */
+  autoTicketPolicy: SensorAutoTicketPolicy;
+  /** Duração mínima própria em segundos. 0 = herda a política. */
+  autoTicketMinDurationSeconds: number;
+  autoTicketImpact: AutoTicketImpact;
 }
 
 /** Payload completo da aba "Sensores" de um agente. */
@@ -5146,6 +5163,11 @@ export interface SensorUpsertRequest {
   minSeverityToAlert?: SensorSeverity | null;
   severityWhenFailing?: SensorSeverity | null;
   alertOnSensorError?: boolean | null;
+  /** Vínculo do sensor com o auto-ticket. */
+  autoTicketPolicy?: SensorAutoTicketPolicy | null;
+  /** Duração mínima própria em segundos. 0 = herda a política. */
+  autoTicketMinDurationSeconds?: number | null;
+  autoTicketImpact?: AutoTicketImpact | null;
   displayOrder?: number | null;
   isPinned?: boolean | null;
   isActive?: boolean | null;

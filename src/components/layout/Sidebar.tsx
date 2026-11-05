@@ -59,6 +59,8 @@ const ticketsLinks = [
   { to: '/tickets/alerts', label: 'Alertas' },
   { to: '/tickets/sla', label: 'SLA, Calendários e Perfis' },
   { to: '/tickets/departments', label: 'Departamentos' },
+  { to: '/tickets/auto-rules', label: 'Auto-Ticket (Regras)' },
+  { to: '/tickets/auto-policy', label: 'Auto-Ticket (Política)' },
   { to: '/settings/workflow-profiles', label: 'Workflow Profiles' },
 ];
 
@@ -172,12 +174,20 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
   const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
   const canViewWorkflowProfiles = hasAnyPermission(['workflow-profiles.*', 'settings.*', 'settings.read', 'admin.*']);
+  // A rota /tickets/auto-rules exige tickets.edit (PermissionGate do router).
+  // O menu espelha a MESMA regra, para não exibir link que levaria a "sem acesso".
+  const canManageAutoTicketRules = hasAnyPermission(['tickets.*', 'tickets.edit', 'admin.*']);
   let visibleTicketsLinks = canViewDepartments
     ? ticketsLinks
     : ticketsLinks.filter(({ to }) => to !== '/tickets/departments');
   visibleTicketsLinks = canViewWorkflowProfiles
     ? visibleTicketsLinks
     : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
+  visibleTicketsLinks = canManageAutoTicketRules
+    ? visibleTicketsLinks
+    : visibleTicketsLinks.filter(
+        ({ to }) => to !== '/tickets/auto-rules' && to !== '/tickets/auto-policy',
+      );
   const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
   const canViewSensors = hasAnyPermission(['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']);
   const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);

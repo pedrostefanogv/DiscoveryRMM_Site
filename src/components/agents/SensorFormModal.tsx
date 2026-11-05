@@ -4,6 +4,8 @@ import { Button, Icon, Input, Loading, Modal, Select, TextArea } from "@/compone
 import { AppApprovalScopeType } from "@/api/types";
 import { describeSensorsError } from "@/api/sensors";
 import type {
+  AutoTicketImpact,
+  SensorAutoTicketPolicy,
   SensorChannel,
   SensorChannelUnit,
   SensorComparison,
@@ -85,6 +87,13 @@ interface FormValues {
   scriptId: string;
   extractorsJson: string;
   exitCodeMapJson: string;
+  // ── Vínculo com o auto-ticket ──────────────────────────────────────────
+  /** Never | OnEscalation (default) | Always. */
+  autoTicketPolicy: SensorAutoTicketPolicy;
+  /** Duração mínima própria em segundos (vazio = herda a política). */
+  autoTicketMinDurationSeconds: string;
+  /** Low | Medium | High | Critical — alimenta a escada e o piso de prioridade. */
+  autoTicketImpact: AutoTicketImpact;
 }
 
 type FormErrors = Partial<
@@ -119,6 +128,9 @@ function emptyValues(
     scriptId: "",
     extractorsJson: "",
     exitCodeMapJson: "",
+    autoTicketPolicy: "OnEscalation",
+    autoTicketMinDurationSeconds: "",
+    autoTicketImpact: "Medium",
   };
 }
 
@@ -162,6 +174,11 @@ function valuesFromItem(
     scriptId: item.scriptId ?? "",
     extractorsJson: "",
     exitCodeMapJson: "",
+    // O SensorItemDto não carrega estes campos; assume-se o default (que é o
+    // mesmo aplicado pelo backend). A definição completa corrige na edição.
+    autoTicketPolicy: "OnEscalation",
+    autoTicketMinDurationSeconds: "",
+    autoTicketImpact: "Medium",
   };
 }
 
@@ -195,6 +212,12 @@ function valuesFromDefinition(
     scriptId: definition.scriptId ?? "",
     extractorsJson: definition.extractorsJson ?? "",
     exitCodeMapJson: definition.exitCodeMapJson ?? "",
+    autoTicketPolicy: definition.autoTicketPolicy ?? "OnEscalation",
+    autoTicketMinDurationSeconds:
+      definition.autoTicketMinDurationSeconds > 0
+        ? String(definition.autoTicketMinDurationSeconds)
+        : "",
+    autoTicketImpact: definition.autoTicketImpact ?? "Medium",
   };
 }
 
@@ -369,6 +392,11 @@ function buildRequest(
     failsBeforeAlert: Number(values.failsBeforeAlert),
     minSeverityToAlert: values.minSeverityToAlert,
     severityWhenFailing: values.severityWhenFailing,
+    // Vínculo com o auto-ticket: define se ESTE sensor pode abrir chamado.
+    autoTicketPolicy: values.autoTicketPolicy,
+    // Vazio = 0 = herda a duração da política hierárquica.
+    autoTicketMinDurationSeconds: Number(values.autoTicketMinDurationSeconds || "0"),
+    autoTicketImpact: values.autoTicketImpact,
     isActive: values.isActive,
     scriptId: isScript ? values.scriptId.trim() || null : null,
     extractorsJson: isScript ? values.extractorsJson.trim() || null : null,
@@ -776,6 +804,54 @@ export default function SensorFormModal({
                 )}
               />
             </div>
+          </FormSection>
+
+          {/* Vínculo do sensor com o auto-ticket. É a resposta à pergunta
+              "quais sensores podem abrir chamado?" no nível do próprio sensor. */}
+          <FormSection title="Auto-ticket">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Select
+                label="Este sensor pode abrir chamado?"
+                value={values.autoTicketPolicy}
+                options={[
+                  { value: "Never", label: "Nunca" },
+                  { value: "OnEscalation", label: "Só na abertura/escala" },
+                  { value: "Always", label: "Sempre que alertar" },
+                ]}
+                onChange={(event) =>
+                  setField("autoTicketPolicy", event.target.value as SensorAutoTicketPolicy)
+                }
+                hint="“Nunca” vence as listas da política, mesmo que o sensor esteja nelas."
+              />
+              <Select
+                label="Impacto"
+                value={values.autoTicketImpact}
+                options={[
+                  { value: "Low", label: "Baixo" },
+                  { value: "Medium", label: "Médio" },
+                  { value: "High", label: "Alto" },
+                  { value: "Critical", label: "Crítico" },
+                ]}
+                onChange={(event) =>
+                  setField("autoTicketImpact", event.target.value as AutoTicketImpact)
+                }
+                hint="Funciona como piso da prioridade sugerida pela IA."
+              />
+              <Input
+                label="Duração mínima em falha (s)"
+                type="number"
+                min={0}
+                value={values.autoTicketMinDurationSeconds}
+                onChange={(event) =>
+                  setField("autoTicketMinDurationSeconds", event.target.value)
+                }
+                hint="Vazio ou 0 = herda a política hierárquica."
+              />
+            </div>
+            <p className="text-xs text-muted">
+              O chamado só é aberto se a política do escopo (Global/Cliente/Site) também
+              permitir. Estas opções restringem <strong>este</strong> sensor dentro dela.
+            </p>
           </FormSection>
 
           <FormSection title="Limiares">

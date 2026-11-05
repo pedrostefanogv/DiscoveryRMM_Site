@@ -22,6 +22,7 @@ const AgentSupportChatWindow = lazy(() => import('@/pages/agents/AgentSupportCha
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketAlertsPage = lazy(() => import('@/pages/tickets/TicketAlertsPage'));
 const AutoTicketRulesPage = lazy(() => import('@/pages/tickets/AutoTicketRulesPage'));
+const AutoTicketPolicyPage = lazy(() => import('@/pages/tickets/AutoTicketPolicyPage'));
 const TicketSlaPage = lazy(() => import('@/pages/tickets/TicketSlaPage'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
 const TicketChatWindow = lazy(() => import('@/pages/tickets/TicketChatWindow'));
@@ -320,6 +321,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
             <LazyPage><AutoTicketRulesPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'tickets/auto-policy',
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
+            <LazyPage><AutoTicketPolicyPage /></LazyPage>
           </PermissionGate>
         ),
       },
