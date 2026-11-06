@@ -9,9 +9,10 @@ import { Pagination } from './Pagination';
  * recortado — a altura é limitada ao espaço REAL disponível e o conteúdo rola
  * dentro dele.
  *
- * Os outros consumidores de `rowHoverCard` (TicketList, AgentPoliciesPanel,
+ * Os consumidores de `rowHoverCard` (TicketList, AgentPoliciesPanel,
  * AgentScheduledTasksPanel, AgentStartupItemsPanel) não passam a prop e mantêm
- * exatamente o comportamento anterior.
+ * exatamente o comportamento anterior. (A aba Sensores usava este card de hover
+ * e passou a abrir um modal ao clicar na linha.)
  *
  * IMPORTANTE (por que `position: fixed`): o card é renderizado dentro de um
  * contêiner com `overflow: hidden` (a moldura da tabela) e de uma área de

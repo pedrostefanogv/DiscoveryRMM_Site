@@ -90,9 +90,9 @@ function shortFingerprint(value: string | null | undefined): string {
   return raw.length > 12 ? `${raw.slice(0, 12)}…` : raw || "—";
 }
 /**
- * Linha rótulo/valor do card de detalhes exibido no hover.
+ * Linha rótulo/valor do modal de detalhes do sensor.
  *
- * O valor QUEBRA a linha (break-words) em vez de ser truncado: o card mostra o
+ * O valor QUEBRA a linha (break-words) em vez de ser truncado: o modal mostra o
  * conteúdo completo — inclusive limiares e mensagens longas. O `title` antigo só
  * existia quando o valor era string (valores ReactNode ficavam sem alternativa),
  * então foi removido junto com o truncate.
@@ -103,6 +103,138 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
       <p className="text-[11px] uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-0.5 break-words text-sm text-foreground">{value}</p>
     </div>
+  );
+}
+
+/**
+ * Corpo do modal "Detalhes do sensor": estado, alvo/escopo, limiares, contadores,
+ * canais atuais e o trecho da última saída.
+ *
+ * Vive no nível do módulo (e não dentro do painel) para o modal poder ser
+ * renderizado como filho do `Modal` — que já cuida de portal, foco, Esc e
+ * rolagem interna.
+ */
+function SensorDetailsBody({ sensor, nowMs }: { sensor: SensorItem; nowMs: number }) {
+  const meta = sensorStatusMeta(sensor.status, sensor.isStale);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">{sensor.name}</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {sensorTypeLabel(sensor.sensorType)}
+            {sensor.target ? ` · ${sensor.target}` : ""}
+          </p>
+        </div>
+        <Badge color={meta.color}>{meta.label}</Badge>
+      </div>
+      {sensor.description ? <p className="text-xs text-muted">{sensor.description}</p> : null}
+      {sensor.message ? (
+        <p className="rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted-foreground">
+          {sensor.message}
+        </p>
+      ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <DetailItem label="Alvo" value={sensor.target || sensor.targetKey || "—"} />
+        <DetailItem label="Escopo" value={sensorScopeLabel(sensor.scopeType) + (sensor.isInherited ? " (herdado)" : "")} />
+        <DetailItem
+          label="Limiares"
+          value={describeSensorThresholds(
+            sensor.warningThreshold,
+            sensor.criticalThreshold,
+            sensor.thresholdUnit,
+            sensor.comparison,
+          )}
+        />
+        <DetailItem label="Intervalo" value={formatSensorInterval(sensor.intervalSeconds)} />
+        <DetailItem label="Timeout" value={`${sensor.timeoutSeconds}s`} />
+        <DetailItem label="Falhas antes de alertar" value={String(sensor.failsBeforeAlert)} />
+        <DetailItem
+          label="Amostras para agravar (histerese)"
+          value={describeSustainSamples(sensorOptionsFromJson(sensor.optionsJson).sustainSamples)}
+        />
+        <DetailItem label="Última execução" value={formatAgo(sensor.lastRunAt, nowMs)} />
+        <DetailItem label="Mudança de estado" value={formatAgo(sensor.lastStatusChangedAt, nowMs)} />
+        <DetailItem label="Código de saída" value={sensor.exitCode === null ? "—" : String(sensor.exitCode)} />
+        <DetailItem label="Duração" value={sensor.durationMs === null ? "—" : `${sensor.durationMs} ms`} />
+        <DetailItem label="Execuções" value={`${sensor.totalRuns} (${sensor.totalFailures} falha(s))`} />
+        <DetailItem label="Script" value={sensor.scriptName ?? "—"} />
+      </div>
+      {Object.keys(sensor.currentChannels).length > 0 ? (
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted">Canais atuais</p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {Object.entries(sensor.currentChannels).map(([key, value]) => {
+              const channel = sensor.channels.find((item) => item.key === key);
+              return (
+                <Badge key={key} color="slate">
+                  {channel?.label ?? key}:{" "}
+                  {formatSensorChannelValue(key, value, channel?.unit ?? "Count")}
+                </Badge>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      {sensor.outputExcerpt ? (
+        <div className="min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Saída (trecho)</p>
+          <pre className="mt-0.5 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
+            {sensor.outputExcerpt}
+          </pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+interface SensorDetailsModalProps {
+  sensor: SensorItem;
+  nowMs: number;
+  onClose: () => void;
+  onOpenChart: () => void;
+  onOpenHistory: () => void;
+  onEdit: () => void;
+  canManage: boolean;
+}
+
+/**
+ * Modal "Detalhes do sensor" — aberto ao clicar na linha (ou no nome) do sensor.
+ *
+ * Substitui o antigo card de hover: o card era alto, ficava recortado na borda da
+ * tabela e não dava para interagir (abrir gráfico/histórico) sem tirar o mouse da
+ * linha. O modal mostra tudo, rola sozinho e concentra as ações do sensor.
+ */
+function SensorDetailsModal({
+  sensor,
+  nowMs,
+  onClose,
+  onOpenChart,
+  onOpenHistory,
+  onEdit,
+  canManage,
+}: SensorDetailsModalProps) {
+  return (
+    <Modal open onClose={onClose} title={`Detalhes — ${sensor.name}`} maxWidth="max-w-2xl">
+      <div className="space-y-4">
+        <SensorDetailsBody sensor={sensor} nowMs={nowMs} />
+        {/* Sem botão "Fechar" aqui: o Modal já tem o X do cabeçalho e o Esc. */}
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+          <Button size="sm" variant="secondary" onClick={onOpenHistory}>
+            <Icon name="history" className="h-4 w-4" />
+            Histórico
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onOpenChart}>
+            <Icon name="monitoring" className="h-4 w-4" />
+            Ver gráfico
+          </Button>
+          <Button size="sm" variant="primary" onClick={onEdit} disabled={!canManage} title="Editar a definição deste sensor">
+            <Icon name="edit" className="h-4 w-4" />
+            Editar
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -143,6 +275,7 @@ export default function AgentSensorsPanel({
 }: AgentSensorsPanelProps) {
   const nowMs = useNowTick(15_000);
   const [rowMenu, setRowMenu] = useState<RowMenuState | null>(null);
+  const [detailsSensor, setDetailsSensor] = useState<SensorItem | null>(null);
   const [chartSensor, setChartSensor] = useState<SensorItem | null>(null);
   const [historySensor, setHistorySensor] = useState<SensorItem | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -163,85 +296,13 @@ export default function AgentSensorsPanel({
     setEditingSensor(sensor);
     setFormOpen(true);
   };
+  const openDetails = (sensor: SensorItem) => setDetailsSensor(sensor);
+  const closeDetails = () => setDetailsSensor(null);
 
   /** Abre o menu de ações posicionado no botão "⋯" da linha. */
   const openRowMenu = (event: ReactMouseEvent<HTMLButtonElement>, sensor: SensorItem) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setRowMenu({ x: rect.right - 220, y: rect.bottom + 4, sensor });
-  };
-
-  const renderDetails = (sensor: SensorItem) => {
-    const meta = sensorStatusMeta(sensor.status, sensor.isStale);
-    return (
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-foreground">{sensor.name}</p>
-            <p className="mt-0.5 text-xs text-muted">
-              {sensorTypeLabel(sensor.sensorType)}
-              {sensor.target ? ` · ${sensor.target}` : ""}
-            </p>
-          </div>
-          <Badge color={meta.color}>{meta.label}</Badge>
-        </div>
-        {sensor.description ? <p className="text-xs text-muted">{sensor.description}</p> : null}
-        {sensor.message ? (
-          <p className="rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted-foreground">
-            {sensor.message}
-          </p>
-        ) : null}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <DetailItem label="Alvo" value={sensor.target || sensor.targetKey || "—"} />
-          <DetailItem label="Escopo" value={sensorScopeLabel(sensor.scopeType) + (sensor.isInherited ? " (herdado)" : "")} />
-          <DetailItem
-            label="Limiares"
-            value={describeSensorThresholds(
-              sensor.warningThreshold,
-              sensor.criticalThreshold,
-              sensor.thresholdUnit,
-              sensor.comparison,
-            )}
-          />
-          <DetailItem label="Intervalo" value={formatSensorInterval(sensor.intervalSeconds)} />
-          <DetailItem label="Timeout" value={`${sensor.timeoutSeconds}s`} />
-          <DetailItem label="Falhas antes de alertar" value={String(sensor.failsBeforeAlert)} />
-          <DetailItem
-            label="Amostras para agravar (histerese)"
-            value={describeSustainSamples(sensorOptionsFromJson(sensor.optionsJson).sustainSamples)}
-          />
-          <DetailItem label="Última execução" value={formatAgo(sensor.lastRunAt, nowMs)} />
-          <DetailItem label="Mudança de estado" value={formatAgo(sensor.lastStatusChangedAt, nowMs)} />
-          <DetailItem label="Código de saída" value={sensor.exitCode === null ? "—" : String(sensor.exitCode)} />
-          <DetailItem label="Duração" value={sensor.durationMs === null ? "—" : `${sensor.durationMs} ms`} />
-          <DetailItem label="Execuções" value={`${sensor.totalRuns} (${sensor.totalFailures} falha(s))`} />
-          <DetailItem label="Script" value={sensor.scriptName ?? "—"} />
-        </div>
-        {Object.keys(sensor.currentChannels).length > 0 ? (
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-muted">Canais atuais</p>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {Object.entries(sensor.currentChannels).map(([key, value]) => {
-                const channel = sensor.channels.find((item) => item.key === key);
-                return (
-                  <Badge key={key} color="slate">
-                    {channel?.label ?? key}:{" "}
-                    {formatSensorChannelValue(key, value, channel?.unit ?? "Count")}
-                  </Badge>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-        {sensor.outputExcerpt ? (
-          <div className="min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted">Saída (trecho)</p>
-            <pre className="mt-0.5 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
-              {sensor.outputExcerpt}
-            </pre>
-          </div>
-        ) : null}
-      </div>
-    );
   };
 
   const columns: Column<SensorItem>[] = useMemo(
@@ -262,9 +323,23 @@ export default function AgentSensorsPanel({
         render: (sensor) => (
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="truncate font-medium text-foreground" title={sensor.name}>
+              {/*
+                Botão de verdade (não um <p> com onClick): o modal de detalhes é a
+                ação principal da linha, então precisa de foco e Enter/Espaço por
+                teclado. `stopPropagation` evita disparar o clique da linha duas
+                vezes (o handler da linha abre o mesmo modal).
+              */}
+              <button
+                type="button"
+                title={sensor.name}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openDetails(sensor);
+                }}
+                className="truncate text-left font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
                 {sensor.name}
-              </p>
+              </button>
               {sensor.isInherited ? <Badge color="slate">herdado</Badge> : null}
             </div>
             <p className="truncate text-xs text-muted" title={sensor.target ?? sensor.targetKey}>
@@ -608,11 +683,9 @@ export default function AgentSensorsPanel({
           columns={columns}
           data={items}
           keyExtractor={(sensor) => sensor.sensorId}
-          rowHoverCard={renderDetails}
-          rowHoverDelayMs={1200}
-          // Opt-in: o card de detalhes desta aba é alto (canais, limiares,
-          // saída) e era recortado no fim da área visível.
-          hoverCardClamp
+          // O card de detalhes é ALTO (canais, limiares, saída) e ficava
+          // recortado na borda da tabela no hover — agora a linha abre um modal.
+          onRowClick={openDetails}
           pageSize={15}
           emptyMessage="Nenhum sensor encontrado"
           maxHeight="min(560px, 52vh)"
@@ -623,8 +696,34 @@ export default function AgentSensorsPanel({
       {canView && items.length > 0 ? (
         <p className="mt-3 flex items-center gap-2 text-xs text-muted">
           <Icon name="info" className="h-3.5 w-3.5" />
-          Passe o mouse sobre um sensor para ver canais, limiares e a última mensagem da coleta.
+          Clique em um sensor para ver canais, limiares e a última mensagem da coleta.
         </p>
+      ) : null}
+
+      {/*
+        Modal "Detalhes do sensor" (clique na linha ou no nome). As ações do
+        rodapé FECHAM este modal e abrem o modal correspondente — dois modais
+        abertos ao mesmo tempo empilhariam overlays e prenderiam o foco errado.
+      */}
+      {detailsSensor ? (
+        <SensorDetailsModal
+          sensor={detailsSensor}
+          nowMs={nowMs}
+          canManage={canManage}
+          onClose={closeDetails}
+          onOpenChart={() => {
+            setChartSensor(detailsSensor);
+            closeDetails();
+          }}
+          onOpenHistory={() => {
+            setHistorySensor(detailsSensor);
+            closeDetails();
+          }}
+          onEdit={() => {
+            openEdit(detailsSensor);
+            closeDetails();
+          }}
+        />
       ) : null}
 
       {rowMenu ? (

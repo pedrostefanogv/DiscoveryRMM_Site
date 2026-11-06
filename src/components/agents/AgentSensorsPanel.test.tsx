@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import { AppApprovalScopeType } from "@/api/types";
@@ -155,7 +155,7 @@ function renderPanel(over: Partial<ComponentProps<typeof AgentSensorsPanel>> = {
 
 afterEach(() => {
   cleanup();
-  // O teste do card de hover usa timers falsos (rowHoverDelayMs do DataTable).
+  // Rede de segurança: algum teste pode ter ligado timers falsos.
   vi.useRealTimers();
 });
 
@@ -362,57 +362,93 @@ describe("AgentSensorsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Ações do sensor Disco C:/ }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Histórico/ }));
 
-    expect(screen.getByText("Mudança de estado")).toBeTruthy();
+    // Escopado ao modal do histórico: "Mudança de estado" também é o rótulo de
+    // um DetailItem do modal de detalhes, então a busca global fica ambígua.
+    const history = within(screen.getByRole("dialog", { name: /Histórico — Disco C:/ }));
+    expect(history.getByText("Mudança de estado")).toBeTruthy();
     // A primeira página usa só limit (cursor null).
     expect(useSensorEventsMock).toHaveBeenCalledWith("a1", "s1", { limit: 50 });
 
-    fireEvent.click(screen.getByRole("button", { name: /Carregar mais/ }));
+    fireEvent.click(history.getByRole("button", { name: /Carregar mais/ }));
 
     // A segunda página pede o cursor devolvido pelo servidor...
     expect(useSensorEventsMock).toHaveBeenCalledWith("a1", "s1", { limit: 50, cursor: "c1" });
     // ...e a lista acumula (o evento anterior continua visível).
-    expect(screen.getByText("Mudança de estado")).toBeTruthy();
-    expect(screen.getByText("Estado zerado")).toBeTruthy();
-    expect(screen.getByText(/Fim do histórico/)).toBeTruthy();
+    expect(history.getByText("Mudança de estado")).toBeTruthy();
+    expect(history.getByText("Estado zerado")).toBeTruthy();
+    expect(history.getByText(/Fim do histórico/)).toBeTruthy();
   });
 
-  it("hover-card mostra valores completos (sem truncate) e liga o modo clamp", async () => {
-    vi.useFakeTimers();
+  it("clicar na linha abre o modal de detalhes (substitui o card de hover)", () => {
     renderPanel({
       payload: payload({
         items: [sensor({ outputExcerpt: "linha 1\nlinha 2\nlinha 3" })],
       }),
     });
 
+    // Sem modal antes do clique e sem card de hover na tabela.
+    expect(screen.queryByRole("dialog")).toBeNull();
+
     const row = screen
       .getAllByRole("row")
       .find((candidate) => candidate.querySelector("td")) as HTMLElement;
-    fireEvent.mouseOver(row);
-    await act(async () => {
-      // Delay configurado no painel (rowHoverDelayMs=1200) + rAF de ajuste.
-      await vi.advanceTimersByTimeAsync(1200);
-      await vi.advanceTimersByTimeAsync(32);
-    });
+    fireEvent.click(row);
 
-    const dialog = screen.getByRole("dialog");
-    // O painel é o consumidor que ativa o modo opt-in (card rola em vez de ser
-    // recortado no fim da área visível).
-    expect(dialog.className).toContain("overflow-y-auto");
-    expect(dialog.className).toContain("pointer-events-auto");
-
+    const dialog = screen.getByRole("dialog", { name: /Detalhes — Disco C:/ });
+    // Detalhes completos: alvo, escopo, limiares e canais.
+    expect(within(dialog).getByText("Alvo")).toBeTruthy();
+    expect(within(dialog).getByText("Escopo")).toBeTruthy();
+    expect(within(dialog).getByText("Canais atuais")).toBeTruthy();
     // DetailItem sem truncate: o valor quebra a linha e aparece completo.
     const label = within(dialog).getByText("Limiares");
     const value = (label.parentElement as HTMLElement).querySelectorAll("p")[1] as HTMLElement;
     expect(value.textContent).toContain("atenção 15%");
     expect(value.className).not.toContain("truncate");
     expect(value.className).toContain("break-words");
-    // O title antigo só existia para valores string (ReactNode ficava sem
-    // alternativa): com a quebra de linha ele deixou de ser necessário.
     expect(value.getAttribute("title")).toBeNull();
-
-    // "Saída (trecho)" ganhou mais altura antes de rolar (era max-h-24).
+    // "Saída (trecho)" mantém altura maior antes de rolar.
     const pre = dialog.querySelector("pre") as HTMLElement;
-    expect(pre.className).not.toContain("max-h-24");
     expect(pre.className).toContain("max-h-64");
+  });
+
+  it("o nome do sensor é um botão que abre o modal (acessível por teclado)", () => {
+    renderPanel({ payload: payload({ items: [sensor()] }) });
+
+    const nameButton = screen.getByRole("button", { name: "Disco C:" });
+    fireEvent.click(nameButton);
+
+    expect(screen.getByRole("dialog", { name: /Detalhes — Disco C:/ })).toBeTruthy();
+  });
+
+  it("fechar o modal de detalhes o remove da tela", () => {
+    renderPanel({ payload: payload({ items: [sensor()] }) });
+
+    fireEvent.click(screen.getAllByRole("row").find((r) => r.querySelector("td")) as HTMLElement);
+    const dialog = screen.getByRole("dialog", { name: /Detalhes — Disco C:/ });
+    expect(dialog).toBeTruthy();
+
+    // O X do cabeçalho do Modal (o único controle "Fechar" da tela).
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    expect(screen.queryByRole("dialog", { name: /Detalhes — Disco C:/ })).toBeNull();
+  });
+
+  it("ações do modal de detalhes fecham o modal e abrem gráfico/histórico", () => {
+    renderPanel({ payload: payload({ items: [sensor()] }) });
+
+    // Histórico: fecha os detalhes e abre o modal de histórico.
+    fireEvent.click(screen.getAllByRole("row").find((r) => r.querySelector("td")) as HTMLElement);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Histórico/ }));
+
+    expect(screen.queryByRole("dialog", { name: /Detalhes — Disco C:/ })).toBeNull();
+    expect(screen.getByRole("dialog", { name: /Histórico — Disco C:/ })).toBeTruthy();
+    // Só UM modal por vez (overlays não se empilham).
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  });
+
+  it("não abre o card de hover: a linha não tem rowHoverCard", () => {
+    renderPanel({ payload: payload({ items: [sensor()] }) });
+    // Nenhum role=dialog antes de qualquer clique (o antigo hover-card usava
+    // role=dialog e aparecia ao passar o mouse).
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

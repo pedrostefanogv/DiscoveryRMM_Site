@@ -102,9 +102,10 @@ describe('DataTable — ordenação', () => {
 /**
  * Card de hover (`rowHoverCard`): o modo "clamp" é OPT-IN.
  *
- * Os outros 4 consumidores (TicketList, AgentPoliciesPanel, AgentScheduledTasks-
- * Panel e AgentStartupItemsPanel) NÃO passam `hoverCardClamp` — estes testes
- * travam o comportamento legado para que o fix da aba Sensores não mude nada lá.
+ * Todos os consumidores (TicketList, AgentPoliciesPanel, AgentScheduledTasksPanel
+ * e AgentStartupItemsPanel) NÃO passam `hoverCardClamp` — a aba Sensores usava o
+ * modo clamp, mas passou a abrir um MODAL ao clicar na linha. Estes testes travam
+ * o comportamento legado para o modo clamp não mudar nada nas outras telas.
  */
 describe('DataTable — card de hover (rowHoverCard)', () => {
   let offsetHeightDescriptor: PropertyDescriptor | undefined;
