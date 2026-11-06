@@ -12,14 +12,25 @@ import { Pagination } from './Pagination';
  * Os outros consumidores de `rowHoverCard` (TicketList, AgentPoliciesPanel,
  * AgentScheduledTasksPanel, AgentStartupItemsPanel) não passam a prop e mantêm
  * exatamente o comportamento anterior.
+ *
+ * IMPORTANTE (por que `position: fixed`): o card é renderizado dentro de um
+ * contêiner com `overflow: hidden` (a moldura da tabela) e de uma área de
+ * rolagem com `overflow: auto` + `maxHeight`. Um card `absolute` fica PRESO a
+ * esses dois recortes: por mais que o max-height seja calculado "certo", ele é
+ * cortado no fim da área visível da tabela. O card usa `fixed` e é posicionado
+ * em coordenadas de viewport, então nunca é recortado pelo ancestral rolável.
  */
-const HOVER_CARD_CLAMP_MAX_HEIGHT = 420;
-const HOVER_CARD_CLAMP_MIN_HEIGHT = 160;
+const HOVER_CARD_CLAMP_MAX_HEIGHT = 460;
+const HOVER_CARD_CLAMP_MIN_HEIGHT = 200;
 /**
  * Estimativa do primeiro frame, ANTES de medir o card: o card pode chegar ao
  * teto, então usar o teto é conservador (melhor abrir para o lado que cabe).
  */
-const HOVER_CARD_CLAMP_ESTIMATED_HEIGHT = 320;
+const HOVER_CARD_CLAMP_ESTIMATED_HEIGHT = 340;
+/** Distância entre a linha e o card. */
+const HOVER_CARD_OFFSET = 10;
+/** Folga mínima em relação às bordas da viewport. */
+const HOVER_CARD_VIEWPORT_PADDING = 12;
 
 interface Column<T> {
   key: string;
@@ -215,7 +226,7 @@ export function DataTable<T>({
       return;
     }
 
-    const offset = 10;
+    const offset = HOVER_CARD_OFFSET;
     const preferredWidth = 460;
     const containerRect = containerElement.getBoundingClientRect();
     const availableWidth = Math.max(260, containerRect.width - 16);
@@ -224,46 +235,55 @@ export function DataTable<T>({
     const rowRect = rowElement.getBoundingClientRect();
     const rowTop = rowRect.top - containerRect.top;
     const rowBottom = rowRect.bottom - containerRect.top;
-    const viewportPadding = 12;
+    const viewportPadding = HOVER_CARD_VIEWPORT_PADDING;
 
     if (hoverCardClamp) {
       // Modo opt-in ("clamp"): o card inteiro nunca é recortado.
       //
-      // (c) A altura REAL medida no frame anterior entra na decisão; no primeiro
-      // frame (card ainda não montado) usamos a estimativa conservadora. O
-      // useLayoutEffect + rAF logo abaixo medem de novo antes da pintura.
+      // O card é `position: fixed`, ou seja, NÃO é preso pelo ancestral rolável
+      // da tabela (overflow-hidden/auto) — o único limite real é a viewport.
+      // Por isso o espaço disponível é medido contra a VIEWPORT, e nunca contra
+      // a borda inferior da tabela (era exatamente isso que recortava o card no
+      // fim da área visível).
       const measuredHeight = popoverRef.current?.offsetHeight ?? 0;
       const cardHeight = measuredHeight > 0 ? measuredHeight : HOVER_CARD_CLAMP_ESTIMATED_HEIGHT;
 
-      // (b) Espaço disponível = menor entre a viewport e o CONTAINER: o card é
-      // absolute dentro do container e pode ser recortado por um ancestral com
-      // overflow-hidden (Card/Modal), então comparar só com window.innerHeight
-      // não basta.
-      const spaceBelow = Math.min(
-        window.innerHeight - viewportPadding - rowRect.bottom - offset,
-        containerRect.bottom - viewportPadding - rowRect.bottom - offset,
+      // Altura máxima possível na viewport, descontando as folgas — o card
+      // nunca pode passar disso, independentemente do lado em que abrir.
+      const viewportSpace = Math.max(
+        0,
+        window.innerHeight - viewportPadding * 2,
       );
-      const spaceAbove = Math.min(
-        rowRect.top - viewportPadding - offset,
-        rowRect.top - containerRect.top - viewportPadding - offset,
-      );
-
-      // Abre para o lado em que o card INTEIRO cabe; se nenhum comportar, fica
-      // no lado mais espaçoso (o conteúdo rola dentro do card).
-      const canShowBelow = cardHeight <= spaceBelow || spaceBelow >= spaceAbove;
-      const availableSpace = canShowBelow ? spaceBelow : spaceAbove;
-
-      // (a) max-height limitado ao espaço real (e ao teto do modo clamp).
       const maxHeight = Math.max(
-        HOVER_CARD_CLAMP_MIN_HEIGHT,
-        Math.min(HOVER_CARD_CLAMP_MAX_HEIGHT, availableSpace),
+        Math.min(HOVER_CARD_CLAMP_MIN_HEIGHT, viewportSpace),
+        Math.min(HOVER_CARD_CLAMP_MAX_HEIGHT, viewportSpace),
       );
 
-      const top = canShowBelow
-        ? rowBottom + offset
-        : Math.max(0, rowTop - Math.min(cardHeight, Math.max(availableSpace, 0)) - offset);
+      const spaceBelow = window.innerHeight - viewportPadding - rowRect.bottom - offset;
+      const spaceAbove = rowRect.top - viewportPadding - offset;
 
-      const left = Math.max(0, Math.min(rowRect.left - containerRect.left + 8, containerRect.width - width));
+      // Abre para o lado em que o card INTEIRO cabe. Quando nenhum dos dois
+      // comporta tudo, prefere o lado de baixo desde que ele tenha espaço útil
+      // (metade do card ou o mínimo do modo clamp) — o conteúdo rola dentro do
+      // card, mas o operador lê na direção natural da leitura. Só sobe para
+      // cima quando abaixo não há espaço utilizável.
+      const fitsBelow = cardHeight <= spaceBelow;
+      const fitsAbove = cardHeight <= spaceAbove;
+      const usefulBelow = spaceBelow >= Math.min(cardHeight, HOVER_CARD_CLAMP_MIN_HEIGHT);
+      const canShowBelow = fitsBelow || (!fitsAbove && usefulBelow) || (!fitsAbove && spaceBelow >= spaceAbove);
+
+      // Coordenadas de VIEWPORT (position: fixed).
+      const top = canShowBelow
+        ? rowRect.bottom + offset
+        : Math.max(
+            viewportPadding,
+            rowRect.top - offset - Math.min(cardHeight, Math.max(maxHeight, 0)),
+          );
+
+      const left = Math.max(
+        viewportPadding,
+        Math.min(rowRect.left + 8, window.innerWidth - viewportPadding - width),
+      );
 
       setPopoverPosition({ top, left, width, maxHeight: Math.round(maxHeight) });
       return;
@@ -375,10 +395,21 @@ export function DataTable<T>({
 
     window.addEventListener('resize', handleViewportChange);
 
+    // Modo clamp: o card é `fixed`, então a rolagem do documento/tabela não o
+    // move sozinho — sem estes listeners ele ficaria "solto" na viewport
+    // enquanto a linha rolava por baixo. Rolar reabre/reposiciona o card.
+    if (hoverCardClamp) {
+      window.addEventListener('scroll', handleViewportChange, { capture: true, passive: true });
+      return () => {
+        window.removeEventListener('resize', handleViewportChange);
+        window.removeEventListener('scroll', handleViewportChange, { capture: true });
+      };
+    }
+
     return () => {
       window.removeEventListener('resize', handleViewportChange);
     };
-  }, [activeHover, rowHoverCard, updateHoverPopoverPosition]);
+  }, [activeHover, rowHoverCard, hoverCardClamp, updateHoverPopoverPosition]);
 
   useEffect(() => {
     return () => {
@@ -496,10 +527,12 @@ export function DataTable<T>({
       {rowHoverCard && activeHover && popoverPosition && (
         <div
           ref={popoverRef}
-          // Modo legado: pointer-events-none (card só visual). Modo clamp: o
-          // card rola e aceita ponteiro para o operador conseguir ler tudo.
-          className={`absolute z-50 ${
-            hoverCardClamp ? "pointer-events-auto overflow-y-auto" : "pointer-events-none"
+          // Modo legado: pointer-events-none (card só visual) e absolute como
+          // sempre foi. Modo clamp: fixed (escapa do recorte do ancestral
+          // rolável da tabela), rola por dentro e aceita ponteiro para o
+          // operador conseguir ler tudo.
+          className={`${hoverCardClamp ? "fixed" : "absolute"} z-50 ${
+            hoverCardClamp ? "pointer-events-auto overflow-y-auto overscroll-contain" : "pointer-events-none"
           }`}
           style={{
             top: popoverPosition.top,

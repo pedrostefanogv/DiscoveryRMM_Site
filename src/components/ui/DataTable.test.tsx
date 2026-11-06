@@ -229,7 +229,7 @@ describe('DataTable — card de hover (rowHoverCard)', () => {
     expect(dialog.style.width).toBe('460px');
   });
 
-  it('modo clamp aplica max-height/overflow calculados pelo espaçamento real', async () => {
+  it('modo clamp usa position: fixed e não é preso ao contêiner da tabela', async () => {
     mockRects({ containerBottom: 600, rowTop: 100, rowBottom: 130 });
     const dialog = await hoverFirstRow({ clamp: true });
 
@@ -237,14 +237,29 @@ describe('DataTable — card de hover (rowHoverCard)', () => {
     expect(dialog.className).toContain('overflow-y-auto');
     expect(dialog.className).toContain('pointer-events-auto');
     expect(dialog.className).not.toContain('pointer-events-none');
+    // `fixed` escapa do `overflow-hidden` da moldura e do `overflow-auto` da
+    // área de rolagem — era isso que recortava o card no fim da tabela.
+    expect(dialog.className).toContain('fixed');
+    expect(dialog.className).not.toContain('absolute');
+  });
 
-    // Espaço abaixo = min(viewport, container) = 448px → teto de 420px.
-    expect(dialog.style.maxHeight).toBe('420px');
+  it('modo clamp limita a altura pela VIEWPORT, não pela borda inferior da tabela', async () => {
+    // A tabela termina MUITO antes do fim da viewport: 460px contra 900px.
+    // Antes do fix o max-height era min(420, containerBottom-rowBottom-22) =
+    // 420 - nada; mas o card era `absolute` dentro do contêiner e ficava
+    // recortado na borda. Agora o limite é a viewport (900 - 24 = 876 → teto
+    // de 460), independentemente da altura da tabela.
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(900);
+    mockRects({ containerBottom: 460, rowTop: 100, rowBottom: 130 });
+    const dialog = await hoverFirstRow({ clamp: true });
+
+    expect(dialog.style.maxHeight).toBe('460px');
+    // Coordenadas de viewport: logo abaixo da linha (130 + 10).
     expect(dialog.style.top).toBe('140px');
   });
 
-  it('reposiciona acima quando o card não cabe abaixo (e mede a altura real)', async () => {
-    // Container/linha no rodapé da viewport: só 8px abaixo da linha.
+  it('modo clamp abre acima quando não há espaço útil abaixo', async () => {
+    // Linha no rodapé da viewport: só 8px abaixo dela.
     vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
     mockRects({ containerBottom: 600, rowTop: 540, rowBottom: 570 });
 
@@ -264,9 +279,29 @@ describe('DataTable — card de hover (rowHoverCard)', () => {
     expect(dialog.style.top).toBe('230px');
     // 230 < topo da linha (540): o card não desce sobre o rodapé cortado.
     expect(Number.parseInt(dialog.style.top, 10)).toBeLessThan(540);
-    // Sem espaço abaixo, o max-height fica limitado ao espaço de cima (518px)
-    // mas nunca acima do teto do modo clamp.
-    expect(dialog.style.maxHeight).toBe('420px');
+    // Max-height nunca acima do teto do modo clamp.
+    expect(dialog.style.maxHeight).toBe('460px');
+  });
+
+  it('modo clamp prefere abrir abaixo quando há espaço útil (card alto)', async () => {
+    // Linha a 40px do topo; abaixo sobram ~460px — não cabe o card inteiro
+    // (600px), mas há espaço útil, então abre abaixo e rola por dentro.
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600);
+    mockRects({ containerBottom: 600, rowTop: 20, rowBottom: 40 });
+
+    offsetHeightDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'offsetHeight',
+    );
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 600,
+    });
+
+    const dialog = await hoverFirstRow({ clamp: true });
+
+    // Abaixo da linha (40 + 10), em vez de subir para cima.
+    expect(dialog.style.top).toBe('50px');
   });
 });
 
