@@ -233,16 +233,32 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // Defense in depth: a API já exige Agents.View (e filtra por escopo),
+        // mas sem o gate a página renderizava a casca para quem não tem acesso
+        // e só falhava ao buscar dados — mostrando uma tela vazia/erro em vez de
+        // redirecionar. O gate de rota evita renderizar superfície sem permissão.
         path: 'agents',
-        element: <LazyPage><AgentList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['agents.*', 'agents.view', 'admin.*']}>
+            <LazyPage><AgentList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'agents/:id',
-        element: <LazyPage><AgentDetail /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['agents.*', 'agents.view', 'admin.*']}>
+            <LazyPage><AgentDetail /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'tickets',
-        element: <LazyPage><TicketList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'admin.*']}>
+            <LazyPage><TicketList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'tickets/alerts',
@@ -334,7 +350,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'tickets/:id',
-        element: <LazyPage><TicketDetail /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'admin.*']}>
+            <LazyPage><TicketDetail /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'logs',
@@ -471,7 +491,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'service-board',
-        element: <LazyPage><ServiceBoardPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'admin.*']}>
+            <LazyPage><ServiceBoardPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/ai-cost',

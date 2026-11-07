@@ -20,6 +20,12 @@ export interface CreateUserRequest {
   fullName: string;
   password: string;
   mfaRequired: boolean;
+  /**
+   * Grupo inicial do usuário. A API cria usuário + senha + vínculo numa única
+   * transação. É obrigatório para administradores com escopo limitado: sem grupo a
+   * conta não pertence a nenhum escopo e não pode ser administrada por ninguém.
+   */
+  groupId?: string;
 }
 
 export interface CreateUserResponse {
@@ -199,18 +205,30 @@ export const iamApi = {
   createUserWithGroups: async (
     payload: CreateUserWithGroupsRequest,
   ): Promise<CreateUserWithGroupsResponse> => {
-    // O usuário é criado primeiro; cada vínculo de grupo é uma operação independente.
-    // Falhas de vínculo são coletadas e devolvidas, em vez de mascarar a criação.
-    const created = await api.post<CreateUserResponse>(USERS, payload.user);
-
-    const normalizedGroupIds = payload.groupIds
+    // O PRIMEIRO grupo vai na própria criação (createUser.groupId): a API cria
+    // usuário + senha + vínculo inicial numa transação única.
+    //
+    // Antes o usuário era criado aqui e os vínculos vinham depois, um a um — o que
+    // produzia contas "criadas com acesso" que na verdade não tinham acesso quando
+    // o vínculo falhava (a UI mostrava groupsFailed e o operador não reconciliável).
+    // Pior: para um administrador ESCOPADO a um cliente, a API passou a exigir o
+    // grupo inicial (sem grupo a conta não pertence a escopo algum e fica
+    // inadministrável), então o vínculo precisa ser atômico.
+    const normalizedGroupIds = (payload.groupIds ?? [])
       .map((groupId) => groupId.trim())
       .filter(Boolean);
 
-    let groupsAssigned = 0;
+    const [initialGroupId, ...additionalGroupIds] = normalizedGroupIds;
+
+    const created = await api.post<CreateUserResponse>(USERS, {
+      ...payload.user,
+      ...(initialGroupId ? { groupId: initialGroupId } : {}),
+    });
+
+    let groupsAssigned = initialGroupId ? 1 : 0;
     const groupsFailed: Array<{ groupId: string; message: string }> = [];
 
-    for (const groupId of normalizedGroupIds) {
+    for (const groupId of additionalGroupIds) {
       try {
         await api.post<void>(`${GROUPS}/${groupId}/members`, {
           userId: created.id,

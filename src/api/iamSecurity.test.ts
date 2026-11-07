@@ -60,12 +60,20 @@ describe("iamApi.getMySecurity", () => {
 });
 
 describe("iamApi.createUserWithGroups", () => {
-  it("não mascara a criação do usuário quando um vínculo de grupo falha", async () => {
+  it("envia o PRIMEIRO grupo na criação (vínculo atômico) e não mascara falhas dos seguintes", async () => {
+    // O primeiro grupo vai no corpo do POST /users (a API cria usuário + senha +
+    // vínculo numa transação). Antes todos os vínculos vinham depois, em loop, e
+    // uma conta "criada com acesso" podia ficar sem acesso nenhum.
+    const bodies: unknown[] = [];
+
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
-        if (url.endsWith("/api/v1/users")) return jsonResponse({ id: "u1" }, 201);
+        if (url.endsWith("/api/v1/users")) {
+          bodies.push(JSON.parse(String(init?.body ?? "{}")));
+          return jsonResponse({ id: "u1" }, 201);
+        }
         if (url.includes("/members")) return jsonResponse({ message: "Permissão insuficiente." }, 403);
         return jsonResponse({}, 404);
       }),
@@ -76,9 +84,15 @@ describe("iamApi.createUserWithGroups", () => {
       groupIds: ["g1", "g2"],
     });
 
+    // O grupo inicial foi no create.
+    expect(bodies).toHaveLength(1);
+    expect((bodies[0] as { groupId?: string }).groupId).toBe("g1");
+
+    // O primeiro grupo conta como vinculado; só o segundo falha em loop.
     expect(result.id).toBe("u1");
-    expect(result.groupsAssigned).toBe(0);
-    expect(result.groupsFailed).toHaveLength(2);
+    expect(result.groupsAssigned).toBe(1);
+    expect(result.groupsFailed).toHaveLength(1);
+    expect(result.groupsFailed[0]!.groupId).toBe("g2");
     expect(result.groupsFailed[0]!.message).toContain("Permissão insuficiente");
   });
 
@@ -94,10 +108,34 @@ describe("iamApi.createUserWithGroups", () => {
 
     const result = await iamApi.createUserWithGroups({
       user: { login: "bia", email: "bia@empresa.com", fullName: "Bia", password: "SenhaForte#2026", mfaRequired: true },
+      // O primeiro (g1) vai no create; g2 vira chamada de membro; "" é ignorado.
       groupIds: ["g1", " g2 ", ""],
     });
 
     expect(result.groupsAssigned).toBe(2);
+    expect(result.groupsFailed).toEqual([]);
+  });
+
+  it("não envia groupId quando nenhum grupo é informado", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/api/v1/users")) {
+          bodies.push(JSON.parse(String(init?.body ?? "{}")));
+          return jsonResponse({ id: "u3" }, 201);
+        }
+        return jsonResponse({}, 404);
+      }),
+    );
+
+    const result = await iamApi.createUserWithGroups({
+      user: { login: "caio", email: "caio@empresa.com", fullName: "Caio", password: "SenhaForte#2026", mfaRequired: true },
+      groupIds: [],
+    });
+
+    expect((bodies[0] as { groupId?: string }).groupId).toBeUndefined();
+    expect(result.groupsAssigned).toBe(0);
     expect(result.groupsFailed).toEqual([]);
   });
 });

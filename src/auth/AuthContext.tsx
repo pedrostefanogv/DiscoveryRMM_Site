@@ -19,7 +19,7 @@ import {
 } from "@/api";
 import { clearAuthSession, emptyAuthSession, loadAuthSession, saveAuthSession } from "./storage";
 import type { AuthSessionState, AuthStage } from "./types";
-import { postCrossTabMessage, onCrossTabMessage, type CrossTabMessage } from "./crossTabSync";
+import { postCrossTabMessage, onCrossTabMessage, replyTokensTo, type CrossTabMessage } from "./crossTabSync";
 
 interface AuthContextValue {
   session: AuthSessionState;
@@ -127,6 +127,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         type: "TOKEN_REFRESHED",
         ...tokens,
       });
+
+      // Responde ENDEREÇADO a quem pediu os tokens e ficou aguardando o refresh
+      // concluir (popup de acesso remoto aberta durante a rotação). Sem isto, a
+      // popup dependeria do broadcast geral — que qualquer listener do canal recebe.
+      if (pendingTokenRequestersRef.current.size > 0) {
+        for (const requesterId of pendingTokenRequestersRef.current) {
+          replyTokensTo(requesterId, tokens);
+        }
+        pendingTokenRequestersRef.current.clear();
+      }
     }
     isCrossTabTokenRef.current = false;
   }, []);
@@ -350,6 +360,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshSession]);
 
+  /**
+   * Abas/janelas que pediram os tokens e estão aguardando um refresh concluir.
+   * Endereçar a resposta evita que qualquer listener do canal receba credenciais.
+   */
+  const pendingTokenRequestersRef = useRef<Set<string>>(new Set());
+
   // ── Cross-tab sync via BroadcastChannel ──────────────────────────────────
   // Escuta tokens atualizados de outras abas, pings de atividade da popup de
   // acesso remoto, e pedidos de logout.
@@ -386,13 +402,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           break;
 
         case "TOKEN_REQUEST":
-          // Outra aba (ex: popup) pede os tokens atuais.
-          // Se o token estiver próximo de expirar (menos de 5 min), faz refresh
-          // proativo antes de responder para a popup receber tokens frescos.
+          // Outra aba (ex: popup de acesso remoto) pede os tokens atuais.
+          //
+          // Endereçamento (auditoria 2026-11-07): respondemos SOMENTE ao
+          // solicitante (`replyTokensTo` exige um `from` válido). Antes a
+          // resposta era um broadcast sem destinatário, então qualquer listener
+          // no canal recebia os tokens — e um TOKEN_REQUEST forjado por um
+          // script same-origin era atendido sem nenhuma verificação.
           {
+            // Ignora pedido sem remetente identificado.
+            if (!message.from) {
+              break;
+            }
+
+            const requesterId = message.from;
             const remaining = (sessionRef.current.expiresAt ?? 0) - Date.now();
             if (remaining < 5 * 60 * 1000 && refreshTokenRef.current) {
-              // Dispara refresh (não aguarda — o TOKEN_REFRESHED broadcast fará a popup receber)
+              // Registra o solicitante: quando o refresh concluir, os tokens vão
+              // DIRETAMENTE para ele além do broadcast normal.
+              pendingTokenRequestersRef.current.add(requesterId);
               void refreshSession();
             } else if (
               sessionRef.current.stage === "authenticated" &&
@@ -400,9 +428,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               sessionRef.current.refreshToken &&
               sessionRef.current.expiresAt
             ) {
-              // Token ainda válido por tempo suficiente — envia diretamente
-              postCrossTabMessage({
-                type: "TOKEN_REFRESHED",
+              // Token ainda válido por tempo suficiente — responde endereçado.
+              replyTokensTo(requesterId, {
                 accessToken: sessionRef.current.accessToken,
                 refreshToken: sessionRef.current.refreshToken,
                 expiresAt: sessionRef.current.expiresAt,

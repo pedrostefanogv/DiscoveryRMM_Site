@@ -167,11 +167,31 @@ export function useAuthorization() {
      */
     const permissionsLoaded = hasClaim(payload, PERMISSION_KEYS);
 
+    /**
+     * Memo por token.
+     *
+     * `matchesPermission` re-expande a string pedida (aliases de família e de ação)
+     * a cada chamada, e cada página chama os gates com literais de array inline —
+     * ou seja, uma lista nova a cada render, sem memo possível no call site
+     * (ex.: hasAnyPermission(["Users.Edit", "identity.*", "admin.*"])).
+     *
+     * O resultado da comparação depende apenas do token e da permissão pedida, então
+     * o cache é por instância do useMemo — que já é recriada quando o accessToken
+     * muda. Sem risco de servir permissão de token antigo.
+     */
+    const decisionCache = new Map<string, boolean>();
+
     const hasPermission = (permission: string) => {
       if (!permissionsLoaded) return false;
-      return permissions.some((granted) =>
+
+      const cached = decisionCache.get(permission);
+      if (cached !== undefined) return cached;
+
+      const allowed = permissions.some((granted) =>
         matchesPermission(granted, permission),
       );
+      decisionCache.set(permission, allowed);
+      return allowed;
     };
 
     const hasAnyPermission = (requiredPermissions: string[]) => {

@@ -26,7 +26,9 @@ import {
 } from "@/api";
 import {
   useAddIamGroupMember,
+  useAllSites,
   useAssignIamGroupRole,
+  useClients,
   useCreateIamGroup,
   useDeleteIamGroup,
   useIamGroupMembers,
@@ -55,6 +57,9 @@ export default function IamGroupsPage() {
   const groupsQuery = useIamGroups();
   const usersQuery = useIamUsers();
   const rolesQuery = useIamRoles();
+  // Clientes/sites para o seletor de escopo (antes exigia-se o GUID digitado).
+  const clientsQuery = useClients();
+  const allSitesQuery = useAllSites();
 
   const createGroup = useCreateIamGroup();
   const updateGroup = useUpdateIamGroup();
@@ -67,6 +72,37 @@ export default function IamGroupsPage() {
   const { hasAnyPermission } = useAuthorization();
   const canWrite = hasAnyPermission(["groups.write", "groups.*", "identity.*", "admin.*"]);
   const canDelete = hasAnyPermission(["groups.delete", "groups.*", "identity.*", "admin.*"]);
+
+  // Opções do seletor de escopo: id -> nome, para o operador escolher pelo nome
+  // e não pelo identificador interno.
+  const clientOptions = useMemo(
+    () =>
+      (clientsQuery.data ?? []).map((client) => ({
+        value: client.id,
+        label: client.name ?? client.id,
+      })),
+    [clientsQuery.data],
+  );
+
+  const siteOptions = useMemo(
+    () =>
+      (allSitesQuery.data ?? []).map((site) => ({
+        value: site.id,
+        label: site.name ?? site.id,
+      })),
+    [allSitesQuery.data],
+  );
+
+  const scopeNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const client of clientsQuery.data ?? []) {
+      map.set(client.id, client.name ?? client.id);
+    }
+    for (const site of allSitesQuery.data ?? []) {
+      map.set(site.id, site.name ?? site.id);
+    }
+    return map;
+  }, [clientsQuery.data, allSitesQuery.data]);
 
   const groupColumns = useMemo<Column<UserGroupDto>[]>(
     () => [
@@ -189,6 +225,9 @@ export default function IamGroupsPage() {
           users={usersQuery.data ?? []}
           rolesLoading={rolesQuery.isLoading}
           roles={rolesQuery.data ?? []}
+          clientOptions={clientOptions}
+          siteOptions={siteOptions}
+          scopeNameById={scopeNameById}
         />
       )}
 
@@ -221,12 +260,19 @@ function GroupAssignmentsPanel({
   usersLoading,
   roles,
   rolesLoading,
+  clientOptions,
+  siteOptions,
+  scopeNameById,
 }: {
   group: UserGroupDto;
   users: Array<{ id: string; fullName: string; login: string }>;
   usersLoading: boolean;
   roles: Array<{ id: string; name: string }>;
   rolesLoading: boolean;
+  /** Opções do seletor de escopo (id -> nome), para não pedir GUID digitado. */
+  clientOptions: Array<{ value: string; label: string }>;
+  siteOptions: Array<{ value: string; label: string }>;
+  scopeNameById: Map<string, string>;
 }) {
   const membersQuery = useIamGroupMembers(group.id);
   const groupRolesQuery = useIamGroupRoles(group.id);
@@ -342,16 +388,42 @@ function GroupAssignmentsPanel({
                 }))
               }
             />
-            <Input
-              placeholder="ScopeId (opcional)"
-              value={roleAssignment.scopeId ?? ""}
-              onChange={(e) =>
-                setRoleAssignment((prev) => ({
-                  ...prev,
-                  scopeId: e.target.value.trim() ? e.target.value.trim() : null,
-                }))
-              }
-            />
+            {/* Seletor de cliente/site em vez de um campo GUID cru.
+                Antes o operador tinha de colar o id interno (sem validação, sem
+                nome e sem como descobri-lo na tela) — atribuir um papel com escopo
+                de Site era praticamente impossível sem consultar o banco. O escopo
+                Global não precisa de id; Client e Site usam a lista real. */}
+            {roleAssignment.scopeLevel === "Global" ? (
+              <Input placeholder="Escopo global — sem id" value="" disabled readOnly />
+            ) : roleAssignment.scopeLevel === "Client" ? (
+              <Select
+                options={[
+                  { value: "", label: "Selecione o cliente..." },
+                  ...clientOptions,
+                ]}
+                value={roleAssignment.scopeId ?? ""}
+                onChange={(e) =>
+                  setRoleAssignment((prev) => ({
+                    ...prev,
+                    scopeId: e.target.value || null,
+                  }))
+                }
+              />
+            ) : (
+              <Select
+                options={[
+                  { value: "", label: "Selecione o site..." },
+                  ...siteOptions,
+                ]}
+                value={roleAssignment.scopeId ?? ""}
+                onChange={(e) =>
+                  setRoleAssignment((prev) => ({
+                    ...prev,
+                    scopeId: e.target.value || null,
+                  }))
+                }
+              />
+            )}
           </div>
           <Button
             size="sm"
@@ -373,7 +445,13 @@ function GroupAssignmentsPanel({
                   <p className="font-medium text-foreground">{assignment.roleName ?? assignment.roleId}</p>
                   <div className="flex items-center gap-2">
                     <Badge color="accent">{assignment.scopeLevel}</Badge>
-                    <span className="text-xs text-muted">{assignment.scopeId ?? "Sem scopeId"}</span>
+                    {/* Nome do cliente/site em vez do GUID cru: antes o operador
+                        via "3f2a1b..." e não sabia a que cliente aquilo pertencia. */}
+                    <span className="text-xs text-muted">
+                      {assignment.scopeId
+                        ? scopeNameById.get(assignment.scopeId) ?? assignment.scopeId
+                        : "Sem escopo específico"}
+                    </span>
                   </div>
                 </div>
                 <Button

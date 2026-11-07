@@ -1,7 +1,6 @@
 import {
   type StartRemoteSessionRequest,
 } from "@/api/remote-sessions";
-import { getApiAccessToken } from "@/api/client";
 
 export interface OpenRemoteSessionParams {
   agentId: string;
@@ -33,15 +32,17 @@ export async function openRemoteSessionPopup({
   // fluxo antigo (o transport webrtc nem existe mais: o agent só suporta
   // nats) e o modo auto ajusta qualidade/codec em runtime, tornando os
   // defaults da URL irrelevantes. A página usa seus próprios defaults
-  // ('nats'/'unlimited'/'webp'). Mantém apenas a identidade + token.
+  // ('nats'/'unlimited'/'webp').
+  //
+  // SEGURANÇA (auditoria 2026-11-07): o access token NÃO vai mais na query
+  // string. Ele ia para o histórico do navegador, para o header Referer da
+  // navegação e para qualquer log intermediário. O launcher de debug já
+  // recusava esse padrão; o de acesso remoto o usava — a inconsistência era
+  // o bug. A popup obtém o token em memória pelo canal cross-tab
+  // (TOKEN_REQUEST), que é o mesmo mecanismo já existente para refresh.
   const query = new URLSearchParams({
     agentId,
   });
-
-  const accessToken = getApiAccessToken();
-  if (accessToken) {
-    query.set("accessToken", accessToken);
-  }
 
   const popup = window.open(
     `/agents/remote-session?${query.toString()}`,

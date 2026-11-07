@@ -78,8 +78,13 @@ export default function IamUsersPage() {
 
   const canEdit = hasAnyPermission(["Users.Edit", "identity.*", "admin.*"]);
 
-  const canDelete = canEdit;
-  const canChangePassword = canEdit;
+  // A API exige Users.Delete para DELETE /users/{id} (UsersController) e
+  // Users.Edit para reset de senha — são permissões distintas no servidor.
+  // Antes o console colapsava as três em canEdit, o que ESCONDIA uma capacidade
+  // legitimamente concedida a quem tem Delete sem Edit (o inverso — conceder o
+  // que o backend proíbe — não acontecia, mas o gate mentia sobre o papel).
+  const canDelete = hasAnyPermission(["Users.Delete", "identity.*", "admin.*"]);
+  const canChangePassword = hasAnyPermission(["Users.Edit", "identity.*", "admin.*"]);
 
   const columns = useMemo<Column<UserDto>[]>(
     () => [
@@ -513,6 +518,12 @@ function CreateUserModal({
       return;
     }
 
+    // NOTA: o backend exige grupo inicial quando o ator tem escopo limitado (sem
+    // grupo a conta não pertence a escopo algum e fica inadministrável). A
+    // exigência é validada NO SERVIDOR porque o console não consegue saber se o
+    // usuário tem escopo global: o access token carrega permissões no formato
+    // "Recurso.Ação", sem a informação de escopo (ver auth/authorization.ts).
+    // O erro devolvido é autoexplicativo e aparece no toast abaixo.
     try {
       await onSubmit(form, selectedGroupIds);
       setForm(EMPTY_CREATE_FORM);

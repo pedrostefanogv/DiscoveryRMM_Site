@@ -207,15 +207,22 @@ export default function RemoteSession() {
   const transport = searchParams.get('transport') ?? 'nats';
   const quality = searchParams.get('quality') ?? 'unlimited';
   const codec = searchParams.get('codec') ?? 'webp';
-  const initialAccessToken = searchParams.get('accessToken') ?? '';
-
-  // Ref mutável para o accessToken — atualizado via BroadcastChannel quando
-  // a aba principal faz refresh. O apiClient lê desta ref via getAccessToken.
-  const accessTokenRef = useRef(initialAccessToken);
+  // O token NÃO vem mais da query string (vazava em histórico/Referer/logs).
+  // Esta janela começa sem token e o pede à aba principal pelo canal cross-tab
+  // (TOKEN_REQUEST, disparado no efeito de sincronização abaixo). A ref é
+  // preenchida quando a resposta chega; o apiClient a lê via getAccessToken.
+  //
+  // Compatibilidade: ainda aceitamos o parâmetro para uma janela que já estava
+  // aberta antes da atualização do bundle — mas ele deixa de ser o caminho
+  // normal, e a próxima abertura não o carrega.
+  const legacyAccessToken = searchParams.get('accessToken') ?? '';
+  const accessTokenRef = useRef(legacyAccessToken);
 
   useEffect(() => {
-    accessTokenRef.current = initialAccessToken;
-  }, [initialAccessToken]);
+    if (legacyAccessToken) {
+      accessTokenRef.current = legacyAccessToken;
+    }
+  }, [legacyAccessToken]);
 
   // Configura o apiClient com o token JWT da query string, atualizável via BroadcastChannel.
   useEffect(() => {
@@ -258,18 +265,60 @@ export default function RemoteSession() {
     });
   }, []);
 
+  // ── Aquisição inicial do token (sem token na URL) ──
+  //
+  // A janela abre SEM token (ver remoteSessionLauncher: o token ia para o
+  // histórico/Referer). Ela pede o token à aba principal por TOKEN_REQUEST, mas o
+  // pedido é assíncrono: sem esperar a resposta, a PRIMEIRA chamada da API saía
+  // com token vazio, tomava 401 e só então o refresh trazia o token — um flicker
+  // de erro no melhor caso, e dependência do caminho de retry no pior.
+  //
+  // tokenReadyRef resolve quando o token chega; a inicialização espera por ela.
+  const tokenReadyRef = useRef<{ promise: Promise<string | null>; resolve: (t: string | null) => void } | null>(null);
+  if (tokenReadyRef.current === null) {
+    let resolveFn: (t: string | null) => void = () => {};
+    const promise = new Promise<string | null>((resolve) => {
+      resolveFn = resolve;
+    });
+    tokenReadyRef.current = { promise, resolve: resolveFn };
+  }
+
   // ── Cross-tab sync ──
   useEffect(() => {
     const cleanup = onCrossTabMessage((message: CrossTabMessage) => {
       if (message.type === 'TOKEN_REFRESHED' && message.accessToken) {
         accessTokenRef.current = message.accessToken;
+        tokenReadyRef.current?.resolve(message.accessToken);
+        return;
+      }
+
+      // LOGOUT: antes só TOKEN_REFRESHED era tratado aqui. Uma popup aberta antes
+      // do logout seguia usando o token já revogado (até tomar 401), mantendo uma
+      // janela com credencial morta e confundindo o operador. Encerra na hora.
+      if (message.type === 'LOGOUT') {
+        accessTokenRef.current = '';
+        setErrorMsg('Sessão encerrada em outra aba. Feche esta janela.');
       }
     });
     const stopPing = startActivityPing(10_000);
-    postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+
+    // Compatibilidade: se a janela trouxe token legado na URL, já está pronto.
+    if (accessTokenRef.current) {
+      tokenReadyRef.current?.resolve(accessTokenRef.current);
+    } else {
+      postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+    }
+
+    // Não bloqueia para sempre: sem resposta em 5s deixa seguir (o fluxo normal
+    // de refresh e a mensagem de sessão expirada cobrem o caso sem aba principal).
+    const readyTimer = setTimeout(() => {
+      tokenReadyRef.current?.resolve(accessTokenRef.current || null);
+    }, 5_000);
+
     return () => {
       cleanup();
       stopPing();
+      clearTimeout(readyTimer);
     };
   }, []);
 
@@ -298,6 +347,11 @@ export default function RemoteSession() {
     (async () => {
       if (!agentId) return;
       try {
+        // Espera o token chegar da aba principal antes da PRIMEIRA chamada:
+        // a janela abre sem token na URL e o pedido cross-tab é assíncrono.
+        await tokenReadyRef.current?.promise;
+        if (cancelled) return;
+
         const agent = await agentsApi.get(agentId);
         if (cancelled) return;
         // O backend serializa Guid.Empty como string de zeros — normaliza
