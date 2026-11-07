@@ -45,6 +45,7 @@ import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
+import { useTicketCapabilities } from '@/hooks/useTicketCapabilities';
 import { useIamUsers } from '@/hooks/useIdentity';
 import { useWheelScrollChaining } from '@/hooks/useWheelScrollChaining';
 import { useAgent } from '@/hooks/useAgents';
@@ -133,6 +134,12 @@ export default function TicketDetail() {
   const ticket   = useTicket(id!);
   const comments = useTicketComments(id!);
   const states   = useWorkflowStates();
+
+  // O que ESTE usuário pode fazer neste chamado — decidido pelo backend.
+  // Antes não havia gate nenhum: o botão de alterar estado (que fecha o
+  // chamado) aparecia para qualquer pessoa, inclusive de outro departamento.
+  // Enquanto carrega, as capacidades são negadas (fail-closed).
+  const { capabilities } = useTicketCapabilities(id);
   const iamUsers = useIamUsers();
   // ?tab=chat permite deep-link (notificação de nova mensagem no chat).
   const [tab, setTab] = useState<Tab>(() => {
@@ -226,7 +233,11 @@ export default function TicketDetail() {
         <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
           <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
         </Button>
-        <DeleteTicketButton ticketId={t.id} title={t.title} />
+        {/* Excluir era renderizado INCONDICIONALMENTE: qualquer pessoa com o link
+            via o botão, inclusive quem não trata o chamado. */}
+        {capabilities.canDelete && (
+          <DeleteTicketButton ticketId={t.id} title={t.title} />
+        )}
       </PageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -1328,6 +1339,10 @@ function TicketSummaryPanel({
   closedAt: string | null;
   templateName?: string | null;
 }) {
+  // Capacidades NESTE chamado: decidem se o usuário pode alterar o estado
+  // (fechar) e quais destinos são válidos para ele. Vem do backend para o
+  // console não reimplementar a autorização.
+  const { capabilities } = useTicketCapabilities(ticketId);
   const updateRequester = useUpdateTicket();
   const iamUsers = useIamUsers();
   const agentQuery = useAgent(agentId ?? undefined);
@@ -1371,13 +1386,30 @@ function TicketSummaryPanel({
     setStateEditing(false);
   }, [ticketId, currentStateId]);
 
+  // Transições oferecidas ao usuário.
+  //
+  // Quem TRATA o chamado vê todos os estados (o workflow ainda valida origem e
+  // destino). Quem apenas ABRIU o chamado só pode ENCERRÁ-LO — o backend expõe
+  // exatamente esses destinos em closableStateIds, e listar os demais criaria
+  // opções que o servidor recusa.
+  const allowedStates = useMemo(() => {
+    const all = Array.isArray(workflowStates.data) ? workflowStates.data : [];
+    if (capabilities.canTreat) return all;
+    if (!capabilities.canClose) return [];
+    const closable = new Set(capabilities.closableStateIds);
+    return all.filter((state) => closable.has(state.id));
+  }, [workflowStates.data, capabilities.canTreat, capabilities.canClose, capabilities.closableStateIds]);
+
   const stateOptions = [
     { value: '', label: 'Selecione...' },
-    ...(Array.isArray(workflowStates.data) ? workflowStates.data : []).map((state) => ({
+    ...allowedStates.map((state) => ({
       value: state.id,
       label: state.name,
     })),
   ];
+
+  // Só faz sentido oferecer "alterar estado" se houver algum destino permitido.
+  const canChangeState = capabilities.canTreat || (capabilities.canClose && allowedStates.length > 0);
   const currentStateName =
     (workflowStates.data ?? []).find((state) => state.id === currentStateId)?.name ?? 'Não definido';
 
@@ -1552,15 +1584,21 @@ function TicketSummaryPanel({
           <dd className="text-foreground">
             <div className="flex items-start justify-between gap-2">
               <Badge color="slate">{currentStateName}</Badge>
-              <button
-                type="button"
-                onClick={() => setStateEditing((current) => !current)}
-                aria-label="Alterar estado"
-                title="Alterar estado"
-                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
-              >
-                <Icon name="refresh" className="h-4 w-4" />
-              </button>
+              {canChangeState && (
+                <button
+                  type="button"
+                  onClick={() => setStateEditing((current) => !current)}
+                  aria-label="Alterar estado"
+                  title={
+                    capabilities.canTreat
+                      ? 'Alterar estado'
+                      : 'Você pode encerrar o chamado que abriu'
+                  }
+                  className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                >
+                  <Icon name="refresh" className="h-4 w-4" />
+                </button>
+              )}
             </div>
             {stateEditing && (
               <div className="mt-2 flex flex-wrap items-end gap-2">
@@ -1571,7 +1609,11 @@ function TicketSummaryPanel({
                     value={selectedState}
                     disabled={workflowStates.isLoading}
                     onChange={(event) => setSelectedState(event.target.value)}
-                    hint="A transição precisa ser permitida pelo workflow."
+                    hint={
+                      capabilities.canTreat
+                        ? 'A transição precisa ser permitida pelo workflow.'
+                        : 'Como solicitante, você pode encerrar o chamado que abriu.'
+                    }
                   />
                 </div>
                 <Button

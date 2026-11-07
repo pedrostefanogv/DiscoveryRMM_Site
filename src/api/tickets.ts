@@ -19,6 +19,8 @@ import type {
   CursorPageDto,
 } from "./types";
 
+// Nota: TicketCapabilities é declarado neste arquivo (e reexportado abaixo).
+
 const BASE = "/api/v1/tickets";
 
 /**
@@ -56,6 +58,45 @@ async function downloadAttachmentBlob(
 
 export interface ReopenTicketRequest {
   reason?: string | null;
+}
+
+/**
+ * Capacidades do ator sobre um chamado, calculadas pelo backend.
+ * Espelha o endpoint GET /tickets/{id}/capabilities.
+ */
+export interface TicketCapabilities {
+  canView: boolean;
+  /** Tratar/atender: membro do time do departamento do chamado (ou acesso global). */
+  canTreat: boolean;
+  canEdit: boolean;
+  canAssign: boolean;
+  canMerge: boolean;
+  canDelete: boolean;
+  canExecuteRunbook: boolean;
+  /** Notas internas só são visíveis a quem trata o chamado. */
+  canSeeInternalNotes: boolean;
+  /** Fechar: o time fecha qualquer chamado do depto; o solicitante só o próprio. */
+  canClose: boolean;
+  /**
+   * Estados FINAIS que este usuário pode atingir. O solicitante só encerra —
+   * não reabre nem move para outros estados — então a UI deve oferecer
+   * exatamente estes destinos.
+   */
+  closableStateIds: string[];
+  isRequester: boolean;
+  isDepartmentTeamMember: boolean;
+  /** true durante a fase de medição (negações são registradas, não aplicadas). */
+  shadowMode: boolean;
+  /**
+   * true quando a ação foi liberada APENAS pelo modo de observação — ou seja,
+   * a política negaria, mas o shadow concedeu para medir o impacto. Útil para
+   * a UI sinalizar durante a transição.
+   */
+  grantedByShadow?: boolean;
+  /** Motivo legível da negação (para explicar ao usuário por que não pode). */
+  reason?: string | null;
+  /** Código estável da negação (ex.: TICKET_NOT_IN_YOUR_TEAM). */
+  code?: string | null;
 }
 
 export interface RateTicketRequest {
@@ -146,6 +187,24 @@ export const ticketsApi = {
     api.get<Ticket[]>(`${BASE}/by-client/${clientId}`, { workflowStateId }),
 
   get: (id: string) => api.get<Ticket>(`${BASE}/${id}`),
+
+  /**
+   * O que o usuário autenticado PODE fazer NESTE chamado.
+   *
+   * A decisão vem do backend de propósito: o console não deve reimplementar a
+   * regra de autorização (hoje são "membro do time do departamento" ou "abriu o
+   * próprio chamado"), senão frontend e backend divergem e a UI mostra botão que
+   * dá 403 — ou pior, esconde ação que o backend permitiria.
+   */
+  getCapabilities: (id: string) =>
+    api.get<TicketCapabilities>(`${BASE}/${id}/capabilities`),
+
+  /**
+   * Departamentos em que o usuário é membro ativo do time. Alimenta a fila
+   * "Meu time"; devolve lista vazia quando não há vínculo (não é erro).
+   */
+  getMyDepartments: () =>
+    api.get<{ departmentIds: string[] }>(`${BASE}/my-departments`),
 
   create: (data: CreateTicketRequest) => api.post<Ticket>(BASE, data),
 

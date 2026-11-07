@@ -40,6 +40,7 @@ import {
   startActivityPing,
   type CrossTabMessage,
 } from '@/auth/crossTabSync';
+import { loadAuthSession } from '@/auth/storage';
 import { realtimeConfig, resolveNatsWsUrl } from '@/config/realtime';
 import RemoteConsentNotice from '@/modules/remote-screen/RemoteConsentNotice';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
@@ -216,7 +217,24 @@ export default function RemoteSession() {
   // aberta antes da atualização do bundle — mas ele deixa de ser o caminho
   // normal, e a próxima abertura não o carrega.
   const legacyAccessToken = searchParams.get('accessToken') ?? '';
-  const accessTokenRef = useRef(legacyAccessToken);
+  // FALLBACK DE STORAGE (correção do 401 de 2026-11-07):
+  //
+  // Antes esta ref nascia SOMENTE do parâmetro da URL — que o launcher deixou de
+  // preencher. Como o override de configureApiClient abaixo substitui o provider
+  // global do AuthContext, a janela DESCARTAVA a sessão que já estava hidratada
+  // no storage e ficava sem token nenhum até o handshake cross-tab responder.
+  //
+  // Isso a tornava a única janela dedicada vulnerável: sem sessão hidratada, a
+  // PRIMEIRA chamada de API saía sem header Authorization e tomava 401
+  // {"message":"Autenticação necessária."} — e o retry usava o mesmo caminho
+  // cross-tab que havia falhado.
+  //
+  // Ler o storage aqui restaura a paridade com as demais janelas no regime
+  // "manter conectado" (localStorage compartilhado). O token continua fora da
+  // URL no fluxo normal; reaproveitamos apenas a sessão DESTA mesma origem.
+  // O handshake cross-tab segue como fonte primária quando não há nada no storage.
+  const hydratedAccessToken = legacyAccessToken || (loadAuthSession().accessToken ?? '');
+  const accessTokenRef = useRef(hydratedAccessToken);
 
   useEffect(() => {
     if (legacyAccessToken) {
@@ -251,9 +269,21 @@ export default function RemoteSession() {
               // So reusa o token atual se ele mudou desde o pedido; se e o
               // mesmo token que acabou de receber 401, devolve null para o
               // apiClient tratar como falha de auth (sem retry inutil).
-              resolve(accessTokenRef.current && accessTokenRef.current !== before
-                ? accessTokenRef.current
-                : null);
+              if (accessTokenRef.current && accessTokenRef.current !== before) {
+                resolve(accessTokenRef.current);
+                return;
+              }
+              // Antes de desistir do retry, tenta o storage: a sessão pode ter
+              // sido hidratada/renovada por esta janela enquanto esperávamos o
+              // broadcast. Sem isto, um 401 por token vazio vira falha terminal
+              // mesmo havendo credencial válida disponível localmente.
+              const fromStorage = loadAuthSession().accessToken ?? '';
+              if (fromStorage && fromStorage !== before) {
+                accessTokenRef.current = fromStorage;
+                resolve(fromStorage);
+                return;
+              }
+              resolve(null);
             }
           }, 3_000);
           postCrossTabMessage({ type: 'TOKEN_REQUEST' });
@@ -306,13 +336,27 @@ export default function RemoteSession() {
     if (accessTokenRef.current) {
       tokenReadyRef.current?.resolve(accessTokenRef.current);
     } else {
-      postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+      // Rede de segurança adicional: o AuthContext desta janela pode hidratar a
+      // sessão do storage logo após a montagem (assíncrono). Sem isto, uma janela
+      // que ganhasse o token pela hidratação continuaria esperando o cross-tab até
+      // o timeout e faria a primeira chamada sem header.
+      const hydrated = loadAuthSession().accessToken ?? '';
+      if (hydrated) {
+        accessTokenRef.current = hydrated;
+        tokenReadyRef.current?.resolve(hydrated);
+      } else {
+        postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+      }
     }
 
     // Não bloqueia para sempre: sem resposta em 5s deixa seguir (o fluxo normal
     // de refresh e a mensagem de sessão expirada cobrem o caso sem aba principal).
+    // Última tentativa de hidratação antes de desistir: preferimos um token do
+    // storage a seguir sem identidade e colher 401 opaco.
     const readyTimer = setTimeout(() => {
-      tokenReadyRef.current?.resolve(accessTokenRef.current || null);
+      const late = accessTokenRef.current || (loadAuthSession().accessToken ?? '');
+      if (late) accessTokenRef.current = late;
+      tokenReadyRef.current?.resolve(late || null);
     }, 5_000);
 
     return () => {
