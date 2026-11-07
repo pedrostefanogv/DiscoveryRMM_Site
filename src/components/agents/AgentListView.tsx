@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import { Icon, Badge, MetricBar } from '@/components/ui';
-import { formatRelative, getAgentOsIcon, type AgentCardAgent } from './AgentCard';
+import { formatRelative, getAgentOsIcon, isAgentWindowsServer, type AgentCardAgent } from './AgentCard';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 
 interface AgentListViewProps {
@@ -76,7 +76,12 @@ export function AgentListView({
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-                      {getAgentOsIcon(a.operatingSystem)}
+                      {/* Mesma regra do card: campo dedicado primeiro, texto como fallback. */}
+                      {isAgentWindowsServer(a) ? (
+                        <Icon name="storage" className="h-5 w-5 text-warning" />
+                      ) : (
+                        getAgentOsIcon(a.operatingSystem, a.isServer)
+                      )}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{displayName}</p>

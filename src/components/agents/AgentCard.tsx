@@ -8,10 +8,87 @@ import { formatDateCompact } from '@/utils/format';
 /** Agente com cliente/site já resolvidos para exibição. */
 export type AgentCardAgent = Agent & { clientName: string; clientId: string; siteName?: string };
 
-/** Ícone do SO usado no card (extraído do AgentList para reuso). */
-export function getAgentOsIcon(os: string | null | undefined) {
+/**
+ * Detecta Windows Server pelo TEXTO do operatingSystem.
+ *
+ * A partir da exposição de isServer/productType no DTO, esta função deixou de
+ * ser o caminho principal: virou o FALLBACK para agentes antigos, que ainda não
+ * reportaram esses campos (ou cujo registro é anterior à migração M272).
+ * Continua sendo por string porque operatingSystem traz o ProductName do
+ * registry, e nos servidores a Microsoft publica nomes como
+ * "Windows Server 2022 Datacenter" ou "Windows Server Standard".
+ */
+
+export function isWindowsServerOs(os: string | null | undefined): boolean {
+  if (!os) return false;
+  // Normaliza caixa e separadores (hífen/underscore) para cobrir
+  // "Windows Server 2022", "windows-server-2019" e "WindowsServer 2019".
+  // O split de "windowsserver" é feito só na forma colada exata, para não
+  // quebrar palavras que apenas começam com "server" (ex.: "Serverless").
+  const normalizado = os
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/windowsserver/g, 'windows server')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // O \b final garante que "Windows Server" seja uma palavra inteira: evita
+  // casar "Windows Serverless"/"Windows ServerX". O nome real sempre continua
+  // com Standard/Datacenter/ano/versão, então o prefixo basta.
+  return /^windows server\b/.test(normalizado);
+}
+
+/** Campos mínimos de SO de um agente (subconjunto de Agent). */
+export type AgentOsIdentity = {
+  operatingSystem?: string | null;
+  isServer?: boolean | null;
+  productType?: string | null;
+};
+
+/**
+ * Decide se o agente é Windows Server, PREFERINDO o campo dedicado.
+ *
+ * Quando o backend entrega productType, ele é a fonte da verdade e o texto é
+ * ignorado (inclusive para dizer "não é servidor"). Só quando o campo está
+ * ausente/null — agente antigo ou anterior à migração M272 — caímos para a
+ * detecção por texto. O fallback é obrigatório: sem ele, esses agentes
+ * perderiam o ícone.
+ */
+export function isAgentWindowsServer(agent: AgentOsIdentity): boolean {
+  const productType = agent.productType?.trim();
+  if (productType) {
+    // ProductType "1" = workstation, "2" = controlador de domínio,
+    // "3" = servidor. Qualquer outro valor desconhecido cai no texto.
+    if (productType === '1') return false;
+    if (productType === '2' || productType === '3') return true;
+  }
+  if (typeof agent.isServer === 'boolean') return agent.isServer;
+  return isWindowsServerOs(agent.operatingSystem);
+}
+
+/** Ícone de servidor (reaproveitado pelo card e pela listagem). */
+const windowsServerIcon = () => <Icon name="storage" className="h-5 w-5 text-warning" />;
+
+/**
+ * Ícone do SO usado no card (extraído do AgentList para reuso).
+ *
+ * `isServer` permite que quem já sabe a resposta pelo campo dedicado desligue a
+ * detecção por texto. É o que evita o caso contraditório: um agente cujo campo
+ * diz "não é servidor" (isServer=false) mas cujo operatingSystem ainda parece
+ * servidor — o campo vence e o glifo de servidor não é reintroduzido.
+ * Omitido/null = decide pelo texto (comportamento do fallback).
+ */
+export function getAgentOsIcon(os: string | null | undefined, isServer?: boolean | null) {
   if (!os) return <Icon name="desktop_windows" className="h-5 w-5 text-primary" />;
   const lower = os.toLowerCase();
+  // Windows Server vem ANTES do 'windows' genérico, senão cairia no ícone de desktop.
+  // Glifo "storage" (e não "dns") porque "dns" já representa Linux logo abaixo:
+  // usar o mesmo glifo para servidor confundiria servidor com Linux. "storage"
+  // não colide com nenhum outro SO desta função e existe no conjunto fixo de glifos.
+  // Cor "text-warning" (âmbar), também distinta do text-accent do Linux e do
+  // text-primary do desktop. Evitei de propósito uma cor fora do conjunto disponível
+  // para não depender de um token inexistente no tema.
+  // isServer === false vence o texto: não reintroduz o glifo de servidor.
+  if (isServer !== false && isWindowsServerOs(os)) return windowsServerIcon();
   if (lower.includes('windows')) return <Icon name="desktop_windows" className="h-5 w-5 text-primary" />;
   if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) {
     return <Icon name="dns" className="h-5 w-5 text-accent" />;
@@ -94,7 +171,10 @@ export function AgentCard({
       </div>
       <div className="flex items-start gap-3 pr-6">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-          {getAgentOsIcon(agent.operatingSystem)}
+          {/* Prefere o campo isServer/productType; cai para o texto se vier null. */}
+          {isAgentWindowsServer(agent)
+            ? windowsServerIcon()
+            : getAgentOsIcon(agent.operatingSystem, agent.isServer)}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-foreground transition-colors group-hover:text-primary">{displayName}</p>

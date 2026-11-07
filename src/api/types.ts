@@ -197,6 +197,18 @@ export interface Agent {
   pendingRebootReasons?: string | null;
   /** Instante da última sonda de reinício (ISO 8601). */
   pendingRebootCheckedAt?: string | null;
+  /**
+   * Indica se o SO é um Windows Server, reportado pelo agente (coluna
+   * os_is_server, migração M272). null/ausente = agente antigo ou que ainda
+   * não reportou: a UI cai para a detecção por texto do operatingSystem.
+   */
+  isServer?: boolean | null;
+  /**
+   * ProductType do Windows (string, pois vem cru do registry):
+   * "1" = workstation, "2" = controlador de domínio, "3" = servidor.
+   * null/ausente nos mesmos casos de isServer.
+   */
+  productType?: string | null;
 }
 
 /** Página da lixeira de agentes (GET /agents/deleted). */
@@ -231,6 +243,18 @@ export interface AgentHardwareInfo {
   osVersion: string | null;
   osBuild: string | null;
   osArchitecture: string | null;
+  /**
+   * Identidade de SO/Windows Server reportada pelo agente (M272).
+   * Campos nullable: `null` significa "não reportado" (agente antigo),
+   * nunca "não é servidor". Trate null como desconhecido.
+   */
+  osEdition?: string | null;
+  isServer?: boolean | null;
+  /** "WinNT" (cliente) | "ServerNT" (servidor membro) | "LanmanNT" (domain controller). */
+  productType?: string | null;
+  domain?: string | null;
+  workgroup?: string | null;
+  partOfDomain?: boolean | null;
   collectedAt: string;
   updatedAt: string;
 }
