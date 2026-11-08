@@ -7,8 +7,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   remoteSessionsApi,
   type BandwidthMode,
+  type BandwidthPreset,
   type BandwidthPolicy,
-  type BandwidthState,
+  type ChangeBandwidthRequest,
   type ChangeQualityRequest,
   type StartRemoteSessionRequest,
 } from '@/api/remote-sessions';
@@ -53,6 +54,19 @@ type QualityMode = 'auto' | 'hd' | 'manual';
 // resultado no codec WebP, sem a escada adaptativa rebaixar a qualidade.
 const HD_IMAGE_QUALITY = 90;
 const HD_MAX_FPS = 30;
+
+/**
+ * Presets de banda usados quando a política do servidor não carrega. Espelha
+ * os defaults de RemoteAccessBandwidthOptions (API). "unlimited" = sem teto e
+ * é o PRESET PADRÃO do modo Manual.
+ */
+const BANDWIDTH_PRESETS_FALLBACK: BandwidthPreset[] = [
+  { id: 'low', label: 'Baixa (1 Mbps)', kbps: 1000 },
+  { id: 'medium', label: 'Média (4 Mbps)', kbps: 4000 },
+  { id: 'high', label: 'Alta (8 Mbps)', kbps: 8000 },
+  { id: 'max', label: 'Máxima (20 Mbps)', kbps: 20000 },
+  { id: 'unlimited', label: 'Sem limite', kbps: 0 },
+];
 
 // Sessão ativa de uma aba específica. Cada aba inicia sua própria sessão
 // sob demanda (botão "Conectar") — nada é iniciado automaticamente ao abrir.
@@ -461,17 +475,13 @@ export default function RemoteSession() {
   const [qualityChanging, setQualityChanging] = useState(false);
 
   // ── Teto de banda (kbps) ──
-  // Controle SEPARADO da qualidade: a qualidade reduz a compressão, o teto freia
-  // a PRODUÇÃO de frames quando o link não escoa. Sem ele, baixar a qualidade
-  // não impede a fila de crescer (o frame entregue fica cada vez mais velho).
-  // O menu do cadeado compartilha o mesmo padrão Auto/HD/Manual da qualidade.
-  const [bandwidthMode, setBandwidthMode] = useState<BandwidthMode>('auto');
-  const [bandwidthPresetId, setBandwidthPresetId] = useState<string>('high');
+  // A banda NÃO é mais um controle independente: ela DERIVA do modo de tela.
+  //   - Tela Auto   → banda automática (o agent ajusta o teto pelo bitrate);
+  //   - Tela HD     → sem teto (a imagem em HD não pode ser estrangulada);
+  //   - Tela Manual → preset escolhido nos Ajustes finos, padrão Sem limite.
+  // Por isso não há seletor de banda na barra: em Auto/HD ele nem aparece.
+  const [bandwidthPresetId, setBandwidthPresetId] = useState<string>('unlimited');
   const [bandwidthChanging, setBandwidthChanging] = useState(false);
-  const [bandwidthMenuOpen, setBandwidthMenuOpen] = useState(false);
-  const bandwidthMenuRef = useRef<HTMLDivElement | null>(null);
-  // Estado reportado pelo agente (no modo auto o teto se move sozinho).
-  const [bandwidthState, setBandwidthState] = useState<BandwidthState | null>(null);
   // Política configurada no servidor (presets e limites). Ausente = defaults.
   const [bandwidthPolicy, setBandwidthPolicy] = useState<BandwidthPolicy | null>(null);
   // Snapshot sempre atualizado do modo/parâmetros de qualidade. Usado por
@@ -788,6 +798,78 @@ export default function RemoteSession() {
     return false;
   }, [agentId]);
 
+  /**
+   * Aplica a política de TETO DE BANDA (kbps) ao agente.
+   *
+   * A banda deriva do MODO DE TELA (ver estados acima); esta função só envia
+   * o modo/preset derivado:
+   *   - 'auto'   → o agente ajusta o teto sozinho pelo bitrate recebido;
+   *   - 'hd'     → sem teto;
+   *   - 'manual' → teto fixo do preset escolhido (padrão Sem limite).
+   *
+   * Sem sessão de tela ainda: apenas guarda a escolha de preset (aplicada no
+   * próximo "Conectar" por applyBandwidthToSession).
+   */
+  const applyBandwidthMode = useCallback(async (mode: BandwidthMode, presetId?: string) => {
+    const preset = bandwidthPolicy?.manualPresets.find((p) => p.id === (presetId ?? bandwidthPresetId));
+    const ceiling = preset ? preset.kbps : (bandwidthPolicy?.manualDefaultKbps ?? 0);
+
+    if (presetId) setBandwidthPresetId(presetId);
+
+    if (!screenSession) return;
+
+    setBandwidthChanging(true);
+    try {
+      await remoteSessionsApi.changeBandwidth(agentId, screenSession.sessionId, {
+        mode,
+        ceilingKbps: mode === 'manual' ? ceiling : undefined,
+      });
+    } catch (err) {
+      console.error('Falha ao alterar teto de banda:', err);
+      toast.error('Não foi possível aplicar o limite de banda.');
+    } finally {
+      setBandwidthChanging(false);
+    }
+  }, [agentId, screenSession, bandwidthPolicy, bandwidthPresetId]);
+
+  /**
+   * Modo de banda DERIVADO do modo de tela. É o único lugar que define a
+   * relação entre os dois controles:
+   *   - tela 'auto'   → banda 'auto'   (o agent ajusta — sem seletor na UI);
+   *   - tela 'hd'     → banda 'hd'     (sem teto: HD não pode ser estrangulado);
+   *   - tela 'manual' → banda 'manual' (preset dos Ajustes finos).
+   */
+  const bandwidthModeForQuality = useCallback((mode: QualityMode): BandwidthMode => {
+    if (mode === 'hd') return 'hd';
+    if (mode === 'manual') return 'manual';
+    return 'auto';
+  }, []);
+
+  /**
+   * Aplica o teto de banda derivado do modo de tela a uma sessão recém-criada.
+   * Tenta 1 reaplicação porque o agent pode ainda não ter registrado a sessão
+   * quando o comando chega (mesmo padrão de applyQualityModeToSession).
+   */
+  const applyBandwidthToSession = useCallback(async (sessionId: string) => {
+    const mode = bandwidthModeForQuality(qualityMode);
+    const payload: ChangeBandwidthRequest = { mode };
+    if (mode === 'manual') {
+      const preset = bandwidthPolicy?.manualPresets.find((p) => p.id === bandwidthPresetId);
+      payload.ceilingKbps = preset ? preset.kbps : (bandwidthPolicy?.manualDefaultKbps ?? 0);
+    }
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await remoteSessionsApi.changeBandwidth(agentId, sessionId, payload);
+        return true;
+      } catch {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    }
+    return false;
+  }, [agentId, qualityMode, bandwidthPolicy, bandwidthPresetId, bandwidthModeForQuality]);
+
   // ── Inicia a sessão de uma aba sob demanda ──
   // `force` permite sobrepor uma sessão ativa existente do mesmo agent (o
   // backend encerra a anterior e cria a nova). No fluxo normal (force=false)
@@ -930,6 +1012,12 @@ export default function RemoteSession() {
         if (!applied) {
           toast.error('Sessão conectada, mas o modo de qualidade não pôde ser aplicado. Selecione o modo novamente.');
         }
+        // A banda deriva do modo de tela: aplica o teto derivado à sessão nova
+        // (Auto → automático · HD → sem teto · Manual → preset dos Ajustes finos).
+        const bandApplied = await applyBandwidthToSession(session.sessionId);
+        if (!bandApplied) {
+          toast.error('Sessão conectada, mas o limite de banda não pôde ser aplicado. Ajuste nos Ajustes finos (modo Manual).');
+        }
       }
 
       setSessions((prev) => {
@@ -988,7 +1076,7 @@ export default function RemoteSession() {
       setConnectingTab(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, connectingTab, transport, monitorIndex, sessions, applyQualityModeToSession]);
+  }, [agentId, connectingTab, transport, monitorIndex, sessions, applyQualityModeToSession, applyBandwidthToSession]);
 
   // Inicia a sessão da aba com força (vinda do aviso de conflito de sessão).
   const confirmForce = useCallback(async (tab: Tab) => {
@@ -1271,7 +1359,9 @@ export default function RemoteSession() {
 
     // Sem sessão de tela ainda: a escolha é aplicada no próximo "Conectar".
     // Espelha desde já os valores do modo nos selects de ajuste fino, para que
-    // um "Manual" posterior continue de onde o HD parou.
+    // um "Manual" posterior continue de onde o HD parou. A banda derivada não
+    // precisa de chamada aqui (sem sessão, applyBandwidthMode só registra o
+    // preset — e o applyBandwidthToSession cuida do connect).
     if (!screenSession) {
       if (newMode === 'hd') {
         setLiveQuality('ultra');
@@ -1323,6 +1413,12 @@ export default function RemoteSession() {
           auto: false,
         });
       }
+      // A banda DERIVA do modo de tela: aplica o teto correspondente SÓ DEPOIS
+      // de o modo ter mudado de fato — se o changeQuality falhar e o modo
+      // voltar atrás, a banda acompanha (nada aplicado à toa).
+      //   Auto → banda automática · HD → sem teto · Manual → preset escolhido
+      // nos Ajustes finos (padrão Sem limite).
+      await applyBandwidthMode(bandwidthModeForQuality(newMode));
     } catch (err) {
       setQualityMode(prevMode);
       setLiveCodec(prevCodec);
@@ -1332,57 +1428,13 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, qualityMode, screenSession, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
+  }, [qualityChanging, qualityMode, screenSession, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps, applyBandwidthMode, bandwidthModeForQuality]);
 
-
-  /**
-   * Aplica a política de TETO DE BANDA (kbps) ao agente.
-   *
-   * Controle SEPARADO da qualidade: a qualidade reduz a compressão, o teto
-   * freia a PRODUÇÃO de frames. Modos:
-   *   - 'auto'   → o agente ajusta o teto sozinho pelo bitrate recebido;
-   *   - 'hd'     → sem teto;
-   *   - 'manual' → teto fixo do preset escolhido.
-   *
-   * Sem sessão de tela ainda: apenas guarda a escolha (aplicada no próximo
-   * "Conectar"), como o seletor de qualidade já faz.
-   */
-  const applyBandwidthMode = useCallback(async (mode: BandwidthMode, presetId?: string) => {
-    const preset = bandwidthPolicy?.manualPresets.find((p) => p.id === (presetId ?? bandwidthPresetId));
-    const ceiling = preset ? preset.kbps : (bandwidthPolicy?.manualDefaultKbps ?? 0);
-
-    setBandwidthMode(mode);
-    if (presetId) setBandwidthPresetId(presetId);
-
-    if (!screenSession) return;
-
-    setBandwidthChanging(true);
-    try {
-      await remoteSessionsApi.changeBandwidth(agentId, screenSession.sessionId, {
-        mode,
-        ceilingKbps: mode === 'manual' ? ceiling : undefined,
-      });
-      // O agente reporta o estado efetivo pelo canal .event; até lá, reflete
-      // otimisticamente o que foi pedido.
-      setBandwidthState((prev) => ({
-        mode,
-        ceilingKbps: mode === 'manual' ? ceiling : mode === 'hd' ? 0 : (prev?.ceilingKbps ?? 0),
-        paused: false,
-        closes: prev?.closes ?? 0,
-        opens: prev?.opens ?? 0,
-        autoAdjusts: prev?.autoAdjusts ?? 0,
-        lastKbps: prev?.lastKbps ?? 0,
-      }));
-    } catch (err) {
-      console.error('Falha ao alterar teto de banda:', err);
-      toast.error('Não foi possível aplicar o limite de banda.');
-    } finally {
-      setBandwidthChanging(false);
-    }
-  }, [agentId, screenSession, bandwidthPolicy, bandwidthPresetId]);
 
   // Carrega a política de banda configurada no servidor (presets/limites).
-  // Ausente/erro → a UI usa defaults locais; não bloqueia a sessão.
+  // Ausente/erro → a UI usa defaults locais (BANDWIDTH_PRESETS_FALLBACK); não
+  // bloqueia a sessão. O MODO de banda não vem mais daqui: ele deriva do modo
+  // de tela (bandwidthModeForQuality).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -1390,25 +1442,12 @@ export default function RemoteSession() {
         const policy = await remoteSessionsApi.getBandwidthPolicy();
         if (cancelled || !policy) return;
         setBandwidthPolicy(policy);
-        setBandwidthMode(policy.defaultMode);
       } catch {
         // Silencioso de propósito: a política é um refinamento, não um pré-requisito.
       }
     })();
     return () => { cancelled = true; };
   }, []);
-
-  // Fecha o menu de banda ao clicar fora (mesmo padrão dos outros popovers).
-  useEffect(() => {
-    if (!bandwidthMenuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (bandwidthMenuRef.current && !bandwidthMenuRef.current.contains(e.target as Node)) {
-        setBandwidthMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [bandwidthMenuOpen]);
 
   // Troca de monitor — reinicia a sessão de tela com o monitor selecionado.
   const handleMonitorChange = useCallback(async (newMonitor: number) => {
@@ -1459,6 +1498,8 @@ export default function RemoteSession() {
       if (!applied) {
         toast.error('Monitor alterado, mas o modo de qualidade não pôde ser reaplicado. Selecione o modo novamente.');
       }
+      // E a banda derivada do modo de tela, pelo mesmo motivo.
+      await applyBandwidthToSession(session.sessionId);
       setSessions((prev) => ({
         ...prev,
         screen: {
@@ -1492,7 +1533,7 @@ export default function RemoteSession() {
     } finally {
       setMonitorChanging(false);
     }
-  }, [monitorChanging, agentId, screenSession, transport, applyQualityModeToSession]);
+  }, [monitorChanging, agentId, screenSession, transport, applyQualityModeToSession, applyBandwidthToSession]);
 
   // Timer de expiração removido — a sessão gerencia a própria expiração e o
   // backend encerra quando necessário (viewer recebe onSessionEnded).
@@ -1759,69 +1800,9 @@ export default function RemoteSession() {
               </div>
 
 
-              {/* Teto de banda (kbps): controle SEPARADO da qualidade.
-                  A qualidade reduz a compressão; o teto freia a PRODUÇÃO de
-                  frames quando o link não escoa. Em Auto o agente ajusta o
-                  teto pelo bitrate recebido; HD = sem teto; Manual = preset. */}
-              <div ref={bandwidthMenuRef} className="relative flex items-center gap-0.5">
-                <Icon name="speed" className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
-                <select
-                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
-                  value={bandwidthMode}
-                  disabled={bandwidthChanging || connectingTab === 'screen'}
-                  onChange={(e) => { void applyBandwidthMode(e.target.value as BandwidthMode); }}
-                  title="Limite de banda: Auto (o agente ajusta) · HD (sem limite) · Manual (preset)"
-                  aria-label="Limite de banda do stream de tela"
-                >
-                  <option value="auto">Banda: Auto</option>
-                  <option value="hd">Banda: HD</option>
-                  <option value="manual">Banda: Manual</option>
-                </select>
-
-                {bandwidthMode === 'manual' && (
-                  <>
-                    <button
-                      type="button"
-                      className="px-2 py-0.5 rounded bg-surface border border-border text-muted-foreground hover:text-foreground"
-                      onClick={() => setBandwidthMenuOpen((open) => !open)}
-                      aria-expanded={bandwidthMenuOpen}
-                      aria-haspopup="listbox"
-                      title="Escolher o limite de banda (presets do servidor)"
-                      aria-label="Escolher limite de banda"
-                    >
-                      {bandwidthPolicy?.manualPresets.find((p) => p.id === bandwidthPresetId)?.label ?? 'Preset'}
-                    </button>
-                    {bandwidthMenuOpen && (
-                      <div
-                        role="listbox"
-                        aria-label="Limite de banda"
-                        className="absolute right-0 top-full z-50 mt-1 w-52 space-y-0.5 rounded border border-border bg-surface p-1 text-xs shadow-lg"
-                      >
-                        {(bandwidthPolicy?.manualPresets ?? []).map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            role="option"
-                            aria-selected={preset.id === bandwidthPresetId}
-                            className={`block w-full rounded px-2 py-1 text-left hover:bg-surface-hover ${preset.id === bandwidthPresetId ? 'text-foreground' : 'text-muted-foreground'}`}
-                            onClick={() => { setBandwidthMenuOpen(false); void applyBandwidthMode('manual', preset.id); }}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Em Auto o teto é móvel: mostrar o valor corrente evita a
-                    impressão de que o controle não faz nada. */}
-                {bandwidthMode === 'auto' && bandwidthState && bandwidthState.ceilingKbps > 0 && (
-                  <span className="text-[10px] text-muted-foreground" title="Teto corrente ajustado pelo agente">
-                    {Math.round(bandwidthState.ceilingKbps / 1000)} Mbps
-                  </span>
-                )}
-              </div>
+              {/* A banda NÃO tem seletor na barra: ela deriva do modo de tela
+                  (Auto → automática · HD → sem teto · Manual → preset nos
+                  Ajustes finos, padrão Sem limite). Ver bandwidthModeForQuality. */}
               {qualityMode === 'manual' && screenSession && (
                 <div ref={qualitySettingsRef} className="relative">
                   {/* Ajustes finos em popover: evita 3 selects extras na barra
@@ -1832,7 +1813,7 @@ export default function RemoteSession() {
                     onClick={() => setQualitySettingsOpen((open) => !open)}
                     aria-expanded={qualitySettingsOpen}
                     aria-haspopup="dialog"
-                    title="Ajustes finos de imagem (codec, compressão e FPS)"
+                    title="Ajustes finos de imagem (codec, compressão, FPS e banda)"
                     aria-label="Ajustes finos de imagem"
                   >
                     ⚙
@@ -1840,7 +1821,7 @@ export default function RemoteSession() {
                   {qualitySettingsOpen && (
                     <div
                       role="dialog"
-                      aria-label="Ajustes finos de imagem"
+                      aria-label="Ajustes finos de imagem (codec, compressão, FPS e banda)"
                       className="absolute right-0 top-full z-50 mt-1 w-64 space-y-2 rounded border border-border bg-surface p-2 text-xs shadow-lg"
                     >
                       <label className="flex items-center justify-between gap-2">
@@ -1893,6 +1874,27 @@ export default function RemoteSession() {
                         >
                           {FPS_PRESETS.map((f) => (
                             <option key={f.value} value={f.value}>{f.label} FPS</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      {/* Limite de banda: vive aqui porque SÓ existe no modo
+                          Manual (nos modos Auto e HD o teto é definido pelo
+                          próprio modo — automático e sem limite). Padrão:
+                          Sem limite. */}
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Icon name="speed" className="h-3.5 w-3.5" aria-hidden /> Banda
+                        </span>
+                        <select
+                          className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
+                          value={bandwidthPresetId}
+                          disabled={bandwidthChanging || connectingTab === 'screen'}
+                          onChange={(e) => { void applyBandwidthMode('manual', e.target.value); }}
+                          title="Limite de banda do stream (Sem limite por padrão)"
+                        >
+                          {(bandwidthPolicy?.manualPresets ?? BANDWIDTH_PRESETS_FALLBACK).map((preset) => (
+                            <option key={preset.id} value={preset.id}>{preset.label}</option>
                           ))}
                         </select>
                       </label>
