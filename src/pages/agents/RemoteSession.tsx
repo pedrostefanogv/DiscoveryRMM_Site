@@ -1442,6 +1442,15 @@ export default function RemoteSession() {
         const policy = await remoteSessionsApi.getBandwidthPolicy();
         if (cancelled || !policy) return;
         setBandwidthPolicy(policy);
+        // Garante que o preset selecionado existe na política carregada: um id
+        // removido pelo admin deixaria o select dos Ajustes finos sem opção
+        // visível. Prefere "Sem limite" (padrão do modo Manual); sem ele, o
+        // primeiro preset da lista.
+        setBandwidthPresetId((prev) => {
+          if (policy.manualPresets.some((p) => p.id === prev)) return prev;
+          if (policy.manualPresets.some((p) => p.id === 'unlimited')) return 'unlimited';
+          return policy.manualPresets[0]?.id ?? prev;
+        });
       } catch {
         // Silencioso de propósito: a política é um refinamento, não um pré-requisito.
       }
@@ -1498,8 +1507,12 @@ export default function RemoteSession() {
       if (!applied) {
         toast.error('Monitor alterado, mas o modo de qualidade não pôde ser reaplicado. Selecione o modo novamente.');
       }
-      // E a banda derivada do modo de tela, pelo mesmo motivo.
-      await applyBandwidthToSession(session.sessionId);
+      // E a banda derivada do modo de tela, pelo mesmo motivo (mesma
+      // paridade de aviso: sem ela o operador confiaria num teto que não vale).
+      const bandApplied = await applyBandwidthToSession(session.sessionId);
+      if (!bandApplied) {
+        toast.error('Monitor alterado, mas o limite de banda não pôde ser reaplicado. Ajuste nos Ajustes finos (modo Manual).');
+      }
       setSessions((prev) => ({
         ...prev,
         screen: {
