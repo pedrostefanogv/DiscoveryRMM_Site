@@ -397,6 +397,14 @@ export const serverEditableFields: EditableField[] = [
       "Habilita o inventário e a instalação de atualizações do Windows nos agentes. Desligado, o agente não roda scan nem aceita comandos de patch (o inventário já coletado é preservado).",
   },
   {
+    key: "updatesTabEnabled",
+    label: "Aba de Atualizações de Aplicativos",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Desligado, a aba Atualizações fica oculta no painel do agent.",
+  },
+  {
     key: "windowsUpdateScanIntervalMinutes",
     label: "Intervalo de Varredura de Patches",
     kind: "number",
@@ -695,6 +703,14 @@ export const clientEditableFields: EditableField[] = [
     kind: "policy",
     group: "policy",
   },
+  {
+    key: "updatesTabEnabled",
+    label: "Aba de Atualizações de Aplicativos",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do servidor.",
+  },
   ...REMOTE_CONSENT_FIELDS,
   {
     key: "aiIntegrationSettingsJson",
@@ -816,6 +832,14 @@ export const siteEditableFields: EditableField[] = [
     label: "Política da Loja de Aplicativos",
     kind: "policy",
     group: "policy",
+  },
+  {
+    key: "updatesTabEnabled",
+    label: "Aba de Atualizações de Aplicativos",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do cliente/servidor.",
   },
   ...REMOTE_CONSENT_FIELDS,
   {

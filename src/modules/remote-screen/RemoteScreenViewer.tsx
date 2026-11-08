@@ -367,12 +367,17 @@ export default function RemoteScreenViewer({
         bmp.close();
       }
     } else {
-      // Modo tiles — garante o canvas com as dimensões reais da tela (header)
+      // Modo tiles — garante o canvas com as dimensões reais da tela (header).
+      //
+      // NÃO pintamos de preto ao (re)dimensionar: definir width/height já zera
+      // o canvas, e pintar de preto transforma qualquer frame inicial parcial
+      // em "faixas pretas sólidas" — o sintoma relatado pelo operador ao
+      // conectar (2026-11-07). O preto não é informação: um canvas vazio
+      // (transparente) deixa claro que a base ainda não chegou, e o pedido de
+      // keyframe em +OK reconstrói a tela inteira.
       if (frameHeader && (canvas.width !== frameHeader.width || canvas.height !== frameHeader.height)) {
         canvas.width = frameHeader.width;
         canvas.height = frameHeader.height;
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       // Desenha os patches
       for (let i = 0; i < bitmaps.length; i++) {
@@ -413,9 +418,6 @@ export default function RemoteScreenViewer({
     let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
     let connectSent = false;
     let authenticated = false;
-    // True após a 1ª autenticação bem-sucedida — em reconexões pedimos keyframe
-    // (o agent está em dirty-rect mode e o canvas local está vazio).
-    let hadPreviousConnection = false;
     const MAX_RECONNECT_ATTEMPTS = 5;
     const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 
@@ -788,10 +790,20 @@ export default function RemoteScreenViewer({
               controlSeqRef.current += 1;
               sendControlEnvelope(buildInputLockQuery(sessionId, controlSeqRef.current));
             }
-            // Reconexão: o agent já está com dirty-rect ativo (frames parciais)
-            // e o canvas local está vazio — pede keyframe para redesenhar tudo.
-            // Apenas em reconexões: na 1ª conexão o agent já envia key frame.
-            if (reconnectAttemptsRef.current > 0 || hadPreviousConnection) {
+            // Pede keyframe SEMPRE que a conexão autentica — inclusive na
+            // PRIMEIRA conexão. O agente publica a tela em modo dirty-rect
+            // (tileMode é true por padrão, ver manager.go), e o canvas local
+            // está vazio: sem um frame COMPLETO o viewer não tem base para
+            // aplicar os patches e a tela aparece com faixas pretas que só
+            // vão sendo preenchidas conforme o operador mexe o mouse.
+            //
+            // A premissa anterior ("na 1ª conexão o agent já envia key frame")
+            // era FALSA: o agente marcava o primeiro frame como tile por causa
+            // de um bug de ordem em session_screen.go (corrigido em
+            // 2026-11-07). Pedir o keyframe aqui é defesa em profundidade —
+            // vale para agentes antigos, já implantados, que não receberam a
+            // correção (a frota leva tempo para atualizar).
+            {
               const kf = JSON.stringify({ action: 'keyframe' });
               setTimeout(() => {
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -799,7 +811,6 @@ export default function RemoteScreenViewer({
                 }
               }, 150);
             }
-            hadPreviousConnection = true;
           }
           continue;
         }

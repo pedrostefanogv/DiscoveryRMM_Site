@@ -89,9 +89,14 @@ export default function PatchesPolicy() {
     setHideDeniedUpdates(data.hideDeniedUpdates);
     setDeferralDays(data.deferralDays ?? 0);
     setDeadlineDays(data.deadlineDays ?? 0);
-    const sources = data.sources ?? ["os"];
-    setAllowOs(sources.includes("os"));
-    setAllowThirdParty(sources.includes("third_party"));
+    // O DTO ecoa fielmente o que está gravado (lista vazia = nunca configurado).
+    // A regra de resolução do servidor trata vazio/ausente como "os", então a UI
+    // precisa hidratar do mesmo jeito — senão uma política sem origens explícitas
+    // abriria com "Windows Update (OS)" desmarcado e um save ingênuo gravaria [].
+    const sources = data.sources ?? [];
+    const effective = sources.length > 0 ? sources : ["os"];
+    setAllowOs(effective.includes("os"));
+    setAllowThirdParty(effective.includes("third_party"));
     setAllowThirdPartyApps(data.allowThirdPartyApps ?? false);
     if (data.maintenanceWindowJson) {
       try {

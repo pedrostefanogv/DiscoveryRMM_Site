@@ -113,6 +113,47 @@ describe("política da loja de aplicativos", () => {
   });
 });
 
+describe("aba de Atualizações de Aplicativos (updatesTabEnabled)", () => {
+  it("expõe o kill switch como boolean em servidor, cliente e site", () => {
+    for (const [scope, fields] of scopes) {
+      const field = fields.find((item) => item.key === "updatesTabEnabled");
+      expect(field, `${scope} sem updatesTabEnabled`).toBeDefined();
+      expect(field?.kind, `${scope} updatesTabEnabled não é boolean`).toBe("boolean");
+      // O grupo "features" é o mesmo de windowsUpdateEnabled/appStorePolicy, para
+      // o campo cair no card de funcionalidades (e não virar blob JSON).
+      expect(field?.group, `${scope} updatesTabEnabled fora de features`).toBe("features");
+      expect(field?.label).toBeTruthy();
+      expect(field?.description).toBeTruthy();
+    }
+  });
+
+  it("é desenhado como switch (kind boolean) e não como JSON", () => {
+    const field = serverEditableFields.find(
+      (item) => item.key === "updatesTabEnabled",
+    );
+    expect(field).toBeDefined();
+    expect(isBooleanToggleField(field!)).toBe(true);
+  });
+
+  it("valida e envia apenas true/false no payload", () => {
+    expect(validateFieldValue("boolean", "true", "updatesTabEnabled")).toBe(true);
+    expect(validateFieldValue("boolean", "false", "updatesTabEnabled")).toBe(true);
+    expect(validateFieldValue("boolean", "sim", "updatesTabEnabled")).not.toBe(true);
+    expect(parseFieldValue("boolean", "true", "updatesTabEnabled")).toBe(true);
+    expect(parseFieldValue("boolean", "false", "updatesTabEnabled")).toBe(false);
+    expect(toPatchPayloadValue("boolean", true)).toBe(true);
+  });
+
+  it("fica junto de windowsUpdateEnabled no servidor", () => {
+    const keys = serverEditableFields.map((item) => item.key);
+    const updatesTabIndex = keys.indexOf("updatesTabEnabled");
+    const windowsUpdateIndex = keys.indexOf("windowsUpdateEnabled");
+    expect(updatesTabIndex).toBeGreaterThanOrEqual(0);
+    expect(windowsUpdateIndex).toBeGreaterThanOrEqual(0);
+    expect(Math.abs(updatesTabIndex - windowsUpdateIndex)).toBe(1);
+  });
+});
+
 describe("dependências entre funcionalidades", () => {
   it("expõe Bootstrap P2P via Nuvem em servidor e cliente, mas não no site", () => {
     // O backend não tem override de site para cloud bootstrap: enviar o campo no

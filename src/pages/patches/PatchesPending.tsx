@@ -6,7 +6,7 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { usePatchPending, useScanPatchScope } from "@/hooks/usePatches";
-import { useApproveAgentPendingWindowsUpdates, useInstallApprovedWindowsUpdates } from "@/hooks/useAgentWindowsUpdates";
+import { useApproveAgentPendingWindowsUpdates, useInstallApprovedWindowsUpdates, useScanAgentWindowsUpdates } from "@/hooks/useAgentWindowsUpdates";
 import { useAuthorization } from "@/auth/authorization";
 import type { PatchPendingAgent, PatchScope } from "@/api/types";
 import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
@@ -18,6 +18,7 @@ export default function PatchesPending() {
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
+  const [scanningAgentId, setScanningAgentId] = useState<string | null>(null);
   const pag = useCursorPagination({ initialLimit: 25 });
 
   const clients = useClients();
@@ -33,6 +34,7 @@ export default function PatchesPending() {
   const scan = useScanPatchScope();
   const installApproved = useInstallApprovedWindowsUpdates();
   const approvePending = useApproveAgentPendingWindowsUpdates();
+  const scanAgent = useScanAgentWindowsUpdates();
   const { hasAnyPermission } = useAuthorization();
   const canExecute = hasAnyPermission(["Patches.Execute", "patches.*", "admin.*"]);
   const canApprove = hasAnyPermission(["Patches.Edit", "patches.*", "admin.*"]);
@@ -81,6 +83,23 @@ export default function PatchesPending() {
     }
   };
 
+  const handleScanAgent = async (agent: PatchPendingAgent) => {
+    setScanningAgentId(agent.agentId);
+    try {
+      const result = await scanAgent.mutateAsync({
+        agentId: agent.agentId,
+        reason: "varredura individual na página de pendências",
+      });
+      toast.success(result.message);
+      // O hook já invalida as queries de patches; refetch garante o status visível nesta lista.
+      await list.refetch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao solicitar varredura do agente.");
+    } finally {
+      setScanningAgentId(null);
+    }
+  };
+
   const columns: Column<PatchPendingAgent>[] = [
     {
       key: "agent",
@@ -124,6 +143,16 @@ export default function PatchesPending() {
             disabled={approvePending.isPending || !canApprove}
           >
             Aprovar pendentes
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleScanAgent(agent)}
+            disabled={scanningAgentId !== null || !canExecute}
+            title="Verificar atualizações somente neste agente"
+          >
+            <Icon name="refresh" className={`h-4 w-4${scanningAgentId === agent.agentId ? " animate-spin" : ""}`} />
+            {scanningAgentId === agent.agentId ? "Verificando..." : "Verificar atualizações"}
           </Button>
           <Button
             size="sm"
