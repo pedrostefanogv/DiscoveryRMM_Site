@@ -4760,6 +4760,9 @@ export interface PatchPendingAgent {
   pendingReboot: boolean;
   scanStatus: string | null;
   lastScanAt: string | null;
+  /** Status persistido do agente no backend ("Online" | "Offline"). */
+  status?: string | null;
+  /** Quando o agente foi visto pela última vez (ISO). Frescor do sinal de online. */
   lastSeenAt: string | null;
 }
 

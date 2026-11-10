@@ -7,9 +7,35 @@ import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { usePatchPending, useScanPatchScope } from "@/hooks/usePatches";
 import { useApproveAgentPendingWindowsUpdates, useInstallApprovedWindowsUpdates, useScanAgentWindowsUpdates } from "@/hooks/useAgentWindowsUpdates";
+import { useNowTick } from "@/hooks/useNowTick";
 import { useAuthorization } from "@/auth/authorization";
+import { isAgentOnlineNow } from "@/utils/agentStatus";
 import type { PatchPendingAgent, PatchScope } from "@/api/types";
 import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
+
+/**
+ * Indicador de agente online da lista de pendências.
+ *
+ * Duas fontes, combinadas pela MESMA regra da lista de agentes (AgentListView):
+ * - `lastSeenAt` é o FRESCOR do sinal: dentro da janela
+ *   VITE_AGENT_OFFLINE_FALLBACK_MS (90s por padrão) o agente conta como online,
+ *   mesmo que o status persistido ainda diga "Offline".
+ * - `status` é o status PERSISTIDO pelo servidor (Online/Offline), atualizado nas
+ *   transições de heartbeat. Ele só é consultado quando não há lastSeenAt válido
+ *   (payload antigo do backend, sem o campo).
+ *
+ * O `now` vem de fora (useNowTick no componente) para que a decisão seja
+ * determinística em teste e se atualize sozinha na tela a cada tick.
+ */
+export function isPendingAgentOnline(agent: PatchPendingAgent, now: number): boolean {
+  return isAgentOnlineNow(
+    {
+      status: (agent.status ?? undefined) as "Online" | "Offline" | undefined,
+      lastSeenAt: agent.lastSeenAt,
+    },
+    now,
+  );
+}
 
 export default function PatchesPending() {
   const navigate = useNavigate();
@@ -20,6 +46,9 @@ export default function PatchesPending() {
   const [searchApplied, setSearchApplied] = useState("");
   const [scanningAgentId, setScanningAgentId] = useState<string | null>(null);
   const pag = useCursorPagination({ initialLimit: 25 });
+  // Tick de 5s: mantém o indicador Online/Offline coerente com o frescor de
+  // lastSeenAt sem depender de um novo fetch da lista.
+  const now = useNowTick();
 
   const clients = useClients();
   const sites = useSites(selectedClientId || undefined);
@@ -127,6 +156,31 @@ export default function PatchesPending() {
         )}
       </div>
     ) },
+    {
+      // Indicador de agente online. Fica imediatamente antes das ações para não
+      // empurrar as colunas numéricas, que continuam alinhadas à direita.
+      key: "status",
+      header: "Status",
+      render: (agent) => {
+        const online = isPendingAgentOnline(agent, now);
+        // Offline com lastSeenAt conhecido: o title mostra quando o agente foi
+        // visto pela última vez (o Badge em si não aceita title).
+        const vistoPorUltimo =
+          !online && agent.lastSeenAt
+            ? `Visto por último em ${formatPatchDate(agent.lastSeenAt)}`
+            : undefined;
+        return (
+          <span className="inline-flex" title={vistoPorUltimo}>
+            <Badge color={online ? "success" : "slate"}>
+              <span className="flex items-center gap-1">
+                <Icon name={online ? "wifi" : "wifi_off"} className="h-2.5 w-2.5" />
+                {online ? "Online" : "Offline"}
+              </span>
+            </Badge>
+          </span>
+        );
+      },
+    },
     {
       key: "actions",
       header: "",
