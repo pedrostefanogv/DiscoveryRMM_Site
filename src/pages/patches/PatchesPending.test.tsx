@@ -49,7 +49,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 /** Instante fixo usado como "agora" em todos os casos (evita corrida de relógio). */
 const NOW = new Date('2026-11-10T12:00:00.000Z').getTime();
 
-/** Janela de frescor: VITE_AGENT_OFFLINE_FALLBACK_MS, 90s por padrão. */
+/** Janela de frescor: VITE_AGENT_OFFLINE_FALLBACK_MS, 120s por padrão. */
 const RECENTE = new Date(NOW - 10_000).toISOString(); // 10s atrás -> fresco
 const ANTIGO = new Date(NOW - 2 * 24 * 60 * 60 * 1000).toISOString(); // 2 dias atrás
 
@@ -113,6 +113,10 @@ describe('PatchesPending — indicador de agente online', () => {
     expect(screen.getByText('PARADO-01')).toBeTruthy();
     // Exatamente um Online e um Offline.
     expect(badgesOnlineOffline().sort()).toEqual(['Offline', 'Online']);
+
+    // A coluna "Status" saiu da tabela: o badge vive agora na célula do nome.
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).toBeNull();
+    expect(screen.queryByText('Status')).toBeNull();
 
     // E cada badge está na linha do agente certo.
     const linhaAtivo = screen.getByText('ATIVO-01').closest('tr') as HTMLElement;

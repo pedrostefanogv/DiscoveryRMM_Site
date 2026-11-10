@@ -53,6 +53,48 @@ const groups: SettingsGroup[] = [
     ],
   },
   {
+    title: "Automação",
+    description: "Scripts, tarefas, operações e rotulagem automática dos agentes.",
+    cards: [
+      {
+        title: "Visão Geral de Automação",
+        description: "Painel inicial com execuções, filas e saúde da automação.",
+        to: "/automation",
+        icon: <Icon name="build" className="h-5 w-5" />,
+      },
+      {
+        title: "Scripts",
+        description: "Biblioteca de scripts disponíveis para execução nos agentes.",
+        to: "/automation/scripts",
+        icon: <Icon name="code" className="h-5 w-5" />,
+      },
+      {
+        title: "Tarefas",
+        description: "Tarefas agendadas e execuções sob demanda.",
+        to: "/automation/tasks",
+        icon: <Icon name="play_circle" className="h-5 w-5" />,
+      },
+      {
+        title: "Operações",
+        description: "Histórico e acompanhamento das operações executadas.",
+        to: "/automation/operations",
+        icon: <Icon name="rocket_launch" className="h-5 w-5" />,
+      },
+      {
+        title: "Auditoria de Automação",
+        description: "Trilha de auditoria das execuções e alterações de automação.",
+        to: "/automation/audit",
+        icon: <Icon name="fact_check" className="h-5 w-5" />,
+      },
+      {
+        title: "Labels Automáticas",
+        description: "Regras de rotulagem automática aplicadas aos agentes.",
+        to: "/automation/agent-labels",
+        icon: <Icon name="sell" className="h-5 w-5" />,
+      },
+    ],
+  },
+  {
     title: "Operação de tickets",
     description: "Fluxos, notificações e classificação automática.",
     cards: [
@@ -73,12 +115,6 @@ const groups: SettingsGroup[] = [
         description: "Canais de notificação e eventos disparados.",
         to: "/settings/notifications",
         icon: <Icon name="notifications" className="h-5 w-5" />,
-      },
-      {
-        title: "Labels Automáticas",
-        description: "Regras de rotulagem automática aplicadas aos agentes.",
-        to: "/settings/agent-labels",
-        icon: <Icon name="sell" className="h-5 w-5" />,
       },
     ],
   },
@@ -129,7 +165,7 @@ const groups: SettingsGroup[] = [
 export default function ConfigurationSettings() {
   const [query, setQuery] = useState("");
 
-  // Busca rápida por título/descrição/grupo — 18 cards exigem filtro, não rolagem.
+  // Busca rápida por título/descrição/grupo — 24 cards exigem filtro, não rolagem.
   const filteredGroups = useMemo(() => {
     const term = query.trim().toLowerCase();
     const matches = (text: string) => text.toLowerCase().includes(term);

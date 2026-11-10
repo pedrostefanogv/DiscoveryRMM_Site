@@ -592,6 +592,18 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // A tela vive no menu Automação, mas os dados são de AGENTES: o gate repete a
+        // permissão que o AgentLabelsController exige (Agents.View), para o link nunca
+        // levar a um 403. Ver o comentário no controller para o porquê de não usar
+        // automation.* aqui.
+        path: 'automation/agent-labels',
+        element: (
+          <PermissionGate anyOf={['agents.*', 'agents.view', 'Agents.View', 'admin.*']}>
+            <LazyPage><AgentLabelsSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'settings',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
@@ -684,12 +696,9 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        // Compatibilidade: links e favoritos antigos apontam para a nova rota em Automação
         path: 'settings/agent-labels',
-        element: (
-          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
-            <LazyPage><AgentLabelsSettings /></LazyPage>
-          </PermissionGate>
-        ),
+        element: <Navigate to="/automation/agent-labels" replace />,
       },
       {
         path: 'settings/agent-updates',

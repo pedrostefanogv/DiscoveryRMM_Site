@@ -18,7 +18,8 @@ import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
  *
  * Duas fontes, combinadas pela MESMA regra da lista de agentes (AgentListView):
  * - `lastSeenAt` é o FRESCOR do sinal: dentro da janela
- *   VITE_AGENT_OFFLINE_FALLBACK_MS (90s por padrão) o agente conta como online,
+ *   VITE_AGENT_OFFLINE_FALLBACK_MS (120s por padrão, o mesmo grace period do
+ *   servidor) o agente conta como online,
  *   mesmo que o status persistido ainda diga "Offline".
  * - `status` é o status PERSISTIDO pelo servidor (Online/Offline), atualizado nas
  *   transições de heartbeat. Ele só é consultado quando não há lastSeenAt válido
@@ -26,6 +27,12 @@ import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
  *
  * O `now` vem de fora (useNowTick no componente) para que a decisão seja
  * determinística em teste e se atualize sozinha na tela a cada tick.
+ *
+ * Segurança do cast abaixo: o endpoint desta lista SEMPRE serializa "Online" ou
+ * "Offline" — o handler do backend reduz o enum a esses dois valores antes do DTO
+ * (PatchQueryHandlers, GetPatchPendingQueryHandler), então Maintenance/Error do
+ * enum AgentStatus nunca chegam aqui. Se isso mudar no servidor, o badge passaria a
+ * tratar Manutenção como Offline e este comentário denuncia o ponto a revisar.
  */
 export function isPendingAgentOnline(agent: PatchPendingAgent, now: number): boolean {
   return isAgentOnlineNow(
@@ -133,12 +140,31 @@ export default function PatchesPending() {
     {
       key: "agent",
       header: "Agente",
-      render: (agent) => (
-        <div>
-          <p className="font-medium text-foreground">{agent.agentDisplayName ?? agent.hostname}</p>
-          <p className="text-xs text-muted">{agent.clientName} · {agent.siteName}</p>
-        </div>
-      ),
+      render: (agent) => {
+        const online = isPendingAgentOnline(agent, now);
+        // Offline com lastSeenAt conhecido: o title mostra quando o agente foi
+        // visto pela última vez (o Badge em si não aceita title).
+        const vistoPorUltimo =
+          !online && agent.lastSeenAt
+            ? `Visto por último em ${formatPatchDate(agent.lastSeenAt)}`
+            : undefined;
+        return (
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-foreground">{agent.agentDisplayName ?? agent.hostname}</p>
+              <span className="inline-flex" title={vistoPorUltimo}>
+                <Badge color={online ? "success" : "slate"}>
+                  <span className="flex items-center gap-1">
+                    <Icon name={online ? "wifi" : "wifi_off"} className="h-2.5 w-2.5" />
+                    {online ? "Online" : "Offline"}
+                  </span>
+                </Badge>
+              </span>
+            </div>
+            <p className="text-xs text-muted">{agent.clientName} · {agent.siteName}</p>
+          </div>
+        );
+      },
     },
     { key: "pending", header: "Pendentes", className: "text-right tabular-nums", sortValue: (agent) => agent.pendingCount, render: (agent) => agent.pendingCount },
     { key: "critical", header: "Críticas", className: "text-right tabular-nums", sortValue: (agent) => agent.criticalCount, render: (agent) => (
@@ -156,31 +182,6 @@ export default function PatchesPending() {
         )}
       </div>
     ) },
-    {
-      // Indicador de agente online. Fica imediatamente antes das ações para não
-      // empurrar as colunas numéricas, que continuam alinhadas à direita.
-      key: "status",
-      header: "Status",
-      render: (agent) => {
-        const online = isPendingAgentOnline(agent, now);
-        // Offline com lastSeenAt conhecido: o title mostra quando o agente foi
-        // visto pela última vez (o Badge em si não aceita title).
-        const vistoPorUltimo =
-          !online && agent.lastSeenAt
-            ? `Visto por último em ${formatPatchDate(agent.lastSeenAt)}`
-            : undefined;
-        return (
-          <span className="inline-flex" title={vistoPorUltimo}>
-            <Badge color={online ? "success" : "slate"}>
-              <span className="flex items-center gap-1">
-                <Icon name={online ? "wifi" : "wifi_off"} className="h-2.5 w-2.5" />
-                {online ? "Online" : "Offline"}
-              </span>
-            </Badge>
-          </span>
-        );
-      },
-    },
     {
       key: "actions",
       header: "",

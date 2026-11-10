@@ -42,6 +42,8 @@ const automationLinks = [
   { to: '/automation/tasks', label: 'Tarefas' },
   { to: '/automation/operations', label: 'Operações' },
   { to: '/automation/audit', label: 'Auditoria' },
+  // Rotulagem automática dos agentes vive na Automação (antes ficava em Configurações).
+  { to: '/automation/agent-labels', label: 'Labels Automáticas' },
 ];
 
 const reportsLinks = [
@@ -73,7 +75,6 @@ const settingsLinks = [
   { to: '/settings/effective', label: 'Config. Efetiva' },
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/notifications', label: 'Notificações' },
-  { to: '/settings/agent-labels', label: 'Labels Automáticas' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },
   { to: '/settings/mcp-tools', label: 'Ferramentas de IA (MCP)' },
   { to: '/settings/agent-updates', label: 'Agent Updates' },
@@ -188,6 +189,15 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     : visibleTicketsLinks.filter(
         ({ to }) => to !== '/tickets/auto-rules' && to !== '/tickets/auto-policy',
       );
+  // A rota /automation/agent-labels repete a permissão do AgentLabelsController
+  // (Agents.View), e NÃO a família automation.*: os dados rotulados são de agentes.
+  // O menu espelha a MESMA regra, para não exibir um link que levaria a 403.
+  const canViewAgentLabels = hasAnyPermission([
+    'agents.*',
+    'agents.view',
+    'Agents.View',
+    'admin.*',
+  ]);
   const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
   const canViewSensors = hasAnyPermission(['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']);
   const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);
@@ -208,6 +218,9 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
       if (to === '/sensors' || to.startsWith('/sensors/')) return canViewSensors;
       return true;
     });
+  const visibleAutomationLinks = canViewAgentLabels
+    ? automationLinks
+    : automationLinks.filter(({ to }) => to !== '/automation/agent-labels');
 
   useEffect(() => {
     if (!isDesktop) onCloseMobile();
@@ -536,7 +549,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             {!effectiveCollapsed && (
               <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen} inert={!automationOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {automationLinks.map(({ to, label }) => (
+                  {visibleAutomationLinks.map(({ to, label }) => (
                     <NavLink
                       key={to}
                       to={to}

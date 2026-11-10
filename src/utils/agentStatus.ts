@@ -1,4 +1,10 @@
-const DEFAULT_AGENT_OFFLINE_FALLBACK_MS = 90 * 1000;
+// Janela de frescor do console. Alinhada ao default do servidor
+// (ServerConfiguration.AgentOnlineGraceSeconds = 120s): o backend só considera o
+// agente Offline depois de now - max(60, grace), então o console não pode dizer
+// "Offline" antes disso. Com 90s, agentes na faixa 90s-120s apareciam Offline na
+// tela enquanto o servidor ainda os tratava como vivos (e mandava comandos).
+// A env VITE_AGENT_OFFLINE_FALLBACK_MS continua tendo precedência.
+const DEFAULT_AGENT_OFFLINE_FALLBACK_MS = 120 * 1000;
 
 function parseFallbackMs(value: string | undefined): number {
   const parsed = Number(value);

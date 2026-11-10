@@ -910,7 +910,7 @@ export default function AgentLabelsSettings() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <PageHeader title="Labels Automáticas" description="Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+        <PageHeader title="Labels Automáticas" description="Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site."   breadcrumb={<Link to="/automation" className="transition-colors hover:text-foreground">Automação</Link>}
       />
         {viewMode === 'list' ? (
           <Button size="sm" onClick={startCreateRule}>
