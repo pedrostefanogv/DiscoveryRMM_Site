@@ -23,7 +23,10 @@ import {
   useDeleteComment,
   useReopenTicket,
   useDeleteTicket,
+  useMergeTickets,
+  useTickets,
 } from '@/hooks/useTickets';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { useAuthorization } from '@/auth/authorization';
 import TicketChatHistory from './TicketChatHistory';
@@ -61,6 +64,7 @@ import {
   useTicketAiTriage,
 } from '@/hooks/useTicketAi';
 import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox,
+Modal,
 PageHeader,
 } from '@/components/ui';
 import { ticketsApi } from '@/api';
@@ -1486,6 +1490,55 @@ function TicketSummaryPanel({
     );
   };
 
+  // ── Mesclagem ───────────────────────────────────────────────────────────
+  // canMerge vem do backend (TicketsController.cs:1126 → treatAllowed). Antes
+  // o campo era declarado no tipo e nunca consumido: a UI não oferecia a ação
+  // e quem podia mesclar não tinha como fazê-lo pelo console.
+  const mergeTickets = useMergeTickets();
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeReason, setMergeReason] = useState('');
+  const [selectedMergeSources, setSelectedMergeSources] = useState<string[]>([]);
+
+  const openMergeModal = () => {
+    setSelectedMergeSources([]);
+    setMergeReason('');
+    setMergeModalOpen(true);
+  };
+
+  const toggleMergeSource = (sourceId: string) => {
+    setSelectedMergeSources((current) =>
+      current.includes(sourceId)
+        ? current.filter((id) => id !== sourceId)
+        : [...current, sourceId],
+    );
+  };
+
+  const confirmMerge = () => {
+    if (selectedMergeSources.length === 0) return;
+    mergeTickets.mutate(
+      {
+        targetTicketId: ticketId,
+        data: {
+          sourceTicketIds: selectedMergeSources,
+          reason: mergeReason.trim() || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            selectedMergeSources.length === 1
+              ? 'Chamado mesclado neste.'
+              : `${selectedMergeSources.length} chamados mesclados neste.`,
+          );
+          setMergeModalOpen(false);
+          setSelectedMergeSources([]);
+        },
+        onError: (error: unknown) =>
+          toast.error(error instanceof Error ? error.message : 'Não foi possível mesclar os chamados.'),
+      },
+    );
+  };
+
   const assumeTicket = () => {
     if (!currentUserId) {
       toast.error('Não foi possível identificar o usuário autenticado.');
@@ -1779,6 +1832,24 @@ function TicketSummaryPanel({
         <TicketRelationsSection ticketId={ticketId} />
       </div>
 
+      {/* Mesclar: só para quem pode TRATAR o chamado (canMerge do backend).
+          A decisão final continua no servidor (POST /tickets/{id}/merge). */}
+      {capabilities.canMerge && (
+        <div className="mt-4 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">Mesclar chamados</p>
+              <p className="mt-0.5 text-xs text-muted">
+                Absorve chamados duplicados neste: comentários e anexos vêm para cá e as origens são encerradas.
+              </p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={openMergeModal}>
+              <Icon name="merge" className="h-4 w-4" /> Mesclar
+            </Button>
+          </div>
+        </div>
+      )}
+
       <RequesterPickerModal
         open={requesterModalOpen}
         users={iamUsers.data ?? []}
@@ -1809,7 +1880,135 @@ function TicketSummaryPanel({
         onClose={() => setDepartmentModalOpen(false)}
         onSave={changeDepartment}
       />
+
+      <MergeTicketsModal
+        open={mergeModalOpen}
+        currentTicketId={ticketId}
+        selectedIds={selectedMergeSources}
+        reason={mergeReason}
+        isSaving={mergeTickets.isPending}
+        onToggle={toggleMergeSource}
+        onReasonChange={setMergeReason}
+        onClose={() => setMergeModalOpen(false)}
+        onConfirm={confirmMerge}
+      />
     </Card>
+  );
+}
+
+/**
+ * Seleção dos chamados de origem da mesclagem.
+ *
+ * Lista só chamados ABERTOS (origem já encerrada não faz sentido absorver) e a
+ * busca já vem escopada pelo backend ao escopo de acesso do usuário — cada
+ * origem escolhida é revalidada no servidor (TicketsController.cs:341).
+ */
+function MergeTicketsModal({
+  open,
+  currentTicketId,
+  selectedIds,
+  reason,
+  isSaving,
+  onToggle,
+  onReasonChange,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  currentTicketId: string;
+  selectedIds: string[];
+  reason: string;
+  isSaving: boolean;
+  onToggle: (id: string) => void;
+  onReasonChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 450);
+  const term = debouncedSearch.trim();
+  const candidatesQuery = useTickets(
+    { text: term || undefined, isClosed: false, limit: 20 },
+    { enabled: open },
+  );
+
+  const candidates = (candidatesQuery.data?.items ?? []).filter(
+    (ticket) => ticket.id !== currentTicketId,
+  );
+
+  if (!open) return null;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Mesclar chamados neste">
+      <div className="space-y-4">
+        <p className="text-sm text-muted">
+          Os chamados escolhidos são absorvidos por este. Comentários e anexos
+          passam para cá e as origens ficam marcadas como duplicadas e encerradas.
+        </p>
+
+        <Input
+          label="Buscar chamados"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Título, descrição ou resposta do questionário"
+        />
+
+        {/* A lista permanece visível durante o refetch: placeholderData do
+            useTickets mantém os itens anteriores em vez de esvaziar o modal. */}
+        {candidatesQuery.isLoading && candidates.length === 0 ? (
+          <Loading />
+        ) : candidatesQuery.isError ? (
+          <p className="text-sm text-danger">Não foi possível carregar os chamados.</p>
+        ) : candidates.length === 0 ? (
+          <p className="text-sm text-muted">Nenhum chamado encontrado.</p>
+        ) : (
+          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+            {candidates.map((ticket) => {
+              const checked = selectedIds.includes(ticket.id);
+              return (
+                <label
+                  key={ticket.id}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2 text-sm transition-colors ${
+                    checked ? 'border-primary/40 bg-primary/10' : 'border-border bg-surface-light'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onToggle(ticket.id)}
+                    className="mt-0.5 h-4 w-4 rounded border-border-strong bg-transparent"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-foreground">{ticket.title}</span>
+                    <span className="block font-mono text-[11px] text-muted">#{ticket.id.slice(0, 8)}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        <Input
+          label="Motivo (opcional)"
+          value={reason}
+          onChange={(event) => onReasonChange(event.target.value)}
+          placeholder="Ex.: duplicados da mesma solicitação"
+        />
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={onConfirm}
+            loading={isSaving}
+            disabled={isSaving || selectedIds.length === 0}
+          >
+            Mesclar {selectedIds.length > 0 ? `(${selectedIds.length})` : ''}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

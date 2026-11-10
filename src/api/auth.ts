@@ -78,6 +78,17 @@ export interface CompleteOtpLoginRequest {
   code: string;
 }
 
+/**
+ * Falha WebAuthn ocorrida no navegador (DOMException). Reportada ao backend para aparecer
+ * no log do servidor: no fluxo híbrido do Android a cerimônia morre no celular e nenhuma
+ * requisição de MFA chega a ser feita, então sem este canal o caso não deixa rastro.
+ */
+export interface Fido2ClientErrorRequest {
+  errorName: string | null;
+  errorMessage: string | null;
+  stage: string | null;
+}
+
 export interface BeginTotpRegistrationResponse {
   secretBase32: string;
   qrCodeUri: string;
@@ -179,6 +190,14 @@ export const authApi = {
   completeLoginFido2: (token: string, request: CompleteFido2AssertionRequest) =>
     api.post<TokenPair>(
       "/api/v1/auth/mfa/fido2/complete",
+      request,
+      withBearer(token),
+    ),
+
+  /** Telemetria: registra no servidor a falha WebAuthn que aconteceu no navegador. */
+  reportFido2ClientError: (token: string, request: Fido2ClientErrorRequest) =>
+    api.post<void>(
+      "/api/v1/auth/mfa/fido2/client-error",
       request,
       withBearer(token),
     ),

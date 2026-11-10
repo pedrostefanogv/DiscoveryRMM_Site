@@ -14,6 +14,41 @@ import {
 } from "@/auth/webauthn";
 import { Icon, Button, Card, CardHeader, Input } from "@/components/ui";
 
+/**
+ * Envia ao backend o nome do DOMException que abortou a cerimônia WebAuthn. Best-effort:
+ * qualquer falha é ignorada — é telemetria, não parte do fluxo de autenticação.
+ */
+async function reportFido2ClientError(caught: unknown, stage: string, token?: string) {
+  if (!token) {
+    return;
+  }
+
+  const isDomException =
+    typeof DOMException !== "undefined" && caught instanceof DOMException;
+
+  const errorName = isDomException
+    ? caught.name
+    : caught instanceof Error
+      ? caught.name || null
+      : null;
+
+  if (!errorName) {
+    return;
+  }
+
+  const errorMessage = caught instanceof Error ? caught.message ?? null : null;
+
+  try {
+    await authApi.reportFido2ClientError(token, {
+      errorName,
+      errorMessage,
+      stage,
+    });
+  } catch {
+    // Silencioso de propósito.
+  }
+}
+
 function resolveRoleMfaRequirement(roleMfaRequirement: string | undefined) {
   if (roleMfaRequirement === "Totp") return "Totp";
   if (roleMfaRequirement === "Fido2") return "Fido2";
@@ -137,6 +172,11 @@ export default function MfaAssertionPage() {
       setError(message);
       toast.error(message);
       setTemporaryStage("mfa-assert-begin");
+
+      // Telemetria: o erro de WebAuthn acontece no navegador e não chega ao servidor —
+      // sem este report o caso "desaparece" dos logs (foi o que aconteceu com a passkey
+      // do Android). É best-effort: falhar aqui não pode piorar a tela de MFA.
+      void reportFido2ClientError(caught, "mfa-assert", token);
     } finally {
       setIsRunning(false);
     }

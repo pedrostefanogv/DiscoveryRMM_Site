@@ -1145,17 +1145,27 @@ export interface TicketSavedView {
   updatedAt: string;
 }
 
+/**
+ * O backend recebe o JSON do filtro como STRING opaca
+ * (TicketSavedViewsController.cs:52 — record FilterJson) e devolve o mesmo
+ * texto em TicketSavedView.filterJson.
+ *
+ * Antes o cliente enviava `filter` (objeto camelCase), propriedade que o
+ * record NÃO tem: o ASP.NET vinculava FilterJson = null e o handler gravava
+ * `"{}"` — ou seja, TODA visão salva perdia os filtros no servidor, e
+ * parseSavedViewFilter sempre lia vazio. O nome do campo agora é o do contrato.
+ */
 export interface CreateTicketSavedViewRequest {
   name: string;
   userId?: string | null;
   isShared?: boolean;
-  filter?: TicketSavedViewFilter | null;
+  filterJson?: string | null;
 }
 
 export interface UpdateTicketSavedViewRequest {
   name: string;
   isShared?: boolean;
-  filter?: TicketSavedViewFilter | null;
+  filterJson?: string | null;
 }
 
 export interface TicketKpiByAssignee {

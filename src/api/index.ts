@@ -39,6 +39,7 @@ export type {
 export type {
   ReopenTicketRequest,
   RateTicketRequest,
+  MergeTicketsRequest,
   TicketRelationKind,
   CreateTicketRelationRequest,
   TicketRelationDto,

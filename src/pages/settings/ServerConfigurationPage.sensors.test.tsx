@@ -48,6 +48,26 @@ const SERVER_CONFIG = {
   }),
 };
 
+/**
+ * Quantos toggles do grupo "features" aparecem LIGADOS com a SERVER_CONFIG
+ * abaixo. O contador "Módulos ativos" da página usa exatamente esta regra: um
+ * campo ligado é o que estiver true no servidor; sem valor no servidor, vale o
+ * defaultValue declarado pelo campo (é o que espelha o appsettings).
+ *
+ * Antes este teste fixava "1/N" no texto: só recoveryEnabled estava ligado no
+ * fixture. Os kill switches do GRUPO A (CFG-A) entraram no grupo com
+ * defaultValue true (o mesmo do appsettings), então derivar o número evita
+ * quebrar o teste a cada toggle novo — o que ele realmente protege é que o blob
+ * JSON (SensorsSettingsJson) NÃO entre no denominador.
+ */
+const CONFIG_BY_KEY = SERVER_CONFIG as Record<string, unknown>;
+const ACTIVE_FEATURE_TOGGLE_COUNT = serverEditableFields.filter((field) => {
+  if (field.group !== "features" || field.kind !== "boolean") return false;
+  const configured = CONFIG_BY_KEY[field.key];
+  if (configured !== undefined && configured !== null) return configured === true;
+  return field.defaultValue === "true";
+}).length;
+
 const { patchMutate, toastSuccess, toastError } = vi.hoisted(() => ({
   patchMutate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -146,9 +166,15 @@ describe("ServerConfigurationPage — campos de funcionalidades por kind", () =>
   it("conta apenas toggles booleanos em Módulos ativos", () => {
     renderPage();
 
-    // recoveryEnabled = true; o blob JSON não entra no denominador.
+    // O blob JSON não entra no denominador. O numerador conta os toggles
+    // LIGADOS: recoveryEnabled (true no fixture) + os kill switches do GRUPO A
+    // que não têm valor no fixture e caem no defaultValue true do catálogo.
     expect(FEATURE_TOGGLE_COUNT).toBeGreaterThan(0);
-    expect(screen.getByText("1/" + FEATURE_TOGGLE_COUNT)).toBeTruthy();
+    expect(ACTIVE_FEATURE_TOGGLE_COUNT).toBeGreaterThan(0);
+    expect(ACTIVE_FEATURE_TOGGLE_COUNT).toBeLessThan(FEATURE_TOGGLE_COUNT);
+    expect(
+      screen.getByText(ACTIVE_FEATURE_TOGGLE_COUNT + "/" + FEATURE_TOGGLE_COUNT),
+    ).toBeTruthy();
   });
 
   it("alternar um módulo booleano continua enviando booleano no PATCH", async () => {

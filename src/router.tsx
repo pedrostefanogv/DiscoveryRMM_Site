@@ -185,7 +185,13 @@ export const router = createBrowserRouter([
         // e o console de remote debug: a conversa continua viva mesmo que o
         // atendente feche ou navegue no detalhe do chamado.
         path: 'tickets/:id/chat',
-        element: <LazyPage><TicketChatWindow /></LazyPage>,
+        element: (
+          // Defense in depth: a API já exige Tickets.View, mas sem o gate a
+          // janela de chat renderizava a casca para quem não tem acesso.
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'admin.*']}>
+            <LazyPage><TicketChatWindow /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         // Janela DEDICADA do chat de suporte da MÁQUINA (sem chamado), aberta
@@ -262,11 +268,19 @@ export const router = createBrowserRouter([
       },
       {
         path: 'tickets/alerts',
-        element: <LazyPage><TicketAlertsPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'admin.*']}>
+            <LazyPage><TicketAlertsPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'tickets/sla',
-        element: <LazyPage><TicketSlaPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'admin.*']}>
+            <LazyPage><TicketSlaPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'tickets/csat',

@@ -99,6 +99,12 @@ export interface TicketCapabilities {
   code?: string | null;
 }
 
+export interface MergeTicketsRequest {
+  /** Chamados que serão absorvidos pelo destino (nunca inclua o próprio destino). */
+  sourceTicketIds: string[];
+  reason?: string | null;
+}
+
 export interface RateTicketRequest {
   rating: number;
   feedback?: string | null;
@@ -363,6 +369,19 @@ export const ticketsApi = {
 
   rate: (id: string, data: RateTicketRequest) =>
     api.post<Ticket>(`${BASE}/${id}/rating`, data),
+
+  /**
+   * Mescla chamados de ORIGEM neste chamado (destino).
+   *
+   * Backend: POST /tickets/{id}/merge (TicketsController.cs:330), que exige
+   * ActionType.Edit no chamado destino E acesso a cada origem. A UI só oferece
+   * a ação quando capabilities.canMerge é true — a checagem real é do servidor.
+   */
+  merge: (targetTicketId: string, data: MergeTicketsRequest) =>
+    api.post<{ targetTicketId: string; mergedCount: number }>(
+      `${BASE}/${targetTicketId}/merge`,
+      data,
+    ),
 
   // Relations
   listRelations: (id: string) =>

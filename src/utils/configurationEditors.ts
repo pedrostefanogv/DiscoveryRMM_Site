@@ -36,6 +36,15 @@ export interface EditableField {
   unit?: string;
   /** Opções para fields do tipo "select" (value = id enviado à API). */
   options?: { value: string; label: string }[];
+  /**
+   * Default do campo quando o servidor ainda não devolveu valor.
+   *
+   * Sem isto o form assume "false" para TODO booleano (fieldDefault). Nos kill
+   * switches do GRUPO A isso inverteria a tela: 9 dos 10 são ligados no
+   * appsettings, então a configuração abriria mostrando tudo desligado — e um
+   * "salvar" desligaria features ativas em produção.
+   */
+  defaultValue?: string;
 }
 
 const AI_INTEGRATION_FIELD_KEY = "aiIntegrationSettingsJson";
@@ -67,6 +76,36 @@ export const REMOTE_CONSENT_MODE_OPTIONS: { value: string; label: string }[] = [
 export const REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS: { value: string; label: string }[] = [
   { value: "Deny", label: "Negar automaticamente" },
   { value: "Approve", label: "Aprovar automaticamente" },
+];
+
+/**
+ * Autorização por departamento (Tickets:DepartmentAuth:ShadowMode).
+ *
+ * O backend expõe o estado como BOOLEANO (DepartmentAuthShadowMode), NÃO como
+ * enum: ITicketAccessPolicy.ShadowMode é bool e o controller deriva canTreat
+ * dele (TicketsController.cs:1141). Um enum criaria duas representações do
+ * mesmo estado.
+ *
+ * Por isso NÃO existe uma lista de options aqui: o campo é renderizado como
+ * switch (kind "boolean") e mandar string no PATCH devolveria 400 — o mesmo
+ * bug histórico do SensorsSettingsJson. Este rótulo só documenta o mapeamento
+ * de negócio usado no label/description do campo.
+ *
+ * ATENÇÃO ao inverter: true = OBSERVAÇÃO (não bloqueia ninguém).
+ */
+export const DEPARTMENT_AUTH_SHADOW_MODE_LABELS = {
+  true: "Observação",
+  false: "Ativo",
+} as const;
+
+/**
+ * Modo do contrato de realtime (RealtimeContract:Mode no appsettings).
+ * Valores aceitos pelo backend; qualquer outro cai no default "auto".
+ */
+export const REALTIME_CONTRACT_MODE_OPTIONS: { value: string; label: string }[] = [
+  { value: "auto", label: "Automático (adapta ao emissor)" },
+  { value: "strict", label: "Estrito (rejeita emissores legados)" },
+  { value: "legacy", label: "Legado (aceita apenas o contrato antigo)" },
 ];
 
 const REMOTE_CONSENT_FIELDS: EditableField[] = [
@@ -389,6 +428,115 @@ export const serverEditableFields: EditableField[] = [
       "Permite que agentes sem credenciais se registrem sozinhos pela rede (P2P onboarding). Requer Descoberta de Rede ativa para os agentes se encontrarem.",
   },
   {
+    key: "knowledgeEmbeddingEnabled",
+    label: "Embeddings da Base de Conhecimento",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Desliga o KnowledgeEmbeddingJob: para de re-chunkar artigos, de gerar embeddings em lote e de consumir a fila de artigos alterados (a busca semântica da base de conhecimento deixa de receber conteúdo novo). O gate é de AGENDAMENTO no Quartz — desligar exige reiniciar a API para o job sair do scheduler. Ligado por padrão no servidor.",
+  },
+  // ── Kill switches de feature (GRUPO A da auditoria appsettings × UI) ──────
+  // Antes só existiam no appsettings.json: para ligar/desligar era preciso
+  // editar o arquivo no servidor e reiniciar. O default de cada um reproduz o
+  // valor que já estava em produção (zero surpresa ao subir esta versão).
+  {
+    // kind BOOLEAN de propósito (não select): a propriedade no backend é
+    // bool? (DepartmentAuthShadowMode). Um "select" mandaria STRING no PATCH e
+    // a API devolveria 400 — exatamente o bug histórico do SensorsSettingsJson
+    // (JSON renderizado como switch). O estado Observação/Ativo é o MESMO
+    // booleano: true = Observação, false = Ativo. O rótulo e a description
+    // deixam o mapeamento explícito para o usuário.
+    key: "departmentAuthShadowMode",
+    label: "Autorização por departamento — Observação / Ativo",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Observação (ligado) = registra no log quem SERIA barrado, sem bloquear ninguém. Ativo (desligado) = somente o time do departamento trata o chamado; quem abriu só encerra o próprio. LIGAR SEM POPULAR OS TIMES BLOQUEIA TODOS que não têm acesso global. Padrão: Observação (ligado). Tem efeito imediato — não exige reiniciar a API.",
+  },
+  {
+    key: "pushEnabled",
+    label: "Notificações Push (Web Push)",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Envia notificações push para os navegadores inscritos. Desligado, nenhuma inscrição recebe aviso (as chaves VAPID continuam sendo lidas do ambiente). Exige reiniciar a API.",
+  },
+  {
+    key: "wingetCatalogEnabled",
+    label: "Catálogo Winget",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Habilita a sincronização do catálogo de aplicativos winget. Desligado, o sync do catálogo para e a Loja de Aplicativos deixa de receber pacotes novos (o que já foi sincronizado continua disponível). Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessEnabled",
+    label: "Acesso Remoto",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Liga o acesso remoto (área de trabalho, terminal, arquivos, proxy e processos). Desligar derruba o acesso remoto de TODA a frota — os agentes recusam novas sessões. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessRecordingEnabled",
+    label: "Gravação das Sessões Remotas",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Grava as sessões de acesso remoto para auditoria. Desligado, novas sessões não são gravadas (as gravações existentes são preservadas até expirar). Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessRecordingAutoDeleteExpired",
+    label: "Excluir Gravações Expiradas Automaticamente",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Remove as gravações de sessão após o período de retenção. Desligado, as gravações vencidas continuam armazenadas e o consumo de disco cresce sem limite — a limpeza passa a ser manual. Exige reiniciar a API.",
+  },
+  {
+    key: "automaticLoggingEnabled",
+    label: "Log Automático",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "advanced",
+    description:
+      "Coleta automática de logs pelos agentes. Desligado, os agentes param de enviar logs e o visualizador de logs deixa de receber eventos novos (o histórico já coletado é preservado). Exige reiniciar a API.",
+  },
+  {
+    key: "openTelemetryEnabled",
+    label: "OpenTelemetry (traces e métricas)",
+    kind: "boolean",
+    defaultValue: "false",
+    group: "advanced",
+    description:
+      "Liga a exportação de traces e métricas via OTLP. Exige um coletor OTLP configurado; sem ele não há export (a instrumentação fica ativa, mas nada é enviado). Padrão: desligado. Exige reiniciar a API.",
+  },
+  {
+    key: "migrationsRunOnStartup",
+    label: "Rodar Migrações na Inicialização",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "advanced",
+    description:
+      "Aplica as migrações do banco automaticamente quando a API sobe. Desligar impede que migrações rodem no boot — novas instalações ficam com schema desatualizado. Mantenha ligado a menos que aplique migrações manualmente. Exige reiniciar a API.",
+  },
+  {
+    key: "realtimeContractMode",
+    label: "Modo do Contrato de Realtime",
+    kind: "select",
+    defaultValue: "auto",
+    group: "advanced",
+    options: REALTIME_CONTRACT_MODE_OPTIONS,
+    description:
+      "Automático adapta o payload ao emissor; Estrito pode rejeitar emissores legados e quebrar o dashboard em tempo real; Legado aceita apenas o contrato antigo. Padrão: Automático. Exige reiniciar a API.",
+  },
+  {
     key: "windowsUpdateEnabled",
     label: "Gerenciador de Patches (Windows Update)",
     kind: "boolean",
@@ -698,6 +846,14 @@ export const clientEditableFields: EditableField[] = [
       "Requer Descoberta de Rede ativa neste escopo ou herdada para os agentes se encontrarem.",
   },
   {
+    key: "knowledgeEmbeddingEnabled",
+    label: "Embeddings da Base de Conhecimento",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Vazio herda do servidor (padrão: ligado). Desligar para de re-chunkar artigos e de gerar embeddings neste cliente; o gate é de AGENDAMENTO no Quartz, então é preciso reiniciar a API para reavaliar.",
+  },
+  {
     key: "appStorePolicy",
     label: "Política da Loja de Aplicativos",
     kind: "policy",
@@ -710,6 +866,73 @@ export const clientEditableFields: EditableField[] = [
     group: "features",
     description:
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do servidor.",
+  },
+  // ── Kill switches herdáveis (GRUPO A da auditoria appsettings × UI) ───────
+  // Vazio (null) = herda do servidor. Os campos que NÃO herdam
+  // (openTelemetryEnabled, realtimeContractMode, migrationsRunOnStartup) ficam
+  // só no escopo do servidor — enviá-los aqui devolveria 400.
+  {
+    key: "departmentAuthShadowMode",
+    label: "Autorização por departamento — Observação / Ativo",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Observação (ligado) = registra no log quem SERIA barrado, sem bloquear ninguém. Ativo (desligado) = somente o time do departamento trata o chamado; quem abriu só encerra o próprio. LIGAR SEM POPULAR OS TIMES BLOQUEIA TODOS que não têm acesso global. Vazio herda do servidor (padrão: Observação). Exige reiniciar a API.",
+  },
+  {
+    key: "pushEnabled",
+    label: "Notificações Push (Web Push)",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Envia notificações push para os navegadores inscritos. Vazio herda do servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "wingetCatalogEnabled",
+    label: "Catálogo Winget",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Habilita a sincronização do catálogo de aplicativos winget. Desligado, a Loja de Aplicativos deste cliente deixa de receber pacotes novos. Vazio herda do servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessEnabled",
+    label: "Acesso Remoto",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Liga o acesso remoto (área de trabalho, terminal, arquivos, proxy e processos). Desligar derruba o acesso remoto de toda a frota DESTE cliente. Vazio herda do servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessRecordingEnabled",
+    label: "Gravação das Sessões Remotas",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Grava as sessões de acesso remoto para auditoria. Desligado, novas sessões deste cliente não são gravadas. Vazio herda do servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessRecordingAutoDeleteExpired",
+    label: "Excluir Gravações Expiradas Automaticamente",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Remove as gravações de sessão após o período de retenção. Desligado, as gravações vencidas continuam armazenadas e o consumo de disco cresce sem limite. Vazio herda do servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "automaticLoggingEnabled",
+    label: "Log Automático",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "advanced",
+    description:
+      "Coleta automática de logs pelos agentes. Desligado, os agentes deste cliente param de enviar logs. Vazio herda do servidor. Exige reiniciar a API.",
   },
   ...REMOTE_CONSENT_FIELDS,
   {
@@ -828,6 +1051,14 @@ export const siteEditableFields: EditableField[] = [
       "Requer Descoberta de Rede ativa neste escopo ou herdada para os agentes se encontrarem.",
   },
   {
+    key: "knowledgeEmbeddingEnabled",
+    label: "Embeddings da Base de Conhecimento",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Vazio herda do cliente e, na ausência dele, do servidor (padrão: ligado). Desligar para de re-chunkar artigos e de gerar embeddings neste site; o gate é de AGENDAMENTO no Quartz, então é preciso reiniciar a API para reavaliar.",
+  },
+  {
     key: "appStorePolicy",
     label: "Política da Loja de Aplicativos",
     kind: "policy",
@@ -840,6 +1071,73 @@ export const siteEditableFields: EditableField[] = [
     group: "features",
     description:
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do cliente/servidor.",
+  },
+  // ── Kill switches herdáveis (GRUPO A da auditoria appsettings × UI) ───────
+  // Vazio (null) = herda do cliente e, na ausência dele, do servidor. Os campos
+  // que NÃO herdam (openTelemetryEnabled, realtimeContractMode,
+  // migrationsRunOnStartup) ficam só no escopo do servidor.
+  {
+    key: "departmentAuthShadowMode",
+    label: "Autorização por departamento — Observação / Ativo",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Observação (ligado) = registra no log quem SERIA barrado, sem bloquear ninguém. Ativo (desligado) = somente o time do departamento trata o chamado; quem abriu só encerra o próprio. LIGAR SEM POPULAR OS TIMES BLOQUEIA TODOS que não têm acesso global. Vazio herda do cliente/servidor (padrão: Observação). Exige reiniciar a API.",
+  },
+  {
+    key: "pushEnabled",
+    label: "Notificações Push (Web Push)",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Envia notificações push para os navegadores inscritos. Vazio herda do cliente/servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "wingetCatalogEnabled",
+    label: "Catálogo Winget",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "features",
+    description:
+      "Habilita a sincronização do catálogo de aplicativos winget. Desligado, a Loja de Aplicativos deste site deixa de receber pacotes novos. Vazio herda do cliente/servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessEnabled",
+    label: "Acesso Remoto",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Liga o acesso remoto (área de trabalho, terminal, arquivos, proxy e processos). Desligar derruba o acesso remoto de toda a frota DESTE site. Vazio herda do cliente/servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessRecordingEnabled",
+    label: "Gravação das Sessões Remotas",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Grava as sessões de acesso remoto para auditoria. Desligado, novas sessões deste site não são gravadas. Vazio herda do cliente/servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "remoteAccessRecordingAutoDeleteExpired",
+    label: "Excluir Gravações Expiradas Automaticamente",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "remoteAccess",
+    description:
+      "Remove as gravações de sessão após o período de retenção. Desligado, as gravações vencidas continuam armazenadas e o consumo de disco cresce sem limite. Vazio herda do cliente/servidor. Exige reiniciar a API.",
+  },
+  {
+    key: "automaticLoggingEnabled",
+    label: "Log Automático",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "advanced",
+    description:
+      "Coleta automática de logs pelos agentes. Desligado, os agentes deste site param de enviar logs. Vazio herda do cliente/servidor. Exige reiniciar a API.",
   },
   ...REMOTE_CONSENT_FIELDS,
   {
@@ -1149,7 +1447,13 @@ export function validateFieldValue(
   if (kind === "select") {
     // A lista válida é publicada pelo servidor (agentHomeTabOptions) e a
     // validação definitiva é dele; aqui só garantimos que algo foi escolhido.
-    return trimmed.length > 0 ? true : "Selecione uma aba para a página inicial do agent";
+    if (trimmed.length > 0) {
+      return true;
+    }
+
+    return fieldKey === "realtimeContractMode"
+      ? "Selecione o modo do contrato de realtime"
+      : "Selecione uma aba para a página inicial do agent";
   }
 
   return true;
@@ -1343,14 +1647,32 @@ export function isConfigFlagOn(
   return value === true || value === "true";
 }
 
-export function fieldDefault(kind: EditableFieldKind): string {
+/**
+ * Default de um campo quando o servidor ainda não devolveu valor.
+ *
+ * Para "select" o default é a PRIMEIRA opção declarada pelo próprio campo, não
+ * uma constante global: com a constante antiga ("status", default de
+ * agentHomeTab) qualquer outro select — como realtimeContractMode — nascia com
+ * um valor inválido e o PATCH era recusado. Sem options declaradas, cai no
+ * default histórico de agentHomeTab para não mudar o comportamento existente.
+ */
+export function fieldDefault(
+  kind: EditableFieldKind,
+  field?: Pick<EditableField, "key" | "options" | "defaultValue">,
+): string {
+  // Default declarado pelo próprio campo vence: é o que espelha o appsettings.
+  if (field?.defaultValue) return field.defaultValue;
   if (kind === "boolean") return "false";
   if (kind === "number") return "0";
   if (kind === "json") return "{}";
   // PreApproved: espelha o default de ServerConfiguration.AppStorePolicy no backend.
   if (kind === "policy") return "1";
-  // status: espelha o default de ServerConfiguration.AgentHomeTab no backend.
-  if (kind === "select") return "status";
+  if (kind === "select") {
+    const firstOption = field?.options?.[0]?.value;
+    if (firstOption) return firstOption;
+    // status: espelha o default de ServerConfiguration.AgentHomeTab no backend.
+    return "status";
+  }
   return "";
 }
 
@@ -1364,7 +1686,7 @@ export function buildServerDraft(
       source?.[field.key] as ConfigurationValue | undefined,
       field.key,
     );
-    draft[field.key] = raw !== "" ? raw : fieldDefault(field.kind);
+    draft[field.key] = raw !== "" ? raw : fieldDefault(field.kind, field);
   }
   return draft;
 }

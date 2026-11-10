@@ -14,6 +14,7 @@ import type {
   StartTicketRemoteSessionRequest,
   ReopenTicketRequest,
   RateTicketRequest,
+  MergeTicketsRequest,
   CreateTicketRelationRequest,
   CursorPageDto,
 } from "@/api";
@@ -140,6 +141,31 @@ export function useUpdateTicket() {
     mutationFn: ({ id, data }: { id: string; data: UpdateTicketRequest }) =>
       ticketsApi.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+}
+
+/**
+ * Mescla chamados de origem no chamado destino.
+ *
+ * A autorização vem de capabilities.canMerge (backend) — este hook não decide
+ * nada; só executa quando a UI já confirmou que a ação é permitida.
+ */
+export function useMergeTickets() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      targetTicketId,
+      data,
+    }: {
+      targetTicketId: string;
+      data: MergeTicketsRequest;
+    }) => ticketsApi.merge(targetTicketId, data),
+    onSuccess: (_result, vars) => {
+      // O destino muda (comentários/anexos absorvidos) e cada origem vira
+      // duplicata encerrada — as duas listas e as timelines ficam stale.
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.targetTicketId) });
+    },
   });
 }
 

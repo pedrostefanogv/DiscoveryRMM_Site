@@ -16,6 +16,7 @@ import { useSites } from '@/hooks/useSites';
 import { useAgent, useAgentsBySite } from '@/hooks/useAgents';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useMyDepartments, useTicketCapabilities } from '@/hooks/useTicketCapabilities';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
 import { useTicketTemplates } from '@/hooks/useSupportProductivity';
 import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
@@ -333,6 +334,12 @@ export default function TicketList() {
   const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>(DEFAULT_STATUS_FILTER);
   const [filterText, setFilterText] = useState('');
   const [filterTemplate, setFilterTemplate] = useState('');
+  // Responsável (id de usuário). Dois atalhos o escrevem, além do seletor:
+  // "Atribuídos a mim" (currentUserId) e a aplicação de uma visão salva.
+  const [filterAssignedToUserId, setFilterAssignedToUserId] = useState('');
+  // Fila "Meu time": liga o filtro pelos departamentos em que o usuário é
+  // membro ativo do time (backend: GET /tickets/my-departments).
+  const [filterMyDepartments, setFilterMyDepartments] = useState(false);
   const [filterAnswerKey, setFilterAnswerKey] = useState('');
   const [filterAnswerValue, setFilterAnswerValue] = useState('');
   const [filterAnswerMatch, setFilterAnswerMatch] = useState<TicketAnswerMatch>(TicketAnswerMatch.Exact);
@@ -365,10 +372,28 @@ export default function TicketList() {
     [session.accessToken],
   );
 
+  // Departamentos em que o usuário é membro ativo do time. Alimenta a fila
+  // "Meu time": antes o hook existia e não tinha nenhum consumidor, então a UI
+  // não tinha como saber os vínculos do usuário logado (o backend já filtrava
+  // por departamento, mas o console não conseguia nem listar os seus).
+  const myDepartmentsQuery = useMyDepartments();
+  const myDepartmentIds = useMemo(
+    () => myDepartmentsQuery.data?.departmentIds ?? [],
+    [myDepartmentsQuery.data],
+  );
+  // A fila "Meu time" é uma UNIÃO de departamentos (o backend aceita um único
+  // departmentId por consulta). Com 1 departamento envia direto — mantém o
+  // filtro no servidor e a paginação por cursor correta; com vários, o filtro
+  // preciso é aplicado no cliente sobre a página carregada.
+  const myDepartmentsFilterId =
+    filterMyDepartments && myDepartmentIds.length === 1 ? myDepartmentIds[0] : undefined;
+
   const cursor = pageCursors[page - 1];
   const tickets = useTickets({
     clientId: filterClient || undefined,
     workflowStateId: filterState || undefined,
+    departmentId: myDepartmentsFilterId,
+    assignedToUserId: filterAssignedToUserId || undefined,
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     // Debounced: evita um request de listagem a cada tecla (o input continua
@@ -387,6 +412,8 @@ export default function TicketList() {
   const kpiQuery = useTicketKpi({
     clientId: filterClient || undefined,
     workflowStateId: filterState || undefined,
+    departmentId: myDepartmentsFilterId,
+    assignedToUserId: filterAssignedToUserId || undefined,
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: deferredFilterText.trim() || undefined,
@@ -428,7 +455,16 @@ export default function TicketList() {
     [states.data],
   );
 
-  const visibleTickets = tickets.data?.items ?? [];
+  // Fila "Meu time" com MAIS DE UM departamento: o backend aceita um único
+  // departmentId por consulta, então a união é aplicada sobre a página já
+  // carregada. Com um único vínculo o filtro vai ao servidor (acima) e este
+  // passo é um no-op.
+  const myDepartmentsIdSet = useMemo(() => new Set(myDepartmentIds), [myDepartmentIds]);
+  const visibleTickets = useMemo(() => {
+    const items = tickets.data?.items ?? [];
+    if (!filterMyDepartments || myDepartmentsIdSet.size <= 1) return items;
+    return items.filter((ticket) => !!ticket.departmentId && myDepartmentsIdSet.has(ticket.departmentId));
+  }, [tickets.data, filterMyDepartments, myDepartmentsIdSet]);
   const hoverPreviewTicket = useMemo(() => {
     if (!hoverPreviewTicketId) return null;
     if (hoverPreviewTicketQuery.data) return hoverPreviewTicketQuery.data;
@@ -538,6 +574,8 @@ export default function TicketList() {
     filterClient ? 'Cliente' : '',
     filterTemplate ? 'Template' : '',
     filterAnswerKey || filterAnswerValue.trim() ? 'Resposta do questionário' : '',
+    filterAssignedToUserId ? 'Responsável' : '',
+    filterMyDepartments ? 'Meu time' : '',
   ]
     .filter(Boolean)
     .join(', ');
@@ -547,6 +585,8 @@ export default function TicketList() {
     Boolean(filterPriority) ||
     Boolean(filterText) ||
     Boolean(filterTemplate) ||
+    Boolean(filterAssignedToUserId) ||
+    filterMyDepartments ||
     Boolean(filterAnswerKey) ||
     filterStatus !== DEFAULT_STATUS_FILTER;
 
@@ -574,6 +614,15 @@ export default function TicketList() {
       value: '',
       label: iamUsersQuery.isLoading ? 'Carregando usuarios...' : 'Manter responsável atual',
     },
+    ...(iamUsersQuery.data ?? []).map((user) => ({
+      value: user.id,
+      label: user.fullName || user.login || user.email || user.id,
+    })),
+  ];
+  // Filtro por responsável: "Todos" + os usuários do escopo. Reaproveita a
+  // mesma origem do seletor de transferência (iamUsers) para não divergir.
+  const assignedToOptions = [
+    { value: '', label: 'Todos os responsáveis' },
     ...(iamUsersQuery.data ?? []).map((user) => ({
       value: user.id,
       label: user.fullName || user.login || user.email || user.id,
@@ -776,6 +825,13 @@ export default function TicketList() {
     );
   };
 
+  // Capacidades do chamado-alvo do menu de contexto. O hook aceita undefined e
+  // fica desabilitado até haver alvo; enquanto não resolve, o padrão é NEGAR
+  // (useTicketCapabilities devolve tudo false), então o menu já nasce fechado.
+  const { capabilities: targetTicketCapabilities } = useTicketCapabilities(
+    ticketContextMenu?.ticket.id,
+  );
+
   const closeAssignModal = () => {
     setAssignModalOpen(false);
     setAssignTargetTicket(null);
@@ -806,7 +862,8 @@ export default function TicketList() {
 
     const rect = pageRef.current.getBoundingClientRect();
     const menuWidth = 248;
-    const menuHeight = 164;
+    // Base do menu + a linha extra de explicação do gate de atribuição.
+    const menuHeight = 164 + 40;
     const rawX = event.clientX - rect.left;
     const rawY = event.clientY - rect.top;
 
@@ -846,6 +903,19 @@ export default function TicketList() {
   const handleContextMenuTakeOwnership = async () => {
     if (!ticketContextMenu) return;
 
+    // Fail-closed: as capacidades vêm do backend (GET /tickets/{id}/capabilities)
+    // e enquanto não chegam ficam todas falsas. Sem ISTO o menu oferecia
+    // "Assumir"/"Transferir" para quem o backend recusa (403) — o gating era só
+    // isPending/currentUserId, que não diz nada sobre o time do departamento.
+    if (!targetTicketCapabilities.canAssign) {
+      toast.error(
+        targetTicketCapabilities.reason ??
+          'Você não tem permissão para atribuir este chamado.',
+      );
+      setTicketContextMenu(null);
+      return;
+    }
+
     if (!currentUserId) {
       toast.error('Não foi possível identificar o usuário autenticado.');
       return;
@@ -867,6 +937,15 @@ export default function TicketList() {
 
   const handleContextMenuOpenAssign = () => {
     if (!ticketContextMenu) return;
+
+    if (!targetTicketCapabilities.canAssign) {
+      toast.error(
+        targetTicketCapabilities.reason ??
+          'Você não tem permissão para transferir este chamado.',
+      );
+      setTicketContextMenu(null);
+      return;
+    }
 
     setAssignTargetTicket(ticketContextMenu.ticket);
     setAssignTargetUserId(ticketContextMenu.ticket.assignedToUserId ?? '');
@@ -924,6 +1003,8 @@ export default function TicketList() {
     setFilterStatus(DEFAULT_STATUS_FILTER);
     setFilterText('');
     setFilterTemplate('');
+    setFilterAssignedToUserId('');
+    setFilterMyDepartments(false);
     setFilterAnswerKey('');
     setFilterAnswerValue('');
     setFilterAnswerMatch(TicketAnswerMatch.Exact);
@@ -934,6 +1015,12 @@ export default function TicketList() {
   const buildCurrentFilter = (): TicketSavedViewFilter => ({
     clientId: filterClient || undefined,
     workflowStateId: filterState || undefined,
+    // Assimetria corrigida: parseSavedViewFilter já LIA assignedToUserId, mas
+    // buildCurrentFilter o descartava — salvar uma visão com o filtro de
+    // responsável ativo gravava um JSON sem ele e "Aplicar" nunca o restaurava.
+    // O backend aceita o campo (TicketQueryService.cs:39), então a visão volta
+    // completa: o que é lido ao aplicar também precisa ser gravado ao salvar.
+    assignedToUserId: filterAssignedToUserId || undefined,
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: filterText.trim() || undefined,
@@ -957,6 +1044,12 @@ export default function TicketList() {
     );
     setFilterText(filter.text ?? '');
     setFilterTemplate(filter.templateId ?? '');
+    // A visão salva grava assignedToUserId (buildCurrentFilter) e agora também
+    // o restaura ao aplicar — antes o campo era lido do JSON e descartado aqui.
+    setFilterAssignedToUserId(filter.assignedToUserId ?? '');
+    // A fila "Meu time" é um filtro derivado dos vínculos do usuário, não um
+    // parâmetro de visão salva: aplicar uma visão não deve ligá-la.
+    setFilterMyDepartments(false);
     setFilterAnswerKey(filter.answerKey ?? '');
     setFilterAnswerValue(filter.answerValue ?? '');
     setFilterAnswerMatch(filter.answerMatch ?? TicketAnswerMatch.Exact);
@@ -1052,7 +1145,8 @@ export default function TicketList() {
           data: {
             name: savedViewForm.name.trim(),
             isShared: savedViewForm.isShared,
-            filter: buildCurrentFilter(),
+            // String, não objeto: é o contrato do backend (record FilterJson).
+            filterJson: JSON.stringify(buildCurrentFilter()),
           },
         });
         setActiveSavedViewId(editingSavedView.id);
@@ -1062,7 +1156,7 @@ export default function TicketList() {
           name: savedViewForm.name.trim(),
           userId: currentUserId,
           isShared: savedViewForm.isShared,
-          filter: buildCurrentFilter(),
+          filterJson: JSON.stringify(buildCurrentFilter()),
         });
         setActiveSavedViewId(created.id);
         toast.success('Visao salva com sucesso.');
@@ -1215,6 +1309,77 @@ export default function TicketList() {
             }}
           />
         </div>
+
+        {/* Fila "Meu time": usa os vínculos de departamento do usuário logado
+            (GET /tickets/my-departments) — antes o hook existia sem nenhum
+            consumidor e a UI não tinha como oferecer essa fila. */}
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <Button
+            variant={filterMyDepartments ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={() => {
+              applyFilterChange(() =>
+                setFilterMyDepartments((current) => {
+                  const next = !current;
+                  // Entrar na fila "Meu time" não deve manter um responsável
+                  // que não seja o próprio usuário: as duas facetas se somam.
+                  if (next && filterAssignedToUserId && filterAssignedToUserId !== currentUserId) {
+                    setFilterAssignedToUserId('');
+                  }
+                  return next;
+                }),
+              );
+            }}
+            loading={myDepartmentsQuery.isLoading}
+            disabled={myDepartmentsQuery.isError}
+            aria-pressed={filterMyDepartments}
+            title={
+              myDepartmentsQuery.isError
+                ? 'Não foi possível carregar seus departamentos.'
+                : 'Somente chamados dos departamentos em que você é membro do time'
+            }
+          >
+            <Icon name="group" className="h-4 w-4" />
+            Meu time
+            {myDepartmentIds.length > 0 && <Badge color="slate">{myDepartmentIds.length}</Badge>}
+          </Button>
+          {currentUserId && (
+            <Button
+              variant={filterAssignedToUserId === currentUserId ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => {
+                applyFilterChange(() =>
+                  setFilterAssignedToUserId((current) =>
+                    current === currentUserId ? '' : (currentUserId ?? ''),
+                  ),
+                );
+              }}
+              aria-pressed={filterAssignedToUserId === currentUserId}
+              title="Somente chamados atribuídos a você"
+            >
+              <Icon name="person" className="h-4 w-4" />
+              Atribuídos a mim
+            </Button>
+          )}
+          <div className="min-w-[220px] flex-1">
+            <Select
+              label="Responsável"
+              options={assignedToOptions}
+              value={filterAssignedToUserId}
+              onChange={(event) => {
+                const value = event.target.value;
+                applyFilterChange(() => setFilterAssignedToUserId(value));
+              }}
+              hint="Filtra pelo usuário atribuído ao chamado."
+            />
+          </div>
+        </div>
+
+        {filterMyDepartments && myDepartmentsQuery.isSuccess && myDepartmentIds.length === 0 && (
+          <p className="mt-2 text-xs text-muted">
+            Você não é membro ativo do time de nenhum departamento — a fila "Meu time" fica vazia.
+          </p>
+        )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button
@@ -1438,6 +1603,12 @@ export default function TicketList() {
           <div className="py-12 text-center">
             <Icon name="confirmation_number" className="mx-auto mb-3 h-10 w-10 text-muted" />
             <p className="text-muted">Nenhum chamado encontrado</p>
+            {filterMyDepartments && (
+              <p className="mt-2 text-xs text-muted">
+                A fila "Meu time" pode esconder chamados desta página quando você
+                atende mais de um departamento.
+              </p>
+            )}
           </div>
         ) : (
           <>
@@ -1477,11 +1648,14 @@ export default function TicketList() {
             <span>Acompanhar</span>
             <span className="text-xs text-muted">watcher</span>
           </button>
+          {/* Assumir/Transferir dependem de canAssign (backend). Sem o gate o
+              item aparecia para quem não trata o chamado e só falhava com 403. */}
           <button
             type="button"
             className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void handleContextMenuTakeOwnership()}
-            disabled={updateTicket.isPending || !currentUserId}
+            disabled={updateTicket.isPending || !currentUserId || !targetTicketCapabilities.canAssign}
+            title={targetTicketCapabilities.canAssign ? undefined : (targetTicketCapabilities.reason ?? 'Sem permissão para atribuir')}
             role="menuitem"
           >
             <span>Assumir</span>
@@ -1491,12 +1665,21 @@ export default function TicketList() {
             type="button"
             className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleContextMenuOpenAssign}
-            disabled={updateTicket.isPending}
+            disabled={updateTicket.isPending || !targetTicketCapabilities.canAssign}
+            title={targetTicketCapabilities.canAssign ? undefined : (targetTicketCapabilities.reason ?? 'Sem permissão para transferir')}
             role="menuitem"
           >
             <span>Transferir / Atribuir</span>
             <span className="text-xs text-muted">departamento ou usuario</span>
           </button>
+          {/* Explicação visível: um title em botão desabilitado não aparece no
+              hover, então o usuário ficaria sem saber POR QUE não pode agir. */}
+          {!targetTicketCapabilities.canAssign && (
+            <p className="mt-1 border-t border-border px-3 pt-2 pb-1 text-[11px] leading-snug text-muted">
+              {targetTicketCapabilities.reason ??
+                'Você não faz parte do time deste departamento — atribuir exige permissão de tratamento.'}
+            </p>
+          )}
         </div>
       )}
 
