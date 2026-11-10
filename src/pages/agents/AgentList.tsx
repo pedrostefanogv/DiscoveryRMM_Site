@@ -28,6 +28,11 @@ import { getAgentLastSeen, isAgentOnlineNow, isAgentPossiblyOnline } from '@/uti
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
+import {
+  useApproveAgentPendingWindowsUpdates,
+  useInstallApprovedWindowsUpdates,
+  useScanAgentWindowsUpdates,
+} from '@/hooks/useAgentWindowsUpdates';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { awaitAgentCommandById, notifyAgentCommandOutcome } from './agentDetailUtils';
@@ -151,6 +156,14 @@ export default function AgentList() {
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   // Enviar notificação é uma ação de execução no endpoint (Agents.Execute).
   const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
+  // Windows Update é um domínio de permissão PRÓPRIO (Patches.*), separado de
+  // Agents.*: quem só cuida de patch não deve ganhar/perder acesso por causa
+  // deste menu. Mesma convenção do AgentContextMenu e das telas de /patches.
+  const scanWindowsUpdates = useScanAgentWindowsUpdates();
+  const approvePendingWindowsUpdates = useApproveAgentPendingWindowsUpdates();
+  const installApprovedWindowsUpdates = useInstallApprovedWindowsUpdates();
+  const canApprovePatches = hasAnyPermission(['Patches.Edit', 'patches.*', 'admin.*']);
+  const canExecutePatches = hasAnyPermission(['Patches.Execute', 'patches.*', 'admin.*']);
 
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -212,6 +225,12 @@ export default function AgentList() {
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   // Retângulo do item "Energia" que ancora o submenu no viewport (position: fixed).
   const [powerSubmenuAnchor, setPowerSubmenuAnchor] = useState<{ top: number; left: number; right: number } | null>(null);
+  // Submenu "Patches" (Windows Update): mesmo mecanismo do Energia, mas em par
+  // próprio — os dois podem estar abertos em momentos diferentes e compartilhar
+  // o estado faria um fechar o outro ao trocar o hover.
+  const patchesSubmenuRef = useRef<HTMLDivElement | null>(null);
+  const [patchesSubmenuOpen, setPatchesSubmenuOpen] = useState(false);
+  const [patchesSubmenuAnchor, setPatchesSubmenuAnchor] = useState<{ top: number; left: number; right: number } | null>(null);
   const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
 
   // Lixeira: busca somente quando a visão de excluídos está aberta.
@@ -259,6 +278,10 @@ export default function AgentList() {
   useEffect(() => {
     setPowerSubmenuOpen(false);
     setPowerSubmenuAnchor(null);
+    // Mesmo motivo para o submenu Patches: sem isto ele ficaria órfão aberto
+    // apontando para a posição do agente anterior.
+    setPatchesSubmenuOpen(false);
+    setPatchesSubmenuAnchor(null);
   }, [contextMenu]);
 
   // Mantém o menu de contexto inteiro dentro da viewport (bordas direita/inferior).
@@ -302,6 +325,30 @@ export default function AgentList() {
     const rect = anchor.getBoundingClientRect();
     setPowerSubmenuAnchor({ top: rect.top, left: rect.left, right: rect.right });
     setPowerSubmenuOpen(true);
+  };
+
+  // Mesma regra de posicionamento do submenu de energia: vira para a esquerda
+  // quando não há espaço à direita e sobe quando passaria da base da tela.
+  useLayoutEffect(() => {
+    const el = patchesSubmenuRef.current;
+    if (!patchesSubmenuOpen || !patchesSubmenuAnchor || !el) return;
+
+    const margin = 8;
+    const rect = el.getBoundingClientRect();
+    let left = patchesSubmenuAnchor.right;
+    if (left + rect.width > window.innerWidth - margin) {
+      left = patchesSubmenuAnchor.left - rect.width;
+    }
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    const top = Math.max(margin, Math.min(patchesSubmenuAnchor.top, window.innerHeight - rect.height - margin));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }, [patchesSubmenuOpen, patchesSubmenuAnchor]);
+
+  const openPatchesSubmenu = (anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
+    setPatchesSubmenuAnchor({ top: rect.top, left: rect.left, right: rect.right });
+    setPatchesSubmenuOpen(true);
   };
 
   const openRemoteControl = async (agent: AgentWithClient) => {
@@ -513,6 +560,54 @@ export default function AgentList() {
       toast.error(message);
     } finally {
       setApprovingAgentId(null);
+    }
+  };
+
+  // ── Windows Update pelo menu de contexto ───────────────────────────────
+  // Diferente de "Atualizar agente" (auto-update do BINÁRIO), estas três ações
+  // são Windows Update. O dispatcher persiste o comando: offline NÃO bloqueia,
+  // só entra na fila e é entregue quando o agente reconectar. O menu fecha
+  // antes do await (mesmo padrão dos itens vizinhos).
+  const handleScanWindowsUpdates = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+    if (!canExecutePatches) return;
+    try {
+      const result = await scanWindowsUpdates.mutateAsync({
+        agentId: agent.id,
+        reason: 'menu de contexto da listagem de agentes',
+      });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao solicitar varredura de atualizações.');
+    }
+  };
+
+  const handleApprovePendingWindowsUpdates = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+    if (!canApprovePatches) return;
+    try {
+      // Escopo "Agent": aprova só o que está pendente nesta máquina.
+      const result = await approvePendingWindowsUpdates.mutateAsync({
+        agentId: agent.id,
+        action: 'Approve',
+        scope: 'Agent',
+        reason: 'aprovação em lote pelo menu de contexto da listagem',
+      });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao aprovar as atualizações pendentes.');
+    }
+  };
+
+  const handleInstallApprovedWindowsUpdates = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+    if (!canExecutePatches) return;
+    try {
+      // postAction 'none': instalar não reinicia nem desliga a máquina.
+      const result = await installApprovedWindowsUpdates.mutateAsync({ agentId: agent.id, postAction: 'none' });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao instalar as atualizações aprovadas.');
     }
   };
 
@@ -1357,6 +1452,96 @@ export default function AgentList() {
               {!canExecuteAgent && <Badge>sem permissão</Badge>}
               {canExecuteAgent && !contextAgentOnline && <MenuTag label="na fila" />}
             </button>
+            {/* Windows Update do agente. Diferente de "Atualizar agente" (auto-update
+                do BINÁRIO), aqui é Windows Update. Aparece SEMPRE — online e
+                offline: as três primeiras ações viram comando persistido e são
+                entregues quando o agente reconectar, então o sinal de online não
+                é bloqueio (só a permissão é). Mesmo comportamento do submenu
+                Patches do menu de contexto compartilhado (AgentContextMenu). */}
+            <div
+              className="relative flex w-full"
+              onMouseEnter={event => openPatchesSubmenu(event.currentTarget)}
+              onMouseLeave={() => setPatchesSubmenuOpen(false)}
+            >
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={patchesSubmenuOpen}
+                onClick={event => openPatchesSubmenu(event.currentTarget)}
+                onFocus={event => openPatchesSubmenu(event.currentTarget)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+              >
+                <Icon name="inventory_2" className="h-4 w-4" />
+                Patches
+                <Icon name="chevron_right" className="ml-auto h-4 w-4" />
+              </button>
+              {patchesSubmenuOpen && patchesSubmenuAnchor && (
+                <div
+                  ref={patchesSubmenuRef}
+                  role="menu"
+                  aria-label="Opções de patches"
+                  className="fixed z-[60] max-h-[calc(100vh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
+                  style={{ left: patchesSubmenuAnchor.right, top: patchesSubmenuAnchor.top }}
+                >
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => {
+                      void handleScanWindowsUpdates(contextMenu.agent);
+                    }}
+                    disabled={!canExecutePatches}
+                    title={!canExecutePatches
+                      ? 'Sem permissão para executar ações de patch'
+                      : contextAgentOnline ? undefined : offlineQueueHint}
+                  >
+                    <Icon name="refresh" className="h-4 w-4" />
+                    Verificar atualizações
+                    {!canExecutePatches && <Badge>sem permissão</Badge>}
+                    {canExecutePatches && !contextAgentOnline && <MenuTag label="na fila" />}
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => {
+                      void handleApprovePendingWindowsUpdates(contextMenu.agent);
+                    }}
+                    disabled={!canApprovePatches}
+                    title={!canApprovePatches
+                      ? 'Sem permissão para aprovar atualizações'
+                      : contextAgentOnline ? undefined : offlineQueueHint}
+                  >
+                    <Icon name="check_circle" className="h-4 w-4" />
+                    Aprovar pendentes
+                    {!canApprovePatches && <Badge>sem permissão</Badge>}
+                    {canApprovePatches && !contextAgentOnline && <MenuTag label="na fila" />}
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => {
+                      void handleInstallApprovedWindowsUpdates(contextMenu.agent);
+                    }}
+                    disabled={!canExecutePatches}
+                    title={!canExecutePatches
+                      ? 'Sem permissão para executar ações de patch'
+                      : contextAgentOnline ? undefined : offlineQueueHint}
+                  >
+                    <Icon name="download" className="h-4 w-4" />
+                    Instalar aprovadas
+                    {!canExecutePatches && <Badge>sem permissão</Badge>}
+                    {canExecutePatches && !contextAgentOnline && <MenuTag label="na fila" />}
+                  </button>
+                  <div className="my-1 border-t border-border" />
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+                    onClick={() => {
+                      setContextMenu(null);
+                      navigate(`/agents/${contextMenu.agent.id}?tab=atualizacoes`);
+                    }}
+                  >
+                    <Icon name="open_in_new" className="h-4 w-4" />
+                    Abrir aba de atualizações
+                  </button>
+                </div>
+              )}
+            </div>
             {isAgentOnlineNow(contextMenu.agent, now) && (
               <div
                 className="relative flex w-full"

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,6 +62,17 @@ vi.mock('@tanstack/react-query', () => ({
   // A lista monta uma query por cliente; devolvemos os mesmos agentes ativos.
   useQueries: (options: { queries: unknown[] }) =>
     options.queries.map(() => ({ data: [activeAgent, secondAgent], isLoading: false })),
+  // A página importa os hooks de Windows Update (useAgentWindowsUpdates), cujo
+  // invalidador chama useQueryClient(). Sem estes dois stubs o import do módulo
+  // explode com "No useQueryClient export is defined on the mock" e TODOS os
+  // testes do arquivo falham — não é um problema do menu em si.
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useMutation: (options: { mutationFn?: unknown }) => ({
+    mutateAsync: vi.fn(),
+    mutate: vi.fn(),
+    isPending: false,
+    mutationFn: options?.mutationFn,
+  }),
 }));
 
 vi.mock('@/api', () => ({
@@ -571,5 +582,84 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     fireEvent.click(confirmButton);
 
     await waitFor(() => expect(deleteMock).toHaveBeenCalledWith('a1'));
+  });
+
+  // ── Submenu Patches (Windows Update) ────────────────────────────────────────
+  // A tela /agents tem menu de contexto PRÓPRIO (inline), separado do componente
+  // compartilhado AgentContextMenu. Estes testes travam o submenu Patches aqui:
+  // sem eles, uma futura edição pode remover o item sem ninguém perceber — foi
+  // exatamente o que aconteceu antes (o Patches existia só no compartilhado).
+
+  function patchesTrigger() {
+    const label = screen.getByText('Patches');
+    const wrapper = label.closest('div.relative.flex');
+    expect(wrapper).not.toBeNull();
+    return wrapper as HTMLElement;
+  }
+
+  it('oferece o submenu Patches com as três ações de Windows Update', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(patchesTrigger());
+
+    const submenu = screen.getByRole('menu', { name: 'Opções de patches' });
+    expect(within(submenu).getByText('Verificar atualizações')).toBeTruthy();
+    expect(within(submenu).getByText('Aprovar pendentes')).toBeTruthy();
+    expect(within(submenu).getByText('Instalar aprovadas')).toBeTruthy();
+    expect(within(submenu).getByText('Abrir aba de atualizações')).toBeTruthy();
+  });
+
+  it('mostra o submenu Patches também com o agente offline (comandos enfileirados)', () => {
+    statusFlag.online = false;
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+
+    // Diferente do Energia, o Patches não desaparece offline: as ações viram
+    // comando persistido e são entregues quando o agente reconectar.
+    expect(screen.getByText('Patches')).toBeTruthy();
+    fireEvent.mouseOver(patchesTrigger());
+
+    const submenu = screen.getByRole('menu', { name: 'Opções de patches' });
+    const scan = within(submenu).getByRole('button', { name: /Verificar atualizações/ }) as HTMLButtonElement;
+    expect(scan.disabled).toBe(false);
+    // O aviso de fila aparece em vez de bloquear.
+    expect(scan.getAttribute('title')).toMatch(/entra na fila/i);
+  });
+
+  it('fecha o submenu Patches ao abrir o menu de contexto de outro agente', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(patchesTrigger());
+    expect(screen.getByText('Verificar atualizações')).toBeTruthy();
+
+    openContextMenuFor('ATIVO-02', 120, 80);
+
+    // Sem o efeito de reset o submenu ficaria órfão apontando para o agente anterior.
+    expect(screen.queryByText('Verificar atualizações')).toBeNull();
+    expect(screen.queryByText('Aprovar pendentes')).toBeNull();
+  });
+
+  it('posiciona o submenu Patches dentro da viewport', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', window.innerWidth - 30, window.innerHeight - 30);
+    fireEvent.mouseOver(patchesTrigger());
+
+    const submenu = screen.getByRole('menu', { name: 'Opções de patches' });
+    expect(submenu.className).toContain('fixed');
+    expect(submenu.style.left).toBe('8px');
+    expect(submenu.style.top).toBe('8px');
+  });
+
+  it('abre o submenu Patches por clique (touch/teclado)', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.click(screen.getByText('Patches'));
+
+    expect(screen.getByText('Verificar atualizações')).toBeTruthy();
   });
 });
