@@ -184,9 +184,16 @@ export const remoteSessionsApi = {
     getRecordingDownload: (agentId: string, sessionId: string): Promise<RecordingDownload> =>
         api.get<RecordingDownload>(`${BASE}/${agentId}/${sessionId}/recording/download`),
 
-    /** Exclui a gravação (LGPD Art. 18). */
+    /**
+     * Exclui a gravação (LGPD Art. 18).
+     *
+     * DELETE, não POST: o controller expõe
+     * [HttpDelete("{agentId}/{sessionId}/recording")] (RemoteSessionsController.cs:364).
+     * Não existe rota POST .../recording/delete na API — o POST dava 405 garantido.
+     * Hoje sem chamador na UI; corrigido para não quebrar quando alguém usar.
+     */
     deleteRecording: (agentId: string, sessionId: string): Promise<void> =>
-        api.post<void>(`${BASE}/${agentId}/${sessionId}/recording/delete`),
+        api.del<void>(`${BASE}/${agentId}/${sessionId}/recording`, { retryOnAuthError: false }),
 
     /** Altera qualidade/codec/FPS de uma sessão ativa. */
     /**
@@ -201,8 +208,12 @@ export const remoteSessionsApi = {
      * Separado de changeQuality: um freia a PRODUCAO de frames, o outro reduz
      * a compressao.
      */
+    // PUT (não POST): o backend expõe [HttpPut("{agentId}/{sessionId}/bandwidth")]
+    // em RemoteSessionsController.cs — com POST a API respondia 405 (allow: PUT)
+    // e a troca de teto em runtime nunca funcionava. Mantenha o verbo alinhado
+    // ao controller (a rota /quality ao lado já usa PUT e funciona).
     changeBandwidth: (agentId: string, sessionId: string, request: ChangeBandwidthRequest): Promise<void> =>
-        api.post<void>(`${BASE}/${agentId}/${sessionId}/bandwidth`, request, { retryOnAuthError: false }),
+        api.put<void>(`${BASE}/${agentId}/${sessionId}/bandwidth`, request, { retryOnAuthError: false }),
 
     changeQuality: (agentId: string, sessionId: string, request: ChangeQualityRequest): Promise<RemoteSessionResponse> =>
         api.put<RemoteSessionResponse>(`${BASE}/${agentId}/${sessionId}/quality`, request),

@@ -799,6 +799,28 @@ export default function RemoteSession() {
   }, [agentId]);
 
   /**
+   * Envia a política de teto de banda com UMA reaplicação (500 ms).
+   *
+   * Extraído para não duplicar o retry entre o seletor do operador
+   * (applyBandwidthMode) e o caminho de connect/reconexão
+   * (applyBandwidthToSession). Propaga o erro para o chamador decidir o aviso.
+   */
+  const sendBandwidthWithRetry = useCallback(async (sessionId: string, payload: ChangeBandwidthRequest) => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await remoteSessionsApi.changeBandwidth(agentId, sessionId, payload);
+        return;
+      } catch (err) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } else {
+          throw err;
+        }
+      }
+    }
+  }, [agentId]);
+
+  /**
    * Aplica a política de TETO DE BANDA (kbps) ao agente.
    *
    * A banda deriva do MODO DE TELA (ver estados acima); esta função só envia
@@ -820,7 +842,10 @@ export default function RemoteSession() {
 
     setBandwidthChanging(true);
     try {
-      await remoteSessionsApi.changeBandwidth(agentId, screenSession.sessionId, {
+      // Mesmo retry do caminho de connect: o agent pode ainda não ter registrado
+      // a sessão quando o comando chega. Aqui o erro é reportado ao operador
+      // (ação explícita no seletor), nunca silencioso.
+      await sendBandwidthWithRetry(screenSession.sessionId, {
         mode,
         ceilingKbps: mode === 'manual' ? ceiling : undefined,
       });
@@ -830,7 +855,7 @@ export default function RemoteSession() {
     } finally {
       setBandwidthChanging(false);
     }
-  }, [agentId, screenSession, bandwidthPolicy, bandwidthPresetId]);
+  }, [agentId, screenSession, bandwidthPolicy, bandwidthPresetId, sendBandwidthWithRetry]);
 
   /**
    * Modo de banda DERIVADO do modo de tela. É o único lugar que define a
@@ -857,18 +882,13 @@ export default function RemoteSession() {
       const preset = bandwidthPolicy?.manualPresets.find((p) => p.id === bandwidthPresetId);
       payload.ceilingKbps = preset ? preset.kbps : (bandwidthPolicy?.manualDefaultKbps ?? 0);
     }
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        await remoteSessionsApi.changeBandwidth(agentId, sessionId, payload);
-        return true;
-      } catch {
-        if (attempt === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-      }
+    try {
+      await sendBandwidthWithRetry(sessionId, payload);
+      return true;
+    } catch {
+      return false;
     }
-    return false;
-  }, [agentId, qualityMode, bandwidthPolicy, bandwidthPresetId, bandwidthModeForQuality]);
+  }, [agentId, qualityMode, bandwidthPolicy, bandwidthPresetId, bandwidthModeForQuality, sendBandwidthWithRetry]);
 
   // ── Inicia a sessão de uma aba sob demanda ──
   // `force` permite sobrepor uma sessão ativa existente do mesmo agent (o
@@ -1009,14 +1029,18 @@ export default function RemoteSession() {
       // mas avisa o operador para ele não confiar em uma UI "HD" que não vale.
       if (tab === 'screen') {
         const applied = await applyQualityModeToSession(session.sessionId);
-        if (!applied) {
-          toast.error('Sessão conectada, mas o modo de qualidade não pôde ser aplicado. Selecione o modo novamente.');
-        }
         // A banda deriva do modo de tela: aplica o teto derivado à sessão nova
         // (Auto → automático · HD → sem teto · Manual → preset dos Ajustes finos).
         const bandApplied = await applyBandwidthToSession(session.sessionId);
-        if (!bandApplied) {
-          toast.error('Sessão conectada, mas o limite de banda não pôde ser aplicado. Ajuste nos Ajustes finos (modo Manual).');
+        // Uma única mensagem quando os dois falham: são o mesmo sintoma para o
+        // operador e empilhar dois toasts só polui. A sessão está viva — o teto
+        // é secundário e NÃO derruba a conexão.
+        if (!applied && !bandApplied) {
+          toast.error('Sessão iniciada, mas o modo de qualidade e o limite de banda não puderam ser aplicados.');
+        } else if (!applied) {
+          toast.error('Sessão conectada, mas o modo de qualidade não pôde ser aplicado. Selecione o modo novamente.');
+        } else if (!bandApplied) {
+          toast.error('Sessão iniciada, mas o limite de banda não pôde ser aplicado. Ajuste nos Ajustes finos (modo Manual).');
         }
       }
 
@@ -1504,14 +1528,17 @@ export default function RemoteSession() {
       // Mantém o modo HD/Manual também após reiniciar a captura (troca de
       // monitor): a nova sessão nasce em auto e seria rebaixada sem isto.
       const applied = await applyQualityModeToSession(session.sessionId);
-      if (!applied) {
-        toast.error('Monitor alterado, mas o modo de qualidade não pôde ser reaplicado. Selecione o modo novamente.');
-      }
       // E a banda derivada do modo de tela, pelo mesmo motivo (mesma
       // paridade de aviso: sem ela o operador confiaria num teto que não vale).
       const bandApplied = await applyBandwidthToSession(session.sessionId);
-      if (!bandApplied) {
-        toast.error('Monitor alterado, mas o limite de banda não pôde ser reaplicado. Ajuste nos Ajustes finos (modo Manual).');
+      // Como no connect: um único toast quando ambos falham, e nunca derrubar a
+      // sessão nova por causa da banda (o teto é secundário).
+      if (!applied && !bandApplied) {
+        toast.error('Monitor alterado, mas o modo de qualidade e o limite de banda não puderam ser reaplicados.');
+      } else if (!applied) {
+        toast.error('Monitor alterado, mas o modo de qualidade não pôde ser reaplicado. Selecione o modo novamente.');
+      } else if (!bandApplied) {
+        toast.error('Monitor alterado, mas o limite de banda não pôde ser reaplicado. Ajuste nos Ajustes Finos (modo Manual).');
       }
       setSessions((prev) => ({
         ...prev,
