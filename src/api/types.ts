@@ -4764,6 +4764,17 @@ export interface PatchPendingAgent {
   status?: string | null;
   /** Quando o agente foi visto pela última vez (ISO). Frescor do sinal de online. */
   lastSeenAt: string | null;
+  /**
+   * Status ONLINE autoritativo, lido do Redis (fonte de verdade) pelo backend.
+   * `null`/`undefined` = payload antigo (backend sem o campo) → a UI cai no frescor
+   * de lastSeenAt e, na falta dele, no `status` persistido.
+   *
+   * Por que ele existe: `status`/`lastSeenAt` são o ÚLTIMO estado GRAVADO no banco
+   * e só mudam na TRANSIÇÃO de heartbeat — para um agente que pulsa a cada ~60s
+   * eles ficam defasados por design (até ~3 min). Comparar esse dado congelado com
+   * o `now` que avança pintava a frota de "Offline" sozinha.
+   */
+  isOnline?: boolean | null;
 }
 
 export interface PatchPendingList {

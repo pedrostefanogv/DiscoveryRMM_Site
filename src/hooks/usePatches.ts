@@ -131,6 +131,30 @@ export function usePatchInventoryAgents(params: {
   });
 }
 
+/**
+ * Intervalo de refetch da lista de pendências.
+ *
+ * POR QUE 30s (e não os 60s do overview/snapshot):
+ * 1. O ajuste de status no servidor é feito na TRANSIÇÃO do heartbeat: enquanto o
+ *    agente está online, o `status`/`lastSeenAt` PERSISTIDOS no banco ficam congelados
+ *    no último valor gravado (a cada ~180s o TTL da chave Redis expira e o job de
+ *    expiração grava "Offline"). Sem um fetch novo, esse dado envelhece na tela
+ *    enquanto o `now` do useNowTick (5s) avança, e em 120s (a janela de frescor de
+ *    agentStatus.ts) TODO agente virava "Offline" sozinho — só o F5 corrigia.
+ * 2. 30s é metade da janela de 120s: na pior das hipóteses o dado que a regra de
+ *    frescor olha tem 30s de idade + até 180s do ciclo de persistência do backend.
+ *    Um intervalo de 60s deixaria o último fetch colado no limite da janela; 30s dá
+ *    folga para o servidor responder antes de a UI desistir do sinal. A página é
+ *    paginada (limit 25) e a resposta é leve, então o custo é irrelevante.
+ * 3. A regra definitiva passou a ser o campo autoritativo `isOnline` (Redis) que o
+ *    backend envia no DTO; o refetch curto é o que mantém esse campo atualizado sem
+ *    o usuário apertar "Atualizar".
+ *
+ * `refetchIntervalInBackground: false` mantém a aba oculta sem gastar rede; ao voltar
+ * para a aba o React Query refaz o fetch na hora e o status se corrige sozinho.
+ */
+const PENDING_REFETCH_INTERVAL_MS = 30_000;
+
 export function usePatchPending(params: {
   scope: PatchScope;
   clientId?: string;
@@ -152,6 +176,12 @@ export function usePatchPending(params: {
         search: params.search,
       }),
     enabled,
+    // Atualização automática da lista (ver comentário acima). O placeholderData
+    // abaixo é o que evita o "pisca": a tabela segue renderizada com os dados
+    // anteriores enquanto o novo fetch está em voo (isPlaceholderData), sem cair
+    // no estado de loading.
+    refetchInterval: PENDING_REFETCH_INTERVAL_MS,
+    refetchIntervalInBackground: false,
     placeholderData: (previous) => previous,
   });
 }

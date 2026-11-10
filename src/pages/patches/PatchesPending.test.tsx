@@ -214,6 +214,63 @@ describe('PatchesPending — indicador de agente online', () => {
     // Sem status e sem lastSeenAt: offline.
     expect(isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', lastSeenAt: null }), NOW)).toBe(false);
   });
+
+  // ── BUG DE PRODUÇÃO: status ONLINE autoritativo do servidor (Redis) ──────────
+  // A lista /patches/pending mostrava os agentes Online e, depois de alguns
+  // minutos com a tela aberta, eles viravam Offline SOZINHOS (F5 corrigia).
+  // Causa: o `lastSeenAt` desta lista é o ÚLTIMO valor PERSISTIDO no banco — o
+  // backend só regrava na transição de heartbeat — e o `now` do useNowTick avança
+  // a cada 5s. Em 120s (janela de frescor) todo agente caía fora da janela.
+  // O caso abaixo é a trava dessa correção: se alguém voltar a decidir SÓ por
+  // frescor (removendo o `isOnline` da frente), este teste FALHA.
+  it('BUG de produção: isOnline true do servidor vence o frescor (status Offline + lastSeenAt de 2 dias)', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([
+      agent({ agentId: 'a1', hostname: 'ONLINE-DEFASADO', isOnline: true, status: 'Offline', lastSeenAt: ANTIGO }),
+    ]);
+
+    renderPage();
+
+    const linha = screen.getByText('ONLINE-DEFASADO').closest('tr') as HTMLElement;
+    expect(within(linha).getByText('Online')).toBeTruthy();
+    expect(within(linha).queryByText('Offline')).toBeNull();
+    // Os números continuam renderizando normalmente (placeholderData mantém a tabela).
+    expect(within(linha).getByText('3')).toBeTruthy();
+  });
+
+  it('o servidor manda: isOnline false vence o frescor (status Online + lastSeenAt recente)', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([
+      agent({ agentId: 'a1', hostname: 'OFFLINE-COM-SINAL', isOnline: false, status: 'Online', lastSeenAt: RECENTE }),
+    ]);
+
+    renderPage();
+
+    const linha = screen.getByText('OFFLINE-COM-SINAL').closest('tr') as HTMLElement;
+    expect(within(linha).getByText('Offline')).toBeTruthy();
+    expect(within(linha).queryByText('Online')).toBeNull();
+    expect(within(linha).getByText('3')).toBeTruthy();
+  });
+
+  it('isPendingAgentOnline: o campo isOnline tem precedência sobre frescor e status', () => {
+    // Servidor afirma online mesmo com tudo dizendo o contrário.
+    expect(
+      isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', isOnline: true, status: 'Offline', lastSeenAt: ANTIGO }), NOW),
+    ).toBe(true);
+    // Servidor afirma offline mesmo com frescor e status dizendo online.
+    expect(
+      isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', isOnline: false, status: 'Online', lastSeenAt: RECENTE }), NOW),
+    ).toBe(false);
+    // isOnline null (payload novo com campo nulo): NÃO é decisão do servidor,
+    // cai na regra compartilhada de frescor.
+    expect(
+      isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', isOnline: null, status: 'Offline', lastSeenAt: RECENTE }), NOW),
+    ).toBe(true);
+    // Sem o campo (payload antigo): regra antiga preservada.
+    expect(
+      isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', status: 'Online', lastSeenAt: null }), NOW),
+    ).toBe(true);
+  });
 });
 
 // ── Linha clicável + ações como ícones ────────────────────────────────────────

@@ -18,9 +18,27 @@ export const AGENT_OFFLINE_FALLBACK_MS = parseFallbackMs(
   import.meta.env.VITE_AGENT_OFFLINE_FALLBACK_MS,
 );
 
+/**
+ * Sinais aceitos para decidir se um agente está online AGORA.
+ *
+ * Três fontes, da mais local para a mais autoritativa:
+ * - `lastSeenAt`/`lastSeen`: FRESCOR do sinal (heartbeat aplicado na hora pela UI).
+ * - `isOnline`: status ONLINE AUTORITATIVO do servidor (Redis) — campo `isOnline` do
+ *   payload. Existe porque o estado PERSISTIDO (`status`/`lastSeenAt` no banco) só é
+ *   gravado na TRANSIÇÃO de heartbeat e pode estar defasado por design (até ~3 min
+ *   para um agente que pulsa a cada ~60s). Quando o payload traz este campo, ele é a
+ *   melhor resposta disponível para quem NÃO tem um sinal fresco — ver a ordem de
+ *   precedência em isAgentOnlineNow.
+ * - `status`: status PERSISTIDO pelo servidor ("Online"/"Offline"), último recurso.
+ *
+ * ATENÇÃO ao consumir: a ordem de precedência de isAgentOnlineNow continua sendo
+ * FRESCOR primeiro. Telas cujo lastSeenAt também é um dado PERSISTIDO (congelado até
+ * o próximo fetch) e que precisam que o servidor vença devem tratar `isOnline`
+ * explicitamente ANTES de chamar esta função — é o que PatchesPending faz.
+ */
 export interface AgentStatusLike {
   status?: "Online" | "Offline";
-  isOnline?: boolean;
+  isOnline?: boolean | null;
   lastSeenAt?: string | null;
   lastSeen?: string | null;
 }
@@ -29,6 +47,19 @@ export function getAgentLastSeen(agent: AgentStatusLike): string | null {
   return agent.lastSeenAt ?? agent.lastSeen ?? null;
 }
 
+/**
+ * Decide se o agente está online agora, na ordem de precedência:
+ *   1) `lastSeenAt` (ou `lastSeen`) válido → decide pelo FRESCOR;
+ *   2) `isOnline` boolean → decide pelo SERVIDOR (campo autoritativo do payload);
+ *   3) `status` "Online"/"Offline" → decide pelo status PERSISTIDO;
+ *   4) nada disso → false.
+ *
+ * O frescor vem primeiro para preservar o comportamento das telas que já mandam um
+ * `lastSeenAt` fresco (AgentListView, AgentCard, AgentDetail via heartbeat ao vivo):
+ * ali o sinal é atualizado a cada heartbeat, então ele é mais novo que qualquer
+ * status — inclusive que o `isOnline` do servidor. Quem só tem dado PERSISTIDO
+ * (PatchesPending) inverte isso no call site, tratando `isOnline` antes.
+ */
 export function isAgentOnlineNow(
   agent: AgentStatusLike,
   now = Date.now(),
@@ -42,12 +73,12 @@ export function isAgentOnlineNow(
     }
   }
 
-  if (agent.status) {
-    return agent.status === "Online";
-  }
-
   if (typeof agent.isOnline === "boolean") {
     return agent.isOnline;
+  }
+
+  if (agent.status) {
+    return agent.status === "Online";
   }
 
   return false;

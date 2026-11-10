@@ -26,6 +26,41 @@ describe('isAgentOnlineNow — janela de frescor', () => {
   });
 });
 
+describe('isAgentOnlineNow — campo autoritativo isOnline', () => {
+  it('sem lastSeenAt válido, decide pelo isOnline do servidor', () => {
+    expect(isAgentOnlineNow({ isOnline: true, status: 'Offline' }, NOW)).toBe(true);
+    expect(isAgentOnlineNow({ isOnline: false, status: 'Online' }, NOW)).toBe(false);
+    // null = campo presente mas sem resposta do servidor (payload antigo/indefinido).
+    expect(isAgentOnlineNow({ isOnline: null, status: 'Online' }, NOW)).toBe(true);
+  });
+
+  it('o FRESCOR continua vindo primeiro quando existe lastSeenAt válido', () => {
+    // Preserva o comportamento das telas que recebem lastSeenAt ao vivo
+    // (AgentListView, AgentCard): o heartbeat local é mais novo que o campo do servidor.
+    expect(
+      isAgentOnlineNow(
+        { isOnline: true, lastSeenAt: new Date(NOW - 130_000).toISOString() },
+        NOW,
+      ),
+    ).toBe(false);
+    expect(
+      isAgentOnlineNow(
+        { isOnline: false, lastSeenAt: new Date(NOW - 10_000).toISOString() },
+        NOW,
+      ),
+    ).toBe(true);
+  });
+
+  it('lastSeenAt inválido (string corrompida) cai no isOnline, não no status', () => {
+    expect(isAgentOnlineNow({ isOnline: true, status: 'Offline', lastSeenAt: 'nao-e-data' }, NOW)).toBe(true);
+  });
+
+  it('sem nenhum sinal continua false', () => {
+    expect(isAgentOnlineNow({}, NOW)).toBe(false);
+    expect(isAgentOnlineNow({ isOnline: null }, NOW)).toBe(false);
+  });
+});
+
 describe('isAgentPossiblyOnline', () => {
   it('é true quando o heartbeat UI está fresco', () => {
     expect(

@@ -17,14 +17,23 @@ import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
 /**
  * Indicador de agente online da lista de pendências.
  *
- * Duas fontes, combinadas pela MESMA regra da lista de agentes (AgentListView):
- * - `lastSeenAt` é o FRESCOR do sinal: dentro da janela
- *   VITE_AGENT_OFFLINE_FALLBACK_MS (120s por padrão, o mesmo grace period do
- *   servidor) o agente conta como online,
- *   mesmo que o status persistido ainda diga "Offline".
- * - `status` é o status PERSISTIDO pelo servidor (Online/Offline), atualizado nas
- *   transições de heartbeat. Ele só é consultado quando não há lastSeenAt válido
- *   (payload antigo do backend, sem o campo).
+ * ── PRECEDÊNCIA INVERTIDA EM RELAÇÃO A isAgentOnlineNow ───────────────────────
+ * Aqui o campo AUTORITATIVO do servidor (`isOnline`, lido do Redis pelo backend)
+ * VENCE o frescor. Motivo: nesta lista NÃO existe sinal fresco.
+ * - `lastSeenAt` chega do BANCO e é o ÚLTIMO valor PERSISTIDO: o backend só grava
+ *   na TRANSIÇÃO de heartbeat, e a cada ~180s o TTL da chave Redis expira e o job
+ *   de expiração grava "Offline". Para um agente que pulsa a cada ~60s esse valor
+ *   fica com até ~3 minutos de idade.
+ * - O `now` da tela vem do useNowTick (5s) e só CRESCE entre dois fetches.
+ * Comparar um dado congelado com um `now` que avança fazia TODO agente virar
+ * "Offline" sozinho em 120s (a janela VITE_AGENT_OFFLINE_FALLBACK_MS); o F5
+ * corrigia porque refazia o fetch. Com `isOnline` do servidor na frente, a tela
+ * depende do fetch (usePatchPending tem refetchInterval) e não do relógio local.
+ *
+ * Isso NÃO contradiz agentStatus.ts: lá o frescor continua vindo primeiro, porque
+ * nas telas de agente (AgentListView, AgentCard) o `lastSeenAt` é atualizado ao
+ * vivo pelo heartbeat. Só desviamos no call site, e só quando o payload traz o
+ * campo autoritativo — sem ele (payload antigo), vale a regra compartilhada.
  *
  * O `now` vem de fora (useNowTick no componente) para que a decisão seja
  * determinística em teste e se atualize sozinha na tela a cada tick.
@@ -36,6 +45,13 @@ import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
  * tratar Manutenção como Offline e este comentário denuncia o ponto a revisar.
  */
 export function isPendingAgentOnline(agent: PatchPendingAgent, now: number): boolean {
+  // 1) Servidor (Redis) manda, quando o payload traz o campo — ver comentário acima.
+  if (typeof agent.isOnline === "boolean") {
+    return agent.isOnline;
+  }
+
+  // 2) Payload antigo (sem isOnline): frescor de lastSeenAt e, na falta dele, o
+  //    status persistido — exatamente a regra compartilhada do console.
   return isAgentOnlineNow(
     {
       status: (agent.status ?? undefined) as "Online" | "Offline" | undefined,
@@ -148,10 +164,12 @@ export default function PatchesPending() {
       render: (agent) => {
         const online = isPendingAgentOnline(agent, now);
         // Offline com lastSeenAt conhecido: o title mostra quando o agente foi
-        // visto pela última vez (o Badge em si não aceita title).
+        // visto pela última vez (o Badge em si não aceita title). A data é a do
+        // ÚLTIMO VISTO PERSISTIDO no banco — pode estar defasada em relação ao
+        // acesso remoto, por isso o rótulo diz explicitamente que é o persistido.
         const vistoPorUltimo =
           !online && agent.lastSeenAt
-            ? `Visto por último em ${formatPatchDate(agent.lastSeenAt)}`
+            ? `Visto por último (persistido) em ${formatPatchDate(agent.lastSeenAt)}`
             : undefined;
         return (
           <div>
