@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ApiError, agentUpdatesApi } from '@/api';
 import { Icon, ConfirmDialog, ContextMenu, type ContextMenuItem } from '@/components/ui';
@@ -9,6 +10,11 @@ import AgentNotificationModal, { type AgentNotificationPayload } from '@/compone
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
+import {
+  useApproveAgentPendingWindowsUpdates,
+  useInstallApprovedWindowsUpdates,
+  useScanAgentWindowsUpdates,
+} from '@/hooks/useAgentWindowsUpdates';
 import { useAuthorization } from '@/auth/authorization';
 import { isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { awaitAgentCommandById, notifyAgentCommandOutcome } from '@/pages/agents/agentDetailUtils';
@@ -36,10 +42,21 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const wakeOnLan = useWakeOnLan();
   const deleteAgent = useDeleteAgent();
   const sendAgentNotification = useSendAgentNotification();
+  // Ações de Windows Update do agente (aba "Atualizações"): mesmos hooks usados
+  // pelo AgentWindowsUpdatesPanel/PatchesPending, que já invalidam as queries
+  // de patches no onSuccess.
+  const scanWindowsUpdates = useScanAgentWindowsUpdates();
+  const approvePendingWindowsUpdates = useApproveAgentPendingWindowsUpdates();
+  const installApprovedWindowsUpdates = useInstallApprovedWindowsUpdates();
+  const navigate = useNavigate();
   const { hasAnyPermission } = useAuthorization();
 
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
+  // Patches são um domínio de permissão PRÓPRIO: o menu não usa Agents.* aqui
+  // (mesma convenção do AgentWindowsUpdatesPanel e das telas de /patches).
+  const canApprovePatches = hasAnyPermission(['Patches.Edit', 'patches.*', 'admin.*']);
+  const canExecutePatches = hasAnyPermission(['Patches.Execute', 'patches.*', 'admin.*']);
   const online = isAgentOnlineNow(agent, now);
   // Sessões AO VIVO (acesso remoto, chat, debug) exigem a máquina acessível.
   // Já update e notificação passam pelo dispatcher de comandos: são persistidos
@@ -55,6 +72,9 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
 
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
+  const [scanningPatchesAgentId, setScanningPatchesAgentId] = useState<string | null>(null);
+  const [approvingPatchesAgentId, setApprovingPatchesAgentId] = useState<string | null>(null);
+  const [installingPatchesAgentId, setInstallingPatchesAgentId] = useState<string | null>(null);
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentCardAgent | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
@@ -164,6 +184,55 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     await sendAgentNotification.mutateAsync({ agentId: notificationAgent.id, ...data });
   };
 
+  // Ações de Windows Update. Diferente de "Atualizar agente"/"Atualizar e
+  // reiniciar" (que são auto-update do BINÁRIO), aqui é Windows Update.
+  // O dispatcher persiste o comando: offline NÃO bloqueia, só entra na fila.
+  const handleScanWindowsUpdates = async () => {
+    if (!canExecutePatches || scanningPatchesAgentId) return;
+    setScanningPatchesAgentId(agent.id);
+    try {
+      const result = await scanWindowsUpdates.mutateAsync({ agentId: agent.id, reason: 'menu de contexto do agente' });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao solicitar varredura de atualizações.');
+    } finally {
+      setScanningPatchesAgentId(null);
+    }
+  };
+
+  const handleApprovePendingWindowsUpdates = async () => {
+    if (!canApprovePatches || approvingPatchesAgentId) return;
+    setApprovingPatchesAgentId(agent.id);
+    try {
+      // Escopo "Agent": aprova só o que está pendente nesta máquina.
+      const result = await approvePendingWindowsUpdates.mutateAsync({
+        agentId: agent.id,
+        action: 'Approve',
+        scope: 'Agent',
+        reason: 'aprovação em lote pelo menu de contexto do agente',
+      });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao aprovar as atualizações pendentes.');
+    } finally {
+      setApprovingPatchesAgentId(null);
+    }
+  };
+
+  const handleInstallApprovedWindowsUpdates = async () => {
+    if (!canExecutePatches || installingPatchesAgentId) return;
+    setInstallingPatchesAgentId(agent.id);
+    try {
+      // postAction 'none': instalar não reinicia nem desliga a máquina.
+      const result = await installApprovedWindowsUpdates.mutateAsync({ agentId: agent.id, postAction: 'none' });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao instalar as atualizações aprovadas.');
+    } finally {
+      setInstallingPatchesAgentId(null);
+    }
+  };
+
   const items: ContextMenuItem[] = [
     {
       key: 'remote',
@@ -212,6 +281,55 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
       onClick: () => setNotificationAgent(agent),
     },
   ];
+
+  // Windows Update do agente, agrupado junto das demais ações de máquina.
+  // Diferente de "Energia" (que só aparece online), este submenu é oferecido
+  // SEMPRE: as três primeiras ações viram comando persistido e são entregues
+  // quando o agente reconectar.
+  items.push({
+    key: 'patches',
+    label: 'Patches',
+    // "inventory_2" (pacotes): não existe glifo "system_update" no registro de
+    // materialSymbols.ts — as três ações internas já têm ícones próprios.
+    icon: <Icon name="inventory_2" className="h-4 w-4" />,
+    children: [
+      {
+        key: 'patches-scan',
+        label: scanningPatchesAgentId === agent.id ? 'Verificando...' : 'Verificar atualizações',
+        icon: <Icon name="refresh" className="h-4 w-4" />,
+        disabled: !canExecutePatches || scanningPatchesAgentId === agent.id,
+        hint: !canExecutePatches ? 'sem permissão' : canReachAgent ? undefined : offlineQueueHint,
+        onClick: () => { void handleScanWindowsUpdates(); },
+      },
+      {
+        key: 'patches-approve',
+        label: approvingPatchesAgentId === agent.id ? 'Aprovando...' : 'Aprovar pendentes',
+        icon: <Icon name="check_circle" className="h-4 w-4" />,
+        disabled: !canApprovePatches || approvingPatchesAgentId === agent.id,
+        hint: !canApprovePatches ? 'sem permissão' : canReachAgent ? undefined : offlineQueueHint,
+        onClick: () => { void handleApprovePendingWindowsUpdates(); },
+      },
+      {
+        key: 'patches-install',
+        label: installingPatchesAgentId === agent.id ? 'Instalando...' : 'Instalar aprovadas',
+        icon: <Icon name="download" className="h-4 w-4" />,
+        disabled: !canExecutePatches || installingPatchesAgentId === agent.id,
+        hint: !canExecutePatches ? 'sem permissão' : canReachAgent ? undefined : offlineQueueHint,
+        onClick: () => { void handleInstallApprovedWindowsUpdates(); },
+      },
+      {
+        key: 'patches-open-tab',
+        label: 'Abrir aba de atualizações',
+        icon: <Icon name="open_in_new" className="h-4 w-4" />,
+        // Só navegação local: sem permissão de patch e sem o agente online? O
+        // item continua útil (o agente está na lista de qualquer forma).
+        separatorBefore: true,
+        // Slug da aba mapeado em agentDetailUtils (windowsUpdates:
+        // 'atualizacoes') e já usado por PatchesInventory/PatchesPending.
+        onClick: () => navigate(`/agents/${agent.id}?tab=atualizacoes`),
+      },
+    ],
+  });
 
   if (online) {
     items.push({

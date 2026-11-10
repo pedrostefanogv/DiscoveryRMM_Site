@@ -1,6 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import PatchesPending, { isPendingAgentOnline } from './PatchesPending';
 import type { PatchPendingAgent } from '@/api/types';
 
@@ -26,11 +26,29 @@ vi.mock('@/hooks/usePatches', () => ({
   useScanPatchScope: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+// Os hooks de ação são observáveis: além de existirem (a página os chama no
+// clique), guardamos os spies para provar que clicar no ícone NÃO navega e que
+// clicar na linha NÃO dispara nenhuma ação.
+// Devolvem uma Promise que nunca resolve: o handler da página faz `await` nela e
+// o clique NÃO atualiza estado fora do act() (o que geraria warning no teste).
+const approveSpy = vi.fn(() => new Promise(() => {}));
+const installSpy = vi.fn(() => new Promise(() => {}));
+const scanSpy = vi.fn(() => new Promise(() => {}));
+
 vi.mock('@/hooks/useAgentWindowsUpdates', () => ({
-  useApproveAgentPendingWindowsUpdates: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useInstallApprovedWindowsUpdates: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useScanAgentWindowsUpdates: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useApproveAgentPendingWindowsUpdates: () => ({ mutateAsync: approveSpy, isPending: false }),
+  useInstallApprovedWindowsUpdates: () => ({ mutateAsync: installSpy, isPending: false }),
+  useScanAgentWindowsUpdates: () => ({ mutateAsync: scanSpy, isPending: false }),
 }));
+
+// useNavigate é mockado porque o MemoryRouter do teste não expõe a rota: assim
+// conseguimos afirmar exatamente para onde a linha navega (e provar que o clique
+// nos botões de ação NÃO navega).
+const navigateSpy = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return { ...actual, useNavigate: () => navigateSpy };
+});
 
 vi.mock('@/auth/authorization', () => ({
   useAuthorization: () => ({ hasAnyPermission: () => true }),
@@ -81,12 +99,24 @@ const mockPending = (items: PatchPendingAgent[]) => {
   });
 };
 
+beforeEach(() => {
+  navigateSpy.mockClear();
+  approveSpy.mockClear();
+  installSpy.mockClear();
+  scanSpy.mockClear();
+});
+
 function renderPage() {
   return render(
     <MemoryRouter>
       <PatchesPending />
     </MemoryRouter>,
   );
+}
+
+/** A linha (<tr>) do agente com o hostname informado. */
+function linhaDoAgente(hostname: string): HTMLElement {
+  return screen.getByText(hostname).closest('tr') as HTMLElement;
 }
 
 /** Os badges de status da tabela (o valor é o texto visível do badge). */
@@ -183,5 +213,154 @@ describe('PatchesPending — indicador de agente online', () => {
     expect(isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', status: 'Offline', lastSeenAt: null }), NOW)).toBe(false);
     // Sem status e sem lastSeenAt: offline.
     expect(isPendingAgentOnline(agent({ agentId: 'a1', hostname: 'H1', lastSeenAt: null }), NOW)).toBe(false);
+  });
+});
+
+// ── Linha clicável + ações como ícones ────────────────────────────────────────
+
+describe('PatchesPending — linha clicável e ações de ícone', () => {
+  const ACOES = /^(Aprovar pendentes|Verificar atualizações|Instalar aprovadas)$/;
+
+  it('clicar na linha navega para a aba de atualizações do agente', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'CLICAVEL-01', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+
+    fireEvent.click(linhaDoAgente('CLICAVEL-01'));
+    expect(navigateSpy).toHaveBeenCalledWith('/agents/a1?tab=atualizacoes');
+  });
+
+  it('clicar num botão de ação NÃO navega para a linha (stopPropagation)', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'ACOES-01', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+
+    const linha = linhaDoAgente('ACOES-01');
+    const acoes = within(linha).getAllByRole('button');
+    // As três ações continuam na linha — e o antigo botão "Abrir" saiu.
+    expect(acoes.map((botao) => botao.getAttribute('aria-label'))).toEqual([
+      'Aprovar pendentes',
+      'Verificar atualizações',
+      'Instalar aprovadas',
+    ]);
+
+    for (const botao of acoes) {
+      fireEvent.click(botao);
+      // O clique chegou ao controle...
+      expect(navigateSpy).not.toHaveBeenCalled();
+    }
+    // ...e cada controle disparou APENAS a sua própria ação.
+    expect(approveSpy).toHaveBeenCalledTimes(1);
+    expect(scanSpy).toHaveBeenCalledTimes(1);
+    expect(installSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('a tabela não tem mais o botão "Abrir" (a navegação virou a própria linha)', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'SEM-ABRIR', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+
+    expect(screen.queryByRole('button', { name: 'Abrir' })).toBeNull();
+    // Cada ação continua acessível pelo nome, mesmo sem texto visível.
+    expect(screen.getAllByRole('button').filter((botao) => ACOES.test(botao.getAttribute('aria-label') ?? '')).length).toBe(3);
+  });
+
+  it('a linha é navegável pelo teclado (Enter), como o DataTable faz com onRowClick', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'TECLADO-01', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+
+    const linha = linhaDoAgente('TECLADO-01');
+    expect(linha.getAttribute('tabindex')).toBe('0');
+    fireEvent.keyDown(linha, { key: 'Enter' });
+    expect(navigateSpy).toHaveBeenCalledWith('/agents/a1?tab=atualizacoes');
+  });
+});
+
+// ── Menu de contexto (botão direito) ──────────────────────────────────────────
+
+describe('PatchesPending — menu de contexto', () => {
+  /** Abre o menu com o botão direito na linha do agente informado. */
+  function abrirMenu(hostname: string) {
+    fireEvent.contextMenu(linhaDoAgente(hostname), { clientX: 120, clientY: 90 });
+  }
+
+  it('o botão direito abre o menu com as ações de patch e o acesso remoto', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'MENU-01', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    abrirMenu('MENU-01');
+
+    // O menu completo: as três ações da tela + o acesso remoto pedido pelo usuário.
+    const menu = screen.getByRole('menu');
+    for (const nome of ['Aprovar pendentes', 'Verificar atualizações', 'Instalar aprovadas', 'Acesso remoto']) {
+      expect(within(menu).getByRole('menuitem', { name: new RegExp(nome) })).toBeTruthy();
+    }
+  });
+
+  it('abrir o menu NÃO navega para o agente (o contextmenu não é clique de linha)', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'MENU-02', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+    abrirMenu('MENU-02');
+
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('a ação do menu dispara o MESMO handler da linha (sem navegar junto)', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'MENU-03', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+    abrirMenu('MENU-03');
+
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: /Aprovar pendentes/ }));
+
+    // O menu reusa handleApprovePending: o mesmo mutateAsync do botão da linha.
+    expect(approveSpy).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('o acesso remoto fica desabilitado quando o agente está offline', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'MENU-04', status: 'Offline', lastSeenAt: ANTIGO })]);
+
+    renderPage();
+    abrirMenu('MENU-04');
+
+    const remoto = within(screen.getByRole('menu')).getByRole('menuitem', { name: /Acesso remoto/ });
+    // Sessão ao vivo exige a máquina acessível: o item aparece, mas bloqueado.
+    expect((remoto as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('o acesso remoto fica habilitado quando o agente está online', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'MENU-05', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+    abrirMenu('MENU-05');
+
+    const remoto = within(screen.getByRole('menu')).getByRole('menuitem', { name: /Acesso remoto/ });
+    expect((remoto as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('o menu fecha ao pressionar Escape', () => {
+    (useNowTick as unknown as ReturnType<typeof vi.fn>).mockReturnValue(NOW);
+    mockPending([agent({ agentId: 'a1', hostname: 'MENU-06', status: 'Online', lastSeenAt: RECENTE })]);
+
+    renderPage();
+    abrirMenu('MENU-06');
+    expect(screen.getByRole('menu')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 });

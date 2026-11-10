@@ -11,6 +11,7 @@ import { useNowTick } from "@/hooks/useNowTick";
 import { useAuthorization } from "@/auth/authorization";
 import { isAgentOnlineNow } from "@/utils/agentStatus";
 import type { PatchPendingAgent, PatchScope } from "@/api/types";
+import { PatchPendingContextMenu } from "@/components/patches/PatchPendingContextMenu";
 import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
 
 /**
@@ -52,6 +53,10 @@ export default function PatchesPending() {
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const [scanningAgentId, setScanningAgentId] = useState<string | null>(null);
+  // Menu de contexto (botão direito na linha): guarda a posição do clique E o
+  // agente daquela linha. O menu completo fica aqui; a coluna de ações mantém
+  // apenas os atalhos de uso frequente.
+  const [contextMenu, setContextMenu] = useState<{ agent: PatchPendingAgent; x: number; y: number } | null>(null);
   const pag = useCursorPagination({ initialLimit: 25 });
   // Tick de 5s: mantém o indicador Online/Offline coerente com o frescor de
   // lastSeenAt sem depender de um novo fetch da lista.
@@ -186,18 +191,24 @@ export default function PatchesPending() {
       key: "actions",
       header: "",
       className: "text-right",
+      // A LINHA inteira é clicável (navega para o agente), então todo clique
+      // dentro da célula de ações precisa parar a propagação — senão aprovar,
+      // verificar ou instalar também abriria a aba do agente. O <tr> do DataTable
+      // não filtra cliques de controles internos (DataTable.tsx linha 503), então
+      // o stopPropagation é responsabilidade de quem renderiza os controles.
       render: (agent) => (
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button size="sm" variant="secondary" onClick={() => navigate(`/agents/${agent.agentId}?tab=atualizacoes`)}>
-            Abrir
-          </Button>
+        <div className="flex flex-wrap justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+          {/* Sem texto visível: o title serve de tooltip nativo e o aria-label
+              mantém o botão acessível (leitor de tela e getByRole por nome). */}
           <Button
             size="sm"
             variant="secondary"
             onClick={() => void handleApprovePending(agent)}
             disabled={approvePending.isPending || !canApprove}
+            title="Aprovar pendentes"
+            aria-label="Aprovar pendentes"
           >
-            Aprovar pendentes
+            <Icon name="check_circle" className="h-4 w-4" />
           </Button>
           <Button
             size="sm"
@@ -205,16 +216,19 @@ export default function PatchesPending() {
             onClick={() => void handleScanAgent(agent)}
             disabled={scanningAgentId !== null || !canExecute}
             title="Verificar atualizações somente neste agente"
+            aria-label={scanningAgentId === agent.agentId ? "Verificando atualizações" : "Verificar atualizações"}
           >
             <Icon name="refresh" className={`h-4 w-4${scanningAgentId === agent.agentId ? " animate-spin" : ""}`} />
-            {scanningAgentId === agent.agentId ? "Verificando..." : "Verificar atualizações"}
           </Button>
           <Button
             size="sm"
+            variant="secondary"
             onClick={() => void handleInstallApproved(agent)}
             disabled={installApproved.isPending || !canExecute}
+            title="Instalar atualizações aprovadas"
+            aria-label="Instalar aprovadas"
           >
-            Instalar aprovadas
+            <Icon name="download" className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -312,6 +326,15 @@ export default function PatchesPending() {
               keyExtractor={(agent) => agent.agentId}
               showPagination={false}
               emptyMessage="Nenhum agente com atualizações pendentes"
+              // Mesma navegação que o antigo botão "Abrir" fazia. O DataTable ativa
+              // cursor/hover e a navegação por Enter/espaço a partir desta prop.
+              onRowClick={(agent) => navigate(`/agents/${agent.agentId}?tab=atualizacoes`)}
+              // Botão direito abre o menu completo do agente na posição do clique.
+              // preventDefault evita o menu nativo do navegador por cima do nosso.
+              onRowContextMenu={(event, agent) => {
+                event.preventDefault();
+                setContextMenu({ agent, x: event.clientX, y: event.clientY });
+              }}
             />
           </div>
           <Pagination
@@ -329,6 +352,19 @@ export default function PatchesPending() {
             }}
           />
         </Card>
+      )}
+
+      {contextMenu && (
+        <PatchPendingContextMenu
+          agent={contextMenu.agent}
+          now={now}
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          scanning={scanningAgentId === contextMenu.agent.agentId}
+          onApprove={(agent) => void handleApprovePending(agent)}
+          onScan={(agent) => void handleScanAgent(agent)}
+          onInstall={(agent) => void handleInstallApproved(agent)}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   );
