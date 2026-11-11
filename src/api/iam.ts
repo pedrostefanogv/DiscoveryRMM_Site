@@ -1,4 +1,9 @@
-import { api } from "./client";
+import {
+  api,
+  apiFetchResponse,
+  ApiError,
+  parseErrorMessage,
+} from "./client";
 import type { MfaRequirement } from "./types";
 
 export type ScopeLevel = "Global" | "Client" | "Site";
@@ -190,6 +195,31 @@ export interface AddRolePermissionRequest {
   permissionId: string;
 }
 
+/**
+ * Corpo dos endpoints em lote de permissões da role.
+ *
+ * É MERGE, não replace: somente as permissões listadas aqui são concedidas ou
+ * revogadas. As demais permissões da role permanecem intactas — por isso a UI
+ * pode mandar o lote sem precisar reenviar o estado atual da role.
+ */
+export interface BulkRolePermissionsRequest {
+  permissionIds: string[];
+}
+
+export interface BulkAssignRolePermissionsResponse {
+  /** Quantas permissões foram efetivamente concedidas nesta chamada. */
+  added: number;
+  /** Quantas já estavam concedidas (idempotência, não é erro). */
+  skipped: number;
+}
+
+export interface BulkRemoveRolePermissionsResponse {
+  /** Quantas permissões foram efetivamente revogadas nesta chamada. */
+  removed: number;
+  /** Quantas não estavam vinculadas (idempotência, não é erro). */
+  skipped: number;
+}
+
 const USERS = "/api/v1/users";
 const GROUPS = "/api/v1/user-groups";
 const ROLES = "/api/v1/roles";
@@ -353,4 +383,49 @@ export const iamApi = {
 
   removeRolePermission: (roleId: string, permissionId: string) =>
     api.del<void>(`${ROLES}/${roleId}/permissions/${permissionId}`),
+
+  /** Concede VÁRIAS permissões numa única requisição (merge, não replace). */
+  bulkAddRolePermissions: (
+    roleId: string,
+    payload: BulkRolePermissionsRequest,
+  ) =>
+    api.post<BulkAssignRolePermissionsResponse>(
+      `${ROLES}/${roleId}/permissions/batch`,
+      payload,
+    ),
+
+  /**
+   * Revoga VÁRIAS permissões numa única requisição (merge, não replace).
+   *
+   * DELETE **com corpo JSON**. O helper `api.del` do client aceita apenas `init`
+   * (não recebe body — veja src/api/client.ts) e o client.ts é arquivo de outro
+   * dono, então o corpo vai por `apiFetchResponse`, que é a primitiva pública do
+   * próprio client: mesma URL base normalizada, mesma injeção de Authorization e
+   * mesmo retry de 401, com o parser de erro reaproveitado aqui.
+   */
+  bulkRemoveRolePermissions: async (
+    roleId: string,
+    payload: BulkRolePermissionsRequest,
+  ): Promise<BulkRemoveRolePermissionsResponse> => {
+    const response = await apiFetchResponse(
+      `${ROLES}/${roleId}/permissions/batch`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!response.ok) {
+      // Mesmo parser do client (lê o corpo uma única vez) para a UI exibir a
+      // mensagem real da ApiError — ex.: a validação de role de sistema.
+      throw new ApiError(response.status, await parseErrorMessage(response));
+    }
+
+    if (response.status === 204) {
+      return { removed: 0, skipped: 0 };
+    }
+
+    return (await response.json()) as BulkRemoveRolePermissionsResponse;
+  },
 };

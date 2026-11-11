@@ -57,8 +57,8 @@ export default function PatchesOverview() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Atualizações do Windows"
-        description="Inventário de patches, aprovações e conformidade da frota (WUA)."
+        title="Gerenciamento de Patches"
+        description="Inventário de patches, aprovações e conformidade da frota (Windows Update; apps de terceiros aparecem somente com a origem habilitada na Política)."
       >
         <Button variant="secondary" onClick={() => void overview.refetch()} disabled={overview.isFetching}>
           <Icon name="refresh" className="h-4 w-4" />

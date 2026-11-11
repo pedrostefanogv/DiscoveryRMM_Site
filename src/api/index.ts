@@ -261,6 +261,9 @@ export type {
   UpdateRoleRequest,
   PermissionDto,
   AddRolePermissionRequest,
+  BulkRolePermissionsRequest,
+  BulkAssignRolePermissionsResponse,
+  BulkRemoveRolePermissionsResponse,
 } from "./iam";
 export type {
   DashboardWindow,

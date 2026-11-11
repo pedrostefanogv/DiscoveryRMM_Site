@@ -477,13 +477,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   ? 'bg-surface-hover text-foreground'
                   : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
-              aria-label="Abrir submenu de atualizações"
+              aria-label="Abrir submenu de gerenciamento de patches"
               aria-expanded={patchesOpen}
             >
               <Icon name="gpp_maybe" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
-                  <span className="truncate">Atualizações</span>
+                  <span className="truncate">Gerenciamento de Patches</span>
                   <span className="ml-auto">
                     <Icon name="expand_more" className={chevronAnimationClass(patchesOpen)} />
                   </span>

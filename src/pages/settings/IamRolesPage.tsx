@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import toast from "react-hot-toast";
@@ -12,8 +12,10 @@ import { Icon,
   Input,
   Loading,
   Modal,
+  PermissionMultiSelect,
   Select,
   type Column,
+  type PermissionOption,
 
 PageHeader,
 } from "@/components/ui";
@@ -25,7 +27,8 @@ import {
   type UpdateRoleRequest,
 } from "@/api";
 import {
-  useAddIamRolePermission,
+  useBulkAddIamRolePermissions,
+  useBulkRemoveIamRolePermissions,
   useCreateIamRole,
   useDeleteIamRole,
   useIamPermissionsCatalog,
@@ -279,6 +282,91 @@ export default function IamRolesPage() {
   );
 }
 
+/** Item do catálogo já normalizado para a UI (id + rótulo + agrupador). */
+interface PermissionEntry {
+  id: string;
+  label: string;
+  code: string;
+  group: string;
+}
+
+/**
+ * Deriva o grupo (recurso) da permissão.
+ *
+ * Preferimos o `resourceType` que a API já manda; quando ele não vem (catálogo
+ * antigo/parcial) caímos para o prefixo do código — "Users.Edit" -> "Users" —
+ * porque é isso que o operador usa para achar a permissão numa lista de 100+.
+ */
+function getPermissionGroup(permission: PermissionLike, code: string) {
+  const resourceType = readString(permission, "resourceType", "resource");
+  if (resourceType) return resourceType;
+
+  const [prefix] = code.split(".");
+  if (prefix && prefix !== code) return prefix;
+
+  return "Outras permissões";
+}
+
+function buildPermissionEntries(permissions: PermissionLike[]): PermissionEntry[] {
+  const uniqueById = new Map<string, PermissionEntry>();
+
+  for (const permission of permissions) {
+    const id = getPermissionId(permission);
+    if (!id || uniqueById.has(id)) continue;
+
+    const code = getPermissionCode(permission);
+    uniqueById.set(id, {
+      id,
+      label: getPermissionLabel(permission),
+      code,
+      group: getPermissionGroup(permission, code),
+    });
+  }
+
+  return Array.from(uniqueById.values()).sort((a, b) => {
+    const byGroup = a.group.localeCompare(b.group, "pt-BR");
+    if (byGroup !== 0) return byGroup;
+    return a.label.localeCompare(b.label, "pt-BR");
+  });
+}
+
+function toPermissionOption(entry: PermissionEntry): PermissionOption {
+  return {
+    id: entry.id,
+    label: entry.label,
+    code: entry.code || entry.id,
+    group: entry.group,
+  };
+}
+
+/** Barra de busca das permissões JÁ vinculadas (essencial acima de ~100 itens). */
+function PermissionFilter({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <Icon
+        name="search"
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+      />
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="w-full rounded-xl border border-border bg-surface-light py-2 pl-9 pr-3 text-sm text-foreground placeholder-muted outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+      />
+    </div>
+  );
+}
+
 function RolePermissionsPanel({
   role,
   canManage,
@@ -291,150 +379,335 @@ function RolePermissionsPanel({
   loadingCatalog: boolean;
 }) {
   const rolePermissionsQuery = useIamRolePermissions(role.id);
-  const addPermission = useAddIamRolePermission(role.id);
   const removePermission = useRemoveIamRolePermission(role.id);
+  const bulkAddPermissions = useBulkAddIamRolePermissions(role.id);
+  const bulkRemovePermissions = useBulkRemoveIamRolePermissions(role.id);
 
-  const [selectedPermissionId, setSelectedPermissionId] = useState("");
-  const [permissionSearch, setPermissionSearch] = useState("");
+  // Ids NOVOS marcados no multi-select. As já vinculadas NÃO entram aqui: elas vão
+  // por `alreadyAssignedIds` (marcadas, com selo e travadas), então a atribuição em
+  // lote recebe exatamente o que o operador marcou de novo, sem filtro extra.
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [linkedIds, setLinkedIds] = useState<string[]>([]);
+  const [linkedSearch, setLinkedSearch] = useState("");
 
-  const normalizedCatalog = useMemo(
-    () => {
-      const uniqueById = new Map<string, { id: string; label: string; searchText: string }>();
+  // useDeferredValue: com 104+ itens, digitar na busca não pode competir com a
+  // renderização da lista inteira a cada tecla.
+  const deferredLinkedSearch = useDeferredValue(linkedSearch);
 
-      permissionsCatalog
-        .map((permission) => permission as PermissionLike)
-        .map((permission) => ({
-          id: getPermissionId(permission),
-          label: getPermissionLabel(permission),
-          searchText: [
-            getPermissionCode(permission),
-            getPermissionName(permission),
-            getPermissionId(permission),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase(),
-        }))
-        .filter((permission) => !!permission.id)
-        .forEach((permission) => {
-          if (!uniqueById.has(permission.id)) {
-            uniqueById.set(permission.id, permission);
-          }
-        });
-
-      return Array.from(uniqueById.values()).sort((a, b) =>
-        a.label.localeCompare(b.label, "pt-BR"),
-      );
-    },
+  const catalog = useMemo(
+    () =>
+      buildPermissionEntries(
+        permissionsCatalog.map((permission) => permission as PermissionLike),
+      ),
     [permissionsCatalog],
   );
 
-  const filteredCatalog = useMemo(() => {
-    const query = permissionSearch.trim().toLowerCase();
-    if (!query) return normalizedCatalog;
+  const linked = useMemo(
+    () =>
+      buildPermissionEntries(
+        (rolePermissionsQuery.data ?? []).map(
+          (permission) => permission as PermissionLike,
+        ),
+      ),
+    [rolePermissionsQuery.data],
+  );
 
-    return normalizedCatalog.filter((permission) =>
-      permission.searchText.includes(query),
+  const catalogOptions = useMemo(
+    () => catalog.map(toPermissionOption),
+    [catalog],
+  );
+
+  const linkedIdSet = useMemo(
+    () => new Set(linked.map((entry) => entry.id)),
+    [linked],
+  );
+
+  const assignableIds = useMemo(
+    () => catalog.filter((entry) => !linkedIdSet.has(entry.id)).map((entry) => entry.id),
+    [catalog, linkedIdSet],
+  );
+
+  const assignableIdSet = useMemo(
+    () => new Set(assignableIds),
+    [assignableIds],
+  );
+
+  useEffect(() => {
+    // Remove da seleção o que deixou de ser atribuível (itens que entraram na role
+    // ou saíram do catálogo): sem isso o botão “Atribuir N” mentiria o N.
+    setPendingIds((current) => {
+      const next = current.filter((id) => assignableIdSet.has(id));
+      return next.length === current.length ? current : next;
+    });
+    // Só precisa reagir quando o conjunto de atribuíveis muda.
+     
+  }, [assignableIdSet]);
+
+  const linkedGroups = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of linked) {
+      counts.set(entry.group, (counts.get(entry.group) ?? 0) + 1);
+    }
+    return counts;
+  }, [linked]);
+
+  const filteredLinked = useMemo(() => {
+    const query = deferredLinkedSearch.trim().toLowerCase();
+    if (!query) return linked;
+
+    return linked.filter(
+      (entry) =>
+        entry.label.toLowerCase().includes(query) ||
+        entry.code.toLowerCase().includes(query) ||
+        entry.id.toLowerCase().includes(query),
     );
-  }, [normalizedCatalog, permissionSearch]);
+  }, [linked, deferredLinkedSearch]);
 
-  const permissionOptions = [
-    {
-      value: "",
-      label: loadingCatalog ? "Carregando permissões..." : "Selecione uma permissão",
-    },
-    ...filteredCatalog.map((permission) => ({
-      value: permission.id,
-      label: permission.label,
-    })),
-  ];
+  // A busca da lista vinculada só esconde itens: o que já estava selecionado
+  // continua contado e continua sendo removido (agir sobre o que não se vê é
+  // surpresa; perder seleção por causa de um filtro também é).
+  const filteredLinkedIds = useMemo(
+    () => filteredLinked.map((entry) => entry.id),
+    [filteredLinked],
+  );
 
-  const assignPermission = async () => {
-    if (!selectedPermissionId) return;
+  const selectedLinked = useMemo(
+    () => linkedIds.filter((id) => linkedIdSet.has(id)),
+    [linkedIds, linkedIdSet],
+  );
+
+  const selectedLinkedSet = useMemo(
+    () => new Set(selectedLinked),
+    [selectedLinked],
+  );
+
+  const allFilteredSelected =
+    filteredLinkedIds.length > 0 &&
+    filteredLinkedIds.every((id) => selectedLinkedSet.has(id));
+
+  const toggleLinked = (permissionId: string) => {
+    if (!permissionId) return;
+    setLinkedIds((current) =>
+      current.includes(permissionId)
+        ? current.filter((id) => id !== permissionId)
+        : [...current, permissionId],
+    );
+  };
+
+  const toggleAllFiltered = () => {
+    if (allFilteredSelected) {
+      setLinkedIds((current) =>
+        current.filter((id) => !filteredLinkedIds.includes(id)),
+      );
+      return;
+    }
+
+    setLinkedIds((current) => {
+      const next = [...current];
+      for (const id of filteredLinkedIds) {
+        if (!next.includes(id)) next.push(id);
+      }
+      return next;
+    });
+  };
+
+  const assignSelected = async () => {
+    const ids = pendingIds.filter((id) => assignableIdSet.has(id));
+    if (ids.length === 0) return;
 
     try {
-      await addPermission.mutateAsync({ permissionId: selectedPermissionId });
-      setSelectedPermissionId("");
-      toast.success("Permissão atribuída com sucesso.");
+      const result = await bulkAddPermissions.mutateAsync({
+        permissionIds: ids,
+      });
+      setPendingIds([]);
+      // Contagens honestas: o backend responde o que REALMENTE aconteceu
+      // (added x skipped), então o operador não é induzido a achar que
+      // reatribuir o que já existia mudou alguma coisa.
+      toast.success(
+        `${result.added} permissão(ões) atribuída(s). ${result.skipped} já estava(m) vinculada(s).`,
+      );
     } catch (error) {
-      toast.error(getErrorMessage(error, "Não foi possível atribuir permissão."));
+      toast.error(
+        getErrorMessage(error, "Não foi possível atribuir as permissões."),
+      );
     }
   };
 
-  const permissions = (rolePermissionsQuery.data ?? []).map(
-    (permission) => permission as PermissionLike,
-  );
+  const removeSelected = async () => {
+    const ids = selectedLinked;
+    if (ids.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Remover ${ids.length} permissão(ões) da role "${role.name}"?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      const result = await bulkRemovePermissions.mutateAsync({
+        permissionIds: ids,
+      });
+      setLinkedIds([]);
+      toast.success(
+        `${result.removed} permissão(ões) removida(s). ${result.skipped} não estava(m) vinculada(s).`,
+      );
+    } catch (error) {
+      toast.error(
+        getErrorMessage(error, "Não foi possível remover as permissões."),
+      );
+    }
+  };
 
   return (
     <Card>
       <CardHeader
         title={`Permissões da role: ${role.name}`}
-        subtitle={`${permissions.length} permissão(ões)`}
+        subtitle={`${linked.length} permissão(ões) — ${catalog.length} no catálogo`}
       />
 
       {canManage && (
-        <div className="mb-4 space-y-2">
-          <Input
-            value={permissionSearch}
-            onChange={(e) => setPermissionSearch(e.target.value)}
-            placeholder="Buscar permissão por código, nome ou id..."
+        <div className="mb-6 space-y-3 rounded-xl border border-border bg-surface-light/40 p-3">
+          <p className="text-sm font-medium text-foreground">
+            Adicionar permissões
+          </p>
+          <PermissionMultiSelect
+            options={catalogOptions}
+            value={pendingIds}
+            onChange={setPendingIds}
+            alreadyAssignedIds={linked.map((entry) => entry.id)}
+            loading={loadingCatalog}
+            placeholder="Buscar permissão no catálogo..."
+            maxHeightClassName="max-h-72"
           />
-          <div className="flex gap-2">
-            <div className="flex-1">
-            <Select
-              options={permissionOptions}
-              value={selectedPermissionId}
-              onChange={(e) => setSelectedPermissionId(e.target.value)}
-            />
-            </div>
-            <Button size="sm" onClick={() => void assignPermission()} loading={addPermission.isPending} disabled={!selectedPermissionId}>
-              <Icon name="key" className="h-4 w-4" /> Atribuir
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => void assignSelected()}
+              loading={bulkAddPermissions.isPending}
+              disabled={pendingIds.length === 0}
+              aria-label={`Atribuir ${pendingIds.length} permissão(ões) selecionada(s)`}
+            >
+              <Icon name="key" className="h-4 w-4" /> Atribuir {pendingIds.length} selecionada(s)
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setPendingIds([])}
+              disabled={pendingIds.length === 0 || bulkAddPermissions.isPending}
+              aria-label="Limpar seleção de novas permissões"
+            >
+              <Icon name="undo" className="h-4 w-4" /> Limpar seleção
             </Button>
           </div>
-          <p className="text-xs text-muted">
-            {filteredCatalog.length} permissão(ões) encontrada(s).
-          </p>
         </div>
       )}
 
       {rolePermissionsQuery.isLoading ? (
         <Loading message="Carregando permissões da role..." />
       ) : (
-        <div className="space-y-2">
-          {permissions.map((permission) => {
-            const permissionId = getPermissionId(permission);
-            const permissionLabel = getPermissionLabel(permission);
-            const code = getPermissionCode(permission);
+        <div className="space-y-3">
+          {linked.length > 0 && (
+            <PermissionFilter
+              value={linkedSearch}
+              onChange={setLinkedSearch}
+              placeholder="Buscar entre as permissões vinculadas..."
+            />
+          )}
+
+          {canManage && linked.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={toggleAllFiltered}
+                disabled={filteredLinkedIds.length === 0}
+                aria-label={`Selecionar todas as ${filteredLinkedIds.length} permissões vinculadas visíveis`}
+              >
+                <Icon name={allFilteredSelected ? "undo" : "done_all"} className="h-4 w-4" />
+                {allFilteredSelected
+                  ? `Limpar seleção (${filteredLinkedIds.length})`
+                  : `Selecionar todas as ${filteredLinkedIds.length} vinculadas`}
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => void removeSelected()}
+                loading={bulkRemovePermissions.isPending}
+                disabled={selectedLinked.length === 0}
+                aria-label={`Remover ${selectedLinked.length} permissão(ões) selecionada(s)`}
+              >
+                <Icon name="delete" className="h-4 w-4" /> Remover {selectedLinked.length} selecionada(s)
+              </Button>
+            </div>
+          )}
+
+          {linked.length > 0 && (
+            <p className="text-xs text-muted" aria-live="polite">
+              {filteredLinked.length} de {linked.length} permissão(ões) vinculada(s)
+              exibida(s){selectedLinked.length > 0 ? ` · ${selectedLinked.length} selecionada(s)` : ""}.
+            </p>
+          )}
+
+          {Array.from(linkedGroups.entries()).map(([group, total]) => {
+            const groupItems = filteredLinked.filter((entry) => entry.group === group);
+            if (groupItems.length === 0) return null;
 
             return (
-            <div key={permissionId || permissionLabel} className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-3 py-2">
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">{permissionLabel}</p>
-                <p className="text-xs text-muted">{code || permissionId}</p>
-              </div>
-              {canManage && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    removePermission.mutate(permissionId, {
-                      onSuccess: () => toast.success("Permissão removida."),
-                      onError: (error) => toast.error(getErrorMessage(error, "Não foi possível remover permissão.")),
-                    })
-                  }
-                  disabled={!permissionId}
-                  aria-label="Remover permissão"
-                title="Remover permissão"
-              >
-                  <Icon name="delete" className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+              <section key={group} className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  {group} ({groupItems.length} de {total})
+                </h3>
+                {groupItems.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-light px-3 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {canManage && (
+                        <input
+                          type="checkbox"
+                          checked={selectedLinkedSet.has(entry.id)}
+                          onChange={() => toggleLinked(entry.id)}
+                          aria-label={`Selecionar ${entry.label}`}
+                          className="h-4 w-4 shrink-0 accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        />
+                      )}
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium text-foreground">{entry.label}</p>
+                        <p className="text-xs text-muted">{entry.code || entry.id}</p>
+                      </div>
+                    </div>
+                    {canManage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          removePermission.mutate(entry.id, {
+                            onSuccess: () => toast.success("Permissão removida."),
+                            onError: (error) => toast.error(getErrorMessage(error, "Não foi possível remover permissão.")),
+                          })
+                        }
+                        disabled={!entry.id || bulkRemovePermissions.isPending}
+                        aria-label={`Remover a permissão ${entry.label}`}
+                        title="Remover permissão"
+                      >
+                        <Icon name="delete" className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </section>
             );
           })}
-          {permissions.length === 0 && (
+
+          {linked.length === 0 && (
             <div className="rounded-lg border border-dashed border-border-strong p-4 text-sm text-muted">
               Nenhuma permissão vinculada a esta role.
+            </div>
+          )}
+
+          {linked.length > 0 && filteredLinked.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border-strong p-4 text-sm text-muted">
+              Nenhuma permissão vinculada corresponde ao filtro.
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ export { MATERIAL_SYMBOL_PATHS, MATERIAL_SYMBOL_VIEWBOX } from "./materialSymbol
 export { Button } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { Badge } from "./Badge";
+export { PermissionMultiSelect, type PermissionOption, type PermissionMultiSelectProps } from "./PermissionMultiSelect";
 export { DataTable, type Column } from "./DataTable";
 export { Pagination } from "./Pagination";
 export { Modal } from "./Modal";

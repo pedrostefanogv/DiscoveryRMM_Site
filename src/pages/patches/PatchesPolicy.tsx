@@ -230,7 +230,7 @@ export default function PatchesPolicy() {
           <Card>
             <CardHeader
               title="Origens de patch"
-              subtitle="Apps de terceiros (Chocolatey/winget) exigem duplo consentimento: habilitar a origem aqui e a instalação automática abaixo."
+              subtitle="Apps de terceiros (Chocolatey/winget) vêm DESATIVADOS por padrão: sem a origem habilitada, os pacotes de terceiros não aparecem em Inventário/Pendências/Conformidade, não contam no score e os agentes não os reportam. Habilitar aqui é o 1º consentimento; a instalação automática exige o 2º (abaixo)."
             />
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex items-center gap-2 text-sm text-foreground">

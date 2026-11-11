@@ -4,6 +4,7 @@ import {
   type AddGroupMemberRequest,
   type AddRolePermissionRequest,
   type AssignGroupRoleRequest,
+  type BulkRolePermissionsRequest,
   type ChangeMyPasswordRequest,
   type ChangePasswordRequest,
   type CreateRoleRequest,
@@ -381,6 +382,42 @@ export function useRemoveIamRolePermission(roleId: string | null) {
   return useMutation({
     mutationFn: (permissionId: string) =>
       iamApi.removeRolePermission(roleId as string, permissionId),
+    onSuccess: () => {
+      if (!roleId) return;
+      queryClient.invalidateQueries({
+        queryKey: IAM_KEYS.rolePermissions(roleId),
+      });
+    },
+  });
+}
+
+/**
+ * Concede VÁRIAS permissões de uma role numa única chamada.
+ *
+ * Uma requisição em vez de N cria um único estado de carregamento (a UI mostra
+ * "atribuindo N..." sem botão travado no meio do lote) e uma única invalidação da
+ * lista de permissões — em vez de N refetches disparados em sequência.
+ */
+export function useBulkAddIamRolePermissions(roleId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BulkRolePermissionsRequest) =>
+      iamApi.bulkAddRolePermissions(roleId as string, payload),
+    onSuccess: () => {
+      if (!roleId) return;
+      queryClient.invalidateQueries({
+        queryKey: IAM_KEYS.rolePermissions(roleId),
+      });
+    },
+  });
+}
+
+/** Revoga VÁRIAS permissões de uma role numa única chamada. */
+export function useBulkRemoveIamRolePermissions(roleId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: BulkRolePermissionsRequest) =>
+      iamApi.bulkRemoveRolePermissions(roleId as string, payload),
     onSuccess: () => {
       if (!roleId) return;
       queryClient.invalidateQueries({
