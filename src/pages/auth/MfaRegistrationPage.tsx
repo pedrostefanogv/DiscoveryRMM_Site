@@ -204,7 +204,7 @@ export default function MfaRegistrationPage() {
       >
         <Input
           label={isTotpFlow ? "Nome do autenticador" : "Nome da chave"}
-          placeholder="Notebook Pedro"
+          placeholder="Ex: Chave de segurança Yubikey"
           value={keyName}
           onChange={(event) => setKeyName(event.target.value)}
         />
