@@ -483,7 +483,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               <Icon name="gpp_maybe" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
-                  <span className="truncate">Gerenciamento de Patches</span>
+                  <span className="truncate">Patches</span>
                   <span className="ml-auto">
                     <Icon name="expand_more" className={chevronAnimationClass(patchesOpen)} />
                   </span>
