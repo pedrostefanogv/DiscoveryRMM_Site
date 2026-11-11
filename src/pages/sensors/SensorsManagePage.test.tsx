@@ -41,10 +41,45 @@ vi.mock("@/hooks/useSites", () => ({
   }),
 }));
 
-// O modal de edição é de outro arquivo (compartilhado com a aba do agente); aqui
-// basta isolar: o que importa é a página abrir/fechar e salvar via update.
+// O modal é de outro arquivo (compartilhado com a aba do agente); aqui ele é
+// isolado. O stub guarda a ÚLTIMA chamada de onSave de cada instância e o botão
+// abaixo a dispara — sem isso não há como exercitar o caminho criar/editar, que
+// é justamente o que a página decide.
+const modalCalls: { open: boolean; onSave: (data: unknown, sensorId?: string) => Promise<void> }[] =
+  [];
+
 vi.mock("@/components/agents/SensorFormModal", () => ({
-  default: () => null,
+  default: (props: {
+    open: boolean;
+    onClose: () => void;
+    clientId: string | null;
+    siteId: string | null;
+    sensor: { sensorId: string } | null;
+    onSave: (data: unknown, sensorId?: string) => Promise<void>;
+  }) => {
+    modalCalls.push({ open: props.open, onSave: props.onSave });
+    if (!props.open) return null;
+    // Lista o escopo herdado da URL: o teste confere o pré-preenchimento.
+    return (
+      <div data-testid="sensor-form-modal">
+        <span data-testid="modal-mode">{props.sensor ? "edicao" : "criacao"}</span>
+        <span data-testid="modal-escopo">
+          {props.clientId ?? "-"}|{props.siteId ?? "-"}
+        </span>
+        <button
+          type="button"
+          data-testid="modal-save"
+          onClick={() =>
+            void props
+              .onSave({ name: "Sensor novo", sensorType: "DiskSpace" }, props.sensor?.sensorId)
+              .catch(() => {})
+          }
+        >
+          salvar-modal
+        </button>
+      </div>
+    );
+  },
 }));
 
 import { sensorsApi } from "@/api/sensors";
@@ -155,7 +190,9 @@ beforeEach(() => {
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  modalCalls.length = 0;
   vi.mocked(sensorsApi.listDefinitions).mockResolvedValue(DEFINITIONS);
+  vi.mocked(sensorsApi.create).mockResolvedValue(definition());
   vi.mocked(sensorsApi.remove).mockResolvedValue(undefined);
   vi.mocked(sensorsApi.update).mockResolvedValue(definition());
 });
@@ -292,7 +329,8 @@ describe("SensorsManagePage", () => {
     renderPage();
 
     expect(await screen.findByText("Nenhum sensor cadastrado")).toBeTruthy();
-    expect(screen.getByText(/aba Sensores do detalhe de um agente/)).toBeTruthy();
+    // A página agora cria: o texto orienta o botão em vez de mandar para o agente.
+    expect(screen.getByText(/Use o botão "Novo sensor"/)).toBeTruthy();
   });
 
   it("estado vazio com filtro explica que é o recorte, não a ausência de sensores", async () => {
@@ -301,5 +339,88 @@ describe("SensorsManagePage", () => {
 
     expect(await screen.findByText("Nenhum sensor neste filtro")).toBeTruthy();
     expect(screen.getByText(/Ajuste os filtros/)).toBeTruthy();
+  });
+
+  it("cria o sensor pelo botão 'Novo sensor' e invalida o cache de sensores", async () => {
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    renderPage();
+    await screen.findByText("Disco C:");
+
+    // Nenhum modal aberto até o clique.
+    expect(screen.queryByTestId("sensor-form-modal")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Novo sensor" }));
+
+    const modal = await screen.findByTestId("sensor-form-modal");
+    expect(within(modal).getByTestId("modal-mode").textContent).toBe("criacao");
+
+    fireEvent.click(within(modal).getByTestId("modal-save"));
+
+    await waitFor(() => {
+      expect(vi.mocked(sensorsApi.create)).toHaveBeenCalledWith({
+        name: "Sensor novo",
+        sensorType: "DiskSpace",
+      });
+    });
+    // Criar NÃO pode cair no update.
+    expect(vi.mocked(sensorsApi.update)).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: SENSOR_KEYS.all });
+    });
+    // Sucesso fecha o modal de criação.
+    await waitFor(() => {
+      expect(screen.queryByTestId("sensor-form-modal")).toBeNull();
+    });
+  });
+
+  it("pré-preenche o escopo da criação com os filtros da URL", async () => {
+    renderPage(`/sensors/manage?clientId=${CLIENT_GUID}&siteId=${SITE_GUID}`);
+    await screen.findByText("Disco C:");
+
+    fireEvent.click(screen.getByRole("button", { name: "Novo sensor" }));
+
+    const modal = await screen.findByTestId("sensor-form-modal");
+    expect(within(modal).getByTestId("modal-escopo").textContent).toBe(
+      `${CLIENT_GUID}|${SITE_GUID}`,
+    );
+  });
+
+  it("abre a criação quando a URL traz ?new=1 e consome o parâmetro", async () => {
+    renderPage("/sensors/manage?new=1");
+    await screen.findByText("Disco C:");
+
+    // O modal de criação abre pelo link vindo da página de frota...
+    const modal = await screen.findByTestId("sensor-form-modal");
+    expect(within(modal).getByTestId("modal-mode").textContent).toBe("criacao");
+    // ...e o parâmetro sai da URL (senão o F5 reabriria o modal).
+    await waitFor(() => {
+      expect(screen.getByTestId("url").textContent).not.toContain("new=1");
+    });
+    expect(screen.getByTestId("url").textContent).toBe("");
+
+    // Fechar depois disso não reabre (o efeito não tem o que consumir).
+    fireEvent.click(screen.getByRole("button", { name: "Novo sensor" }));
+    expect(screen.getByTestId("sensor-form-modal")).toBeTruthy();
+  });
+
+  it("edita com update (sensorId preenchido) quando o modal vem da linha", async () => {
+    renderPage();
+    await screen.findByText("Disco C:");
+
+    fireEvent.click(screen.getByRole("button", { name: "Editar Disco C:" }));
+
+    const modal = await screen.findByTestId("sensor-form-modal");
+    expect(within(modal).getByTestId("modal-mode").textContent).toBe("edicao");
+
+    fireEvent.click(within(modal).getByTestId("modal-save"));
+
+    await waitFor(() => {
+      expect(vi.mocked(sensorsApi.update)).toHaveBeenCalledWith(DEFINITION_ID, {
+        name: "Sensor novo",
+        sensorType: "DiskSpace",
+      });
+    });
+    // Editar NÃO pode criar uma definição nova.
+    expect(vi.mocked(sensorsApi.create)).not.toHaveBeenCalled();
   });
 });

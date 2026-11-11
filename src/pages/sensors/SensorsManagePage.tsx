@@ -24,6 +24,7 @@ import {
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import {
+  useCreateSensor,
   useDeleteSensor,
   useSensorDefinitions,
   useUpdateSensor,
@@ -216,9 +217,16 @@ export default function SensorsManagePage() {
   }, [selectedClientId, selectedSiteId, selectedType, selectedStatus, urlSearch]);
 
   const definitions = useSensorDefinitions(listParams);
+  const createSensor = useCreateSensor();
   const deleteSensor = useDeleteSensor();
   const updateSensor = useUpdateSensor();
 
+  /**
+   * Modal de CRIAÇÃO aberto/fechado. É um estado separado de `editing` de
+   * propósito: o modal recebe `sensor`/escopo diferentes em cada modo e um
+   * sentinela compartilhado deixaria os dois modos acoplados.
+   */
+  const [creating, setCreating] = useState(false);
   /** Sensor em edição (null = modal fechado). */
   const [editing, setEditing] = useState<SensorDefinition | null>(null);
   /** Sensor aguardando confirmação de exclusão. */
@@ -284,14 +292,36 @@ export default function SensorsManagePage() {
     }
   }, [deleting, deleteSensor]);
 
-  /** Salva a edição no modal (o modal já fecha sozinho em caso de sucesso). */
+  /**
+   * Abre a criação a partir de um LINK externo: a página de frota navega para
+   * `/sensors/manage?new=1`. O parâmetro é consumido (removido com
+   * `replace: true`) logo depois de abrir o modal, senão ele continuaria na URL
+   * e reabriria a criação a cada F5 — mesmo padrão do applyFilters.
+   */
+  useEffect(() => {
+    // A presença do parâmetro é o gatilho: um `new=0` na URL não abre nada.
+    if (!searchParams.has("new")) return;
+    setCreating(true);
+    applyFilters({ new: "" });
+  }, [searchParams, applyFilters]);
+
+  /**
+   * Salva o modal. Sem `sensorId` (criação) chama create; com id (edição, vindo
+   * do modal ou do registro em edição) chama update.
+   */
   const handleSave = useCallback(
     async (data: SensorUpsertRequest, sensorId?: string) => {
       const id = sensorId ?? editing?.id;
-      if (!id) return;
-      await updateSensor.mutateAsync({ id, data });
+      if (id) {
+        await updateSensor.mutateAsync({ id, data });
+        return;
+      }
+      await createSensor.mutateAsync(data);
+      // Fecha o modal de criação só depois do sucesso: em erro o modal continua
+      // aberto exibindo a mensagem (o próprio modal trata o catch).
+      setCreating(false);
     },
-    [editing?.id, updateSensor],
+    [editing?.id, createSensor, updateSensor],
   );
 
   const columns = useMemo<Column<SensorDefinition>[]>(
@@ -456,6 +486,10 @@ export default function SensorsManagePage() {
         onBack={() => navigate("/sensors")}
         backLabel="Voltar para a visão de frota"
       >
+        <Button onClick={() => setCreating(true)}>
+          <Icon name="add" className="h-4 w-4" />
+          Novo sensor
+        </Button>
         <Button
           variant="secondary"
           onClick={() => void definitions.refetch()}
@@ -538,7 +572,7 @@ export default function SensorsManagePage() {
           description={
             hasFilters
               ? "Ajuste os filtros (cliente, site, tipo, status ou busca) para encontrar a definição."
-              : "Sensores são criados na aba Sensores do detalhe de um agente — o conjunto recomendado (disco, CPU, memória e uptime) cobre a saúde básica."
+              : "Use o botão \"Novo sensor\" para criar uma definição e escolher o escopo (global, cliente, site ou agente). O conjunto recomendado (disco, CPU, memória e uptime) cobre a saúde básica."
           }
         />
       ) : (
@@ -552,13 +586,36 @@ export default function SensorsManagePage() {
       )}
 
       <SensorFormModal
-        open={editing !== null}
+        // Edição e criação nunca abrem juntas: a edição só entra quando ela é o
+        // modo ativo (criar ganha precedência, do clique ou do `?new=1`).
+        open={editing !== null && !creating}
+        key="modal-edicao"
         onClose={() => setEditing(null)}
         agentId={editing?.agentId ?? ""}
         clientId={editing?.clientId ?? null}
         siteId={editing?.siteId ?? null}
         sensor={editing ? sensorItemFromDefinition(editing) : null}
         isSaving={updateSensor.isPending}
+        onSave={handleSave}
+      />
+
+      {/*
+        Modal de CRIAÇÃO separado, com identidade (`key`) própria: o estado
+        interno do modal é por instância e montar o de edição com dados de
+        criação misturaria os dois formulários. O escopo é pré-preenchido com os
+        filtros da URL (criar já no cliente que o operador está olhando); sem
+        filtro, o usuário escolhe no próprio modal. agentId fica vazio: criação a
+        partir desta página é sem agente.
+      */}
+      <SensorFormModal
+        key="modal-criacao"
+        open={creating}
+        onClose={() => setCreating(false)}
+        agentId=""
+        clientId={selectedClientId || null}
+        siteId={selectedSiteId || null}
+        sensor={null}
+        isSaving={createSensor.isPending}
         onSave={handleSave}
       />
 

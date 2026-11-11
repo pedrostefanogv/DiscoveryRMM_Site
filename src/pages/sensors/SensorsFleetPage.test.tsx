@@ -177,10 +177,15 @@ describe("SensorsFleetPage", () => {
   });
 });
 
-/** Espelha a URL corrente para conferir o deep link dos filtros. */
+/** Espelha a URL corrente para conferir o deep link dos filtros e as rotas. */
 function LocationProbe() {
   const location = useLocation();
-  return <span data-testid="url">{location.search}</span>;
+  return (
+    <>
+      <span data-testid="url">{location.search}</span>
+      <span data-testid="path">{location.pathname}</span>
+    </>
+  );
 }
 
 
@@ -215,5 +220,57 @@ describe("SensorsFleetPage — filtros na URL (deep link)", () => {
     expect(useSensorsFleetSummaryMock).toHaveBeenCalledWith({ clientId: "c1", siteId: "s1" });
     expect((screen.getByLabelText("Cliente") as HTMLSelectElement).value).toBe("c1");
     expect((screen.getByLabelText("Site") as HTMLSelectElement).value).toBe("s1");
+  });
+});
+
+describe("SensorsFleetPage — criação de sensor em um clique", () => {
+  it("leva a criação em um clique: 'Novo sensor' navega para /sensors/manage?new=1", () => {
+    renderPage();
+    expect(screen.getByTestId("path").textContent).toBe("/sensors");
+
+    fireEvent.click(screen.getByRole("button", { name: /Novo sensor/ }));
+
+    // Contrato com a tela de gerenciamento: o ?new=1 abre o modal já criando.
+    expect(screen.getByTestId("path").textContent).toBe("/sensors/manage");
+    expect(screen.getByTestId("url").textContent).toBe("?new=1");
+  });
+
+  it("mantém o botão 'Gerenciar' navegando para /sensors/manage sem sinalizador", () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /Gerenciar/ }));
+
+    expect(screen.getByTestId("path").textContent).toBe("/sensors/manage");
+    expect(screen.getByTestId("url").textContent).toBe("");
+  });
+
+  it("tem apenas UM botão primário no header (Novo sensor)", () => {
+    renderPage();
+    const botoes = screen.getAllByRole("button", { name: /^(Novo sensor|Gerenciar|Atualizar)$/ });
+
+    // Os três botões do header continuam existindo.
+    expect(botoes).toHaveLength(3);
+    // O primário é o de criação; "Gerenciar" foi rebaixado para secundário.
+    expect(screen.getByRole("button", { name: /Novo sensor/ }).className).toContain("bg-primary");
+    expect(screen.getByRole("button", { name: /Gerenciar/ }).className).not.toContain("bg-primary");
+  });
+
+  it("o estado vazio orienta a criar pelo botão 'Novo sensor'", () => {
+    mockSummary({
+      data: {
+        ...SUMMARY,
+        counts: { total: 0, passing: 0, warning: 0, failing: 0, pending: 0, unknown: 0, stale: 0, agentsWithFailing: 0 },
+        byType: [],
+        top: [],
+      },
+    });
+    renderPage();
+
+    expect(screen.getByText("Nenhum sensor monitorado")).toBeTruthy();
+    // O texto do estado vazio aponta para o botão de criação (e não só para o
+    // detalhe do agente, como antes).
+    expect(screen.getByText(/Use o botão "Novo sensor"/)).toBeTruthy();
+    // O botão do header continua disponível no estado vazio.
+    expect(screen.getByRole("button", { name: /Novo sensor/ })).toBeTruthy();
   });
 });

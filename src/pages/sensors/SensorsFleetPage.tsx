@@ -208,9 +208,17 @@ export default function SensorsFleetPage() {
           <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
+        {/* Criação em UM clique a partir da frota: o parâmetro `?new=1` faz a
+            tela de gerenciamento abrir com o modal de criação já aberto (o
+            consumo do parâmetro vive em SensorsManagePage). */}
+        <Button variant="primary" onClick={() => navigate("/sensors/manage?new=1")}>
+          <Icon name="add" className="h-4 w-4" />
+          Novo sensor
+        </Button>
         {/* Gerenciamento das DEFINIÇÕES (editar/excluir/ativar). A frota mostra
-            o estado agregado; o CRUD vive em /sensors/manage. */}
-        <Button variant="primary" onClick={() => navigate("/sensors/manage")}>
+            o estado agregado; o CRUD vive em /sensors/manage. Secundário para
+            manter apenas UM botão primário no header. */}
+        <Button variant="secondary" onClick={() => navigate("/sensors/manage")}>
           <Icon name="settings" className="h-4 w-4" />
           Gerenciar
         </Button>
@@ -256,7 +264,7 @@ export default function SensorsFleetPage() {
           title={hasFilters ? "Nenhum sensor neste filtro" : "Nenhum sensor monitorado"}
           description={hasFilters
             ? "Ajuste o cliente/site (ou limpe os filtros) para ver os sensores da frota."
-            : "Configure sensores no detalhe de um agente — o conjunto recomendado (disco, CPU, memória e uptime) já cobre a saúde básica."
+            : "Use o botão \"Novo sensor\" (ou a tela Gerenciar sensores) para criar o primeiro — o conjunto recomendado (disco, CPU, memória e uptime) já cobre a saúde básica. Também dá para configurar no detalhe de um agente."
           }
         />
       ) : (
