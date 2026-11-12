@@ -450,13 +450,16 @@ export function ConfigurationFieldEditor({
                     label="Max Tokens Per Request"
                     type="number"
                     step="1"
-                    min="1"
+                    // 0 = AUTOMÁTICO (capacidade real do modelo). Antes o mínimo
+                    // era 1, o que impedia escolher o modo automático por aqui.
+                    min="0"
+                    max="450000"
                     value={jsonStringValue("maxTokensPerRequest")}
                     onChange={(event) =>
                       updateJsonObjectValue("maxTokensPerRequest", event.target.value, "number")
                     }
                     disabled={inputDisabled}
-                    placeholder="2000"
+                    placeholder="0 = automático"
                   />
                 </div>
               )}

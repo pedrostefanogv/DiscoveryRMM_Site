@@ -47,6 +47,38 @@ function clampRounds(value: number): number {
   return Math.min(ROUNDS_MAX, Math.max(ROUNDS_MIN, Math.round(value)));
 }
 
+// ── Orçamento de tokens de SAÍDA (maxTokensPerRequest) ────────────────────
+// Contrato do backend (AiTokenLimits.ResolveOutputCap):
+//   cap = max(200, min(pedido, teto do departamento, capacidade do MODELO, teto do produto))
+// 0 = AUTOMÁTICO: o backend deriva o orçamento da capacidade real do modelo
+// selecionado em vez de usar um número fixo — era isso que truncava respostas
+// longas (JSON/A2UI cortado no meio) quando o pedido ficava abaixo do suportado.
+// 1..99 é uma faixa sem sentido prático: qualquer valor dela seria menor que o
+// mínimo do provedor, então o backend a trata como automático. A UI rejeita em
+// vez de deixar o admin achar que escolheu algo.
+const TOKENS_AUTO = 0;
+const TOKENS_MIN = 100;
+const TOKENS_MAX = 450000;
+
+function tokensError(value: number): string | null {
+  if (!Number.isFinite(value)) return "Informe um número";
+  if (value === TOKENS_AUTO) return null;
+  if (value < 0) return "Não use valor negativo: use 0 para automático";
+  if (value < TOKENS_MIN) return "Abaixo de 100 use 0 para automático";
+  if (value > TOKENS_MAX) {
+    return `Acima do teto do produto (${TOKENS_MAX.toLocaleString("pt-BR")}): use 0 para automático`;
+  }
+  return null;
+}
+
+/** Valor enviado ao backend: 0 é automático e é preservado (não vira padrão). */
+function resolveTokensForSave(value: number): number {
+  if (!Number.isFinite(value)) return TOKENS_AUTO;
+  if (value === TOKENS_AUTO) return TOKENS_AUTO;
+  if (value < TOKENS_MIN || value > TOKENS_MAX) return TOKENS_AUTO;
+  return Math.round(value);
+}
+
 // Campos numéricos: o input pode ficar vazio (NaN) e JSON.stringify(NaN) vira
 // null, que o servidor NÃO desserializa para double/int — o JSON inteiro das
 // configurações de IA era descartado e o servidor voltava ao PADRÃO (inclusive
@@ -143,7 +175,12 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [topP, setTopP] = useState(aiSettings?.topP ?? 1.0);
   const [freqPen, setFreqPen] = useState(aiSettings?.frequencyPenalty ?? 0);
   const [presPen, setPresPen] = useState(aiSettings?.presencePenalty ?? 0);
-  const [maxTokens, setMaxTokens] = useState(aiSettings?.maxTokensPerRequest ?? 2000);
+  // 0 = automático (capacidade do modelo). O padrão do servidor é 2000, então
+  // um settings ausente cai em automático em vez de fixar um teto arbitrário.
+  const [maxTokens, setMaxTokens] = useState(
+    aiSettings?.maxTokensPerRequest ?? TOKENS_AUTO,
+  );
+  const maxTokensProblem = tokensError(maxTokens);
   // Orçamento de rounds de ferramentas por turno (3 a 20, padrão 10). Ao esgotar
   // com ação pendente a IA pede autorização e renova no próximo turno.
   const [maxToolIterations, setMaxToolIterations] = useState(
@@ -229,8 +266,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     topP <= 0 ||
     !Number.isFinite(freqPen) ||
     !Number.isFinite(presPen) ||
-    !Number.isFinite(maxTokens) ||
-    maxTokens < 100 ||
+    maxTokensProblem !== null ||
     !Number.isFinite(embeddingDimensions) ||
     embeddingDimensions < 1;
 
@@ -275,7 +311,10 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
       embeddingTicketAnswersEnabled,
       frequencyPenalty: Number.isFinite(freqPen) ? safeNum(freqPen, 0, -2, 2) : 0,
       presencePenalty: Number.isFinite(presPen) ? safeNum(presPen, 0, -2, 2) : 0,
-      maxTokensPerRequest: maxTokens >= 100 ? safeNum(maxTokens, 2000, 100, 32768) : 2000,
+      // 0 = automático é um valor LEGÍTIMO e precisa chegar ao backend como 0 (o
+      // padrão 2000 é o que truncava o card A2UI). Fora da faixa, cai em
+      // automático em vez de gravar um número que o admin não escolheu.
+      maxTokensPerRequest: resolveTokensForSave(maxTokens),
       maxToolCallIterations: clampRounds(maxToolIterations),
     };
     if (apiKey.trim()) s.apiKey = apiKey.trim();
@@ -365,9 +404,16 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
               onClick={() => setExpandedChat(!expandedChat)}
             >
               <span>
-                Modelo de Chat{" "}
+                {/* O rotulo usa text-muted (nao muted-foreground do container): no tema
+                    ESCURO muted-foreground da 3,54:1 e reprova no WCAG AA; text-muted da
+                    6,57:1 no escuro e 4,76:1 no claro — passa nos dois. */}
+                <span className="text-muted">Modelo de Chat</span>{" "}
                 {chatModel && (
-                  <span className="text-muted">
+                  // O VALOR selecionado e a informacao principal da linha: usa a cor de
+                  // texto normal (quase preto no tema claro) em vez de text-muted, que e a
+                  // cor de METADADO do card (contexto/preco). Com text-muted o nome do
+                  // modelo selecionado ficava mais apagado que o proprio rotulo.
+                  <span className="font-semibold text-foreground">
                     — {providerFromId(chatModel)}: {allChat.find((m) => m.id === chatModel)?.name ?? chatModel}
                   </span>
                 )}
@@ -425,9 +471,13 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
               onClick={() => setExpandedEmbed(!expandedEmbed)}
             >
               <span>
-                Modelo de Embedding{" "}
+                {/* Mesmo criterio do Modelo de Chat: text-muted passa no WCAG AA nos
+                    dois temas, enquanto o muted-foreground do container reprova no escuro. */}
+                <span className="text-muted">Modelo de Embedding</span>{" "}
                 {embeddingModel && (
-                  <span className="text-muted">
+                  // Mesmo criterio do Modelo de Chat: o valor selecionado e a informacao
+                  // principal, entao recebe a cor de texto normal — nao a de metadado.
+                  <span className="font-semibold text-foreground">
                     — {providerFromId(embeddingModel)}: {allEmbed.find((m) => m.id === embeddingModel)?.name ?? embeddingModel}
                   </span>
                 )}
@@ -594,11 +644,41 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 </div>
                 <div className="space-y-1">
                   <label className="block text-xs text-muted">Máx. tokens (saída)</label>
-                  <Input type="number" min={100} max={32768} step={100} value={String(maxTokens)} onChange={(e) => setMaxTokens(Number(e.target.value))} />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={TOKENS_MAX}
+                      step={100}
+                      placeholder="0 = automático"
+                      value={String(maxTokens)}
+                      onChange={(e) => setMaxTokens(Number(e.target.value))}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={maxTokens === TOKENS_AUTO ? "primary" : "secondary"}
+                      onClick={() => setMaxTokens(TOKENS_AUTO)}
+                    >
+                      Automático
+                    </Button>
+                  </div>
                   <HelpText>
-                    Teto do tamanho da resposta (1 token ≈ 4 caracteres). O valor efetivo nunca passa do que o modelo suporta.
-                    Respostas cortadas no meio (JSON/A2UI truncado) costumam indicar teto baixo ou modelo com limite pequeno.
+                    <strong>0 = automático</strong>: usa a capacidade do modelo selecionado, sem teto fixo — é a
+                    opção recomendada e a que evita respostas cortadas no meio (JSON/A2UI truncado).
+                    Informe um número para limitar a saída ({TOKENS_MIN.toLocaleString("pt-BR")} a{" "}
+                    {TOKENS_MAX.toLocaleString("pt-BR")}).
                   </HelpText>
+                  <HelpText>
+                    O valor efetivo nunca é maior que o <em>MENOR</em> entre o que você pedir, o teto do
+                    departamento, a capacidade real do modelo e o teto do produto — um número alto aqui não
+                    força o modelo a passar do próprio limite (1 token ≈ 4 caracteres).
+                  </HelpText>
+                  {maxTokensProblem && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      {maxTokensProblem}. Será salvo como automático (0).
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="block text-xs text-muted">

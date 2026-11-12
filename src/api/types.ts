@@ -1752,6 +1752,15 @@ export interface AIIntegrationSettings {
   knowledgeBaseEnabled: boolean;
   mspServers?: string[];
   timeoutMs?: number;
+  /**
+   * Teto de tokens de SAÍDA do chat IA.
+   * - 0 = AUTOMÁTICO: o backend deriva o orçamento da capacidade real do modelo
+   *   selecionado (recomendado; evita respostas truncadas).
+   * - 100..450000 = limite explícito (teto do produto).
+   * - 1..99 é tratado como automático pelo backend.
+   * O efetivo é max(200, min(pedido, teto do departamento, capacidade do modelo,
+   * teto do produto)) — ver AiTokenLimits.ResolveOutputCap no backend.
+   */
   maxTokensPerRequest?: number;
   provider?: string;
   apiKey?: string;
@@ -1809,6 +1818,15 @@ export interface AIIntegrationSettingsOverride {
   chatModel?: string;
   promptTemplate?: string;
   temperature?: number;
+  /**
+   * Teto de tokens de SAÍDA do chat IA.
+   * - 0 = AUTOMÁTICO: o backend deriva o orçamento da capacidade real do modelo
+   *   selecionado (recomendado; evita respostas truncadas).
+   * - 100..450000 = limite explícito (teto do produto).
+   * - 1..99 é tratado como automático pelo backend.
+   * O efetivo é max(200, min(pedido, teto do departamento, capacidade do modelo,
+   * teto do produto)) — ver AiTokenLimits.ResolveOutputCap no backend.
+   */
   maxTokensPerRequest?: number;
   maxHistoryMessages?: number;
   maxKbContextTokens?: number;
