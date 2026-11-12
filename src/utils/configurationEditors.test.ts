@@ -491,6 +491,10 @@ describe("campos do grupo features com kind json nao sao toggles", () => {
   const featureFields = serverEditableFields.filter((field) => field.group === "features");
   const featureToggleFields = featureFields.filter((field) => isBooleanToggleField(field));
   const featureJsonFields = featureFields.filter((field) => field.kind === "json");
+  // O grupo "features" agora também tem campos NUMÉRICOS (McpToolCallsPerMinute),
+  // que não são toggles nem blob JSON. São renderizados em bloco próprio na
+  // ServerConfigurationPage e ficam fora do contador de "módulos ativos".
+  const featureNumberFields = featureFields.filter((field) => field.kind === "number");
   const sensorsField = serverEditableFields.find(
     (field) => field.key === "SensorsSettingsJson",
   );
@@ -507,8 +511,12 @@ describe("campos do grupo features com kind json nao sao toggles", () => {
   it("SensorsSettingsJson cai em featureJsonFields e nunca em featureToggleFields", () => {
     expect(featureJsonFields.map((field) => field.key)).toContain("SensorsSettingsJson");
     expect(featureToggleFields.map((field) => field.key)).not.toContain("SensorsSettingsJson");
-    // O contador de "módulos ativos" só considera toggles: o blob JSON fica fora.
-    expect(featureToggleFields.length).toBe(featureFields.length - featureJsonFields.length);
+    // O contador de "módulos ativos" só considera toggles: o blob JSON e os
+    // campos numéricos ficam fora. A asserção continua EXATA (deriva as outras
+    // categorias) para pegar qualquer campo que deixe de ser renderizado.
+    expect(featureToggleFields.length).toBe(
+      featureFields.length - featureJsonFields.length - featureNumberFields.length,
+    );
   });
 
   it("serializa o payload do campo JSON como STRING para o PATCH", () => {
@@ -857,5 +865,112 @@ describe("kill switches de feature (GRUPO A da auditoria)", () => {
         scope,
       ).toBe(false);
     }
+  });
+});
+
+/**
+ * Teto GLOBAL herdável de chamadas de ferramentas MCP do chat IA por minuto
+ * (McpToolCallsPerMinute no backend). O nome da chave NÃO pode divergir do
+ * backend: como o PATCH é por nome de propriedade, um erro de digitação aparece
+ * na tela e a API devolve 400 (ou ignora o campo).
+ */
+describe("teto global de chamadas de tools MCP (McpToolCallsPerMinute)", () => {
+  it("expõe o campo como number em servidor, cliente e site", () => {
+    for (const [scope, fields] of scopes) {
+      const field = fields.find((item) => item.key === "McpToolCallsPerMinute");
+      expect(field, `${scope} sem McpToolCallsPerMinute`).toBeDefined();
+      expect(field?.kind, `${scope} McpToolCallsPerMinute não é number`).toBe("number");
+      expect(field?.group, `${scope} McpToolCallsPerMinute fora de features`).toBe("features");
+      expect(field?.unit, `${scope} sem unidade`).toBe("chamadas/min");
+      expect(field?.label).toBeTruthy();
+      expect(field?.description).toBeTruthy();
+    }
+  });
+
+  it("aparece exatamente uma vez por escopo", () => {
+    for (const [scope, fields] of scopes) {
+      expect(
+        fields.filter((field) => field.key === "McpToolCallsPerMinute"),
+        `${scope} duplicou McpToolCallsPerMinute`,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("é renderizável: number não vira toggle nem blob JSON", () => {
+    const field = serverEditableFields.find(
+      (item) => item.key === "McpToolCallsPerMinute",
+    );
+    expect(field).toBeDefined();
+    expect(isBooleanToggleField(field!)).toBe(false);
+    expect(field!.kind).not.toBe("json");
+  });
+
+  it("valida a faixa 1..600 e recusa 0 (o backend valida o mesmo range)", () => {
+    expect(validateFieldValue("number", "0", "McpToolCallsPerMinute")).not.toBe(true);
+    expect(validateFieldValue("number", "1", "McpToolCallsPerMinute")).toBe(true);
+    expect(validateFieldValue("number", "20", "McpToolCallsPerMinute")).toBe(true);
+    expect(validateFieldValue("number", "600", "McpToolCallsPerMinute")).toBe(true);
+    expect(validateFieldValue("number", "601", "McpToolCallsPerMinute")).not.toBe(true);
+    expect(validateFieldValue("number", "-1", "McpToolCallsPerMinute")).not.toBe(true);
+    expect(validateFieldValue("number", "abc", "McpToolCallsPerMinute")).not.toBe(true);
+  });
+
+  it("converte para número no payload (int no backend)", () => {
+    expect(parseFieldValue("number", "45", "McpToolCallsPerMinute")).toBe(45);
+  });
+
+  it("no servidor nasce com 20 (o backend recusa 0 neste campo)", () => {
+    const field = serverEditableFields.find(
+      (item) => item.key === "McpToolCallsPerMinute",
+    );
+    expect(field?.defaultValue).toBe("20");
+    expect(fieldDefault("number", field)).toBe("20");
+
+    const draft = buildServerDraft(undefined, serverEditableFields);
+    expect(draft.McpToolCallsPerMinute).toBe("20");
+  });
+
+  it("NÃO muda o default dos outros campos number (continua 0)", () => {
+    const other = serverEditableFields.find(
+      (item) => item.key === "inventoryIntervalHours",
+    );
+    expect(fieldDefault("number", other)).toBe("0");
+    expect(fieldDefault("number")).toBe("0");
+  });
+
+  it("cliente e site herdam: sem defaultValue para não gravar 20 como override", () => {
+    // Em cliente/site o campo é anulável (null = herda). Um defaultValue aqui
+    // não é usado pelo buildServerDraft (que só vale para o servidor), então
+    // declará-lo só criaria a impressão de um override silencioso.
+    for (const fields of [clientEditableFields, siteEditableFields]) {
+      const field = fields.find((item) => item.key === "McpToolCallsPerMinute");
+      expect(field?.defaultValue).toBeUndefined();
+    }
+  });
+
+  it("descreve que o efetivo é o MENOR entre o teto global e o limite da tool", () => {
+    for (const [scope, fields] of scopes) {
+      const description =
+        fields.find((item) => item.key === "McpToolCallsPerMinute")?.description ?? "";
+      expect(description, `${scope} não cita o padrão 20`).toContain("20");
+      expect(description, `${scope} não cita a faixa 1..600`).toContain("1..600");
+      expect(description.toLowerCase(), `${scope} não cita o limite por ferramenta`).toContain(
+        "ferramenta",
+      );
+      expect(description, `${scope} não cita o MENOR`).toContain("MENOR");
+    }
+  });
+
+  it("herdáveis de cliente/site avisam de quem herdam", () => {
+    expect(
+      clientEditableFields
+        .find((item) => item.key === "McpToolCallsPerMinute")
+        ?.description?.toLowerCase(),
+    ).toContain("herda do servidor");
+    expect(
+      siteEditableFields
+        .find((item) => item.key === "McpToolCallsPerMinute")
+        ?.description?.toLowerCase(),
+    ).toContain("herda do cliente");
   });
 });

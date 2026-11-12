@@ -94,6 +94,8 @@ export function ConfigurationFieldEditor({
   const innerLabel = isPlain ? undefined : "Valor local";
 
   const numberRanges: Record<string, { min: number; max: number }> = {
+    // Mesma faixa de ConfigurationService.CheckRange no backend (1..600).
+    McpToolCallsPerMinute: { min: 1, max: 600 },
     inventoryIntervalHours: { min: 1, max: 168 },
     remoteConsentTimeoutSeconds: { min: 10, max: 600 },
     agentHeartbeatIntervalSeconds: { min: 10, max: 3600 },

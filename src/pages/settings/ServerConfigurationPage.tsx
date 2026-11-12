@@ -594,6 +594,11 @@ export default function ServerConfigurationPage() {
   const featureFields = serverEditableFields.filter((f) => f.group === "features");
   const featureToggleFields = featureFields.filter((field) => isBooleanToggleField(field));
   const featureJsonFields = featureFields.filter((field) => field.kind === "json");
+  // Campos numéricos do grupo "features" (ex.: teto global de tools MCP por
+  // minuto). Ficam FORA do contador de "módulos ativos", que só considera
+  // toggles booleanos, mas precisam de editor próprio: sem isto o campo existe
+  // no catálogo e não aparece na tela.
+  const featureNumberFields = featureFields.filter((field) => field.kind === "number");
   const policyFields = serverEditableFields.filter(
     (f) => f.group === "policy" && !SERVER_SEPARATE_POLICY_KEYS.has(f.key),
   );
@@ -1156,6 +1161,11 @@ export default function ServerConfigurationPage() {
                       renderFieldEditor(field)
                     ),
                   )}
+                </div>
+              )}
+              {featureNumberFields.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {featureNumberFields.map((field) => renderFieldEditor(field))}
                 </div>
               )}
             </>

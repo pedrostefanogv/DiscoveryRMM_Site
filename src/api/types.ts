@@ -1929,6 +1929,13 @@ export interface ServerConfiguration {
   brandingSettingsJson: string;
   aiIntegrationSettingsJson: string;
   /**
+   * Teto GLOBAL herdável de chamadas de ferramentas MCP do chat IA por minuto
+   * (1..600; padrão 20 no servidor). null/vazio herda do nível acima.
+   * O limite por ferramenta em Ferramentas de IA (MCP) continua valendo e o
+   * efetivo é o MENOR dos dois.
+   */
+  mcpToolCallsPerMinute: number;
+  /**
    * Configuração global dos processamentos em segundo plano (JSON): ciclos das
    * métricas por atendente e da triagem por IA. Clientes podem sobrescrever.
    */
@@ -1991,6 +1998,13 @@ export interface ClientConfiguration {
   agentUpdatePolicyJson?: string | null;
   agentHeartbeatIntervalSeconds?: number | null;
   agentOnlineGraceSeconds?: number | null;
+  /**
+   * Teto GLOBAL herdável de chamadas de ferramentas MCP do chat IA por minuto
+   * (1..600; padrão 20 no servidor). null/vazio herda do nível acima.
+   * O limite por ferramenta em Ferramentas de IA (MCP) continua valendo e o
+   * efetivo é o MENOR dos dois.
+   */
+  mcpToolCallsPerMinute?: number | null;
   lockedFieldsJson?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -2020,6 +2034,13 @@ export interface SiteConfiguration {
   inventoryIntervalHours?: number | null;
   agentUpdatePolicyJson?: string | null;
   agentOnlineGraceSeconds?: number | null;
+  /**
+   * Teto GLOBAL herdável de chamadas de ferramentas MCP do chat IA por minuto
+   * (1..600; padrão 20 no servidor). null/vazio herda do nível acima.
+   * O limite por ferramenta em Ferramentas de IA (MCP) continua valendo e o
+   * efetivo é o MENOR dos dois.
+   */
+  mcpToolCallsPerMinute?: number | null;
   timezone?: string | null;
   location?: string | null;
   contactPerson?: string | null;

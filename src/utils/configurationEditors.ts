@@ -553,6 +553,19 @@ export const serverEditableFields: EditableField[] = [
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Desligado, a aba Atualizações fica oculta no painel do agent.",
   },
   {
+    // Teto GLOBAL herdável de chamadas de ferramentas MCP por minuto do chat IA
+    // (McpToolCallsPerMinute no backend, ConfigurationService.CheckRange 1..600).
+    // defaultValue "20": o backend recusa 0 aqui (o default de kind number é "0").
+    key: "McpToolCallsPerMinute",
+    label: "Máx. chamadas de tools de IA por minuto",
+    kind: "number",
+    defaultValue: "20",
+    group: "features",
+    unit: "chamadas/min",
+    description:
+      "Padrão: 20. Teto global de TODAS as chamadas de ferramentas MCP do chat IA por minuto neste servidor (1..600). O limite por ferramenta em Ferramentas de IA (MCP) continua valendo e o efetivo é o MENOR dos dois.",
+  },
+  {
     key: "windowsUpdateScanIntervalMinutes",
     label: "Intervalo de Varredura de Patches",
     kind: "number",
@@ -867,6 +880,17 @@ export const clientEditableFields: EditableField[] = [
     description:
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do servidor.",
   },
+  {
+    // Teto GLOBAL herdável de chamadas de ferramentas MCP por minuto do chat IA.
+    // Vazio (null) = herda do servidor.
+    key: "McpToolCallsPerMinute",
+    label: "Máx. chamadas de tools de IA por minuto",
+    kind: "number",
+    group: "features",
+    unit: "chamadas/min",
+    description:
+      "Padrão herdado: 20. Teto global de TODAS as chamadas de ferramentas MCP do chat IA por minuto para este cliente (1..600). O limite por ferramenta em Ferramentas de IA (MCP) continua valendo e o efetivo é o MENOR dos dois. Vazio herda do servidor.",
+  },
   // ── Kill switches herdáveis (GRUPO A da auditoria appsettings × UI) ───────
   // Vazio (null) = herda do servidor. Os campos que NÃO herdam
   // (openTelemetryEnabled, realtimeContractMode, migrationsRunOnStartup) ficam
@@ -1071,6 +1095,17 @@ export const siteEditableFields: EditableField[] = [
     group: "features",
     description:
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do cliente/servidor.",
+  },
+  {
+    // Teto GLOBAL herdável de chamadas de ferramentas MCP por minuto do chat IA.
+    // Vazio (null) = herda do cliente e, na ausência dele, do servidor.
+    key: "McpToolCallsPerMinute",
+    label: "Máx. chamadas de tools de IA por minuto",
+    kind: "number",
+    group: "features",
+    unit: "chamadas/min",
+    description:
+      "Padrão herdado: 20. Teto global de TODAS as chamadas de ferramentas MCP do chat IA por minuto para este site (1..600). O limite por ferramenta em Ferramentas de IA (MCP) continua valendo e o efetivo é o MENOR dos dois. Vazio herda do cliente e, na ausência dele, do servidor.",
   },
   // ── Kill switches herdáveis (GRUPO A da auditoria appsettings × UI) ───────
   // Vazio (null) = herda do cliente e, na ausência dele, do servidor. Os campos
@@ -1312,6 +1347,9 @@ export function validateFieldValue(
 
     const numeric = Number(trimmed);
     const ranges: Record<string, [number, number]> = {
+      // Teto global herdável de tools MCP: o backend valida 1..600 em
+      // ConfigurationService.CheckRange (o valor 0 não é "desligado" aqui).
+      McpToolCallsPerMinute: [1, 600],
       inventoryIntervalHours: [1, 168],
       // Limite validado no backend (ConfigurationService.CheckRange) para o
       // prompt de consentimento de acesso remoto.
