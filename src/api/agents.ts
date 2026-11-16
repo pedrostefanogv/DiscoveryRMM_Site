@@ -49,6 +49,17 @@ import type {
 
 const BASE = "/api/v1/agents";
 
+/**
+ * Desfecho do pedido de desinstalacao remota. O backend distingue "enviado
+ * agora" (sent) de "ficou na fila esperando o agente reconectar" (queued) para
+ * a UI nao anunciar uma desinstalacao que ainda nao vai acontecer.
+ */
+export interface AgentDecommissionDispatchResponse {
+  sent: boolean;
+  queued: boolean;
+  message: string;
+}
+
 export interface HardwareComponentsResponse {
   printers: PrinterInfo[];
   listeningPorts: ListeningPortInfo[];
@@ -131,11 +142,15 @@ export const agentsApi = {
   /**
    * Reenvia o comando de desinstalacao remota (decommission). Uso: o primeiro
    * envio nao chegou (agente offline no delete, NATS indisponivel) e o agente
-   * continua instalado na maquina. O comando e persistido como Pending e
-   * reentregue quando o agente voltar a ser visto online.
+   * continua instalado na maquina.
+   *
+   * A resposta informa o DESFECHO: `sent` = publicado no transporte agora;
+   * `queued` = ficou na fila (agente sem conexao) e so sera entregue quando ele
+   * reconectar. A UI precisa distinguir os dois — tratar ambos como sucesso
+   * prometia uma desinstalacao que nao aconteceria.
    */
   requestDecommission: (id: string) =>
-    api.post<void>(`${BASE}/${id}/decommission`),
+    api.post<AgentDecommissionDispatchResponse>(`${BASE}/${id}/decommission`),
 
   /**
    * Exclusao definitiva (hard delete). force=true confirma a remocao mesmo

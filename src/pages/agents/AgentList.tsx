@@ -480,15 +480,26 @@ export default function AgentList() {
   };
 
   // ── Reenviar desinstalação remota (decommission) na lixeira ──────────────
+  //
+  // O backend informa o DESFECHO. "Queued" significa que o agente não está
+  // conectado: o comando ficou na fila e SÓ será executado quando ele
+  // reconectar. Anunciar isso como sucesso (como antes) fazia o operador
+  // acreditar numa desinstalação que não ia acontecer.
   const handleRequestDecommission = async (agent: AgentWithClient) => {
     if (decommissioningAgentId) return;
     setDecommissioningAgentId(agent.id);
+    const nome = agent.displayName ?? agent.hostname;
     try {
-      await requestDecommission.mutateAsync(agent.id);
-      toast.success(
-        `Comando de desinstalação reenviado para ${agent.displayName ?? agent.hostname}. ` +
-        'Ele será executado quando o agente voltar a se comunicar com o servidor.',
-      );
+      const result = await requestDecommission.mutateAsync(agent.id);
+      if (result?.sent) {
+        toast.success(`Comando de desinstalação enviado para ${nome}.`);
+      } else {
+        toast(
+          `Comando de desinstalação na fila para ${nome}. ` +
+          'O agente está sem conexão: a desinstalação só ocorrerá quando ele reconectar.',
+          { icon: '⏳' },
+        );
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao reenviar o comando de desinstalação.');
     } finally {

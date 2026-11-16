@@ -38,8 +38,14 @@ export default function PowerActionModal({
   const handleSubmit = async () => {
     try {
       await onConfirm({ delaySeconds, force, message, notifyUser });
-      toast.success(
-        `Comando de ${isRestart ? "reinicialização" : "desligamento"} enviado para ${agent.displayName ?? agent.hostname}.`,
+      // Despacho ≠ execução: o desfecho REAL chega depois pelo acompanhamento do
+      // comando (awaitAgentCommandById -> describeAgentCommandOutcome), que pode
+      // reportar adiamento ou negação. Anunciar sucesso aqui produzia a
+      // contradição verde->vermelho: toast de "enviado" e, logo em seguida,
+      // toast de erro dizendo que nada foi executado. Mensagem neutra.
+      toast(
+        `Comando de ${isRestart ? "reinicialização" : "desligamento"} enviado para ${agent.displayName ?? agent.hostname} — aguardando confirmação do agente.`,
+        { icon: "📤" },
       );
       onClose();
     } catch (error) {
