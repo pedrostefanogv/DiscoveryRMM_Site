@@ -140,6 +140,11 @@ export async function fetchRecordingBlob(
     // URL externa já assinada: NÃO anexar o Bearer da sessão, senão o token
     // vaza para outro host. Para o path local da própria API, autenticamos.
     auth: isSameOrigin,
+    // timeoutMs: 0 — gravação de sessão remota (vídeo) não tem teto de tamanho:
+    // o timeout padrão de 60s do apiFetchResponse abortava o corpo no meio e o
+    // blob resultante era truncado sem erro (mesmo defeito já corrigido em
+    // deploy-tokens.ts).
+    timeoutMs: 0,
   });
 
   if (!response.ok) {

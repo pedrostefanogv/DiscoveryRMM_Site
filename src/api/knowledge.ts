@@ -41,9 +41,12 @@ async function downloadImageBlob(
   articleId: string,
   attachmentId: string,
 ): Promise<Blob> {
+  // timeoutMs: 0 — o binario da imagem nao tem teto de tamanho conhecido no
+  // cliente; sem isto o timeout padrao de 60s aborta o corpo em transferencia
+  // lenta (ver o mesmo defeito corrigido em deploy-tokens.ts).
   const response = await apiFetchResponse(
     `${imagesBase(articleId)}/${attachmentId}`,
-    { method: "GET" },
+    { method: "GET", timeoutMs: 0 },
   );
 
   if (!response.ok) {

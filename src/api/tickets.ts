@@ -31,7 +31,12 @@ const BASE = "/api/v1/tickets";
 async function downloadAttachmentBlob(
   url: string,
 ): Promise<{ blob: Blob; fileName: string }> {
-  const response = await apiFetchResponse(url, { method: "GET" });
+  // timeoutMs: 0 — anexos de chamado podem chegar a MaxLargeFileSizeBytes
+  // (2 GB por padrao, teto de 10 GB — ver TicketAttachmentSettings no backend).
+  // Sem isto o AbortSignal.timeout(60s) do apiFetchResponse cortava a
+  // transferencia no meio, DEPOIS do HTTP 200, salvando um arquivo truncado
+  // sem nenhum erro (mesmo defeito do instalador zero-touch de 61 MB).
+  const response = await apiFetchResponse(url, { method: "GET", timeoutMs: 0 });
 
   if (!response.ok) {
     const message = await parseErrorMessage(response);

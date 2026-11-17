@@ -48,7 +48,10 @@ export function RecordingPlayer({
     setError(null);
 
     try {
-      const response = await apiFetchResponse(downloadUrl, { method: 'GET' });
+      // timeoutMs: 0 — gravação de vídeo pode ter centenas de MB; o timeout
+      // padrão de 60s abortava o corpo e o player recebia um blob truncado
+      // (falha de rede / vídeo pela metade). Ver useRecording.fetchRecordingBlob.
+      const response = await apiFetchResponse(downloadUrl, { method: 'GET', timeoutMs: 0 });
 
       if (!response.ok) {
         const message = await parseErrorMessage(response);
@@ -103,7 +106,9 @@ export function RecordingPlayer({
     setError(null);
 
     try {
-      const response = await apiFetchResponse(downloadUrl, { method: 'GET' });
+      // timeoutMs: 0 — idem: download explícito de vídeo grande; sem isto o
+      // arquivo gravado saía truncado sem nenhum erro visível.
+      const response = await apiFetchResponse(downloadUrl, { method: 'GET', timeoutMs: 0 });
 
       if (!response.ok) {
         const message = await parseErrorMessage(response);

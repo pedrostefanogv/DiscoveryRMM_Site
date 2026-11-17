@@ -174,7 +174,13 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
    */
   async function openAttachment(attachment: TicketChatAttachment) {
     try {
-      const response = await apiFetchResponse(ticketChatApi.attachmentUrl(ticketId, attachment.id));
+      // timeoutMs: 0 — anexo baixado inteiro para o disco; o timeout padrao de
+      // 60s abortava o corpo em anexo grande e o catch abaixo engolia o erro
+      // ("Nao foi possivel abrir o anexo"), deixando o arquivo truncado.
+      const response = await apiFetchResponse(
+        ticketChatApi.attachmentUrl(ticketId, attachment.id),
+        { timeoutMs: 0 },
+      );
       if (!response.ok) throw new Error("HTTP " + response.status);
       const blob = await response.blob();
 

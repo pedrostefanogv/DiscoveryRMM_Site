@@ -62,10 +62,12 @@ export const deployTokensApi = {
   createAndDownload: async (
     data: CreateDeployTokenAndDownloadRequest,
   ): Promise<DeployInstallerPayload> => {
+    // timeoutMs: 0 — installer/zip grande; ver downloadGenericInstaller.
     const response = await apiFetchResponse(`${BASE}/create-and-download`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+      timeoutMs: 0,
     });
 
     if (!response.ok) {
@@ -101,12 +103,14 @@ export const deployTokensApi = {
     id: string,
     data: DownloadDeployPackageRequest,
   ): Promise<DeployInstallerPayload> => {
+    // timeoutMs: 0 — pacote de deploy grande; ver downloadGenericInstaller.
     const response = await apiFetchResponse(`${BASE}/${id}/download`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
+      timeoutMs: 0,
     });
 
     if (!response.ok) {
@@ -140,6 +144,8 @@ export const deployTokensApi = {
           rawToken,
           installerType: normalizedType,
         }),
+        // timeoutMs: 0 — instalador grande; ver downloadGenericInstaller.
+        timeoutMs: 0,
       },
     );
 
@@ -160,9 +166,14 @@ export const deployTokensApi = {
 
   /** Downloads the generic (zero-touch) installer directly — no token needed. */
   downloadGenericInstaller: async (): Promise<DeployInstallerPayload> => {
+    // timeoutMs: 0 — o instalador generico tem ~61 MB. O default de 60s do
+    // apiFetchResponse (DEFAULT_REQUEST_TIMEOUT_MS) abortava o download em
+    // ~13-14 MB numa conexao domestica (200 KB/s -> ~5 min), com HTTP 200 ja
+    // enviado: o browser truncava o arquivo silenciosamente. Mesma convencao
+    // dos uploads/downloads grandes em app-store.ts e reports.ts.
     const response = await apiFetchResponse(
       "/api/v1/download/agent/generic",
-      { method: "GET" },
+      { method: "GET", timeoutMs: 0 },
     );
 
     if (!response.ok) {

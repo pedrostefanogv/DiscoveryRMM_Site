@@ -446,7 +446,12 @@ export default function SupportChatPanel({
    */
   async function openAttachment(attachment: TicketChatAttachment) {
     try {
-      const response = await apiFetchResponse(client.attachmentUrl(sessionId!, attachment.id));
+      // timeoutMs: 0 — ver TicketChatHistory.openAttachment: o timeout padrao de
+      // 60s abortava anexos grandes e o catch mascarava a causa.
+      const response = await apiFetchResponse(
+        client.attachmentUrl(sessionId!, attachment.id),
+        { timeoutMs: 0 },
+      );
       if (!response.ok) throw new Error("HTTP " + response.status);
       const blob = await response.blob();
 
