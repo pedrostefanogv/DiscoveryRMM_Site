@@ -11,7 +11,8 @@ import {
 } from '@/hooks/useDeployTokens';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import { agentUpdatesApi, ApiError } from '@/api';
+import { agentUpdatesApi, ApiError, deployTokensApi } from '@/api';
+import { genericInstallerUrl } from '@/api/deploy-tokens';
 import type {
   CreateDeployTokenAndDownloadRequest,
   DeployInstallerType,
@@ -67,8 +68,7 @@ function triggerStreamingInstallerDownload(fileName: string, url: string) {
   anchor.remove();
 }
 
-/** URL publica do instalador generico (o mesmo endpoint que o backend expoe). */
-const GENERIC_INSTALLER_URL = '/api/v1/download/agent/generic';
+const GENERIC_INSTALLER_FILE_NAME = 'discovery-agent-zerotouch.exe';
 
 function mapInstallerFlowError(error: ApiError | null, action: 'baixar instalador') {
   if (!error) return `Não foi possível ${action}.`;
@@ -309,15 +309,31 @@ export default function DeployTokens() {
     },
   });
 
+  const downloadGenericInstaller = useMutation({
+    // Sonda antes de navegar: um <a href> puro transforma um 503/500 (a API
+    // devolve JSON quando nao ha build disponivel ou o build falha) numa
+    // navegacao para o corpo do erro — e o toast diria "iniciado" mesmo assim.
+    mutationFn: () => deployTokensApi.probeGenericInstaller(),
+    onSuccess: () => {
+      // Streaming direto para o disco: sem buffering dos ~61 MB em memoria e sem
+      // o timeout de 60s do apiFetchResponse que truncava o arquivo em ~13-14 MB
+      // (ver triggerStreamingInstallerDownload).
+      triggerStreamingInstallerDownload(
+        GENERIC_INSTALLER_FILE_NAME,
+        genericInstallerUrl(),
+      );
+      toast.success('Download do instalador zero-touch iniciado.');
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError
+        ? error.message
+        : 'Não foi possível baixar o instalador zero-touch.';
+      toast.error(message);
+    },
+  });
+
   function handleDownloadGenericInstaller() {
-    // Streaming direto para o disco: sem buffering dos ~61 MB em memoria e sem
-    // o timeout de 60s do apiFetchResponse que truncava o arquivo em ~13-14 MB
-    // (ver triggerStreamingInstallerDownload). O endpoint e anonimo.
-    triggerStreamingInstallerDownload(
-      'discovery-agent-zerotouch.exe',
-      GENERIC_INSTALLER_URL,
-    );
-    toast.success('Download do instalador zero-touch iniciado.');
+    downloadGenericInstaller.mutate();
   }
 
   function resetListingState() {
@@ -475,6 +491,7 @@ export default function DeployTokens() {
           <Button
             variant="secondary"
             onClick={handleDownloadGenericInstaller}
+            loading={downloadGenericInstaller.isPending}
           >
             <Icon name="download" className="h-4 w-4" />
             Baixar instalador zero-touch

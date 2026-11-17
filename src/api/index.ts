@@ -75,7 +75,7 @@ export type {
 export { ticketAssignmentApi } from "./ticket-assignment";
 export { backgroundProcessingApi } from "./background-processing";
 export { workflowProfilesApi } from "./workflowProfiles";
-export { deployTokensApi } from "./deploy-tokens";
+export { deployTokensApi, genericInstallerUrl } from "./deploy-tokens";
 export { apiTokensApi } from "./api-tokens";
 export { monitoringEventsApi } from "./monitoring-events";
 export { sensorsApi, isSensorOfflineError, describeSensorsError } from "./sensors";

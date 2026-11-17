@@ -4,7 +4,7 @@ const fetchMock = vi.fn();
 
 vi.stubGlobal("fetch", fetchMock);
 
-import { deployTokensApi } from "./deploy-tokens";
+import { deployTokensApi, genericInstallerUrl } from "./deploy-tokens";
 
 /**
  * Regressao do bug "instalador zero-touch baixado truncado".
@@ -30,6 +30,18 @@ function emptyResponse(status = 200): Response {
   } as unknown as Response;
 }
 
+function jsonResponse(body: unknown, status: number): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: "Error",
+    headers: new Headers({ "content-type": "application/json" }),
+    blob: async () => new Blob([]),
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
 /** Le o init efetivamente passado ao fetch (apos o spread interno do client). */
 function lastFetchInit(): RequestInit & { timeoutMs?: number } {
   const calls = fetchMock.mock.calls;
@@ -46,19 +58,37 @@ describe("deploy-tokens — downloads grandes sem timeout de 60s", () => {
     vi.restoreAllMocks();
   });
 
-  it("downloadGenericInstaller NAO herda o timeout padrao de 60s", async () => {
-    await deployTokensApi.downloadGenericInstaller();
+  it("probeGenericInstaller NAO herda o timeout padrao de 60s", async () => {
+    await deployTokensApi.probeGenericInstaller();
 
     // Com timeoutMs: 0 o client nao anexa AbortSignal.timeout — logo o signal
-    // do fetch e undefined (nao ha signal externo neste fluxo).
+    // do fetch e undefined (nao ha signal externo neste fluxo). Em cache miss o
+    // servidor roda o build NSIS antes do primeiro byte (~54s), entao o default
+    // de 60s estouraria.
     expect(lastFetchInit().signal).toBeUndefined();
   });
 
-  it("downloadGenericInstaller aponta para o endpoint generico anonimo", async () => {
-    await deployTokensApi.downloadGenericInstaller();
+  it("probeGenericInstaller aponta para o endpoint generico anonimo", async () => {
+    await deployTokensApi.probeGenericInstaller();
 
     const [url] = fetchMock.mock.calls[0];
     expect(url).toContain("/api/v1/download/agent/generic");
+  });
+
+  it("genericInstallerUrl respeita API_BASE_URL e o prefixo de versao", () => {
+    // Default (VITE_API_URL ausente): same-origin relativo, onde o atributo
+    // `download` do <a> e honrado pelo navegador.
+    expect(genericInstallerUrl()).toBe("/api/v1/download/agent/generic");
+  });
+
+  it("probeGenericInstaller LANCA em 503 (sem build) para a UI mostrar o erro", async () => {
+    // O <a download> puro navegaria para o corpo JSON do erro e o toast ainda
+    // diria "download iniciado". A sonda converte isso em erro visivel.
+    fetchMock.mockResolvedValue(
+      jsonResponse({ message: "Generic installer is not available on this server." }, 503),
+    );
+
+    await expect(deployTokensApi.probeGenericInstaller()).rejects.toMatchObject({ status: 503 });
   });
 
   it("downloadInstaller (token) tambem nao herda o timeout de 60s", async () => {

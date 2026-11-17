@@ -792,7 +792,13 @@ function MessageAttachmentPreview({
 
     void (async () => {
       try {
-        const response = await apiFetchResponse(client.attachmentUrl(sessionId!, attachment.id));
+        // timeoutMs: 0 — mesma rota de anexo de openAttachment: a imagem chega
+        // inteira para gerar o object URL; o timeout padrao de 60s abortava no
+        // meio em anexo grande e o catch abaixo mascarava a causa.
+        const response = await apiFetchResponse(
+          client.attachmentUrl(sessionId!, attachment.id),
+          { timeoutMs: 0 },
+        );
         if (!response.ok) return;
 
         const blob = await response.blob();

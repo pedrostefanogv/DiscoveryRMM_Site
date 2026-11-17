@@ -53,10 +53,13 @@ describe("downloads de arquivo grande nao herdam o timeout de 60s", () => {
     expect(lastInit().signal).toBeUndefined();
   });
 
-  it("knowledgeApi.downloadImage: sem signal de timeout", async () => {
+  it("knowledgeApi.downloadImage: teto FINITO generoso, nao timeout: 0", async () => {
+    // Imagem de KB e pequena e este e o caminho de FALLBACK: um teto finito
+    // evita que um servidor que envia headers e trava deixe a imagem pendurada
+    // para sempre. O default de 60s e que era apertado demais em link lento.
     await knowledgeApi.downloadImage("art-1", "img-1");
 
-    expect(lastInit().signal).toBeUndefined();
+    expect(lastInit().signal).toBeInstanceOf(AbortSignal);
   });
 
   it("controle: chamada comum de ticketsApi MANTEM o signal de timeout", async () => {
