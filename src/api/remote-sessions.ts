@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, apiFetchResponse } from './client';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ export interface StartRemoteSessionRequest {
     userId?: string;
     tenantId?: string;
     siteId?: string;
-    kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'all';
+    kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'rdp' | 'all';
     transport: RemoteTransportInput;
     quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
     codec: RemoteCodecInput;
@@ -163,6 +163,22 @@ export const remoteSessionsApi = {
     /** Lista sessões ativas para um agent. */
     getActiveSessions: (agentId: string): Promise<ActiveSession[]> =>
         api.get<ActiveSession[]>(`${BASE}/${agentId}/active`),
+
+    /**
+     * Baixa o conteúdo do arquivo .rdp (mstsc) da sessão. O arquivo aponta para
+     * 127.0.0.1:{localPort} — a porta local do túnel RDP mantida pelo agent/API.
+     * Retorna o TEXTO do arquivo (content-type application/x-rdp), não JSON.
+     */
+    getRdpFile: async (agentId: string, sessionId: string, localPort: number): Promise<string> => {
+        const res = await apiFetchResponse(
+            `${BASE}/${encodeURIComponent(agentId)}/${encodeURIComponent(sessionId)}/rdp-file?localPort=${localPort}`,
+        );
+        if (!res.ok) {
+            const message = await res.text().catch(() => '');
+            throw new Error(message || `Falha ao obter o arquivo .rdp (HTTP ${res.status}).`);
+        }
+        return await res.text();
+    },
 
     /** Estado do consentimento (polling enquanto o usuário local decide). */
     getConsentStatus: (agentId: string, sessionId: string): Promise<RemoteSessionConsentStatus> =>

@@ -9,6 +9,8 @@ interface RemoteServicesProps {
     natsUrl?: string;
     jwt?: string;
     nkeySeed?: string;
+    /** Renova o JWT NATS escopado em sessões longas. */
+    getFreshCredentials?: () => Promise<string>;
 }
 
 type ServiceSortKey = 'name' | 'state' | 'startType' | 'pid' | 'cpuPercent' | 'memoryBytes' | 'connections';
@@ -61,7 +63,7 @@ const stateLabel = (s: string) => {
     return map[s] ?? s;
 };
 
-export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProps) {
+export function RemoteServices({ natsSubject, natsUrl, jwt, getFreshCredentials }: RemoteServicesProps) {
     const [services, setServices] = useState<ServiceInfo[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -76,6 +78,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
         natsSubject: natsSubject ?? '',
         natsUrl: natsUrl ?? '',
         jwt: jwt ?? '',
+        getFreshCredentials,
     });
 
     const connected = stream.isConnected;

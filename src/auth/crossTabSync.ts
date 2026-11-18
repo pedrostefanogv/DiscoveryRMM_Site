@@ -57,7 +57,12 @@ export type CrossTabListener = (message: CrossTabMessage) => void;
 let channel: BroadcastChannel | null = null;
 
 function getChannel(): BroadcastChannel {
-    if (!channel) {
+    // Recria o canal se ele foi FECHADO (close() em teardown/testes destrói a
+    // instância para sempre: postMessage em canal fechado é descartado em
+    // silêncio e a popup ficaria sem token até o timeout do refresh). O lib.dom
+    // do TS não declara `closed`, mas o runtime define.
+    const closed = channel ? (channel as unknown as { closed?: boolean }).closed === true : false;
+    if (!channel || closed) {
         channel = new BroadcastChannel(CHANNEL_NAME);
     }
     return channel;

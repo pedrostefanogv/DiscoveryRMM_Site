@@ -4,8 +4,9 @@
 [![Frontend Repository](https://img.shields.io/badge/frontend-DiscoveryRMM__Site-0f172a?style=for-the-badge&logo=react&logoColor=white)](https://github.com/pedrostefanogv/DiscoveryRMM_Site)
 [![Backend Repository](https://img.shields.io/badge/backend-DiscoveryRMM__API-2563eb?style=for-the-badge&logo=github)](https://github.com/pedrostefanogv/DiscoveryRMM_API)
 [![React 19](https://img.shields.io/badge/React-19-149eca?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
-[![TypeScript 6](https://img.shields.io/badge/TypeScript-6-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite 7](https://img.shields.io/badge/Vite-7-646cff?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
+[![TypeScript 7](https://img.shields.io/badge/TypeScript-7-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite 8](https://img.shields.io/badge/Vite-8-646cff?style=for-the-badge&logo=vite&logoColor=white)](https://vite.dev/)
+[![Vitest 5](https://img.shields.io/badge/Vitest-5-6e9f18?style=for-the-badge&logo=vitest&logoColor=white)](https://vitest.dev/)
 [![TanStack Query 5](https://img.shields.io/badge/TanStack%20Query-5-ff4154?style=for-the-badge&logo=reactquery&logoColor=white)](https://tanstack.com/query/latest)
 [![Tailwind CSS 4](https://img.shields.io/badge/Tailwind%20CSS-4-06b6d4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
@@ -45,12 +46,15 @@ EN-US: The project is structured as a React SPA with lazy-loaded routes, protect
 
 - PT-BR: React 19 para a interface.
 - EN-US: React 19 for the user interface.
-- PT-BR: TypeScript 6 para tipagem e segurança de contrato.
+- PT-BR: TypeScript 7 para tipagem e segurança de contrato.
+- EN-US: TypeScript 7 for typing and contract safety.
+- PT-BR: Vite 8 para bundling e dev server, com Vitest 5 para testes unitários.
+- EN-US: Vite 8 for bundling and dev server, with Vitest 5 for unit testing.
 - PT-BR: TanStack Query 5 para fetching, cache e invalidação.
 - PT-BR: React Router 7 para composição de rotas.
 - PT-BR: React Hook Form + Zod para formulários e validação.
-- PT-BR: Tailwind CSS 4, Lucide React e Recharts para UI e visualização.
-- EN-US: Tailwind CSS 4, Lucide React, and Recharts for UI and visualization.
+- PT-BR: Tailwind CSS 4, Google Material Symbols e Recharts para UI e visualização.
+- EN-US: Tailwind CSS 4, Google Material Symbols, and Recharts for UI and visualization.
 - PT-BR: NATS para recursos de realtime.
 - EN-US: NATS for realtime capabilities.
 
@@ -113,14 +117,22 @@ npm install
 npm run dev
 ```
 
-4. PT-BR: Para checagem de tipos.
-	EN-US: For type checking.
+4. PT-BR: Para análise estática (lint) e checagem de tipos.
+	EN-US: For linting and type checking.
 
 ```bash
+npm run lint
 npm run typecheck
 ```
 
-5. PT-BR: Para gerar build.
+5. PT-BR: Para executar os testes unitários.
+	EN-US: To run unit tests.
+
+```bash
+npm test
+```
+
+6. PT-BR: Para gerar build.
 	EN-US: To generate a production build.
 
 ```bash
@@ -176,7 +188,7 @@ EN-US: Planned collaboration policy.
 | Branch padrao / Default branch | `release` | `release` |
 | Branches principais / Main branches | `release`, `LTS`, `beta`, `dev` | `release`, `LTS`, `beta`, `dev` |
 | Fluxo de branching / Branching flow | Features e hotfixes devem iniciar em `dev` e ser promovidos por merge | Feature and hotfix branches should start from `dev` and be promoted by merge |
-| Stack de frontend / Frontend stack | React 19, TypeScript 6, Vite 7 | React 19, TypeScript 6, Vite 7 |
+| Stack de frontend / Frontend stack | React 19, TypeScript 7, Vite 8, Vitest 5 | React 19, TypeScript 7, Vite 8, Vitest 5 |
 | Camada de dados / Data layer | TanStack Query 5 | TanStack Query 5 |
 | Formularios e validacao / Forms and validation | React Hook Form, Zod | React Hook Form, Zod |
 | Transporte realtime / Realtime transport | NATS | NATS |

@@ -1,9 +1,21 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import {
     createNatsService,
+    jwtExpiresAtUtc,
     type NatsCredentialsResponse,
     type NatsService,
 } from '@/api/nats';
+import {
+    decodeBinaryFileFrame,
+    encodeBinaryFileFrame,
+    isBinaryFileFrame,
+} from './fileFrameCodec';
+
+export {
+    decodeBinaryFileFrame,
+    encodeBinaryFileFrame,
+    isBinaryFileFrame,
+} from './fileFrameCodec';
 
 interface UseFilesStreamOptions {
     natsSubject: string;
@@ -11,6 +23,8 @@ interface UseFilesStreamOptions {
     jwt: string;
     /** Seed NKey do viewer (credencial escopada da sessão). */
     nkeySeed?: string;
+    /** Callback para renovar o JWT NATS escopado antes ou após expiração (60 min). */
+    getFreshCredentials?: () => Promise<string>;
 }
 
 interface UseFilesStreamReturn {
@@ -26,6 +40,11 @@ interface UseFilesStreamReturn {
 export interface FilesReadyInfo {
     rootPath?: string;
     status?: string;
+    /** Indica suporte do agente a frames binários 'DF'. */
+    supportsBinary?: boolean;
+    binaryFrames?: boolean;
+    /** Indica que o agente e o JWT permitem o canal dedicado .files.data. */
+    dataSubject?: boolean;
     /** Unidades lógicas do host remoto (C:, D:, ...). Ausente/null quando a
      *  sessão tem sandbox restrito a uma subpasta (sem troca de disco). */
     drives?: DriveInfo[] | null;
@@ -59,18 +78,20 @@ export interface FilesResponse {
     entries?: { name: string; path: string; isDir: boolean; size: number; modTime: string; isLink?: boolean; linkTarget?: string; isHidden?: boolean }[];
     /** Presente na resposta da ação "drives". */
     drives?: DriveInfo[];
-    /** Dados binários do chunk. O agent Go serializa []byte como base64 string;
-     *  mantém number[] como fallback para compatibilidade legada. */
-    data?: string | number[];
+    /** Dados binários do chunk (Uint8Array em frames 'DF', base64 string no Go ou number[] legado). */
+    data?: string | number[] | Uint8Array;
     size?: number;
     totalChunks?: number;
     chunkIndex?: number;
     requestId?: string;
 }
 
-/** Decodifica o payload binário da resposta (base64 string do Go ou number[] legado). */
-export function decodeFileData(data: string | number[] | undefined): Uint8Array {
+const textDecoder = new TextDecoder();
+
+/** Decodifica o payload binário da resposta (Uint8Array 'DF', base64 string do Go ou number[] legado). */
+export function decodeFileData(data: string | number[] | Uint8Array | undefined): Uint8Array {
     if (!data) return new Uint8Array(0);
+    if (data instanceof Uint8Array) return data;
     if (typeof data === 'string') {
         try {
             const binary = atob(data);
@@ -97,7 +118,23 @@ function bytesToBase64(bytes: Uint8Array): string {
 let _seq = 0;
 function nextReqId() { return `f${++_seq}`; }
 
-export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: UseFilesStreamOptions): UseFilesStreamReturn {
+interface RawCapableNatsService {
+    subscribeRaw?: (
+        subject: string,
+        callback: (data: Uint8Array) => void,
+        options?: { connectIfNeeded?: boolean },
+    ) => Promise<boolean>;
+    unsubscribeRaw?: (subject: string, callback: (data: Uint8Array) => void) => void;
+    publishRaw?: (subject: string, data: Uint8Array) => Promise<void>;
+}
+
+export function useFilesStream({
+    natsSubject,
+    natsUrl,
+    jwt,
+    nkeySeed = '',
+    getFreshCredentials,
+}: UseFilesStreamOptions): UseFilesStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const pendingRef = useRef<Map<string, { resolve: (r: FilesResponse) => void; reject: (e: Error) => void }>>(new Map());
@@ -113,9 +150,15 @@ export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: Use
     // do servidor (Cloudflare → túnel → auth callout → entrega).
     const serviceRef = useRef<NatsService | null>(null);
     const jwtRef = useRef(jwt);
+    const freshCredsRef = useRef(getFreshCredentials);
+    freshCredsRef.current = getFreshCredentials;
+    const agentSupportsBinaryRef = useRef(false);
+    const agentDataSubjectRef = useRef(false);
+
     const subj = natsSubject.replace(/-/g, '');
     const reqSubject = `${subj}.files.req`;
     const respSubject = `${subj}.files.resp`;
+    const dataSubject = `${subj}.files.data`;
     const readySubject = `${subj}.files.ready`;
     const progressSubject = `${subj}.files.progress`;
 
@@ -134,12 +177,19 @@ export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: Use
 
     // ── Transporte NatsService ──
     useEffect(() => {
+        let mounted = true;
+        mountedRef.current = true;
+        agentSupportsBinaryRef.current = false;
+        agentDataSubjectRef.current = false;
+
         const subjectAllowList = [respSubject, readySubject, progressSubject];
         const buildCreds = (token: string): NatsCredentialsResponse => ({
             jwt: token,
             nkeySeed,
             publicKey: '',
-            expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+            // O JWT escopado da sessão tem TTL próprio: usa o claim exp do
+            // próprio token (fallback 60 min quando ilegível).
+            expiresAtUtc: jwtExpiresAtUtc(token),
             publishSubjects: [reqSubject],
             subscribeSubjects: subjectAllowList,
         });
@@ -147,14 +197,21 @@ export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: Use
             url: natsUrl,
             enabled: true,
             authMode: 'jwt_credentials',
-            credentialsProvider: async () => buildCreds(jwtRef.current),
+            credentialsProvider: async () => {
+                if (freshCredsRef.current) {
+                    const freshToken = await freshCredsRef.current();
+                    jwtRef.current = freshToken;
+                    return buildCreds(freshToken);
+                }
+                return buildCreds(jwtRef.current);
+            },
             scopeMode: 'preserve',
         });
         serviceRef.current = service;
         service.setPreSuppliedCredentials(buildCreds(jwt));
 
         const offState = service.onConnectionStateChange((state) => {
-            if (!mountedRef.current) return;
+            if (!mounted || !mountedRef.current) return;
             if (state === 'connected') {
                 setIsConnected(true);
                 setError(null);
@@ -172,8 +229,28 @@ export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: Use
             }
         });
 
-        const handleResp = (parsed: Record<string, unknown>) => {
-            const r = parsed as unknown as FilesResponse;
+        // Sessões >60 min: JWT NATS expira e auth_error dispara renovação via callback.
+        let refreshing = false;
+        const offAuth = typeof service.onAuthError === 'function'
+            ? service.onAuthError(async () => {
+                if (!mounted || !freshCredsRef.current || refreshing) return;
+                refreshing = true;
+                try {
+                    const freshToken = await freshCredsRef.current();
+                    if (!mounted) return;
+                    jwtRef.current = freshToken;
+                    service.setPreSuppliedCredentials(buildCreds(freshToken));
+                    await service.forceReconnect();
+                } catch {
+                    // onConnectionStateChange já reporta auth_error
+                } finally {
+                    refreshing = false;
+                }
+            })
+            : () => {};
+
+        const resolvePendingResponse = (r: FilesResponse) => {
+            if (!mounted) return;
             const rid = r.requestId;
             if (rid && pendingRef.current.has(rid)) {
                 const pend = pendingRef.current.get(rid)!;
@@ -181,30 +258,106 @@ export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: Use
                 pend.resolve(r);
             }
         };
+
+        const handleResp = (parsed: Record<string, unknown>) => {
+            resolvePendingResponse(parsed as unknown as FilesResponse);
+        };
+
+        const handleRespRaw = (rawBytes: Uint8Array) => {
+            if (!mounted) return;
+            if (isBinaryFileFrame(rawBytes)) {
+                const decoded = decodeBinaryFileFrame(rawBytes);
+                if (!decoded) return;
+                // NÃO marca suporte a PUT binário aqui: frames binários de
+                // RESPOSTA (download) não são o handshake de upload — o modo
+                // binário de envio é negociado apenas via files.ready
+                // (supportsBinary/binaryFrames/dataSubject).
+                const resp: FilesResponse = {
+                    ...(decoded.header as unknown as FilesResponse),
+                    data: decoded.data,
+                };
+                resolvePendingResponse(resp);
+                return;
+            }
+            try {
+                const parsed = JSON.parse(textDecoder.decode(rawBytes)) as FilesResponse;
+                resolvePendingResponse(parsed);
+            } catch {
+                // ignora frame malformado
+            }
+        };
+
+        const rawService = service as unknown as RawCapableNatsService;
+        const hasRawSub = typeof rawService.subscribeRaw === 'function';
+        let dataSubActive = false;
+
         const handleReady = (parsed: Record<string, unknown>) => {
-            readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesReadyInfo));
+            if (!mounted) return;
+            const info = parsed as unknown as FilesReadyInfo;
+            if (info.supportsBinary === true || info.binaryFrames === true) {
+                agentSupportsBinaryRef.current = true;
+            }
+            if (info.dataSubject === true && !dataSubActive && hasRawSub && rawService.subscribeRaw) {
+                agentDataSubjectRef.current = true;
+                dataSubActive = true;
+                if (!subjectAllowList.includes(dataSubject)) {
+                    subjectAllowList.push(dataSubject);
+                }
+                void rawService.subscribeRaw(dataSubject, handleRespRaw, { connectIfNeeded: false });
+            }
+            readyCallbacksRef.current.forEach((cb) => cb(info));
         };
         const handleProgress = (parsed: Record<string, unknown>) => {
-            progressCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesProgressInfo));
+            if (!mounted) return;
+            progressCallbacksRef.current.forEach((cb) => cb(parsed as unknown as FilesProgressInfo));
         };
 
+        // Registra subscrições ANTES do connect() para que restoreSubscriptions()
+        // ative todos os listeners antes do estado 'connected' ser emitido.
+        if (hasRawSub && rawService.subscribeRaw) {
+            void rawService.subscribeRaw(respSubject, handleRespRaw, { connectIfNeeded: false });
+        } else {
+            void service.subscribe(respSubject, handleResp as never, { connectIfNeeded: false });
+        }
+        void service.subscribe(readySubject, handleReady as never, { connectIfNeeded: false });
+        void service.subscribe(progressSubject, handleProgress as never, { connectIfNeeded: false });
+
         void (async () => {
+            if (!mounted) return;
             await service.connect();
-            if (!mountedRef.current) return;
-            await service.subscribe(respSubject, handleResp as never);
-            await service.subscribe(readySubject, handleReady as never);
-            await service.subscribe(progressSubject, handleProgress as never);
         })();
 
+        const waitersRef = readyWaitersRef;
+        const pendingMapRef = pendingRef;
+
         return () => {
+            mounted = false;
+            mountedRef.current = false;
             offState();
+            offAuth();
+            if (hasRawSub && typeof rawService.unsubscribeRaw === 'function') {
+                rawService.unsubscribeRaw(respSubject, handleRespRaw);
+                if (dataSubActive) {
+                    rawService.unsubscribeRaw(dataSubject, handleRespRaw);
+                }
+            } else {
+                service.unsubscribe(respSubject, handleResp as never);
+            }
+            service.unsubscribe(readySubject, handleReady as never);
+            service.unsubscribe(progressSubject, handleProgress as never);
+
+            const waiters = waitersRef.current;
+            waitersRef.current = [];
+            waiters.forEach((w) => w.reject(new Error('Stream de arquivos desmontado')));
+
+            const pending = Array.from(pendingMapRef.current.values());
+            pendingMapRef.current.clear();
+            pending.forEach((p) => p.reject(new Error('Stream de arquivos desmontado')));
+
             if (serviceRef.current === service) serviceRef.current = null;
             void service.dispose().catch(() => { /* teardown best-effort */ });
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [natsUrl, jwt, nkeySeed, subj, reqSubject, respSubject, readySubject, progressSubject]);
-
-
+    }, [natsUrl, jwt, nkeySeed, subj, reqSubject, respSubject, dataSubject, readySubject, progressSubject]);
 
     const sendRequest = useCallback(async (action: string, path: string, data?: Uint8Array, extra?: Record<string, unknown>): Promise<FilesResponse> => {
         // Aguarda o handshake NATS em vez de falhar quando o service ainda
@@ -228,22 +381,47 @@ export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: Use
                 resolve: (r) => { clearTimeout(timer); resolve(r); },
                 reject: (e) => { clearTimeout(timer); reject(e); },
             });
-            const pl = JSON.stringify({
+
+            const headerPayload: Record<string, unknown> = {
                 version: 1,
                 requestId: rid,
                 action,
                 path,
+                ...(extra ?? {}),
+            };
+            const rawService = service as unknown as RawCapableNatsService;
+            const targetPutSubject = agentDataSubjectRef.current ? dataSubject : reqSubject;
+
+            const handlePublishError = (e: Error) => {
+                const pend = pendingRef.current.get(rid);
+                if (pend) {
+                    pendingRef.current.delete(rid);
+                    pend.reject(e);
+                } else {
+                    clearTimeout(timer);
+                    reject(e);
+                }
+            };
+
+            if (
+                action === 'put' &&
+                agentSupportsBinaryRef.current &&
+                typeof rawService.publishRaw === 'function'
+            ) {
+                const frame = encodeBinaryFileFrame(headerPayload, data);
+                void rawService.publishRaw(targetPutSubject, frame).catch(handlePublishError);
+                return;
+            }
+
+            const jsonPayload: Record<string, unknown> = {
+                ...headerPayload,
                 // Envia como base64 string — o agent Go decodifica para []byte.
                 // Array de números estouraria o payload NATS (2MB) para chunks grandes.
                 ...(data && data.length > 0 ? { data: bytesToBase64(data) } : {}),
-                ...(extra ?? {}),
-            });
-            void service.publish(reqSubject, JSON.parse(pl)).catch((e: Error) => {
-                pendingRef.current.delete(rid);
-                reject(e);
-            });
+            };
+            void service.publish(reqSubject, jsonPayload).catch(handlePublishError);
         });
-    }, [reqSubject, waitForReady]);
+    }, [dataSubject, reqSubject, waitForReady]);
 
     const onReady = useCallback((callback: (info: FilesReadyInfo) => void) => {
         readyCallbacksRef.current.add(callback);

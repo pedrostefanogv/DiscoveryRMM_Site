@@ -39,6 +39,7 @@ interface RemoteFilesProps {
   natsUrl?: string;
   jwt?: string;
   nkeySeed?: string;
+  getFreshCredentials?: () => Promise<string>;
 }
 
 function formatSize(bytes: number): string {
@@ -51,6 +52,7 @@ function formatSize(bytes: number): string {
 
 // Chunk size para upload/download (256KB — alinhado ao agent Transfer)
 const CHUNK_SIZE = 256 * 1024;
+const TRANSFER_WINDOW = 4;
 
 function formatSpeed(bps: number): string {
   if (!isFinite(bps) || bps <= 0) return '—';
@@ -100,7 +102,8 @@ export default function RemoteFiles({
   natsSubject,
   natsUrl,
   jwt,
-  nkeySeed: _nkeySeed,
+  nkeySeed,
+  getFreshCredentials,
 }: RemoteFilesProps) {
   const [currentPath, setCurrentPath] = useState('C:\\');
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -155,6 +158,8 @@ export default function RemoteFiles({
     natsSubject: natsSubject || '',
     natsUrl: natsUrl || '',
     jwt: jwt || '',
+    nkeySeed,
+    getFreshCredentials,
   });
 
   // Atualiza a lista de unidades lógicas. Usada no files.ready, no fallback de
@@ -399,32 +404,81 @@ export default function RemoteFiles({
         }
       }
 
-      let totalChunks = 1;
-      let chunkIndex = 0;
-      do {
-        if (cancelTransfersRef.current.has(tid)) {
-          throw new Error('Download cancelado');
-        }
-        const resp = await sendRequest('get', entry.path, undefined, { chunkIndex, chunkSize: CHUNK_SIZE });
-        if (!resp.success) {
-          setError(`Download ${entry.name}: ${resp.error || 'falha'}`);
-          return;
-        }
-        const bytes = decodeFileData(resp.data);
-        if (totalBytes === 0) totalBytes = resp.size ?? 0;
-        totalChunks = resp.totalChunks ?? 1;
+      if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
+        throw new Error('Download cancelado');
+      }
+      const firstResp = await sendRequest('get', entry.path, undefined, { chunkIndex: 0, chunkSize: CHUNK_SIZE });
+      if (!firstResp.success) {
+        setError(`Download ${entry.name}: ${firstResp.error || 'falha'}`);
+        return;
+      }
+      const firstBytes = decodeFileData(firstResp.data);
+      totalBytes = firstResp.size ?? 0;
+      const totalChunks = Math.max(1, firstResp.totalChunks ?? 1);
 
-        if (bytes.length > 0) {
-          loadedBytes += bytes.length;
-          if (writer) {
-            await writer.write(bytes);
-          } else {
-            memoryChunks.push(bytes);
-          }
-          emitProgress();
+      if (firstBytes.length > 0) {
+        loadedBytes += firstBytes.length;
+        if (writer) {
+          await writer.write(firstBytes);
+        } else {
+          memoryChunks.push(firstBytes);
         }
-        chunkIndex++;
-      } while (chunkIndex < totalChunks);
+        emitProgress();
+      }
+
+      if (totalChunks > 1) {
+        const buffered = new Map<number, Uint8Array>();
+        let nextFetch = 1;
+        let nextToWrite = 1;
+        let flushQueue = Promise.resolve();
+        let aborted = false;
+
+        const enqueueFlush = () => {
+          flushQueue = flushQueue.then(async () => {
+            while (buffered.has(nextToWrite)) {
+              const bytes = buffered.get(nextToWrite)!;
+              buffered.delete(nextToWrite);
+              nextToWrite++;
+              if (bytes.length > 0) {
+                loadedBytes += bytes.length;
+                if (writer) {
+                  await writer.write(bytes);
+                } else {
+                  memoryChunks.push(bytes);
+                }
+                emitProgress();
+              }
+            }
+          });
+          return flushQueue;
+        };
+
+        const workerCount = Math.min(TRANSFER_WINDOW, totalChunks - 1);
+        await Promise.all(
+          Array.from({ length: workerCount }, async () => {
+            while (!aborted) {
+              if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
+                aborted = true;
+                throw new Error('Download cancelado');
+              }
+              const chunkIdx = nextFetch++;
+              if (chunkIdx >= totalChunks) return;
+              const resp = await sendRequest('get', entry.path, undefined, { chunkIndex: chunkIdx, chunkSize: CHUNK_SIZE });
+              if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
+                aborted = true;
+                throw new Error('Download cancelado');
+              }
+              if (!resp.success) {
+                aborted = true;
+                throw new Error(resp.error || 'falha');
+              }
+              buffered.set(chunkIdx, decodeFileData(resp.data));
+              await enqueueFlush();
+            }
+          }),
+        );
+        await flushQueue;
+      }
 
       emitProgress(true);
 
@@ -455,6 +509,7 @@ export default function RemoteFiles({
         setError(`Download ${entry.name}: ${err instanceof Error ? err.message : String(err)}`);
       }
     } finally {
+      cancelTransfersRef.current.delete(tid);
       if (writer && !closed) {
         try { await writer.abort(); } catch { /* noop */ }
       }
@@ -488,20 +543,54 @@ export default function RemoteFiles({
     };
 
     try {
-      for (let i = 0; i < totalChunks; i++) {
-        if (cancelTransfersRef.current.has(tid)) {
+      const sendChunk = async (chunkIdx: number) => {
+        if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
           throw new Error('Upload cancelado');
         }
-        const start = i * CHUNK_SIZE;
+        const start = chunkIdx * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, file.size);
         const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
-        const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: i, chunkSize: CHUNK_SIZE, totalChunks });
+        const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: chunkIdx, chunkSize: CHUNK_SIZE, totalChunks });
         if (!resp.success) {
           throw new Error(resp.error || 'falha no upload');
         }
         loadedBytes += chunk.length;
         emitProgress();
+      };
+
+      // Chunk 0 primeiro para criar/truncar o .tmp no agent antes dos demais.
+      await sendChunk(0);
+
+      if (totalChunks > 2) {
+        let nextIdx = 1;
+        const lastMiddle = totalChunks - 2;
+        let aborted = false;
+        const workerCount = Math.min(TRANSFER_WINDOW, lastMiddle);
+        await Promise.all(
+          Array.from({ length: workerCount }, async () => {
+            while (!aborted) {
+              if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
+                aborted = true;
+                throw new Error('Upload cancelado');
+              }
+              const chunkIdx = nextIdx++;
+              if (chunkIdx > lastMiddle) return;
+              try {
+                await sendChunk(chunkIdx);
+              } catch (err) {
+                aborted = true;
+                throw err;
+              }
+            }
+          }),
+        );
       }
+
+      // Último chunk somente após todos os anteriores (dispara os.Rename no agent).
+      if (totalChunks > 1) {
+        await sendChunk(totalChunks - 1);
+      }
+
       emitProgress(true);
       setTimeout(() => {
         if (!mountedRef.current) return;
@@ -519,6 +608,7 @@ export default function RemoteFiles({
         setError(`Upload ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
       }
     } finally {
+      cancelTransfersRef.current.delete(tid);
       setBusy(null);
     }
   };
@@ -748,7 +838,6 @@ export default function RemoteFiles({
       top = Math.max(margin, window.innerHeight - rect.height - margin);
     }
     if (left !== ctxPos.left || top !== ctxPos.top) setCtxPos({ left, top });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxMenu, ctxPos.left, ctxPos.top]);
 
   // Fecha o menu ao clicar fora ou pressionar Esc.

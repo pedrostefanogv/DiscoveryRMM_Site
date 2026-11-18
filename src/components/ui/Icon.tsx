@@ -1,7 +1,13 @@
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useSyncExternalStore } from "react";
 import type { SVGProps } from "react";
-import { MATERIAL_SYMBOL_PATHS, MATERIAL_SYMBOL_VIEWBOX } from "./materialSymbols";
-import type { MaterialSymbolName } from "./materialSymbols";
+import { MATERIAL_SYMBOL_VIEWBOX } from "./icons/types";
+import type { MaterialSymbolName } from "./icons/types";
+import {
+  ensureMaterialSymbolLoaded,
+  getMaterialSymbolPaths,
+  isKnownMaterialSymbol,
+  subscribeIconRegistry,
+} from "./icons/registry";
 
 export type { MaterialSymbolName };
 
@@ -34,14 +40,26 @@ export const Icon = forwardRef<SVGSVGElement, IconProps>(function Icon(
   { name, size = 24, filled = false, strokeWidth: _ignored, children, ...rest },
   ref,
 ) {
-  const paths = MATERIAL_SYMBOL_PATHS[name];
-  if (!paths) {
+  const known = isKnownMaterialSymbol(name);
+  const paths = useSyncExternalStore(
+    subscribeIconRegistry,
+    () => getMaterialSymbolPaths(name),
+    () => getMaterialSymbolPaths(name),
+  );
+
+  useEffect(() => {
+    if (!paths && known) {
+      void ensureMaterialSymbolLoaded(name).catch(() => {});
+    }
+  }, [name, paths, known]);
+
+  if (!known) {
     if (import.meta.env?.DEV) {
-      // eslint-disable-next-line no-console
       console.warn("[Icon] glifo desconhecido: " + String(name));
     }
     return null;
   }
+
   return (
     <svg
       ref={ref}
@@ -54,7 +72,7 @@ export const Icon = forwardRef<SVGSVGElement, IconProps>(function Icon(
       focusable="false"
       {...rest}
     >
-      {paths.map((d, i) => (
+      {paths?.map((d, i) => (
         <path key={i} d={d} fill={filled ? undefined : "currentColor"} />
       ))}
       {children}

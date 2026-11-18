@@ -9,11 +9,13 @@ interface RemoteProcessesProps {
     natsUrl?: string;
     jwt?: string;
     nkeySeed?: string;
+    /** Renova o JWT NATS escopado em sessões longas. */
+    getFreshCredentials?: () => Promise<string>;
 }
 
 type SortKey = 'pid' | 'name' | 'threads' | 'priorityBase' | 'cpuPercent' | 'memoryBytes' | 'ioReadBps' | 'ioWriteBps' | 'connections';
 
-export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesProps) {
+export function RemoteProcesses({ natsSubject, natsUrl, jwt, getFreshCredentials }: RemoteProcessesProps) {
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -29,6 +31,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
         natsSubject: natsSubject ?? '',
         natsUrl: natsUrl ?? '',
         jwt: jwt ?? '',
+        getFreshCredentials,
     });
 
     const connected = stream.isConnected;

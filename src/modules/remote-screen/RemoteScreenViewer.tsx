@@ -240,7 +240,6 @@ export default function RemoteScreenViewer({
     const c = canvasRef.current;
     const ctx = c?.getContext('2d');
     if (ctx) restoreCursorArea(ctx);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursorMode]);
 
   // Escala efetiva — controlada externamente (pai) ou com fallback 'fit'.
@@ -314,7 +313,7 @@ export default function RemoteScreenViewer({
             const size = view.getUint32(offset + 8, false);
             offset += 12;
             if (offset + size > payload.length) break;
-            const tileBlob = blob(payload.subarray(offset, offset + size), 'image/jpeg');
+            const tileBlob = blob(payload.subarray(offset, offset + size));
             offset += size;
             try {
               const bmp = await createImageBitmap(tileBlob);
@@ -351,11 +350,20 @@ export default function RemoteScreenViewer({
     rects?: { x: number; y: number }[],
     frameHeader?: FrameHeader,
   ) => {
+    const closeBitmaps = () => {
+      for (const bmp of bitmaps) bmp?.close?.();
+    };
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      closeBitmaps();
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      closeBitmaps();
+      return;
+    }
 
     if (!rects || rects.length === 0 || bitmaps.length === 0) {
       // Frame completo — redimensiona e redesenha
@@ -364,8 +372,8 @@ export default function RemoteScreenViewer({
         canvas.width = bmp.width;
         canvas.height = bmp.height;
         ctx.drawImage(bmp, 0, 0);
-        bmp.close();
       }
+      closeBitmaps();
     } else {
       // Modo tiles — garante o canvas com as dimensões reais da tela (header).
       //
@@ -413,6 +421,7 @@ export default function RemoteScreenViewer({
     let cancelled = false;
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let keyframeTimer: ReturnType<typeof setTimeout> | null = null;
     reconnectAttemptsRef.current = 0;
     setConnectionState('connecting');
     let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
@@ -432,12 +441,23 @@ export default function RemoteScreenViewer({
       netBytesRef.current += buffer.byteLength;
       netFramesRef.current++;
       decodeFrame(buffer).then((result) => {
-        if (!result || cancelled) return;
+        if (!result) return;
+        if (cancelled || isPausedRef.current) {
+          for (const bmp of result.bitmaps) bmp?.close?.();
+          return;
+        }
         renderFrame(
           result.bitmaps,
           result.kind === 'tiles' ? result.rects : undefined,
           result.header,
         );
+        const header = result.header ?? decodeFrameHeader(buffer);
+        if (header) {
+          const lat = Date.now() - header.ts;
+          lastLatMsRef.current = lat;
+          setRtt(lat);
+          onLatencyRef.current?.(lat);
+        }
         // Captura o snapshot do frame limpo (sem cursor) para restaurar a área
         // do cursor anterior antes de redesenhar. No modo 'local' o cursor
         // remoto nunca é desenhado, então snapshot/overlay são pulados —
@@ -446,13 +466,6 @@ export default function RemoteScreenViewer({
         captureBackgroundSnapshot();
         // Reaplica o cursor (o novo frame pode ter coberto o anterior)
         drawCursorOverlay();
-        const header = result.header ?? decodeFrameHeader(buffer);
-        if (header) {
-          const lat = Date.now() - header.ts;
-          lastLatMsRef.current = lat;
-          setRtt(lat);
-          onLatencyRef.current?.(lat);
-        }
       });
     };
 
@@ -650,6 +663,10 @@ export default function RemoteScreenViewer({
 
       const blob = new Blob([pngBytes.slice().buffer as ArrayBuffer], { type: 'image/png' });
       createImageBitmap(blob).then((bitmap) => {
+        if (cancelled) {
+          bitmap.close();
+          return;
+        }
         // Fecha o bitmap anterior para liberar memória
         if (cursorImage?.bitmap) cursorImage.bitmap.close();
         cursorImage = { bitmap, hotX, hotY };
@@ -734,6 +751,9 @@ export default function RemoteScreenViewer({
           protocolBuffer = protocolBuffer.slice(payloadEnd + 2);
 
           // Roteia por tipo de subject
+          // Conexão PROVADA: dados reais chegando — o backoff de reconexão
+          // volta a zero (autenticar sem receber nada não conta).
+          reconnectAttemptsRef.current = 0;
           if (subject.endsWith('.event')) {
             processEventMessage(decoder.decode(payload));
           } else if (subject.endsWith('.control')) {
@@ -774,7 +794,10 @@ export default function RemoteScreenViewer({
         if (tokens[0] === '+OK') {
           if (connectSent && !authenticated) {
             authenticated = true;
-            reconnectAttemptsRef.current = 0;
+            // NOTA: o contador de reconexão NÃO é zerado aqui — autenticar não
+            // prova que o stream funciona (o agent pode cair logo após o +OK).
+            // O reset acontece no primeiro MSG roteado abaixo (dado real de
+            // sessão), evitando backoff infinito em quedas em loop.
             setConnectionState('connected');
             sendProtocol(`SUB ${natsSubject}.frame 1`);
             sendProtocol(`SUB ${natsSubject}.frame.frag 3`);
@@ -805,8 +828,10 @@ export default function RemoteScreenViewer({
             // correção (a frota leva tempo para atualizar).
             {
               const kf = JSON.stringify({ action: 'keyframe' });
-              setTimeout(() => {
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
+              if (keyframeTimer) clearTimeout(keyframeTimer);
+              keyframeTimer = setTimeout(() => {
+                keyframeTimer = null;
+                if (!cancelled && wsRef.current?.readyState === WebSocket.OPEN) {
                   wsRef.current.send(`PUB ${natsSubject}.control ${new TextEncoder().encode(kf).length}\r\n${kf}\r\n`);
                 }
               }, 150);
@@ -834,6 +859,19 @@ export default function RemoteScreenViewer({
     const connect = () => {
       if (cancelled) return;
 
+      if (keyframeTimer) {
+        clearTimeout(keyframeTimer);
+        keyframeTimer = null;
+      }
+      protocolBuffer = new Uint8Array();
+      connectSent = false;
+      authenticated = false;
+      fragTotalLen = 0;
+      fragCount = 0;
+      fragBuffer = null;
+      fragReceived = 0;
+      setConnectionState('connecting');
+
       // FIX 2026-09-17 (viewer 1006): navegadores NAO seguem redirects HTTP no
       // handshake de WebSocket. Se a URL configurada vier sem a barra final
       // (ex.: "wss://host/nats"), o nginx responde 308 -> "/nats/" e a conexão
@@ -841,17 +879,18 @@ export default function RemoteScreenViewer({
       const normalizedNatsUrl = typeof natsUrl === 'string' && natsUrl && !natsUrl.endsWith('/')
         ? natsUrl + '/'
         : natsUrl;
-      const wsUrl = `${normalizedNatsUrl}?access_token=${encodeURIComponent(jwt)}`;
-      ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
-      wsRef.current = ws;
+      const socket = new WebSocket(normalizedNatsUrl);
+      ws = socket;
+      socket.binaryType = 'arraybuffer';
+      wsRef.current = socket;
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        if (cancelled || wsRef.current !== socket) return;
         console.log('[RemoteScreenViewer] WebSocket aberto; aguardando INFO do NATS');
       };
 
-      ws.onmessage = (event) => {
-        if (cancelled) return;
+      socket.onmessage = (event) => {
+        if (cancelled || wsRef.current !== socket) return;
         const bytes: Uint8Array<ArrayBufferLike> = typeof event.data === 'string'
           ? new Uint8Array(new TextEncoder().encode(event.data))
           : event.data instanceof ArrayBuffer
@@ -863,16 +902,17 @@ export default function RemoteScreenViewer({
         processProtocol();
       };
 
-      ws.onerror = () => {
+      socket.onerror = () => {
+        if (cancelled || wsRef.current !== socket) return;
         console.error('[RemoteScreenViewer] NATS WebSocket error', {
           url: natsUrl,
-          readyState: ws?.readyState,
+          readyState: socket.readyState,
           reconnectAttempt: reconnectAttemptsRef.current,
         });
       };
 
-      ws.onclose = (event) => {
-        if (cancelled) return;
+      socket.onclose = (event) => {
+        if (cancelled || wsRef.current !== socket) return;
 
         console.warn('[RemoteScreenViewer] NATS WebSocket closed', {
           code: event.code,
@@ -880,6 +920,16 @@ export default function RemoteScreenViewer({
           wasClean: event.wasClean,
           reconnectAttempt: reconnectAttemptsRef.current,
         });
+
+        // Autorização/authentication recusada pelo servidor (-ERR + close com
+        // o motivo): reconectar em loop com o MESMO token só acumula tentativas
+        // — é erro terminal e o motivo vai na mensagem pro operador.
+        if (/authorization|authentication|autentic|autoriz/i.test(event.reason || '')) {
+          console.error('[RemoteScreenViewer] Conexão recusada por autorização:', event.reason);
+          setConnectionState('error');
+          onErrorRef.current?.(`Autorização NATS recusada: ${event.reason || 'credencial inválida'}`);
+          return;
+        }
 
         if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
           const delay = RECONNECT_DELAYS[reconnectAttemptsRef.current];
@@ -900,10 +950,21 @@ export default function RemoteScreenViewer({
 
     return () => {
       cancelled = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (keyframeTimer) {
+        clearTimeout(keyframeTimer);
+        keyframeTimer = null;
+      }
+      if (cursorImage?.bitmap) {
+        cursorImage.bitmap.close();
+        cursorImage = null;
+      }
       if (ws) ws.close();
     };
-  }, [natsSubject, natsUrl, jwt, decodeFrame, renderFrame, reconnectKey]);
+  }, [natsSubject, sessionId, natsUrl, jwt, decodeFrame, renderFrame, sendControlEnvelope, reconnectKey]);
 
   // Input capture (mouse/keyboard) — coordenadas corretas C2
   useEffect(() => {
@@ -1205,6 +1266,7 @@ export default function RemoteScreenViewer({
   useEffect(() => {
     if (scale !== 'fit') return;
     const container = containerRef.current;
+    const canvas = canvasRef.current;
     if (!container) return;
 
     const recalc = () => applyFitScale();
@@ -1217,7 +1279,6 @@ export default function RemoteScreenViewer({
       observer.disconnect();
       // Ao sair do modo fit, limpa os estilos inline para que o CSS (1:1)
       // reassuma o controle das dimensões do canvas.
-      const canvas = canvasRef.current;
       if (canvas) {
         canvas.style.width = '';
         canvas.style.height = '';

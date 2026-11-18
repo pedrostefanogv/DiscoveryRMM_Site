@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { lazy, Suspense } from 'react';
 import { Loading } from '@/components/ui';
@@ -133,12 +133,27 @@ function AuthLazyPage({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const router = createBrowserRouter([
+function applyPageErrorBoundary(routeList: RouteObject[]): RouteObject[] {
+  return routeList.map((route) => {
+    if (route.children && route.children.length > 0) {
+      return {
+        ...route,
+        children: applyPageErrorBoundary(route.children),
+      };
+    }
+    return {
+      ...route,
+      errorElement: route.errorElement ?? <PageErrorBoundary />,
+    };
+  });
+}
+
+export const routes: RouteObject[] = [
   {
     path: '/auth',
     element: <PublicOnlyAuth />,
     errorElement: <ErrorPage />,
-    children: [
+    children: applyPageErrorBoundary([
       {
         element: <AuthLayout />,
         children: [
@@ -164,13 +179,13 @@ export const router = createBrowserRouter([
           },
         ],
       },
-    ],
+    ]),
   },
   {
     path: '/',
     element: <RequireAuth />,
     errorElement: <ErrorPage />,
-    children: [
+    children: applyPageErrorBoundary([
       {
         path: 'agents/remote-debug-console',
         element: <LazyPage><RemoteDebugConsole /></LazyPage>,
@@ -890,6 +905,8 @@ export const router = createBrowserRouter([
       },
         ],
       },
-    ],
+    ]),
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

@@ -32,6 +32,7 @@ import { fullscreenApi } from '@/utils/fullscreen';
 import RemoteTerminal, { getLastFittedTermDims } from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
+import RemoteRdp from '@/modules/remote-rdp/RemoteRdp';
 import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
 import { RemoteServices } from '@/modules/remote-processes/RemoteServices';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
@@ -46,7 +47,7 @@ import { realtimeConfig, resolveNatsWsUrl } from '@/config/realtime';
 import RemoteConsentNotice from '@/modules/remote-screen/RemoteConsentNotice';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
-type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
+type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'rdp' | 'processes' | 'services';
 type QualityMode = 'auto' | 'hd' | 'manual';
 
 // Modo HD: fidelidade máxima de imagem. O perfil "ultra" do backend é
@@ -1638,6 +1639,7 @@ export default function RemoteSession() {
     { key: 'screen', label: 'Tela' },
     { key: 'terminal', label: 'Terminal' },
     { key: 'files', label: 'Arquivos' },
+    { key: 'rdp', label: 'RDP' },
     { key: 'processes', label: 'Processos' },
     { key: 'services', label: 'Serviços' },
     { key: 'proxy', label: 'Proxy' },
@@ -1694,6 +1696,7 @@ export default function RemoteSession() {
     { key: 'screen', label: 'Tela' },
     { key: 'terminal', label: 'Terminal' },
     { key: 'files', label: 'Arquivos' },
+    { key: 'rdp', label: 'RDP' },
     { key: 'processes', label: 'Processos' },
     { key: 'proxy', label: 'Proxy' },
   ];
@@ -2107,6 +2110,13 @@ export default function RemoteSession() {
                   natsUrl={sessions.files.natsUrl}
                   jwt={sessions.files.jwt}
                   nkeySeed={sessions.files.nkeySeed}
+                  // Renovação do JWT NATS escopado em sessões longas (mesmo
+                  // padrão do Terminal): o hook refaz o fetch de credenciais.
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, sessions.files!.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
                 />
               </div>
             </div>
@@ -2134,6 +2144,11 @@ export default function RemoteSession() {
                   natsUrl={processSession.natsUrl}
                   jwt={processSession.jwt}
                   nkeySeed={processSession.nkeySeed}
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, processSession.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
                 />
               </div>
             </div>
@@ -2161,6 +2176,11 @@ export default function RemoteSession() {
                   natsUrl={processSession.natsUrl}
                   jwt={processSession.jwt}
                   nkeySeed={processSession.nkeySeed}
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, processSession.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
                 />
               </div>
             </div>
@@ -2177,13 +2197,66 @@ export default function RemoteSession() {
         )}
 
         {activeTab === 'proxy' && (
-          <RemoteProxy
-            sessionId={sessions.proxy?.sessionId ?? ''}
-            agentId={agentId}
-            natsSubject={sessions.proxy?.natsSubject}
-            jwt={sessions.proxy?.jwt}
-            nkeySeed={sessions.proxy?.nkeySeed}
-          />
+          sessions.proxy ? (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex-1 min-h-0">
+                <RemoteProxy
+                  sessionId={sessions.proxy.sessionId}
+                  agentId={agentId}
+                  natsSubject={sessions.proxy.natsSubject}
+                  natsUrl={sessions.proxy.natsUrl}
+                  jwt={sessions.proxy.jwt}
+                  nkeySeed={sessions.proxy.nkeySeed}
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, sessions.proxy!.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
+                />
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Proxy"
+              icon="🔗"
+              connecting={connectingTab === 'proxy'}
+              onConnect={() => startTabSession('proxy')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('proxy', true)}
+            />
+          )
+        )}
+
+        {activeTab === 'rdp' && (
+          sessions.rdp ? (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex-1 min-h-0">
+                <RemoteRdp
+                  key={`rdp-${sessions.rdp.sessionId}-${reconnectKeys.rdp ?? 0}`}
+                  sessionId={sessions.rdp.sessionId}
+                  agentId={agentId}
+                  natsSubject={sessions.rdp.natsSubject}
+                  natsUrl={sessions.rdp.natsUrl}
+                  jwt={sessions.rdp.jwt}
+                  nkeySeed={sessions.rdp.nkeySeed}
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, sessions.rdp!.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
+                />
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="RDP"
+              icon="🖥"
+              connecting={connectingTab === 'rdp'}
+              onConnect={() => startTabSession('rdp')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('rdp', true)}
+            />
+          )
         )}
       </div>
 

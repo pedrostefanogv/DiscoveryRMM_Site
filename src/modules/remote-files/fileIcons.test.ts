@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fileKindOf, extensionOf } from './fileIcons';
+import { fileKindOf, extensionOf } from './fileKind';
 
 describe('extensionOf', () => {
   it('extrai a extensao em minusculas', () => {

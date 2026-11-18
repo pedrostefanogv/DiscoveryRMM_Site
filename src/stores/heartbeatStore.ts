@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import type { AgentHeartbeat, AgentHeartbeatMetrics } from "@/api";
 
 const DEFAULT_HEARTBEAT_METRICS_TTL_MS = 90_000;
@@ -89,13 +90,15 @@ class HeartbeatStore {
       status: "Online" as const,
     };
 
-    this.heartbeats.set(agentId, {
+    const next = new Map(this.heartbeats);
+    next.set(agentId, {
       ...current,
       ...data,
       agentId,
       timestampUtc: data.timestampUtc ?? nowIso,
       receivedAtUtc: nowIso,
     });
+    this.heartbeats = next;
 
     this.emit();
   }
@@ -112,9 +115,11 @@ class HeartbeatStore {
 
   /** Remove heartbeat data for an agent (e.g. when agent goes offline) */
   removeHeartbeat(agentId: string): void {
-    if (this.heartbeats.delete(agentId)) {
-      this.emit();
-    }
+    if (!this.heartbeats.has(agentId)) return;
+    const next = new Map(this.heartbeats);
+    next.delete(agentId);
+    this.heartbeats = next;
+    this.emit();
   }
 
   removeHeartbeatIfStale(
@@ -135,7 +140,9 @@ class HeartbeatStore {
       return false;
     }
 
-    this.heartbeats.delete(agentId);
+    const next = new Map(this.heartbeats);
+    next.delete(agentId);
+    this.heartbeats = next;
     this.emit();
     return true;
   }
@@ -143,7 +150,7 @@ class HeartbeatStore {
   /** Clear all heartbeats */
   clear(): void {
     if (this.heartbeats.size === 0) return;
-    this.heartbeats.clear();
+    this.heartbeats = new Map();
     this.emit();
   }
 
@@ -161,12 +168,23 @@ class HeartbeatStore {
 
 export const heartbeatStore = new HeartbeatStore();
 
+/**
+ * Assinatura com flush SÍNCRONO: mutações do store vindas de FORA do React
+ * (expiração de TTL, eventos de realtime) precisam refletir no DOM na mesma
+ * chamada — o scheduler do React 19 só descarregaria na microtask seguinte,
+ * deixando leitores imediatos (ex.: checagem pós-remoção de heartbeat stale)
+ * vendo o valor antigo.
+ */
+function subscribeFlushed(listener: () => void): () => void {
+  return heartbeatStore.subscribe(() => flushSync(listener));
+}
+
 /** React hook — returns heartbeat data for a specific agent, updated reactively */
 export function useAgentHeartbeat(
   agentId: string,
 ): HeartbeatPayload | undefined {
   return useSyncExternalStore(
-    (cb) => heartbeatStore.subscribe(cb),
+    subscribeFlushed,
     () => heartbeatStore.getHeartbeat(agentId),
     () => heartbeatStore.getHeartbeat(agentId),
   );
@@ -175,7 +193,7 @@ export function useAgentHeartbeat(
 /** React hook — returns ALL heartbeats, updated reactively */
 export function useAllAgentHeartbeats(): ReadonlyMap<string, HeartbeatPayload> {
   return useSyncExternalStore(
-    (cb) => heartbeatStore.subscribe(cb),
+    subscribeFlushed,
     () => heartbeatStore.getSnapshot(),
     () => heartbeatStore.getSnapshot(),
   );

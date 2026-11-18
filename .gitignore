@@ -30,6 +30,9 @@ pnpm-debug.log*
 # TypeScript cache
 *.tsbuildinfo
 
+# Vitest cache
+.vitest/
+
 
 .codebase/
 .github/*

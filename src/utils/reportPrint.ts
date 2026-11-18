@@ -1,3 +1,5 @@
+import DOMPurify from "dompurify";
+
 /**
  * Impressao de relatorios para PDF.
  *
@@ -7,24 +9,36 @@
  * UI nao precise conhecer o detalhe de janela/impressao.
  */
 
+const FORBID_TAGS = [
+  "script",
+  "iframe",
+  "object",
+  "embed",
+  "applet",
+  "base",
+  "meta",
+  "link",
+  "form",
+];
+
+const FORBID_ATTR = ["srcdoc", "formaction"];
+
+const PRINT_IFRAME_CLEANUP_MS = 60_000;
+
 /**
- * Remove conteudo ativo antes de imprimir. O HTML do relatorio e gerado pelo
- * backend (sem scripts) e usa dados de inventario reportados por agentes —
- * esta e a ultima barreira caso algo escape da composicao.
+ * Sanitiza HTML do relatorio com DOMPurify antes de imprimir.
  */
-function stripActiveContent(html: string): string {
-  return html
-    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
-    .replace(/<script\b[^>]*\/?>/gi, "")
-    .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, "")
-    .replace(/<object\b[\s\S]*?<\/object>/gi, "")
-    .replace(/<embed\b[^>]*\/?>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "")
-    .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "");
+function sanitizeReportHtml(html: string, isFullDocument: boolean): string {
+  return DOMPurify.sanitize(html, {
+    WHOLE_DOCUMENT: isFullDocument,
+    ADD_TAGS: ["style"],
+    FORBID_TAGS,
+    FORBID_ATTR,
+  });
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"]/g, (char) => {
+  return value.replace(/[&<>"']/g, (char) => {
     switch (char) {
       case "&":
         return "&amp;";
@@ -34,53 +48,87 @@ function escapeHtml(value: string): string {
         return "&gt;";
       case '"':
         return "&quot;";
+      case "'":
+        return "&#39;";
       default:
         return char;
     }
   });
 }
 
+function openSanitizedBlobFallback(documentHtml: string): void {
+  const blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => {
+    URL.revokeObjectURL(blobUrl);
+  }, PRINT_IFRAME_CLEANUP_MS);
+}
+
 /**
- * Abre o HTML do relatorio em uma janela isolada e dispara o dialogo de
- * impressao (onde o usuario escolhe "Salvar como PDF").
- *
- * Lanca erro quando o navegador bloqueia a janela, para a UI poder orientar
- * o usuario a liberar pop-ups.
+ * Abre o HTML do relatorio em um iframe oculto com sandbox sem same-origin
+ * (ou fallback via Blob URL isolado com noopener,noreferrer) e dispara o
+ * dialogo de impressao.
  */
 export function printHtmlAsPdf(html: string, title = "Relatorio"): void {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return;
   }
 
-  // "noopener" faria window.open devolver null, por isso nao e usado aqui.
-  const printWindow = window.open("", "_blank", "width=1024,height=768");
-  if (!printWindow) {
-    throw new Error(
-      "Nao foi possivel abrir a janela de impressao. Libere pop-ups para este site e tente novamente.",
-    );
-  }
-
-  const safeHtml = stripActiveContent(html);
-  const documentHtml = /<html[\s>]/i.test(safeHtml)
-    ? safeHtml
+  const isFullDocument = /<html[\s>]/i.test(html);
+  const safeHtml = sanitizeReportHtml(html, isFullDocument);
+  const documentHtml = isFullDocument && /<html[\s>]/i.test(safeHtml)
+    ? (/^<!doctype\s+html/i.test(safeHtml.trimStart()) ? safeHtml : `<!doctype html>${safeHtml}`)
     : `<!doctype html><html><head><meta charset="utf-8" /><title>${escapeHtml(title)}</title></head><body>${safeHtml}</body></html>`;
 
-  printWindow.document.open();
-  printWindow.document.write(documentHtml);
-  printWindow.document.close();
+  const staleIframes = document.querySelectorAll('iframe[data-report-print="true"]');
+  for (const stale of staleIframes) {
+    stale.remove();
+  }
 
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("data-report-print", "true");
+  iframe.setAttribute("sandbox", "allow-modals");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.style.pointerEvents = "none";
+  iframe.srcdoc = documentHtml;
+
+  let printed = false;
+  let fallbackTimer: number | undefined;
   const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    if (fallbackTimer !== undefined) {
+      window.clearTimeout(fallbackTimer);
+      fallbackTimer = undefined;
+    }
     try {
-      printWindow.focus();
-      printWindow.print();
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
     } catch {
-      // O usuario pode ter fechado a janela antes da impressao.
+      openSanitizedBlobFallback(documentHtml);
     }
   };
 
-  if (printWindow.document.readyState === "complete") {
-    window.setTimeout(triggerPrint, 250);
-  } else {
-    printWindow.addEventListener("load", () => window.setTimeout(triggerPrint, 250), { once: true });
-  }
+  iframe.addEventListener(
+    "load",
+    () => {
+      window.setTimeout(triggerPrint, 250);
+    },
+    { once: true },
+  );
+
+  (document.body ?? document.documentElement).appendChild(iframe);
+  fallbackTimer = window.setTimeout(triggerPrint, 250);
+
+  window.setTimeout(() => {
+    iframe.remove();
+  }, PRINT_IFRAME_CLEANUP_MS);
 }

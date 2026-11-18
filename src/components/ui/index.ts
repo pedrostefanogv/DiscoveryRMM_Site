@@ -1,6 +1,6 @@
 export { Icon } from "./Icon";
 export type { IconProps, MaterialSymbolName } from "./Icon";
-export { MATERIAL_SYMBOL_PATHS, MATERIAL_SYMBOL_VIEWBOX } from "./materialSymbols";
+export { MATERIAL_SYMBOL_VIEWBOX } from "./icons/types";
 export { Button } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { Badge } from "./Badge";

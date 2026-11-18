@@ -108,6 +108,39 @@ function normalizeNatsUrl(url: string): string {
   return trimmed;
 }
 
+/**
+ * Extrai o claim `exp` (epoch ms) de um JWT sem validar assinatura.
+ * Retorna null quando o token está ausente, malformado ou sem exp — o
+ * chamador decide o fallback (nunca propaga NaN/Infinity como expiração).
+ */
+export function getJwtExpEpochMs(token: string | null | undefined): number | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { exp?: unknown };
+    if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp) || payload.exp <= 0) {
+      return null;
+    }
+    return payload.exp * 1000;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * expiresAtUtc da credencial NATS derivado do PRÓPRIO JWT escopado da sessão
+ * (o agent/API emitem TTL próprio, ~60 min, e reemitem na renovação). Sem exp
+ * legível, cai para o fallback informado (default 60 min) — nunca abaixo de
+ * "agora", para a checagem de expiração do service permanecer coerente.
+ */
+export function jwtExpiresAtUtc(token: string | null | undefined, fallbackMs = 60 * 60_000): string {
+  const expMs = getJwtExpEpochMs(token);
+  return new Date(expMs !== null ? expMs : Date.now() + fallbackMs).toISOString();
+}
+
 function isCredentialsExpiring(credentials: NatsCredentialsResponse): boolean {
   return (
     new Date(credentials.expiresAtUtc).getTime() <=
@@ -234,6 +267,8 @@ export class NatsService {
   private subscriptionInFlight: Map<string, Promise<boolean>> = new Map();
   private listeners: Map<string, Set<(event: DashboardEvent) => void>> =
     new Map();
+  private rawListeners: Map<string, Set<(data: Uint8Array) => void>> =
+    new Map();
   private credentials: NatsCredentialsResponse | null = null;
   private credentialsInFlight: Promise<NatsCredentialsResponse> | null = null;
   private stateListeners = new Set<(state: NatsConnectionState) => void>();
@@ -289,7 +324,7 @@ export class NatsService {
   private tryExternalReconnect(reason: string): void {
     if (this.manualDisconnect) return;
     if (!this.config.enabled) return;
-    if (this.listeners.size === 0) return;
+    if (this.listeners.size === 0 && this.rawListeners.size === 0) return;
     if (this.connection?.isClosed() === false) return;
     if (this.connectInFlight || this.reconnectTimer) return;
     // auth_error é terminal — não fica girando em background
@@ -825,19 +860,30 @@ export class NatsService {
       void (async () => {
         try {
           for await (const msg of subscription) {
-            try {
-              const raw = new TextDecoder().decode(msg.data);
-              const data = JSON.parse(raw);
-              natsLogger.log(
-                "Mensagem recebida em",
-                subject,
-                ":",
-                typeof data === "object"
-                  ? Object.keys(data).join(", ")
-                  : raw.slice(0, 200),
-              );
-              const listeners = this.listeners.get(subject);
-              if (listeners) {
+            const rawListeners = this.rawListeners.get(subject);
+            if (rawListeners && rawListeners.size > 0) {
+              rawListeners.forEach((listener) => {
+                try {
+                  listener(msg.data);
+                } catch (error) {
+                  natsLogger.error("Error in NATS raw listener:", error);
+                }
+              });
+            }
+
+            const listeners = this.listeners.get(subject);
+            if (listeners && listeners.size > 0) {
+              try {
+                const raw = new TextDecoder().decode(msg.data);
+                const data = JSON.parse(raw);
+                natsLogger.log(
+                  "Mensagem recebida em",
+                  subject,
+                  ":",
+                  typeof data === "object"
+                    ? Object.keys(data).join(", ")
+                    : raw.slice(0, 200),
+                );
                 listeners.forEach((listener) => {
                   try {
                     listener(data);
@@ -845,9 +891,9 @@ export class NatsService {
                     natsLogger.error("Error in NATS listener:", error);
                   }
                 });
+              } catch (error) {
+                natsLogger.error("Error parsing NATS message:", error);
               }
-            } catch (error) {
-              natsLogger.error("Error parsing NATS message:", error);
             }
           }
         } catch (error) {
@@ -879,8 +925,12 @@ export class NatsService {
   private async restoreSubscriptions(): Promise<void> {
     let restoredCount = 0;
     let failedCount = 0;
+    const subjects = new Set([
+      ...this.listeners.keys(),
+      ...this.rawListeners.keys(),
+    ]);
 
-    for (const subject of this.listeners.keys()) {
+    for (const subject of subjects) {
       const restored = await this.ensureSubjectSubscription(subject);
       if (!restored) {
         failedCount++;
@@ -1243,7 +1293,7 @@ export class NatsService {
     }
 
     // Only unsubscribe from NATS if no more listeners
-    if (!this.listeners.has(subject)) {
+    if (!this.listeners.has(subject) && !this.rawListeners.has(subject)) {
       const subscription = this.subscriptions.get(subject);
       if (subscription) {
         subscription.unsubscribe();
@@ -1253,6 +1303,111 @@ export class NatsService {
         });
       }
     }
+  }
+
+  async subscribeRaw(
+    subject: string,
+    callback: (data: Uint8Array) => void,
+    options?: { connectIfNeeded?: boolean },
+  ): Promise<boolean> {
+    if (!this.rawListeners.has(subject)) {
+      this.rawListeners.set(subject, new Set());
+    }
+    this.rawListeners.get(subject)!.add(callback);
+
+    const connectIfNeeded = options?.connectIfNeeded ?? true;
+    this.emitTelemetry("info", "subscribe_raw_requested", {
+      subject,
+      connectIfNeeded,
+      listenersForSubject: this.rawListeners.get(subject)?.size ?? 0,
+    });
+
+    if (!this.connection) {
+      if (!connectIfNeeded) {
+        this.emitTelemetry("warn", "subscribe_aborted_no_connection", {
+          subject,
+        });
+        return false;
+      }
+
+      const connected = await this.connect();
+      if (!connected) {
+        this.emitTelemetry("warn", "subscribe_aborted_connect_failed", {
+          subject,
+          diagnostics: this.getConnectionDiagnostics(),
+        });
+        return false;
+      }
+    }
+
+    if (!this.connection) {
+      this.emitTelemetry("warn", "subscribe_aborted_not_connected", {
+        subject,
+      });
+      return false;
+    }
+
+    if (!this.canSubscribeToSubject(subject)) {
+      this.emitTelemetry("warn", "subscribe_blocked_allow_list", {
+        subject,
+        allowedSubjectsCount: this.getAllowedSubscribeSubjects().length,
+      });
+      return false;
+    }
+
+    const subscribed = await this.ensureSubjectSubscription(subject);
+    this.emitTelemetry(subscribed ? "info" : "warn", "subscribe_raw_result", {
+      subject,
+      subscribed,
+    });
+    return subscribed;
+  }
+
+  unsubscribeRaw(
+    subject: string,
+    callback: (data: Uint8Array) => void,
+  ): void {
+    const listeners = this.rawListeners.get(subject);
+    if (listeners) {
+      listeners.delete(callback);
+      this.emitTelemetry("info", "unsubscribe_raw_requested", {
+        subject,
+        listenersRemaining: listeners.size,
+      });
+      if (listeners.size === 0) {
+        this.rawListeners.delete(subject);
+      }
+    }
+
+    if (!this.listeners.has(subject) && !this.rawListeners.has(subject)) {
+      const subscription = this.subscriptions.get(subject);
+      if (subscription) {
+        subscription.unsubscribe();
+        this.subscriptions.delete(subject);
+        this.emitTelemetry("info", "unsubscribe_subject_detached", {
+          subject,
+        });
+      }
+    }
+  }
+
+  async publishRaw(subject: string, data: Uint8Array): Promise<void> {
+    if (!this.connection) {
+      const connected = await this.connect();
+      if (!connected) {
+        throw new Error("NATS not connected");
+      }
+    }
+
+    if (!this.connection) {
+      throw new Error("NATS not connected");
+    }
+
+    this.emitTelemetry("info", "publish_raw", {
+      subject,
+      byteLength: data.byteLength,
+    });
+    this.connection.publish(subject, data);
   }
 
   async publish(subject: string, data: Record<string, unknown>): Promise<void> {
@@ -1291,6 +1446,7 @@ export class NatsService {
     }
     this.subscriptions.clear();
     this.listeners.clear();
+    this.rawListeners.clear();
 
     if (this.connection) {
       await this.connection.close();

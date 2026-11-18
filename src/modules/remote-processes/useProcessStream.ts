@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import {
     createNatsService,
+    jwtExpiresAtUtc,
     type NatsCredentialsResponse,
     type NatsService,
 } from '@/api/nats';
@@ -11,6 +12,8 @@ interface UseProcessesStreamOptions {
     jwt: string;
     /** Seed NKey do viewer (credencial escopada da sessão). */
     nkeySeed?: string;
+    /** Renova o JWT NATS escopado antes/após expiração (sessões longas). */
+    getFreshCredentials?: () => Promise<string>;
 }
 
 export interface ProcessInfo {
@@ -68,7 +71,7 @@ export interface UseProcessesStreamReturn {
 let _seq = 0;
 function nextReqId() { return `p${++_seq}`; }
 
-export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: UseProcessesStreamOptions): UseProcessesStreamReturn {
+export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', getFreshCredentials }: UseProcessesStreamOptions): UseProcessesStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -94,6 +97,8 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }:
     // ── Transporte NatsService ──
     const serviceRef = useRef<NatsService | null>(null);
     const jwtRef = useRef(jwt);
+    const freshCredsRef = useRef(getFreshCredentials);
+    freshCredsRef.current = getFreshCredentials;
     const subj = natsSubject.replace(/-/g, '');
     const reqSubject = `${subj}.proc.req`;
     const respSubject = `${subj}.proc.resp`;
@@ -102,12 +107,16 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }:
     useEffect(() => { jwtRef.current = jwt; }, [jwt]);
 
     useEffect(() => {
+        let mounted = true;
+        mountedRef.current = true;
         const subjectAllowList = [respSubject, readySubject];
         const buildCreds = (token: string): NatsCredentialsResponse => ({
             jwt: token,
             nkeySeed,
             publicKey: '',
-            expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+            // O JWT escopado da sessão tem TTL próprio: usa o claim exp do
+            // próprio token (fallback 60 min quando ilegível).
+            expiresAtUtc: jwtExpiresAtUtc(token),
             publishSubjects: [reqSubject],
             subscribeSubjects: subjectAllowList,
         });
@@ -115,14 +124,21 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }:
             url: natsUrl,
             enabled: true,
             authMode: 'jwt_credentials',
-            credentialsProvider: async () => buildCreds(jwtRef.current),
+            credentialsProvider: async () => {
+                // Reconexão automática busca JWT FRESCO em vez de reusar o
+                // expirado (mesmo padrão do useFilesStream).
+                const refresh = freshCredsRef.current;
+                const token = refresh ? await refresh() : jwtRef.current;
+                jwtRef.current = token;
+                return buildCreds(token);
+            },
             scopeMode: 'preserve',
         });
         serviceRef.current = service;
         service.setPreSuppliedCredentials(buildCreds(jwt));
 
         const offState = service.onConnectionStateChange((state) => {
-            if (!mountedRef.current) return;
+            if (!mounted || !mountedRef.current) return;
             if (state === 'connected') {
                 setIsConnected(true);
                 setError(null);
@@ -158,15 +174,62 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }:
             }
         };
 
+        // Falha de auth (JWT NATS expirado no meio da sessão): busca credencial
+        // fresca e reconecta — em vez de auth_error terminal (mesmo padrão do
+        // useFilesStream).
+        let refreshing = false;
+        const offAuth = typeof service.onAuthError === 'function'
+            ? service.onAuthError(async () => {
+                if (!mounted || !freshCredsRef.current || refreshing) return;
+                refreshing = true;
+                try {
+                    const freshToken = await freshCredsRef.current!();
+                    if (!mounted) return;
+                    jwtRef.current = freshToken;
+                    service.setPreSuppliedCredentials(buildCreds(freshToken));
+                    await service.forceReconnect();
+                } catch {
+                    // onConnectionStateChange já reporta auth_error
+                } finally {
+                    refreshing = false;
+                }
+            })
+            : () => {};
+
+        // Subscrições registradas ANTES do connect(): o connect() restaura os
+        // SUBs a partir dos listeners e só depois emite 'connected' — nenhuma
+        // resposta inicial (proc.ready/proc.resp) é perdida na corrida do mount.
+        void service.subscribe(respSubject, handleMsg as never, { connectIfNeeded: false });
+        void service.subscribe(readySubject, handleMsg as never, { connectIfNeeded: false });
+
         void (async () => {
-            await service.connect();
-            if (!mountedRef.current) return;
-            await service.subscribe(respSubject, handleMsg as never);
-            await service.subscribe(readySubject, handleMsg as never);
+            const ok = await service.connect();
+            if (!mounted) return;
+            if (!ok && mountedRef.current) {
+                setIsConnected(false);
+            }
         })();
 
         return () => {
+            mounted = false;
+            mountedRef.current = false;
             offState();
+            offAuth();
+            try {
+                service.unsubscribe(respSubject, handleMsg as never);
+                service.unsubscribe(readySubject, handleMsg as never);
+            } catch { /* teardown best-effort */ }
+
+            // Rejeita waiters/pedidos pendentes: os timers são limpos agora
+            // (clearTimeout) em vez de sobreviverem ao unmount.
+            const waiters = readyWaitersRef.current;
+            readyWaitersRef.current = [];
+            waiters.forEach((w) => w.reject(new Error('Stream de processos desmontado')));
+
+            const pending = Array.from(pendingRef.current.values());
+            pendingRef.current.clear();
+            pending.forEach((p) => p.reject(new Error('Stream de processos desmontado')));
+
             if (serviceRef.current === service) serviceRef.current = null;
             void service.dispose().catch(() => { /* teardown best-effort */ });
         };

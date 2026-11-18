@@ -32,7 +32,7 @@ interface ThemeContextValue {
 }
 
 const BRANDING_STORAGE_KEY = 'discovery-rmm-branding';
-const THEME_MODE_STORAGE_KEY = 'discovery-rmm-theme-mode';
+export const THEME_MODE_STORAGE_KEY = 'discovery-rmm-theme-mode';
 
 function loadBranding(): BrandingConfig {
   try {
@@ -43,7 +43,9 @@ function loadBranding(): BrandingConfig {
 }
 
 function saveBranding(b: BrandingConfig) {
-  localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(b));
+  try {
+    localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(b));
+  } catch { /* ignore */ }
 }
 
 function applyCSSVars(b: BrandingConfig, mode: ThemeMode) {
@@ -69,18 +71,32 @@ function applyCSSVars(b: BrandingConfig, mode: ThemeMode) {
   }
 }
 
-function loadThemeMode(): ThemeMode {
+function readStoredThemeMode(): ThemeMode | null {
   try {
     const stored = localStorage.getItem(THEME_MODE_STORAGE_KEY);
     if (stored === 'light' || stored === 'dark') return stored;
   } catch { /* ignore */ }
+  return null;
+}
 
-  // Fallback: respeita preferência do sistema
-  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
+function saveThemeMode(mode: ThemeMode) {
+  try {
+    localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+  } catch { /* ignore */ }
+}
+
+function loadThemeMode(): ThemeMode {
+  const stored = readStoredThemeMode();
+  if (stored) return stored;
+
+  // Fallback: respeita preferência do sistema (alinhado ao script inline de index.html)
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    try {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch { /* ignore */ }
   }
 
-  return 'dark'; // default: dark (comportamento original)
+  return 'dark'; // default: dark quando matchMedia indisponível
 }
 
 function applyThemeMode(mode: ThemeMode) {
@@ -96,36 +112,59 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Aplica branding
   useEffect(() => {
     saveBranding(branding);
-    applyCSSVars(branding, mode);
     document.title = branding.appName;
-  }, [branding, mode]);
+  }, [branding]);
 
-  // Aplica modo claro/escuro
+  // Aplica modo claro/escuro e variáveis CSS de branding
   useEffect(() => {
     applyThemeMode(mode);
     applyCSSVars(branding, mode);
-    localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
   }, [mode, branding]);
 
   // Escuta mudanças de prefers-color-scheme (se o usuário não escolheu manualmente)
   useEffect(() => {
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    let mql: MediaQueryList;
+    try {
+      mql = window.matchMedia('(prefers-color-scheme: dark)');
+    } catch {
+      return;
+    }
     const handleChange = (e: MediaQueryListEvent) => {
-      // Só muda automaticamente se não houver preferência explícita salva
-      const hasStoredPreference = localStorage.getItem(THEME_MODE_STORAGE_KEY);
-      if (!hasStoredPreference) {
+      // Só muda automaticamente se não houver preferência explícita válida salva
+      if (!readStoredThemeMode()) {
         setModeState(e.matches ? 'dark' : 'light');
       }
     };
-    mql.addEventListener('change', handleChange);
-    return () => mql.removeEventListener('change', handleChange);
+    if (mql && typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handleChange);
+      return () => {
+        if (typeof mql.removeEventListener === 'function') {
+          mql.removeEventListener('change', handleChange);
+        }
+      };
+    } else if (mql && typeof mql.addListener === 'function') {
+      mql.addListener(handleChange);
+      return () => {
+        if (typeof mql.removeListener === 'function') {
+          mql.removeListener(handleChange);
+        }
+      };
+    }
   }, []);
 
   const toggleMode = useCallback(() => {
-    setModeState(prev => (prev === 'dark' ? 'light' : 'dark'));
+    setModeState(prev => {
+      const next: ThemeMode = prev === 'dark' ? 'light' : 'dark';
+      saveThemeMode(next);
+      return next;
+    });
   }, []);
 
   const setMode = useCallback((newMode: ThemeMode) => {
+    saveThemeMode(newMode);
     setModeState(newMode);
   }, []);
 
