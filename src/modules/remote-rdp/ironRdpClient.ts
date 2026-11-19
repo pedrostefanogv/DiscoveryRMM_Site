@@ -100,6 +100,14 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
     }
   } catch { /* best-effort */ }
 
+  // O IronError do wasm-bindgen expõe backtrace()/message como MÉTODOS. Quando
+  // não há mensagem legível, o backtrace (que traz a causa do lado Rust) é a
+  // única fonte útil — sem ele sobraria apenas o handle __wbg_ptr.
+  //
+  // O backtrace é MAIS ESPECÍFICO que explainByKind (genérico por kind), então
+  // tem precedência sobre ele. Guardamos em wasmDetail para decidir no final.
+  const wasmDetail = rawMessage ? null : extractWasmDetail(anyErr);
+
   try {
     if (typeof anyErr.rdcleanpathDetails === 'function') {
       const d = (anyErr.rdcleanpathDetails as () => Record<string, unknown> | undefined)();
@@ -118,9 +126,16 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
     return info;
   }
 
-  // Sem código RDCleanPath: usa a mensagem extraída, ou explica o kind.
+  // Precedência da mensagem, do mais específico ao mais genérico:
+  //  1. message do próprio erro;
+  //  2. backtrace do WASM (causa do lado Rust);
+  //  3. explicação genérica pelo kind.
   if (rawMessage) {
     info.message = rawMessage;
+    return info;
+  }
+  if (wasmDetail) {
+    info.message = wasmDetail;
     return info;
   }
   info.message = explainByKind(info);
@@ -153,11 +168,16 @@ function extractMessage(obj: Record<string, unknown>): string | null {
   // 4. Último recurso: serializa APENAS campos com conteúdo útil. Sem este
   // filtro, um objeto como {message: ""} viraria '{"message":""}' — tecnicamente
   // não é "[object Object]", mas continua inútil para diagnosticar a falha.
+  //
+  // CUIDADO: objetos do wasm-bindgen têm a propriedade interna __wbg_ptr (um
+  // ponteiro linear-memory). Serializá-la produzia exatamente
+  // '{"__wbg_ptr":2100144}' na tela — vazamento de detalhe interno do WASM e
+  // zero informação útil ao operador.
   try {
     const useful: Record<string, unknown> = {};
     let count = 0;
     for (const [k, v] of Object.entries(obj)) {
-      if (k === 'stack') continue;
+      if (k === 'stack' || k === '__wbg_ptr') continue;
       if (v == null) continue;
       if (typeof v === 'string' && !v.trim()) continue;
       if (typeof v === 'object') continue;
@@ -170,6 +190,36 @@ function extractMessage(obj: Record<string, unknown>): string | null {
     }
   } catch { /* circular */ }
   return null;
+}
+
+/**
+ * Extrai detalhe dos MÉTODOS de um IronError do wasm-bindgen.
+ *
+ * Esses objetos expõem os dados por protótipo (kind/rdcleanpathDetails/
+ * backtrace), não como propriedades próprias — daí um Object.entries só enxergar
+ * __wbg_ptr. O backtrace é a última fonte útil: traz a cadeia de erro do Rust.
+ */
+function extractWasmDetail(obj: Record<string, unknown>): string | null {
+  // O backtrace pode vir como método (wasm-bindgen) ou campo.
+  try {
+    if (typeof obj.backtrace === 'function') {
+      const bt = (obj.backtrace as () => unknown)();
+      if (typeof bt === 'string' && bt.trim()) return tidyBacktrace(bt);
+    }
+  } catch { /* best-effort */ }
+  if (typeof obj.backtrace === 'string' && obj.backtrace.trim()) {
+    return tidyBacktrace(obj.backtrace);
+  }
+  return null;
+}
+
+/** Reduz o backtrace do Rust a algo exibível (sem poluir a UI com ruído). */
+function tidyBacktrace(bt: string): string {
+  const lines = bt.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return bt;
+  // A primeira linha costuma ser a causa real; o resto é cadeia de chamadas.
+  const first = lines[0];
+  return lines.length > 1 ? `${first}` : first;
 }
 
 /** Converte IronErrorKind (enum numérico do WASM) em nome legível. */
