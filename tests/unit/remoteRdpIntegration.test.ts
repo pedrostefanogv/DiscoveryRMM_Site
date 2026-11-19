@@ -56,24 +56,26 @@ describe('authToken é enviado (proxy_auth não pode ir vazio)', () => {
     expect(RDP_SRC).toContain('authToken: ticket.ticket');
   });
 
-  it('o cliente repassa authToken ao builder do WASM', () => {
-    expect(CLIENT_SRC).toContain('builder.authToken(authToken)');
+  it('o cliente repassa authToken ao builder do WASM (incondicional)', () => {
+    // O WASM valida presença e aborta com "auth_token missing": deve ser
+    // definido sempre, mesmo vazio.
+    expect(CLIENT_SRC).toContain("builder.authToken(authToken ?? '')");
   });
 });
 
-describe('setCursorStyleCallback não é registrado sem contexto', () => {
-  it('não chama setCursorStyleCallback (WASM aborta sem o context)', () => {
-    // O IronRDP exige setCursorStyleCallbackContext() ANTES de
-    // setCursorStyleCallback(). Registrar só o callback fazia o WASM abortar a
-    // conexão com "set_cursor_style_callback_context missing" — o erro que o
-    // operador via sem nenhum RDP ser tentado.
-    const calls = CLIENT_SRC.match(/builder\.setCursorStyleCallback\(/g) ?? [];
-    expect(calls.length).toBe(0);
+describe('setters de cursor são um PAR obrigatório', () => {
+  // O WASM valida AMBOS em connect(). Registrar só o callback aborta com
+  // "set_cursor_style_callback_context missing"; remover o callback (tentativa
+  // anterior de correção) aborta com "set_cursor_style_callback missing".
+  // Ou seja: os dois juntos, sempre.
+  it('registra callback E contexto', () => {
+    expect(CLIENT_SRC).toContain('builder.setCursorStyleCallback(');
+    expect(CLIENT_SRC).toContain('builder.setCursorStyleCallbackContext(');
   });
 
-  it('documenta o requisito na interface do builder', () => {
-    expect(CLIENT_SRC).toContain('setCursorStyleCallbackContext');
+  it('documenta os dois erros possíveis no fonte', () => {
     expect(CLIENT_SRC).toContain('set_cursor_style_callback_context missing');
+    expect(CLIENT_SRC).toContain('set_cursor_style_callback missing');
   });
 });
 

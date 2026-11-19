@@ -493,7 +493,7 @@ export default function RemoteRdp({
           {IRON_LABEL[ironStatus]}
         </span>
         {streamOpen && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-success/15 text-success font-medium border border-success/30">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-success text-white font-semibold shadow-sm">
             stream ativo
           </span>
         )}
@@ -509,7 +509,10 @@ export default function RemoteRdp({
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto p-2 bg-black/40">
+      {/* O fundo escuro do canvas NAO fica aqui: as caixas de status usam cores
+          semanticas e, sobre um backdrop preto translucido, ficavam lavadas no
+          tema claro. O preto fica apenas no canvas (letterbox do desktop). */}
+      <div className="flex-1 min-h-0 overflow-auto p-2 bg-background">
         {!sessionId || !jwt ? (
           <div className="flex flex-col items-center justify-center h-full text-muted">
             <div className="text-4xl mb-3">🖥</div>
@@ -518,13 +521,15 @@ export default function RemoteRdp({
           </div>
         ) : (
           <div className="flex flex-col h-full gap-2">
+            {/* Caixas de alerta com fundo SOLIDO + texto branco: legiveis nos dois
+                temas. Fundo translucido dependeria do que esta atras. */}
             {preflightError && (
-              <div className="rounded border border-danger/40 bg-danger/20 p-2 text-danger text-xs" role="alert">
+              <div className="rounded-md bg-danger px-3 py-2 text-white text-xs font-medium shadow-sm" role="alert">
                 ⛔ {preflightError}
               </div>
             )}
             {connectError && (
-              <div className="flex items-center gap-2 rounded border border-danger/40 bg-danger/20 p-2 text-danger text-xs" role="alert">
+              <div className="flex items-center gap-2 rounded-md bg-danger px-3 py-2 text-white text-xs font-medium shadow-sm" role="alert">
                 <span>⛔ {connectError}</span>
                 <span className="flex-1" />
                 {/* Falha de CREDENCIAL: o caminho de retry é o FORMULÁRIO abaixo.
@@ -533,7 +538,7 @@ export default function RemoteRdp({
                 {!needsCredentials && (
                   <button
                     type="button"
-                    className="px-2 py-1 rounded bg-danger/30 hover:bg-danger/50 transition-colors"
+                    className="px-2 py-1 rounded bg-white/20 hover:bg-white/30 transition-colors font-medium"
                     onClick={() => {
                       // Cada tentativa consome um ticket NOVO (uso único).
                       setConnectError(null);
@@ -546,19 +551,21 @@ export default function RemoteRdp({
               </div>
             )}
             {preflight && preflight.ready && !preflightError && (
-              <div className="rounded border border-success/40 bg-success/10 p-2 text-success text-xs">
-                RDP pronto no agent (TermService: {preflight.termServiceState ?? '—'}, porta {preflight.port ?? 3389}).
+              <div className="rounded-md bg-success px-3 py-2 text-white text-xs font-medium shadow-sm">
+                ✓ RDP pronto no agent (TermService: {preflight.termServiceState ?? '—'}, porta {preflight.port ?? 3389}).
               </div>
             )}
             {ironDetail && !preflightError && (
-              <div className="text-muted-foreground text-xs">{ironDetail}</div>
+              <div className="rounded-md border border-border bg-surface-light px-3 py-2 text-muted-foreground text-xs">
+                {ironDetail}
+              </div>
             )}
             {needsCredentials && (
               <form
                 onSubmit={submitCredentials}
-                className="rounded border border-warning/40 bg-warning/10 p-3 text-xs space-y-2"
+                className="rounded-md border border-warning/60 bg-surface-light p-3 text-xs space-y-2 shadow-sm"
               >
-                <p className="text-warning font-medium">
+                <p className="font-semibold text-foreground">
                   Informe as credenciais do Windows desta máquina para abrir a sessão RDP.
                 </p>
                 <div className="flex flex-wrap items-end gap-2">
@@ -609,6 +616,7 @@ export default function RemoteRdp({
                 </p>
               </form>
             )}
+            {/* Fundo preto SÓ no canvas: é a área do desktop remoto (letterbox). */}
             <canvas
               ref={canvasRef}
               width={DEFAULT_WIDTH}
@@ -617,12 +625,12 @@ export default function RemoteRdp({
               aria-label="Área de trabalho remota"
             />
             {error && (
-              <div className="rounded border border-danger/40 bg-danger/20 p-2 text-danger text-xs" role="alert">
+              <div className="rounded-md bg-danger px-3 py-2 text-white text-xs font-medium shadow-sm" role="alert">
                 ⛔ {error}
               </div>
             )}
             {downloadError && (
-              <div className="rounded border border-warning/40 bg-warning/20 p-2 text-warning text-xs">
+              <div className="rounded-md bg-warning px-3 py-2 text-white text-xs font-medium shadow-sm">
                 {downloadError}
               </div>
             )}

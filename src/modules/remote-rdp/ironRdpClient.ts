@@ -386,10 +386,12 @@ interface IronSessionBuilder {
   renderCanvas: (c: HTMLCanvasElement) => IronSessionBuilder;
   extension: (e: unknown) => IronSessionBuilder;
   /**
-   * CUIDADO: registrar isto SEM chamar setCursorStyleCallbackContext antes faz o
-   * WASM abortar a conexão ("set_cursor_style_callback_context missing").
+   * OBRIGATÓRIO junto com setCursorStyleCallbackContext. O WASM valida os dois
+   * em connect(); faltar qualquer um aborta com "set_cursor_style_callback
+   * missing" / "set_cursor_style_callback_context missing".
    */
   setCursorStyleCallback: (cb: (style: string) => void) => IronSessionBuilder;
+  /** OBRIGATÓRIO junto com setCursorStyleCallback (ver acima). */
   setCursorStyleCallbackContext: (context: unknown) => IronSessionBuilder;
   remoteClipboardChangedCallback: (cb: (data: unknown) => void) => IronSessionBuilder;
   forceClipboardUpdateCallback: (cb: () => void) => IronSessionBuilder;
@@ -432,23 +434,41 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
   builder.desktopSize(new mod.DesktopSize(width, height));
   builder.renderCanvas(canvas);
 
-  // Credenciais RDP. Vazias sao permitidas: o server pode usar credenciais
-  // salvas ou o operador pode ser promptado pelo proprio RDP.
-  if (username) builder.username(username);
-  if (password) builder.password(password);
+  // ATENÇÃO: o connect() do WASM VALIDA a presença destes campos e aborta com
+  // "username missing" / "password missing" / "auth_token missing". Por isso são
+  // definidos SEMPRE (mesmo vazios) — omitir a chamada é pior que passar "".
+  //
+  // Consequência prática: o formulário de credenciais é obrigatório, porque sem
+  // usuário o IronRDP não inicia a conexão.
+  builder.username(username ?? '');
+  builder.password(password ?? '');
+  builder.authToken(authToken ?? '');
   if (domain) builder.serverDomain(domain);
-  if (authToken) builder.authToken(authToken);
 
   // CredSSP/NLA. Necessario em Windows moderno que exige NLA no TermService.
   if (enableCredssp) {
     builder.extension(new mod.Extension('enable_credssp', true));
   }
 
-  // NÃO registrar setCursorStyleCallback: o IronRDP WASM exige
-  // setCursorStyleCallbackContext() ANTES, e sem o contexto ele ABORTA a conexão
-  // com "set_cursor_style_callback_context missing". Como o callback registrado
-  // era um no-op (não alterava o cursor), o certo é não registrá-lo — menos
-  // modos de falha para nenhuma perda de comportamento.
+  // Cursor: o WASM EXIGE os DOIS setters antes de connect(). A lista de
+  // validação do binário é literal:
+  //   username / destination / password / proxy_address / auth_token /
+  //   render_canvas / set_cursor_style_callback / set_cursor_style_callback_context
+  // Faltar qualquer um aborta o connect() ANTES de abrir o WebSocket — foi o que
+  // produziu "set_cursor_style_callback_context missing" e, depois de eu remover
+  // o callback, "set_cursor_style_callback missing" (o outro lado do mesmo par).
+  //
+  // O contexto é o objeto entregue ao callback quando o estilo muda; usamos o
+  // próprio canvas para aplicar o cursor via CSS.
+  const cursorContext = { canvas };
+  builder.setCursorStyleCallbackContext(cursorContext);
+  builder.setCursorStyleCallback((style: string) => {
+    // 'default' é o valor neutro; os demais são nomes de cursor CSS.
+    const css = !style || style === 'default' ? 'default' : style;
+    try {
+      canvas.style.cursor = css;
+    } catch { /* estilo inválido — mantém o padrão */ }
+  });
 
   let session: IronSession;
   try {
