@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   createNatsService,
   jwtExpiresAtUtc,
@@ -128,6 +128,12 @@ export default function RemoteRdp({
   const [rdpUnavailable, setRdpUnavailable] = useState(false);
   // Contador de tentativas: cada retry consome um ticket novo (uso único).
   const [connectAttempt, setConnectAttempt] = useState(0);
+  // Credenciais RDP. Necessárias porque o IronRDP RECUSA connect() sem usuário
+  // ("username missing"). Ficam apenas em memória — nunca em localStorage.
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [domain, setDomain] = useState('');
+  const [needsCredentials, setNeedsCredentials] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
   const [ironStatus, setIronStatus] = useState<IronRdpStatus>('idle');
   const [ironDetail, setIronDetail] = useState<string | null>(null);
@@ -378,8 +384,9 @@ export default function RemoteRdp({
           canvas: liveCanvas,
           proxyUrl,
           destination: `127.0.0.1:3389`,
-          username: '',
-          password: '',
+          username,
+          password,
+          domain,
           width: liveCanvas.width || DEFAULT_WIDTH,
           height: liveCanvas.height || DEFAULT_HEIGHT,
           enableCredssp: true,
@@ -412,6 +419,9 @@ export default function RemoteRdp({
         if (cancelled) return;
         const info = describeIronError(err);
         setConnectError(info.message);
+        // Falha de credencial: em vez de erro terminal, pede as credenciais.
+        // (O IronRDP recusa connect() sem usuário antes de abrir o WebSocket.)
+        setNeedsCredentials(info.needsCredentials === true);
       }
     })();
 
@@ -423,7 +433,27 @@ export default function RemoteRdp({
     // NÃO incluir preflightError/connectError aqui: eles são ESCRITOS por este
     // efeito e, como dependências, causariam re-execução e dead-end (o erro
     // viraria o próprio bloqueio da retentativa).
+    // username/password/domain NÃO entram nas dependências: mudá-los não deve
+    // reconectar sozinho (o formulário dispara via submitCreds -> connectAttempt).
   }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, cleanpathOutSubject]);
+
+  /**
+   * Envia as credenciais e tenta conectar.
+   *
+   * Não colocamos username/password nas dependências do efeito: o formulário
+   * atualiza o estado e incrementa connectAttempt, que é o gatilho explícito.
+   */
+  const submitCredentials = useCallback((e?: FormEvent) => {
+    e?.preventDefault();
+    if (!username.trim()) return;
+    setConnectError(null);
+    setConnectAttempt((n) => n + 1);
+  }, [username]);
+
+  // Limpa a senha da memória ao desmontar (troca de aba/encerramento).
+  useEffect(() => () => {
+    setPassword('');
+  }, []);
 
   const tone = status === 'connected'
     ? 'bg-success/20 text-success'
@@ -488,17 +518,22 @@ export default function RemoteRdp({
               <div className="flex items-center gap-2 rounded border border-danger/40 bg-danger/20 p-2 text-danger text-xs" role="alert">
                 <span>⛔ {connectError}</span>
                 <span className="flex-1" />
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded bg-danger/30 hover:bg-danger/50 transition-colors"
-                  onClick={() => {
-                    // Cada tentativa consome um ticket NOVO (uso único).
-                    setConnectError(null);
-                    setConnectAttempt((n) => n + 1);
-                  }}
-                >
-                  Tentar novamente
-                </button>
+                {/* Falha de CREDENCIAL: o caminho de retry é o FORMULÁRIO abaixo.
+                    Um "Tentar novamente" cego aqui repetiria o mesmo erro em loop,
+                    porque nada mudou (usuário continua ausente). */}
+                {!needsCredentials && (
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded bg-danger/30 hover:bg-danger/50 transition-colors"
+                    onClick={() => {
+                      // Cada tentativa consome um ticket NOVO (uso único).
+                      setConnectError(null);
+                      setConnectAttempt((n) => n + 1);
+                    }}
+                  >
+                    Tentar novamente
+                  </button>
+                )}
               </div>
             )}
             {preflight && preflight.ready && !preflightError && (
@@ -508,6 +543,62 @@ export default function RemoteRdp({
             )}
             {ironDetail && !preflightError && (
               <div className="text-muted-foreground text-xs">{ironDetail}</div>
+            )}
+            {needsCredentials && (
+              <form
+                onSubmit={submitCredentials}
+                className="rounded border border-warning/40 bg-warning/10 p-3 text-xs space-y-2"
+              >
+                <p className="text-warning font-medium">
+                  Informe as credenciais do Windows desta máquina para abrir a sessão RDP.
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Domínio (opcional)</span>
+                    <input
+                      type="text"
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      placeholder="DOMINIO"
+                      autoComplete="off"
+                      className="px-2 py-1 rounded bg-surface border border-border text-foreground w-36"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Usuário *</span>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="usuario ou usuario@dominio"
+                      autoComplete="username"
+                      required
+                      className="px-2 py-1 rounded bg-surface border border-border text-foreground w-52"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Senha</span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      className="px-2 py-1 rounded bg-surface border border-border text-foreground w-52"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={!username.trim()}
+                    className="px-3 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors disabled:opacity-50"
+                  >
+                    Conectar
+                  </button>
+                </div>
+                <p className="text-muted-foreground">
+                  As credenciais ficam apenas nesta aba e são enviadas dentro do túnel
+                  autenticado — nunca são gravadas no navegador.
+                </p>
+              </form>
             )}
             <canvas
               ref={canvasRef}

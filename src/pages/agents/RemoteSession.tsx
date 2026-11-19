@@ -34,6 +34,7 @@ import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
 import RemoteRdp from '@/modules/remote-rdp/RemoteRdp';
 import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
+import RegistryPanel from '@/modules/remote-registry/RegistryPanel';
 import { RemoteServices } from '@/modules/remote-processes/RemoteServices';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
 import {
@@ -47,7 +48,7 @@ import { realtimeConfig, resolveNatsWsUrl } from '@/config/realtime';
 import RemoteConsentNotice from '@/modules/remote-screen/RemoteConsentNotice';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
-type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'rdp' | 'processes' | 'services';
+type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'rdp' | 'processes' | 'services' | 'registry';
 type QualityMode = 'auto' | 'hd' | 'manual';
 
 // Modo HD: fidelidade máxima de imagem. O perfil "ultra" do backend é
@@ -615,6 +616,10 @@ export default function RemoteSession() {
   // processos pode ser reutilizada pela aba serviços (e vice-versa), evitando
   // stop+start desnecessário a cada troca de aba.
   const processSession = sessions.processes ?? sessions.services;
+  // 'registry' tem sessão PRÓPRIA (kind RemoteSessionKind.Registry): não
+  // compartilha canal com processos/serviços, porque o contrato NATS é outro
+  // (.registry.* vs .proc.*).
+  const registrySession = sessions.registry;
 
   // O popover de ajustes finos só existe com sessão de tela em modo Manual.
   // Fecha o estado quando a sessão cai/é encerrada para não reabrir sozinho
@@ -1642,6 +1647,7 @@ export default function RemoteSession() {
     { key: 'rdp', label: 'RDP' },
     { key: 'processes', label: 'Processos' },
     { key: 'services', label: 'Serviços' },
+    { key: 'registry', label: 'Registro' },
     { key: 'proxy', label: 'Proxy' },
   ];
 
@@ -1698,6 +1704,7 @@ export default function RemoteSession() {
     { key: 'files', label: 'Arquivos' },
     { key: 'rdp', label: 'RDP' },
     { key: 'processes', label: 'Processos' },
+    { key: 'registry', label: 'Registro' },
     { key: 'proxy', label: 'Proxy' },
   ];
   const activeLivenessTabs = livenessTabs.filter(({ key }) => !!sessions[key]);
@@ -2160,6 +2167,37 @@ export default function RemoteSession() {
               onConnect={() => startTabSession('processes')}
               conflict={sessionConflict}
               onForce={() => startTabSession('processes', true)}
+            />
+          )
+        )}
+
+        {activeTab === 'registry' && (
+          registrySession ? (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex-1 min-h-0">
+                <RegistryPanel
+                  key={`registry-${registrySession.sessionId}-${reconnectKeys.registry ?? 0}`}
+                  natsSubject={registrySession.natsSubject}
+                  natsUrl={registrySession.natsUrl}
+                  jwt={registrySession.jwt}
+                  nkeySeed={registrySession.nkeySeed}
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, registrySession.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
+                  isVisible={activeTab === 'registry'}
+                />
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Registro"
+              icon="🗝"
+              connecting={connectingTab === 'registry'}
+              onConnect={() => startTabSession('registry')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('registry', true)}
             />
           )
         )}

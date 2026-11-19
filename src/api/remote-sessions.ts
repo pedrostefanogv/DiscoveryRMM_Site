@@ -25,7 +25,7 @@ export interface StartRemoteSessionRequest {
     userId?: string;
     tenantId?: string;
     siteId?: string;
-    kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'rdp' | 'all';
+    kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'rdp' | 'registry' | 'all';
     transport: RemoteTransportInput;
     quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
     codec: RemoteCodecInput;

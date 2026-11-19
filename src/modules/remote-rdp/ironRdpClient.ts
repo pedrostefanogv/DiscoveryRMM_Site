@@ -63,6 +63,13 @@ export interface IronRdpErrorInfo {
   tlsAlertCode?: number;
   /** Código de erro de socket do Windows (WSA), quando aplicável. */
   wsaErrorCode?: number;
+  /**
+   * true quando a falha é de CREDENCIAL (usuário/senha ausente ou rejeitada).
+   * A UI usa isto para exibir o formulário de credenciais em vez de um erro
+   * terminal — o IronRDP recusa connect() com "username missing" quando o
+   * builder não recebeu usuário.
+   */
+  needsCredentials?: boolean;
 }
 
 /**
@@ -120,8 +127,19 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
     }
   } catch { /* best-effort */ }
 
+  // Sinaliza falha de credencial ANTES de qualquer return: um erro pode ser de
+  // credencial E trazer mensagem/código, e sem isto a UI nunca ofereceria o
+  // formulário (o return antecipado pularia a marcação).
+  info.needsCredentials = isCredentialError({
+    ...info,
+    message: rawMessage ?? wasmDetail ?? info.message,
+  });
+
   const code = info.rdcleanpathCode;
   if (code !== undefined) {
+    // Códigos RDCleanPath descrevem falha de PROXY/alvo, não de credencial do
+    // Windows: não devem abrir o formulário de credenciais.
+    info.needsCredentials = false;
     info.message = describeRdcCleanPathCode(code, info);
     return info;
   }
@@ -220,6 +238,29 @@ function tidyBacktrace(bt: string): string {
   // A primeira linha costuma ser a causa real; o resto é cadeia de chamadas.
   const first = lines[0];
   return lines.length > 1 ? `${first}` : first;
+}
+
+/**
+ * Informa se o erro é de credencial (ausente ou rejeitada).
+ *
+ * Cobre tanto o kind sancionado pelo WASM (WrongPassword/LogonFailure/
+ * AccessDenied) quanto as mensagens textuais que o IronRDP emite antes de
+ * abrir a conexão (ex.: "username missing", "password missing", "credentials
+ * required") — nesses casos o WebSocket nem chega a ser aberto.
+ */
+export function isCredentialError(info: IronRdpErrorInfo): boolean {
+  if (info.kind === 'WrongPassword' || info.kind === 'LogonFailure' || info.kind === 'AccessDenied') {
+    return true;
+  }
+  const msg = (info.message || '').toLowerCase();
+  return (
+    msg.includes('username missing') ||
+    msg.includes('password missing') ||
+    msg.includes('credentials missing') ||
+    msg.includes('credentials required') ||
+    msg.includes('missing username') ||
+    msg.includes('missing password')
+  );
 }
 
 /** Converte IronErrorKind (enum numérico do WASM) em nome legível. */
