@@ -127,6 +127,16 @@ export interface SessionCredentials {
     natsWssUrl?: string;
 }
 
+/**
+ * Ticket efêmero de uso único para o handshake WebSocket em /tunnel/ws.
+ * Espelha TunnelTicketResponseDto (RemoteSessionsController.cs:723).
+ */
+export interface TunnelTicket {
+    ticket: string;
+    expiresInSeconds: number;
+    expiresAtUtc: string;
+}
+
 export interface RecordingResponse {
     recordingId: string;
     sessionId: string;
@@ -179,6 +189,24 @@ export const remoteSessionsApi = {
         }
         return await res.text();
     },
+
+    /**
+     * Emite um ticket opaco de uso único (TTL curto) para autenticar o
+     * handshake WebSocket em /tunnel/ws.
+     *
+     * Por que não mandar o JWT: o endpoint /tunnel/ws recusa explicitamente
+     * ?access_token= na query string (UserAuthMiddleware.cs:53-55) — só aceita
+     * header Authorization ou este ticket. A URL do WebSocket não carrega
+     * headers, então o ticket é o único caminho.
+     *
+     * Endpoint: POST {BASE}/{agentId}/{sessionId}/tunnel/ticket
+     */
+    issueTunnelTicket: (agentId: string, sessionId: string): Promise<TunnelTicket> =>
+        api.post<TunnelTicket>(
+            `${BASE}/${encodeURIComponent(agentId)}/${encodeURIComponent(sessionId)}/tunnel/ticket`,
+            undefined,
+            { retryOnAuthError: false },
+        ),
 
     /** Estado do consentimento (polling enquanto o usuário local decide). */
     getConsentStatus: (agentId: string, sessionId: string): Promise<RemoteSessionConsentStatus> =>
