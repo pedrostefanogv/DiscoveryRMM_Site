@@ -237,18 +237,42 @@ function describeRdcCleanPathCode(code: number, info: IronRdpErrorInfo): string 
   }
 }
 
+/** Cache do modulo: o init() do wasm-bindgen deve rodar UMA vez por pagina. */
+let ironRdpModulePromise: Promise<IronRdpModule> | null = null;
+
 /**
  * Importa o modulo WASM de forma dinamica (chunk separado).
- * Exportado para permitir mock nos testes sem carregar 5 MiB.
+ *
+ * O resultado e MEMOIZADO: chamar init() duas vezes no mesmo modulo e
+ * desperdicio, e chamadas concorrentes poderiam instanciar o WASM em duplicata.
  */
 export async function loadIronRdpModule(): Promise<IronRdpModule> {
-  const mod = await import('ironrdp-wasm');
-  // O init() carrega o .wasm; chamadas repetidas sao baratas (idempotente no glue).
-  await mod.default();
-  if (typeof mod.setup === 'function') {
-    try { mod.setup('warn'); } catch { /* logging opcional */ }
+  if (!ironRdpModulePromise) {
+    ironRdpModulePromise = (async () => {
+      const mod = await import('ironrdp-wasm');
+      await mod.default();
+      if (typeof mod.setup === 'function') {
+        try { mod.setup('warn'); } catch { /* logging opcional */ }
+      }
+      return mod as unknown as IronRdpModule;
+    })().catch((err) => {
+      // Falha no download/init nao deve envenenar o cache para sempre.
+      ironRdpModulePromise = null;
+      throw err;
+    });
   }
-  return mod as unknown as IronRdpModule;
+  return ironRdpModulePromise;
+}
+
+/**
+ * Pre-carrega o modulo WASM sem conectar.
+ *
+ * Chamado ANTES de pedir o ticket do /tunnel/ws: o ticket e de uso unico com
+ * TTL de 60s, e o binario tem ~4,89 MB. Baixar o WASM depois de emitir o
+ * ticket fazia o ticket expirar no primeiro acesso em rede lenta.
+ */
+export async function preloadIronRdp(): Promise<void> {
+  await loadIronRdpModule();
 }
 
 /** Superficie minima do modulo WASM que realmente usamos. */

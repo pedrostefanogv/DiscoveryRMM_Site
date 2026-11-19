@@ -12,6 +12,7 @@ import { parseTunnelControl, type TunnelControlMsg } from '@/modules/remote-prox
 import {
   connectIronRdp,
   describeIronError,
+  preloadIronRdp,
   type IronRdpSessionHandle,
   type IronRdpStatus,
 } from './ironRdpClient';
@@ -345,8 +346,7 @@ export default function RemoteRdp({
   // ── Sessão IronRDP WASM (renderização no canvas) ──
   useEffect(() => {
     if (!sessionId || !jwt || !natsUrl) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvasRef.current) return;
     // Só NÃO conecta quando o agent afirmou que o RDP está indisponível.
     // Erros de conexão ficam em estado separado para permitir retry.
     if (rdpUnavailable) return;
@@ -356,19 +356,32 @@ export default function RemoteRdp({
 
     void (async () => {
       try {
+        // Pré-carrega o WASM (~4,89 MB) ANTES de pedir o ticket: o ticket tem
+        // TTL de 60s e é de uso único, então em primeiro acesso (ou rede lenta)
+        // ele expiraria durante o download e o WebSocket tomaria 401.
+        setIronStatus('loading');
+        await preloadIronRdp();
+        if (cancelled) return;
+        // Re-lê o canvas APÓS os awaits: o nó capturado no início do efeito pode
+        // ter sido desmontado (troca de aba/reconexão) e desenhar num canvas
+        // destacado deixaria a tela preta.
+        const liveCanvas = canvasRef.current;
+        if (!liveCanvas) return;
+
         // O /tunnel/ws exige ticket efêmero de uso único: a URL do WebSocket não
         // carrega headers e o endpoint recusa ?access_token= na query string.
+        // Pedido o MAIS TARDE possível, imediatamente antes de conectar.
         const ticket = await remoteSessionsApi.issueTunnelTicket(agentId, sessionId);
         if (cancelled) return;
         const proxyUrl = buildProxyUrl(natsUrl, agentId, sessionId, ticket.ticket);
         const h = await connectIronRdp({
-          canvas,
+          canvas: liveCanvas,
           proxyUrl,
           destination: `127.0.0.1:3389`,
           username: '',
           password: '',
-          width: canvas.width || DEFAULT_WIDTH,
-          height: canvas.height || DEFAULT_HEIGHT,
+          width: liveCanvas.width || DEFAULT_WIDTH,
+          height: liveCanvas.height || DEFAULT_HEIGHT,
           enableCredssp: true,
           // proxy_auth do RDCleanPath. O agent é fail-closed: sem isto ele
           // responde Error PDU 401 e o canvas fica preto. Reutilizamos o ticket
