@@ -524,7 +524,9 @@ const TERM_THEME_DARK = {
   magenta: '#c084fc',
   cyan: '#22d3ee',
   white: '#e2e8f0',
-  brightBlack: '#475569',
+  // brightBlack = "DarkGray" do console (parâmetros do PSReadLine, -switches).
+  // #475569 ficava ~2.4:1 sobre o fundo; #94a3b8 dá ~6.9:1.
+  brightBlack: '#94a3b8',
   brightRed: '#fca5a5',
   brightGreen: '#86efac',
   brightYellow: '#fde047',
@@ -534,28 +536,33 @@ const TERM_THEME_DARK = {
   brightWhite: '#f8fafc',
 };
 
+// Paleta clara: shells (PowerShell/PSReadLine, cmd) assumem fundo ESCURO e
+// pintam texto com white/brightWhite/brightYellow (ex.: "ping" em amarelo e
+// "google.com" em branco). Num fundo branco isso some — por isso, como no tema
+// claro do VS Code/Windows Terminal, white/brightWhite viram cinzas escuros e
+// as cores "bright" usam tons mais fortes (todas ≥ ~4.5:1 sobre #ffffff).
 const TERM_THEME_LIGHT = {
   background: '#ffffff',
   foreground: '#0f172a',
   cursor: '#2563eb',
   cursorAccent: '#ffffff',
   selectionBackground: '#bfdbfe',
-  black: '#1e293b',
-  red: '#dc2626',
-  green: '#16a34a',
-  yellow: '#ca8a04',
-  blue: '#2563eb',
-  magenta: '#9333ea',
-  cyan: '#0891b2',
-  white: '#e2e8f0',
-  brightBlack: '#475569',
-  brightRed: '#ef4444',
-  brightGreen: '#22c55e',
-  brightYellow: '#eab308',
-  brightBlue: '#3b82f6',
-  brightMagenta: '#a855f7',
-  brightCyan: '#06b6d4',
-  brightWhite: '#f8fafc',
+  black: '#0f172a',
+  red: '#b91c1c',
+  green: '#15803d',
+  yellow: '#a16207',
+  blue: '#1d4ed8',
+  magenta: '#7e22ce',
+  cyan: '#0e7490',
+  white: '#334155',
+  brightBlack: '#64748b',
+  brightRed: '#dc2626',
+  brightGreen: '#166534',
+  brightYellow: '#b45309',
+  brightBlue: '#2563eb',
+  brightMagenta: '#9333ea',
+  brightCyan: '#0f766e',
+  brightWhite: '#1e293b',
 };
 
 // ── Tema por shell ──
@@ -865,6 +872,10 @@ export default function RemoteTerminal({
       fontSize: 14,
       fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", monospace',
       theme: themeFor(mode, shellKindRef.current),
+      // Rede de segurança (WCAG AA): o xterm ajusta automaticamente qualquer
+      // cor de texto (inclusive truecolor/256 enviados pelo shell) que fique
+      // abaixo de 4.5:1 contra o fundo — vale para tema claro e escuro.
+      minimumContrastRatio: 4.5,
       allowProposedApi: true,
       scrollback: 5000,
     });
