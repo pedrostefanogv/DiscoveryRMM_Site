@@ -61,6 +61,8 @@ export interface IronRdpErrorInfo {
   rdcleanpathCode?: number;
   httpStatusCode?: number;
   tlsAlertCode?: number;
+  /** Código de erro de socket do Windows (WSA), quando aplicável. */
+  wsaErrorCode?: number;
 }
 
 /**
@@ -72,15 +74,29 @@ export interface IronRdpErrorInfo {
  *   16384..32767 = implementation-specific.
  */
 export function describeIronError(err: unknown): IronRdpErrorInfo {
-  const info: IronRdpErrorInfo = { kind: 'unknown', message: String(err) };
-  if (!err || typeof err !== 'object') return info;
+  const info: IronRdpErrorInfo = { kind: 'unknown', message: 'Erro desconhecido no cliente RDP.' };
+  if (err == null) return info;
+
+  // Erro lançado como string simples.
+  if (typeof err === 'string') {
+    info.message = err;
+    return info;
+  }
+  if (typeof err !== 'object') {
+    info.message = String(err);
+    return info;
+  }
 
   const anyErr = err as Record<string, unknown>;
+
+  // Mensagem crua do erro/objeto (NUNCA usar String(objeto): vira "[object Object]").
+  const rawMessage = extractMessage(anyErr);
 
   try {
     if (typeof anyErr.kind === 'function') {
       const k = (anyErr.kind as () => unknown)();
-      info.kind = String(k);
+      // IronErrorKind é um enum numérico; converte para nome legível.
+      info.kind = kindName(k);
     }
   } catch { /* best-effort */ }
 
@@ -91,6 +107,7 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
         if (typeof d.errorCode === 'number') info.rdcleanpathCode = d.errorCode;
         if (typeof d.httpStatusCode === 'number') info.httpStatusCode = d.httpStatusCode;
         if (typeof d.tlsAlertCode === 'number') info.tlsAlertCode = d.tlsAlertCode;
+        if (typeof d.wsaErrorCode === 'number') info.wsaErrorCode = d.wsaErrorCode;
       }
     }
   } catch { /* best-effort */ }
@@ -101,11 +118,96 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
     return info;
   }
 
-  // Sem codigo RDCleanPath: usa a mensagem do proprio erro.
-  if (typeof anyErr.message === 'string' && anyErr.message) {
-    info.message = anyErr.message;
+  // Sem código RDCleanPath: usa a mensagem extraída, ou explica o kind.
+  if (rawMessage) {
+    info.message = rawMessage;
+    return info;
   }
+  info.message = explainByKind(info);
   return info;
+}
+
+/**
+ * Extrai uma mensagem legível de um erro sem nunca produzir "[object Object]".
+ *
+ * Erros do wasm-bindgen são objetos simples (não instâncias de Error), então
+ * String(err) devolveria "[object Object]" — que era exatamente o que a UI
+ * mostrava, escondendo a causa real da falha.
+ */
+function extractMessage(obj: Record<string, unknown>): string | null {
+  // 1. Error nativo ou qualquer objeto com message string.
+  if (typeof obj.message === 'string' && obj.message.trim()) {
+    return obj.message;
+  }
+  // 2. Erro do wasm-bindgen às vezes traz a descrição em campos próprios.
+  for (const key of ['error', 'reason', 'description', 'detail', 'backtrace']) {
+    const v = obj[key];
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  // 3. Objetos aninhados de erro.
+  const cause = obj.cause;
+  if (cause && typeof cause === 'object') {
+    const nested = extractMessage(cause as Record<string, unknown>);
+    if (nested) return nested;
+  }
+  // 4. Último recurso: serializa APENAS campos com conteúdo útil. Sem este
+  // filtro, um objeto como {message: ""} viraria '{"message":""}' — tecnicamente
+  // não é "[object Object]", mas continua inútil para diagnosticar a falha.
+  try {
+    const useful: Record<string, unknown> = {};
+    let count = 0;
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === 'stack') continue;
+      if (v == null) continue;
+      if (typeof v === 'string' && !v.trim()) continue;
+      if (typeof v === 'object') continue;
+      useful[k] = v;
+      if (++count >= 8) break;
+    }
+    if (count > 0) {
+      const json = JSON.stringify(useful);
+      if (json && json !== '{}') return json;
+    }
+  } catch { /* circular */ }
+  return null;
+}
+
+/** Converte IronErrorKind (enum numérico do WASM) em nome legível. */
+function kindName(k: unknown): string {
+  if (typeof k === 'string') return k;
+  // IronErrorKind: 0 General, 1 WrongPassword, 2 LogonFailure, 3 AccessDenied,
+  // 4 RDCleanPath, 5 ProxyConnect, 6 NegotiationFailure.
+  const map: Record<number, string> = {
+    0: 'General',
+    1: 'WrongPassword',
+    2: 'LogonFailure',
+    3: 'AccessDenied',
+    4: 'RDCleanPath',
+    5: 'ProxyConnect',
+    6: 'NegotiationFailure',
+  };
+  if (typeof k === 'number' && map[k]) return map[k];
+  return 'unknown';
+}
+
+/** Explica a falha quando não há mensagem nem código disponíveis. */
+function explainByKind(info: IronRdpErrorInfo): string {
+  switch (info.kind) {
+    case 'ProxyConnect':
+      return 'Não foi possível conectar ao proxy RDCleanPath (WebSocket /tunnel/ws). Verifique se o agent está atualizado e se a rede permite WebSocket.';
+    case 'NegotiationFailure':
+      return 'Falha na negociação RDP com a máquina remota.';
+    case 'AccessDenied':
+      return 'Acesso negado pelo servidor RDP.';
+    case 'WrongPassword':
+      return 'Usuário ou senha RDP incorretos.';
+    case 'LogonFailure':
+      return 'Não foi possível efetuar logon na máquina remota.';
+    case 'RDCleanPath':
+      return 'Erro no handshake RDCleanPath com o agent.';
+    default:
+      return 'Falha ao iniciar o cliente RDP (sem detalhes do erro). Verifique o console do navegador.';
+  }
 }
 
 /** Mensagem legivel para um codigo de erro RDCleanPath. */

@@ -280,7 +280,8 @@ export default function RemoteRdp({
             setPreflightError(null);
           }
         } else if (ctrl.error) {
-          setPreflightError(ctrl.error);
+          // ctrl.error vem de JSON do agent e pode ser objeto; nunca renderizar cru.
+          setPreflightError(typeof ctrl.error === 'string' ? ctrl.error : String(ctrl.error));
         }
         ctrlCallbacks.forEach((cb) => cb(ctrl));
         return;
@@ -292,7 +293,9 @@ export default function RemoteRdp({
       } else if (ctrl.op === 'close') {
         setStreamOpen(false);
       } else if (ctrl.op === 'error') {
-        setPreflightError(ctrl.error ?? 'Erro no túnel RDP do agent.');
+        setPreflightError(
+          typeof ctrl.error === 'string' && ctrl.error ? ctrl.error : 'Erro no túnel RDP do agent.',
+        );
         // Erro de túnel pode indicar RDP indisponível no agent.
         setRdpUnavailable(true);
       }
@@ -367,6 +370,11 @@ export default function RemoteRdp({
           width: canvas.width || DEFAULT_WIDTH,
           height: canvas.height || DEFAULT_HEIGHT,
           enableCredssp: true,
+          // proxy_auth do RDCleanPath. O agent é fail-closed: sem isto ele
+          // responde Error PDU 401 e o canvas fica preto. Reutilizamos o ticket
+          // efêmero já emitido — ele é de uso único, mas esta é a MESMA conexão
+          // (a API o consome no upgrade e o agent valida presença/formato).
+          authToken: ticket.ticket,
           callbacks: {
             onStatus: (s, detail) => {
               if (cancelled) return;
