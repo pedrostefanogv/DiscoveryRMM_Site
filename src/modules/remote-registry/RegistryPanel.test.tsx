@@ -59,9 +59,11 @@ describe('RegistryPanel — carregamento inicial', () => {
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
 
         await waitFor(() => {
-            expect(screen.getByTestId('registry-current-path').textContent).toContain('HKLM');
+            expect(screen.getByTestId('registry-current-path').getAttribute('data-path')).toBe('HKLM');
         });
         expect(sendMock).toHaveBeenCalledWith('listKey', expect.objectContaining({ hive: 'HKLM', path: '' }));
+        // A árvore agora mostra os filhos da raiz (recursiva), não só os hives.
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SOFTWARE')).toBeTruthy());
     });
 
     it('mostra a nota do agente (ex.: HKCU é a chave do SYSTEM)', async () => {
@@ -102,23 +104,22 @@ describe('RegistryPanel — resposta obsoleta não sobrescreve a chave atual', (
         });
 
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
-        await waitFor(() => expect(screen.getByText('LENTA')).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-LENTA')).toBeTruthy());
 
         // Clica em LENTA (fica pendente), depois em RAPIDA (resolve na hora).
-        fireEvent.click(screen.getByText('LENTA'));
-        fireEvent.click(screen.getByText('RAPIDA'));
+        fireEvent.click(screen.getByTestId('registry-subkey-LENTA'));
+        fireEvent.click(screen.getByTestId('registry-subkey-RAPIDA'));
 
         await waitFor(() => {
-            expect(screen.getByTestId('registry-current-path').textContent).toContain('RAPIDA');
+            expect(screen.getByTestId('registry-current-path').getAttribute('data-path')).toBe('HKLM\\RAPIDA');
         });
 
         // Agora a resposta antiga chega. NÃO pode sobrescrever.
         deferred.resolve?.(listOk('HKLM', 'LENTA', ['resultado-lento']));
 
         await waitFor(() => {
-            expect(screen.getByTestId('registry-current-path').textContent).toContain('RAPIDA');
+            expect(screen.getByTestId('registry-current-path').getAttribute('data-path')).toBe('HKLM\\RAPIDA');
         });
-        expect(screen.getByTestId('registry-current-path').textContent).not.toContain('LENTA');
     });
 });
 
@@ -135,16 +136,20 @@ describe('RegistryPanel — falha de navegação revoga a escrita', () => {
         });
 
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
-        await waitFor(() => expect(screen.getByText('PROIBIDA')).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-PROIBIDA')).toBeTruthy());
 
-        fireEvent.click(screen.getByText('PROIBIDA'));
+        // Clica no chip de subchave (a árvore também mostra o nome; o testid
+        // desambigua e garante que estamos acionando a navegação do painel).
+        fireEvent.click(screen.getByTestId('registry-subkey-PROIBIDA'));
 
         await waitFor(() => {
-            expect(screen.getByText(/protegida por política/i)).toBeTruthy();
+            expect(screen.getByTestId('registry-error')).toBeTruthy();
         });
+        expect(screen.getByTestId('registry-error').textContent).toMatch(/política/i);
 
         // O botão "Novo valor" precisa estar desabilitado após a falha.
-        const novo = screen.getByText('Novo valor') as HTMLButtonElement;
+        // (getByRole, não getByText: o estado vazio também menciona o texto.)
+        const novo = screen.getByRole('button', { name: 'Novo valor' }) as HTMLButtonElement;
         expect(novo.disabled).toBe(true);
     });
 
@@ -158,8 +163,8 @@ describe('RegistryPanel — falha de navegação revoga a escrita', () => {
         });
 
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
-        await waitFor(() => expect(screen.getByText('SEMACESSO')).toBeTruthy());
-        fireEvent.click(screen.getByText('SEMACESSO'));
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SEMACESSO')).toBeTruthy());
+        fireEvent.click(screen.getByTestId('registry-subkey-SEMACESSO'));
 
         await waitFor(() => {
             // Diferente de "protegida por política": aqui é privilégio do SO.
@@ -178,12 +183,15 @@ describe('RegistryPanel — chave somente-leitura', () => {
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
 
         await waitFor(() => {
-            expect(screen.getByText(/Somente leitura nesta chave/)).toBeTruthy();
+            expect(screen.getByTestId('registry-readonly')).toBeTruthy();
         });
-        const novo = screen.getByText('Novo valor') as HTMLButtonElement;
-        expect(novo.disabled).toBe(true);
+        const banner = screen.getByTestId('registry-readonly');
+        expect(banner.textContent).toMatch(/Somente leitura nesta chave/);
         // O motivo precisa estar visível — não basta desabilitar.
-        expect(screen.getByText(/somente leitura para diagnóstico/)).toBeTruthy();
+        expect(banner.textContent).toMatch(/somente leitura para diagnóstico/);
+
+        const novo = screen.getByRole('button', { name: 'Novo valor' }) as HTMLButtonElement;
+        expect(novo.disabled).toBe(true);
     });
 });
 
@@ -201,8 +209,8 @@ describe('RegistryPanel — exclusão de chave', () => {
         });
 
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
-        await waitFor(() => expect(screen.getByText('MinhaEmpresa')).toBeTruthy());
-        fireEvent.click(screen.getByText('MinhaEmpresa'));
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-MinhaEmpresa')).toBeTruthy());
+        fireEvent.click(screen.getByTestId('registry-subkey-MinhaEmpresa'));
         await waitFor(() => expect(screen.getByText('Excluir chave')).toBeTruthy());
 
         expect(screen.getByText('Excluir com subchaves')).toBeTruthy();
@@ -224,8 +232,8 @@ describe('RegistryPanel — exclusão de chave', () => {
         });
 
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
-        await waitFor(() => expect(screen.getByText('MinhaEmpresa')).toBeTruthy());
-        fireEvent.click(screen.getByText('MinhaEmpresa'));
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-MinhaEmpresa')).toBeTruthy());
+        fireEvent.click(screen.getByTestId('registry-subkey-MinhaEmpresa'));
         await waitFor(() => expect(screen.getByText('Excluir chave')).toBeTruthy());
 
         fireEvent.click(screen.getByText('Excluir chave'));
@@ -252,8 +260,8 @@ describe('RegistryPanel — exclusão de chave', () => {
         });
 
         render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
-        await waitFor(() => expect(screen.getByText('MinhaEmpresa')).toBeTruthy());
-        fireEvent.click(screen.getByText('MinhaEmpresa'));
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-MinhaEmpresa')).toBeTruthy());
+        fireEvent.click(screen.getByTestId('registry-subkey-MinhaEmpresa'));
         await waitFor(() => expect(screen.getByText('Excluir chave')).toBeTruthy());
         fireEvent.click(screen.getByText('Excluir chave'));
         await waitFor(() => expect(screen.getByText('Cancelar')).toBeTruthy());

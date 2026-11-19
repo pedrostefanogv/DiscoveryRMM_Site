@@ -455,17 +455,22 @@ export default function RemoteRdp({
     setPassword('');
   }, []);
 
+  // Chips de estado com fundo SÓLIDO e texto branco: funciona nos dois temas.
+  // A versão anterior (bg-*/20 + text-*) lavava no tema claro, porque as cores
+  // semânticas claras (#15803d etc.) são escuras e o fundo a 20% ficava quase branco.
   const tone = status === 'connected'
-    ? 'bg-success/20 text-success'
+    ? 'bg-success text-white'
     : status === 'error'
-      ? 'bg-danger/20 text-danger'
-      : 'bg-warning/20 text-warning';
+      ? 'bg-danger text-white'
+      : 'bg-warning text-white';
 
   const ironTone = ironStatus === 'connected'
-    ? 'bg-success/20 text-success'
+    ? 'bg-success text-white'
     : ironStatus === 'error'
-      ? 'bg-danger/20 text-danger'
-      : 'bg-warning/20 text-warning';
+      ? 'bg-danger text-white'
+      : ironStatus === 'idle'
+        ? 'bg-muted text-white'
+        : 'bg-warning text-white';
 
   const IRON_LABEL: Record<IronRdpStatus, string> = {
     idle: 'RDP inativo',
@@ -479,19 +484,23 @@ export default function RemoteRdp({
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-surface border-b border-border text-xs">
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium ${tone}`}>
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold shadow-sm ${tone}`}>
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/90" aria-hidden />
           {STATUS_LABEL[status]}
         </span>
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium ${ironTone}`}>
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold shadow-sm ${ironTone}`}>
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/90" aria-hidden />
           {IRON_LABEL[ironStatus]}
         </span>
-        {streamOpen && <span className="text-success">stream ativo</span>}
+        {streamOpen && (
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-success/15 text-success font-medium border border-success/30">
+            stream ativo
+          </span>
+        )}
         <span className="flex-1" />
         <button
           type="button"
-          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/20 text-primary hover:bg-primary/30 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors disabled:opacity-50"
           onClick={() => { void handleDownloadRdp(); }}
           disabled={downloading || !sessionId || !agentId}
           title="Baixa o arquivo .rdp (mstsc). Requer o discovery-agent.exe --rdp-tunnel rodando na sua máquina apontando para esta sessão."

@@ -61,6 +61,32 @@ describe('authToken é enviado (proxy_auth não pode ir vazio)', () => {
   });
 });
 
+describe('setCursorStyleCallback não é registrado sem contexto', () => {
+  it('não chama setCursorStyleCallback (WASM aborta sem o context)', () => {
+    // O IronRDP exige setCursorStyleCallbackContext() ANTES de
+    // setCursorStyleCallback(). Registrar só o callback fazia o WASM abortar a
+    // conexão com "set_cursor_style_callback_context missing" — o erro que o
+    // operador via sem nenhum RDP ser tentado.
+    const calls = CLIENT_SRC.match(/builder\.setCursorStyleCallback\(/g) ?? [];
+    expect(calls.length).toBe(0);
+  });
+
+  it('documenta o requisito na interface do builder', () => {
+    expect(CLIENT_SRC).toContain('setCursorStyleCallbackContext');
+    expect(CLIENT_SRC).toContain('set_cursor_style_callback_context missing');
+  });
+});
+
+describe('chips de estado são legíveis nos dois temas', () => {
+  it('usa fundo sólido em vez de bg-*/20 com texto escuro', () => {
+    // bg-success/20 + text-success lava no tema claro (texto #15803d sobre fundo
+    // quase branco). O padrão correto é fundo sólido com texto branco.
+    expect(RDP_SRC).toContain('bg-success text-white');
+    expect(RDP_SRC).toContain('bg-danger text-white');
+    expect(RDP_SRC).not.toMatch(/bg-success\/20 text-success/);
+  });
+});
+
 describe('erros nunca renderizam [object Object]', () => {
   it('não usa String(err) como fallback de mensagem', () => {
     expect(CLIENT_SRC).not.toContain('message: String(err)');

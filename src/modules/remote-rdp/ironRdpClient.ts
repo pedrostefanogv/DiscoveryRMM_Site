@@ -385,7 +385,12 @@ interface IronSessionBuilder {
   desktopSize: (v: unknown) => IronSessionBuilder;
   renderCanvas: (c: HTMLCanvasElement) => IronSessionBuilder;
   extension: (e: unknown) => IronSessionBuilder;
+  /**
+   * CUIDADO: registrar isto SEM chamar setCursorStyleCallbackContext antes faz o
+   * WASM abortar a conexão ("set_cursor_style_callback_context missing").
+   */
   setCursorStyleCallback: (cb: (style: string) => void) => IronSessionBuilder;
+  setCursorStyleCallbackContext: (context: unknown) => IronSessionBuilder;
   remoteClipboardChangedCallback: (cb: (data: unknown) => void) => IronSessionBuilder;
   forceClipboardUpdateCallback: (cb: () => void) => IronSessionBuilder;
   connect: () => Promise<IronSession>;
@@ -439,8 +444,11 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
     builder.extension(new mod.Extension('enable_credssp', true));
   }
 
-  // Callbacks opcionais de clipboard/cursor (best-effort).
-  builder.setCursorStyleCallback(() => { /* estilo padrao */ });
+  // NÃO registrar setCursorStyleCallback: o IronRDP WASM exige
+  // setCursorStyleCallbackContext() ANTES, e sem o contexto ele ABORTA a conexão
+  // com "set_cursor_style_callback_context missing". Como o callback registrado
+  // era um no-op (não alterava o cursor), o certo é não registrá-lo — menos
+  // modos de falha para nenhuma perda de comportamento.
 
   let session: IronSession;
   try {

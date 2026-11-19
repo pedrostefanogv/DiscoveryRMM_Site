@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRegistryStream } from './useRegistryStream';
+import { RegistryTree } from './RegistryTree';
+import { RegistryValueGrid } from './RegistryValueGrid';
 import { RegistryValueEditor } from './RegistryValueEditor';
 import {
     REGISTRY_HIVES,
@@ -10,36 +12,28 @@ import {
     type RegistryListPage,
     type RegistryValueEntry,
 } from './registryTypes';
-import {
-    base64ToHexPreview,
-    displayValueName,
-    describeErrorKind,
-    formatValueForDisplay,
-    hexWidthForType,
-    isEditableType,
-    toHexDisplay,
-    typeLabel,
-} from './registryFormat';
+import { describeErrorKind, displayValueName } from './registryFormat';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PAINEL DO REGISTRO — árvore de navegação + grade de valores + edição.
+// PAINEL DO REGISTRO — layout de duas colunas, como o editor do Windows.
 //
-// Recebe as credenciais NATS já emitidas pelo console (mesmo contrato dos outros
-// módulos remotos) e não conhece a API REST: toda a operação vai pelo canal
-// .registry.req/.registry.resp da sessão.
+// Mudanças em relação à versão anterior (após feedback de uso real):
+//
+//  1. ÁRVORE RECURSIVA (RegistryTree) no lugar de uma lista de um nível. Antes,
+//     clicar numa subchave NAVEGAVA e perdia o contexto, então a árvore parecia
+//     não funcionar.
+//  2. PAINEL REDIMENSIONÁVEL: a árvore ocupava 288px fixos e a grade ficava
+//     espremida, cortando o valor. Agora a divisória é arrastável (e persiste).
+//  3. ALTURA TOTAL: o container usa h-full/min-h-0 em toda a cadeia, para a
+//     grade ocupar a tela em vez de ficar com uma faixa mínima.
+//  4. BARRA DE ENDEREÇO navegável (breadcrumb): mostra o caminho completo e
+//     permite clicar em qualquer ancestral.
+//  5. CARREGAMENTO NÃO-BLOQUEANTE: a árvore continua utilizável enquanto uma
+//     chave lenta carrega (antes o conteúdo inteiro virava "Carregando…").
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RegistryPanelProps {
     natsSubject: string;
-    /**
-     * URL WSS do NATS e JWT escopado.
-     *
-     * Opcionais para casar com o contrato dos módulos irmãos (RemoteProcesses,
-     * RemoteFiles): o TabSession do console declara os dois como opcionais, e o
-     * painel só é renderizado quando a sessão existe. Um valor ausente aqui
-     * vira string vazia e o hook reporta a falha de conexão — em vez de o
-     * componente quebrar na montagem.
-     */
     natsUrl?: string;
     jwt?: string;
     nkeySeed?: string;
@@ -47,14 +41,21 @@ export interface RegistryPanelProps {
     isVisible?: boolean;
 }
 
-/** Nó carregado da árvore: guarda os filhos já buscados (lazy). */
-interface TreeNode {
-    hive: RegistryHive;
-    path: string;
-    subkeys: string[];
-    loaded: boolean;
-    loading: boolean;
-    error: string | null;
+const TREE_WIDTH_KEY = 'discovery.registry.treeWidth';
+const TREE_MIN = 180;
+const TREE_MAX = 640;
+const TREE_DEFAULT = 300;
+
+function readStoredTreeWidth(): number {
+    try {
+        const raw = window.localStorage.getItem(TREE_WIDTH_KEY);
+        if (!raw) return TREE_DEFAULT;
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isNaN(parsed)) return TREE_DEFAULT;
+        return Math.min(TREE_MAX, Math.max(TREE_MIN, parsed));
+    } catch {
+        return TREE_DEFAULT;
+    }
 }
 
 export function RegistryPanel({
@@ -75,18 +76,19 @@ export function RegistryPanel({
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [note, setNote] = useState<string | null>(null);
-    const [writable, setWritable] = useState(true);
+    const [writable, setWritable] = useState(false);
     const [denyReason, setDenyReason] = useState('');
-    const [expanded, setExpanded] = useState<Record<string, TreeNode>>({});
     const [history, setHistory] = useState<Array<{ hive: RegistryHive; path: string }>>([]);
     const [forward, setForward] = useState<Array<{ hive: RegistryHive; path: string }>>([]);
 
     const [editingValue, setEditingValue] = useState<RegistryValueEntry | null>(null);
     const [creatingValue, setCreatingValue] = useState(false);
-    const [pendingKey, setPendingKey] = useState<{ action: 'deleteKey'; path: string; recursive: boolean } | null>(null);
+    const [pendingKey, setPendingKey] = useState<{ path: string; recursive: boolean } | null>(null);
     const [mutationError, setMutationError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
+    const [treeWidth, setTreeWidth] = useState<number>(() => readStoredTreeWidth());
+    const [filter, setFilter] = useState('');
 
     const mountedRef = useRef(true);
     useEffect(() => {
@@ -94,18 +96,14 @@ export function RegistryPanel({
         return () => { mountedRef.current = false; };
     }, []);
 
-    // Sequência de navegação: descarta a resposta de um pedido ANTIGO que chegue
-    // depois de um mais recente.
-    //
-    // Sem isto há uma corrida real: clicar em duas subchaves em sequência dispara
-    // duas chamadas; se a primeira responder DEPOIS da segunda, o painel acaba
-    // mostrando o conteúdo da chave errada (a que o operador já abandonou) — e o
-    // botão de escrita passa a apontar para outra chave que não a exibida.
+    // Guarda a resposta de uma navegação superada (ver navSeqRef abaixo).
     const navSeqRef = useRef(0);
+    // Cache de subchaves por nó, para a árvore não refazer chamadas.
+    const subkeyCacheRef = useRef<Map<string, string[]>>(new Map());
+    const loadedOnceRef = useRef(false);
+    const treePaneRef = useRef<HTMLDivElement | null>(null);
 
-    // Abre uma chave: lista subchaves/valores e consulta o stat (para saber se
-    // a mutação é permitida aqui — a UI desabilita os botões ANTES de o operador
-    // tentar, em vez de deixá-lo clicar e receber erro).
+    // ── Abrir uma chave ─────────────────────────────────────────────────────
     const openPath = useCallback(async (
         nextHive: RegistryHive,
         nextPath: string,
@@ -114,6 +112,7 @@ export function RegistryPanel({
         const seq = ++navSeqRef.current;
         setLoading(true);
         setLoadError(null);
+        setFilter('');
         try {
             const [listResp, statResp] = await Promise.all([
                 send('listKey', { hive: nextHive, path: nextPath }),
@@ -126,24 +125,24 @@ export function RegistryPanel({
             if (!listResp.success) {
                 setLoadError(describeErrorKind(listResp.errorKind, listResp.error));
                 setPage(null);
-                // Fail-closed: sem página carregada, a permissão de escrita do
-                // estado anterior não vale para esta chave. Deixá-la intacta
-                // manteria os botões habilitados apontando para uma chave que
-                // nem foi carregada.
                 setWritable(false);
                 setDenyReason('A chave não pôde ser carregada.');
+                // Mesmo com falha, a barra de endereço segue o pedido para o
+                // operador ver ONDE o erro aconteceu.
+                setHive(nextHive);
+                setCurrentPath(nextPath);
                 return;
             }
             setPage(listResp.page ?? null);
             setNote(listResp.note ?? null);
+            // Alimenta o cache da árvore com o que já veio nesta chamada.
+            subkeyCacheRef.current.set(`${nextHive}|\u0000|${nextPath}`, listResp.page?.subkeys ?? []);
 
             if (statResp.success && statResp.key) {
                 setWritable(statResp.key.writable);
                 setDenyReason(statResp.key.denyReason ?? '');
             } else {
-                // Sem stat não há como afirmar que a chave é gravável: assume
-                // NÃO gravável (fail-closed). É preferível o operador recarregar
-                // do que habilitar uma escrita que o agente vai recusar.
+                // Fail-closed: sem stat não há como afirmar que é gravável.
                 setWritable(false);
                 setDenyReason('Não foi possível verificar a política desta chave.');
             }
@@ -155,63 +154,40 @@ export function RegistryPanel({
             setHive(nextHive);
             setCurrentPath(nextPath);
         } catch (e) {
-            if (mountedRef.current && seq === navSeqRef.current) setLoadError((e as Error).message);
+            if (mountedRef.current && seq === navSeqRef.current) {
+                setLoadError((e as Error).message);
+            }
         } finally {
             if (mountedRef.current && seq === navSeqRef.current) setLoading(false);
         }
     }, [send, hive, currentPath]);
 
-    // Primeiro carregamento quando o agente anuncia que o subscribe está ativo.
-    const loadedOnceRef = useRef(false);
+    // Carrega a raiz quando o agente anuncia que o subscribe está ativo.
     useEffect(() => {
         if (!isReady || loadedOnceRef.current) return;
         loadedOnceRef.current = true;
         void openPath('HKLM', '', false);
     }, [isReady, openPath]);
 
-    // Recarrega a chave atual (após uma mutação).
     const refresh = useCallback(async () => {
+        subkeyCacheRef.current.delete(`${hive}|\u0000|${currentPath}`);
         await openPath(hive, currentPath, false);
     }, [openPath, hive, currentPath]);
 
-    const toggleExpand = useCallback(async (nodeHive: RegistryHive, nodePath: string) => {
-        const key = `${nodeHive}\\${nodePath}`;
-        const existing = expanded[key];
-        if (existing?.loaded) {
-            setExpanded((prev) => {
-                const next = { ...prev };
-                if (next[key]) delete next[key];
-                return next;
-            });
-            return;
+    /** Busca de subchaves para a árvore (com cache). */
+    const loadSubkeys = useCallback(async (nodeHive: RegistryHive, nodePath: string): Promise<string[]> => {
+        const key = `${nodeHive}|\u0000|${nodePath}`;
+        const cached = subkeyCacheRef.current.get(key);
+        if (cached) return cached;
+
+        const resp = await send('listKey', { hive: nodeHive, path: nodePath });
+        if (!resp.success) {
+            throw new Error(describeErrorKind(resp.errorKind, resp.error));
         }
-        setExpanded((prev) => ({
-            ...prev,
-            [key]: { hive: nodeHive, path: nodePath, subkeys: [], loaded: false, loading: true, error: null },
-        }));
-        try {
-            const resp = await send('listKey', { hive: nodeHive, path: nodePath });
-            if (!mountedRef.current) return;
-            setExpanded((prev) => ({
-                ...prev,
-                [key]: {
-                    hive: nodeHive,
-                    path: nodePath,
-                    subkeys: resp.success ? (resp.page?.subkeys ?? []) : [],
-                    loaded: true,
-                    loading: false,
-                    error: resp.success ? null : (resp.error ?? 'Falha ao expandir.'),
-                },
-            }));
-        } catch (e) {
-            if (mountedRef.current) {
-                setExpanded((prev) => ({
-                    ...prev,
-                    [key]: { hive: nodeHive, path: nodePath, subkeys: [], loaded: true, loading: false, error: (e as Error).message },
-                }));
-            }
-        }
-    }, [expanded, send]);
+        const subkeys = resp.page?.subkeys ?? [];
+        subkeyCacheRef.current.set(key, subkeys);
+        return subkeys;
+    }, [send]);
 
     const showToast = useCallback((message: string) => {
         setToast(message);
@@ -219,9 +195,6 @@ export function RegistryPanel({
     }, []);
 
     // ── Mutações ────────────────────────────────────────────────────────────
-    // Todas passam confirmed: true. O agente REVALIDA (ErrConfirmationRequired)
-    // — a barreira não é a UI.
-
     const applyValue = useCallback(async (payload: {
         name: string; type: string; data: string; confirmed: true;
     }) => {
@@ -229,10 +202,11 @@ export function RegistryPanel({
         setMutationError(null);
         try {
             const resp = await send('setValue', {
-                hive, path: currentPath, name: payload.name, type: payload.type, data: payload.data, confirmed: true,
+                hive, path: currentPath, name: payload.name,
+                type: payload.type, data: payload.data, confirmed: true,
             });
             if (!resp.success) {
-                setMutationError(resp.error ?? 'Falha ao gravar.');
+                setMutationError(describeErrorKind(resp.errorKind, resp.error));
                 return;
             }
             setEditingValue(null);
@@ -251,7 +225,7 @@ export function RegistryPanel({
         try {
             const resp = await send('deleteValue', { hive, path: currentPath, name, confirmed: true });
             if (!resp.success) {
-                setMutationError(resp.error ?? 'Falha ao excluir.');
+                setMutationError(describeErrorKind(resp.errorKind, resp.error));
                 return;
             }
             showToast('Valor excluído.');
@@ -271,12 +245,14 @@ export function RegistryPanel({
                 hive, path: pendingKey.path, recursive: pendingKey.recursive, confirmed: true,
             });
             if (!resp.success) {
-                setMutationError(resp.error ?? 'Falha ao excluir a chave.');
+                setMutationError(describeErrorKind(resp.errorKind, resp.error));
                 return;
             }
             setPendingKey(null);
             showToast('Chave excluída.');
-            // Se apagamos a chave aberta, sobe para o pai.
+            // Invalida o cache do pai e do nó removido.
+            subkeyCacheRef.current.delete(`${hive}|\u0000|${pendingKey.path}`);
+            subkeyCacheRef.current.delete(`${hive}|\u0000|${parentPath(pendingKey.path)}`);
             if (pendingKey.path === currentPath) {
                 await openPath(hive, parentPath(currentPath), false);
             } else {
@@ -289,15 +265,53 @@ export function RegistryPanel({
         }
     }, [pendingKey, send, hive, refresh, currentPath, openPath, showToast]);
 
-    // ── Render ──────────────────────────────────────────────────────────────
+    // ── Redimensionar a árvore ──────────────────────────────────────────────
+    const startResize = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = treeWidth;
+        const onMove = (ev: MouseEvent) => {
+            const next = Math.min(TREE_MAX, Math.max(TREE_MIN, startWidth + (ev.clientX - startX)));
+            setTreeWidth(next);
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            setTreeWidth((w) => {
+                try { window.localStorage.setItem(TREE_WIDTH_KEY, String(w)); } catch { /* storage indisponível */ }
+                return w;
+            });
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [treeWidth]);
 
-    const values = page?.values ?? [];
+    const navigate = useCallback((nextHive: RegistryHive, nextPath: string, viaHistory: boolean) => {
+        if (viaHistory) {
+            setHistory((prev) => [...prev, { hive, path: currentPath }]);
+            setForward([]);
+        }
+        void openPath(nextHive, nextPath, !viaHistory);
+    }, [openPath, hive, currentPath]);
 
-    // Mensagem de erro exibida. O código do erro (errorKind) já vem traduzido
-    // pelo agente; aqui só repassamos. Mantido como variável simples em vez de
-    // useMemo: era uma abstração sem conteúdo (um useMemo que devolvia o próprio
-    // valor), e memoizar uma string não traz ganho.
-    const friendlyError = loadError;
+    // useMemo: sem isto a expressão cria um array NOVO a cada render, e os
+    // useMemo de filtro abaixo recalculariam sempre (dependência instável).
+    const values = useMemo(() => page?.values ?? [], [page]);
+    const subkeys = useMemo(() => page?.subkeys ?? [], [page]);
+
+    // Filtro de valores/subchaves: em chaves grandes (HKCR) é o que torna a
+    // navegação utilizável sem rolar milhares de linhas.
+    const filteredValues = useMemo(() => {
+        if (!filter) return values;
+        const needle = filter.toLowerCase();
+        return values.filter((v) =>
+            displayValueName(v.name).toLowerCase().includes(needle) || v.data.toLowerCase().includes(needle));
+    }, [values, filter]);
+    const filteredSubkeys = useMemo(() => {
+        if (!filter) return subkeys;
+        const needle = filter.toLowerCase();
+        return subkeys.filter((s) => s.toLowerCase().includes(needle));
+    }, [subkeys, filter]);
 
     if (!isConnected && streamError) {
         return (
@@ -307,24 +321,57 @@ export function RegistryPanel({
         );
     }
 
+    // Segmentos do caminho, para a barra de endereço navegável.
+    const segments = currentPath ? currentPath.split('\\') : [];
+
     return (
         <div className="flex h-full min-h-0 flex-col" data-testid="registry-panel" data-visible={isVisible}>
-            {/* Barra de endereço + ações */}
+            {/* ── Barra superior: hive + caminho + ações ── */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-2 py-1.5 text-xs">
                 <select
-                    className="rounded border border-border bg-background px-1.5 py-1 font-mono"
+                    className="rounded border border-border bg-background px-1.5 py-1 font-mono text-xs"
                     value={hive}
-                    onChange={(e) => void openPath(e.target.value as RegistryHive, currentPath, false)}
+                    onChange={(e) => navigate(e.target.value as RegistryHive, '', true)}
                     aria-label="Hive"
                 >
                     {REGISTRY_HIVES.map((h) => (
                         <option key={h.hive} value={h.hive}>{h.label}</option>
                     ))}
                 </select>
-                <span className="break-all font-mono text-muted" data-testid="registry-current-path">
-                    {fullRegistryPath(hive, currentPath)}
-                </span>
-                <div className="ml-auto flex items-center gap-1">
+
+                {/* Breadcrumb: clicar num segmento sobe até ele. */}
+                <nav
+                    className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden font-mono"
+                    aria-label="Caminho"
+                    data-testid="registry-current-path"
+                    data-path={fullRegistryPath(hive, currentPath)}
+                >
+                    <button
+                        type="button"
+                        className="shrink-0 rounded px-1 hover:bg-background"
+                        onClick={() => navigate(hive, '', true)}
+                    >
+                        {hive}
+                    </button>
+                    {segments.map((seg, i) => {
+                        const target = segments.slice(0, i + 1).join('\\');
+                        return (
+                            <span key={target} className="flex min-w-0 items-center">
+                                <span className="text-muted">\</span>
+                                <button
+                                    type="button"
+                                    className={`truncate rounded px-1 hover:bg-background ${i === segments.length - 1 ? 'text-primary' : ''}`}
+                                    onClick={() => navigate(hive, target, true)}
+                                    title={seg}
+                                >
+                                    {seg}
+                                </button>
+                            </span>
+                        );
+                    })}
+                </nav>
+
+                <div className="flex shrink-0 items-center gap-1">
                     <button
                         type="button"
                         className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
@@ -337,6 +384,7 @@ export function RegistryPanel({
                         }}
                         disabled={history.length === 0 || loading}
                         aria-label="Voltar"
+                        title="Voltar"
                     >
                         ←
                     </button>
@@ -352,15 +400,17 @@ export function RegistryPanel({
                         }}
                         disabled={forward.length === 0 || loading}
                         aria-label="Avançar"
+                        title="Avançar"
                     >
                         →
                     </button>
                     <button
                         type="button"
                         className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
-                        onClick={() => void openPath(hive, parentPath(currentPath), true)}
+                        onClick={() => navigate(hive, parentPath(currentPath), true)}
                         disabled={!currentPath || loading}
                         aria-label="Subir um nível"
+                        title="Subir um nível"
                     >
                         ↑
                     </button>
@@ -370,107 +420,96 @@ export function RegistryPanel({
                         onClick={() => void refresh()}
                         disabled={loading}
                         aria-label="Atualizar"
+                        title="Atualizar"
                     >
                         ⟳
                     </button>
                 </div>
             </div>
 
-            <div className="flex min-h-0 flex-1">
-                {/* Árvore */}
-                <aside className="w-72 shrink-0 overflow-auto border-r border-border bg-surface" aria-label="Árvore do registro">
-                    {REGISTRY_HIVES.map((h) => {
-                        const key = `${h.hive}\\`;
-                        const node = expanded[key];
-                        return (
-                            <div key={h.hive}>
-                                <div className="flex items-center gap-1 px-2 py-1 text-xs">
-                                    <button
-                                        type="button"
-                                        className="w-4 text-muted hover:text-foreground"
-                                        onClick={() => void toggleExpand(h.hive, '')}
-                                        aria-label={`Expandir ${h.label}`}
-                                    >
-                                        {node?.loaded && !node.loading ? '▾' : '▸'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`flex-1 truncate text-left font-mono ${hive === h.hive && currentPath === '' ? 'text-primary' : ''}`}
-                                        onClick={() => void openPath(h.hive, '', true)}
-                                        title={h.description}
-                                    >
-                                        {h.label}
-                                    </button>
-                                </div>
-                                {node?.loaded && (
-                                    <div className="pl-4">
-                                        {node.error && <p className="px-2 py-1 text-[11px] text-red-400">{node.error}</p>}
-                                        {node.subkeys.map((sub) => (
-                                            <button
-                                                key={sub}
-                                                type="button"
-                                                className="block w-full truncate px-2 py-0.5 text-left font-mono text-[11px] hover:bg-background"
-                                                onClick={() => void openPath(h.hive, sub, true)}
-                                            >
-                                                {sub}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </aside>
+            {/* ── Faixas de estado ── */}
+            {note && (
+                <p className="border-b border-border bg-yellow-500/10 px-2 py-1 text-[11px] text-yellow-500" data-testid="registry-note">
+                    {note}
+                </p>
+            )}
+            {!writable && !loadError && (
+                <p className="border-b border-border bg-yellow-500/10 px-2 py-1 text-[11px] text-yellow-500" data-testid="registry-readonly">
+                    Somente leitura nesta chave. {denyReason}
+                </p>
+            )}
+            {loadError && (
+                <p className="border-b border-border bg-red-500/10 px-2 py-1 text-[11px] text-red-400" data-testid="registry-error">
+                    {loadError}
+                </p>
+            )}
 
-                {/* Conteúdo */}
-                <section className="flex min-h-0 flex-1 flex-col">
-                    {note && (
-                        <p className="border-b border-border bg-yellow-500/10 px-2 py-1 text-[11px] text-yellow-500" data-testid="registry-note">
-                            {note}
-                        </p>
-                    )}
-                    {!writable && (
-                        <p className="border-b border-border bg-yellow-500/10 px-2 py-1 text-[11px] text-yellow-500" data-testid="registry-readonly">
-                            Somente leitura nesta chave. {denyReason}
-                        </p>
-                    )}
-                    {friendlyError && (
-                        <p className="border-b border-border bg-red-500/10 px-2 py-1 text-[11px] text-red-400">
-                            {friendlyError}
-                        </p>
-                    )}
+            {/* ── Corpo: árvore + conteúdo ── */}
+            {/* items-stretch: garante que a coluna da árvore ocupe a altura TODA
+                da linha, e não só a altura do conteúdo dela (era o que deixava o
+                painel lateral com o fundo cortado no meio da tela). */}
+            <div className="flex min-h-0 flex-1 items-stretch">
+                <div
+                    ref={treePaneRef}
+                    className="shrink-0 overflow-hidden border-r border-border bg-surface"
+                    style={{ width: `${treeWidth}px` }}
+                >
+                    <RegistryTree
+                        activeHive={hive}
+                        activePath={currentPath}
+                        onSelect={(h, p) => navigate(h, p, true)}
+                        loadSubkeys={loadSubkeys}
+                        disabled={!isReady}
+                    />
+                </div>
 
-                    <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
-                        <span className="text-xs font-medium">
-                            {values.length} valor(es) · {page?.subkeyCount ?? 0} subchave(s)
+                {/* Divisória arrastável */}
+                <div
+                    className="w-1 shrink-0 cursor-col-resize bg-border/40 hover:bg-primary/40"
+                    onMouseDown={startResize}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Redimensionar árvore"
+                />
+
+                <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    {/* Barra de ferramentas da chave */}
+                    <div className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5">
+                        <span className="text-xs font-medium" data-testid="registry-counts">
+                            {page?.valueCount ?? 0} valor(es) · {page?.subkeyCount ?? 0} subchave(s)
                         </span>
+                        {(values.length > 20 || subkeys.length > 20) && (
+                            <input
+                                className="w-48 rounded border border-border bg-background px-2 py-1 text-xs"
+                                placeholder="Filtrar nome ou dado…"
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                aria-label="Filtrar"
+                            />
+                        )}
                         <div className="ml-auto flex gap-1">
                             <button
                                 type="button"
                                 className="rounded border border-border px-2 py-1 text-xs hover:bg-background disabled:opacity-40"
                                 onClick={() => { setCreatingValue(true); setMutationError(null); }}
-                                disabled={!writable || loading}
-                                title={!writable ? denyReason : undefined}
+                                disabled={!writable || !currentPath || loading}
+                                title={!writable ? denyReason : (!currentPath ? 'Abra uma chave para criar um valor.' : undefined)}
                             >
                                 Novo valor
                             </button>
                             <button
                                 type="button"
                                 className="rounded border border-border px-2 py-1 text-xs hover:bg-background disabled:opacity-40"
-                                onClick={() => { setPendingKey({ action: 'deleteKey', path: currentPath, recursive: false }); setMutationError(null); }}
+                                onClick={() => { setPendingKey({ path: currentPath, recursive: false }); setMutationError(null); }}
                                 disabled={!writable || !currentPath || loading}
                                 title={!writable ? denyReason : undefined}
                             >
                                 Excluir chave
                             </button>
-                            {/* A exclusão recursiva é uma ação de risco MUITO maior que a
-                                simples: remove a subárvore inteira. Por isso é um botão
-                                separado, com o próprio modal — e nunca um "sim, pode
-                                apagar tudo" implícito no fluxo anterior. */}
                             <button
                                 type="button"
                                 className="rounded border border-red-500/50 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-                                onClick={() => { setPendingKey({ action: 'deleteKey', path: currentPath, recursive: true }); setMutationError(null); }}
+                                onClick={() => { setPendingKey({ path: currentPath, recursive: true }); setMutationError(null); }}
                                 disabled={!writable || !currentPath || loading}
                                 title={!writable ? denyReason : undefined}
                             >
@@ -479,110 +518,48 @@ export function RegistryPanel({
                         </div>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-auto" aria-busy={loading}>
-                        {/* O aviso de carregamento é NÃO-BLOQUEANTE: substituir o
-                            conteúdo inteiro por "Carregando…" apagava a árvore e os
-                            atalhos de subchave, deixando o operador sem como navegar
-                            para outro lugar enquanto uma chave lenta carregava. */}
-                        {loading && (
-                            <p className="border-b border-border px-2 py-1 text-xs text-muted" data-testid="registry-loading">
-                                Carregando…
-                            </p>
-                        )}
-                        {!loading && values.length === 0 && (
-                            <p className="px-2 py-2 text-xs text-muted">Esta chave não tem valores.</p>
-                        )}
-                        {values.length > 0 && (
-                            <table className="w-full text-xs">
-                                <thead className="sticky top-0 bg-surface">
-                                    <tr className="border-b border-border text-left">
-                                        <th className="px-2 py-1 font-medium">Nome</th>
-                                        <th className="px-2 py-1 font-medium">Tipo</th>
-                                        <th className="px-2 py-1 font-medium">Dado</th>
-                                        <th className="px-2 py-1 font-medium" />
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {values.map((v) => (
-                                        <tr key={v.name || '(default)'} className="border-b border-border/50 hover:bg-background">
-                                            <td className="px-2 py-1 font-mono">{displayValueName(v.name)}</td>
-                                            <td className="px-2 py-1 text-muted" title={typeLabel(v.type)}>{v.type}</td>
-                                            <td className="px-2 py-1 font-mono break-all">
-                                                {v.readError ? (
-                                                    // Sem esta marca, um valor que o agente NÃO conseguiu
-                                                    // ler aparecia como "REG_NONE / vazio" — o operador
-                                                    // concluiria que o valor está limpo.
-                                                    <span className="text-yellow-500">
-                                                        (não foi possível ler: {v.readError})
-                                                    </span>
-                                                ) : (
-                                                    <>
-                                                        {formatValueForDisplay(v)}
-                                                        {v.type === 'REG_DWORD' || v.type === 'REG_QWORD' ? (
-                                                            <span className="ml-2 text-muted">{toHexDisplay(v.data, hexWidthForType(v.type))}</span>
-                                                        ) : null}
-                                                        {v.type === 'REG_BINARY' && base64ToHexPreview(v.data) ? (
-                                                            <span className="ml-2 text-muted">{base64ToHexPreview(v.data)}</span>
-                                                        ) : null}
-                                                    </>
-                                                )}
-                                            </td>
-                                            <td className="whitespace-nowrap px-2 py-1 text-right">
-                                                <button
-                                                    type="button"
-                                                    className="rounded border border-border px-2 py-0.5 hover:bg-surface disabled:opacity-40"
-                                                    onClick={() => { setEditingValue(v); setMutationError(null); }}
-                                                    // Tipos de estrutura binária não são editáveis: editar
-                                                    // como texto corromperia o formato interno.
-                                                    disabled={!writable || !isEditableType(v.type)}
-                                                    title={!isEditableType(v.type) ? 'Este tipo não pode ser editado como texto.' : (!writable ? denyReason : undefined)}
-                                                >
-                                                    Editar
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="ml-1 rounded border border-border px-2 py-0.5 hover:bg-surface disabled:opacity-40"
-                                                    onClick={() => void removeValue(v.name)}
-                                                    disabled={!writable}
-                                                    title={!writable ? denyReason : undefined}
-                                                >
-                                                    Excluir
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
+                    {/* Valores */}
+                    <RegistryValueGrid
+                        values={filteredValues}
+                        loading={loading}
+                        writable={writable}
+                        denyReason={denyReason}
+                        onEdit={(v) => { setEditingValue(v); setMutationError(null); }}
+                        onDelete={(name) => void removeValue(name)}
+                        busy={busy}
+                    />
 
-                        {/* Subchaves da chave atual */}
-                        {(page?.subkeys.length ?? 0) > 0 && (
-                            <div className="border-t border-border px-2 py-2">
-                                <p className="mb-1 text-[11px] font-medium text-muted">Subchaves</p>
-                                <div className="flex flex-wrap gap-1">
-                                    {page!.subkeys.map((sub) => (
-                                        <button
-                                            key={sub}
-                                            type="button"
-                                            className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-background"
-                                            onClick={() => void openPath(hive, joinPath(currentPath, sub), true)}
-                                        >
-                                            {sub}
-                                        </button>
-                                    ))}
-                                </div>
-                                {page!.hasMore && (
-                                    <p className="mt-1 text-[11px] text-muted">
-                                        Mostrando {page!.subkeys.length} de {page!.subkeyCount} subchaves.
-                                    </p>
-                                )}
+                    {/* Subchaves */}
+                    {filteredSubkeys.length > 0 && (
+                        <div className="shrink-0 border-t border-border bg-surface/60 px-2 py-2">
+                            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+                                Subchaves ({filteredSubkeys.length}{filter ? ` de ${subkeys.length}` : ''})
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                                {filteredSubkeys.map((sub) => (
+                                    <button
+                                        key={sub}
+                                        type="button"
+                                        data-testid={`registry-subkey-${sub}`}
+                                        className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-background"
+                                        onClick={() => navigate(hive, joinPath(currentPath, sub), true)}
+                                        onDoubleClick={() => navigate(hive, joinPath(currentPath, sub), true)}
+                                    >
+                                        {sub}
+                                    </button>
+                                ))}
                             </div>
-                        )}
-                    </div>
+                            {page?.hasMore && (
+                                <p className="mt-1 text-[11px] text-muted">
+                                    Mostrando {subkeys.length} de {page.subkeyCount} subchaves.
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </section>
             </div>
 
-            {/* Modais de mutação */}
+            {/* ── Modais ── */}
             {(editingValue || creatingValue) && (
                 <RegistryValueEditor
                     keyPath={fullRegistryPath(hive, currentPath)}
