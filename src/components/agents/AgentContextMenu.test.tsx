@@ -31,6 +31,7 @@ vi.mock('@/hooks/useAgents', () => ({
   useDeleteAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRestartAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useShutdownAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePowerAction: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useWakeOnLan: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 

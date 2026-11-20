@@ -8,7 +8,7 @@ import PowerActionModal from '@/components/agents/PowerActionModal';
 import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
-import { useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { useApproveZeroTouch, useDeleteAgent, usePowerAction, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import {
   useApproveAgentPendingWindowsUpdates,
@@ -39,6 +39,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
+  const powerAction = usePowerAction();
   const wakeOnLan = useWakeOnLan();
   const deleteAgent = useDeleteAgent();
   const sendAgentNotification = useSendAgentNotification();
@@ -79,6 +80,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const [transferAgent, setTransferAgent] = useState<AgentCardAgent | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
   const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
+  const [firmwareRestartAgent, setFirmwareRestartAgent] = useState<AgentCardAgent | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentCardAgent | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentCardAgent | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -172,6 +174,24 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
       ? await restartAgent.mutateAsync({ id: agent.id, data })
       : await shutdownAgent.mutateAsync({ id: agent.id, data });
     void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
+  };
+
+  // Reinício direto no setup do firmware (BIOS/UEFI): comando genérico
+  // "poweraction". O agent valida se a máquina é UEFI e devolve falha tipada
+  // (reportada no acompanhamento) quando for BIOS legado.
+  const handleFirmwareRestartConfirm = async () => {
+    if (!firmwareRestartAgent) return;
+    const agent = firmwareRestartAgent;
+    try {
+      const response = await powerAction.mutateAsync({
+        id: agent.id,
+        data: { action: 'restart-firmware', delaySeconds: 0, force: true, notifyUser: false, message: '' },
+      });
+      void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
+      setFirmwareRestartAgent(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao enviar o comando de reinício no firmware.');
+    }
   };
 
   const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {
@@ -351,6 +371,14 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           onClick: () => setPowerActionAgent({ agent, action: 'shutdown' }),
         },
         {
+          key: 'restart-firmware',
+          label: 'Reiniciar na BIOS/UEFI',
+          icon: <Icon name="memory" className="h-4 w-4" />,
+          separatorBefore: true,
+          hint: 'reinicia direto no setup do firmware — somente UEFI; pode pedir a chave do BitLocker',
+          onClick: () => setFirmwareRestartAgent(agent),
+        },
+        {
           key: 'update-restart',
           label: 'Atualizar e reiniciar',
           icon: <Icon name="refresh" className="h-4 w-4" />,
@@ -455,6 +483,24 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           onClose={() => setUpdatePowerAction(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!firmwareRestartAgent}
+        title="Reiniciar na BIOS/UEFI"
+        message={
+          <>
+            O computador <span className="font-semibold">{firmwareRestartAgent?.displayName ?? firmwareRestartAgent?.hostname}</span> vai{' '}
+            <span className="font-semibold">reiniciar imediatamente e entrar no setup do firmware (BIOS/UEFI)</span>.
+            {' '}Se a máquina estiver em BIOS legado (Legacy/CSM), o agente recusa e o motivo aparece no histórico do comando.
+            {' '}Aplicativos abertos serão fechados à força — <span className="font-semibold">salve o trabalho antes</span>.
+            {' '}Alterações de firmware/boot podem exigir a <span className="font-semibold">chave de recuperação do BitLocker</span> no próximo boot.
+          </>
+        }
+        confirmLabel="Reiniciar no firmware"
+        isLoading={powerAction.isPending}
+        onClose={() => { if (!powerAction.isPending) setFirmwareRestartAgent(null); }}
+        onConfirm={() => { void handleFirmwareRestartConfirm(); }}
+      />
 
       {wolAgent && (
         <WakeOnLanModal

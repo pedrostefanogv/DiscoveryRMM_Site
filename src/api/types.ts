@@ -2255,6 +2255,21 @@ export interface ShutdownRequest {
   message?: string;
 }
 
+/**
+ * Comando genérico de energia. Hoje o único verbo exposto é
+ * "restart-firmware": reinicia a máquina direto no setup do firmware (BIOS/UEFI).
+ * O agent valida a capacidade e devolve falha tipada em BIOS legado (Legacy/CSM).
+ */
+export type PowerActionKind = 'restart-firmware';
+
+export interface PowerActionRequest {
+  action: PowerActionKind;
+  delaySeconds?: number;
+  force?: boolean;
+  notifyUser?: boolean;
+  message?: string;
+}
+
 export interface WakeOnLanRequest {
   broadcastAddress?: string;
 }

@@ -29,6 +29,12 @@ export interface RemoteProxyPolicy {
   allowLoopback: boolean;
   allowedPorts: number[];
   maxResponseBytes: number;
+  /**
+   * Aceita certificado TLS inválido (autoassinado) nos destinos HTTPS.
+   * Necessário para Proxmox/iDRAC/switches, que servem HTTPS autoassinado.
+   * Desliga a validação da cadeia nesta sessão de proxy: default false.
+   */
+  insecureSkipVerify: boolean;
 }
 
 export const EMPTY_POLICY: RemoteProxyPolicy = {
@@ -37,6 +43,7 @@ export const EMPTY_POLICY: RemoteProxyPolicy = {
   allowLoopback: false,
   allowedPorts: [],
   maxResponseBytes: 0,
+  insecureSkipVerify: false,
 };
 
 const IPV4_OCTET = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
@@ -175,6 +182,7 @@ export function parsePolicy(json: string | null | undefined): RemoteProxyPolicy 
       typeof obj.maxResponseBytes === "number" && obj.maxResponseBytes > 0
         ? obj.maxResponseBytes
         : 0,
+    insecureSkipVerify: obj.insecureSkipVerify === true,
   };
 }
 
@@ -197,6 +205,8 @@ export function serializePolicy(policy: RemoteProxyPolicy): string {
   if (policy.allowLoopback) payload.allowLoopback = true;
   if (policy.allowedPorts.length) payload.allowedPorts = policy.allowedPorts;
   if (policy.maxResponseBytes > 0) payload.maxResponseBytes = policy.maxResponseBytes;
+  // Gravado só quando true: um "false" explícito é ruído no JSON auditado.
+  if (policy.insecureSkipVerify) payload.insecureSkipVerify = true;
 
   return JSON.stringify(payload);
 }
@@ -238,6 +248,37 @@ export function validatePolicy(policy: RemoteProxyPolicy): PolicyValidationIssue
   }
 
   return issues;
+}
+
+/**
+ * Decide o que gravar ao salvar num escopo cliente/site.
+ *
+ * Existe como função pura porque a regra tem duas armadilhas já observadas:
+ *
+ *  1. Pular a gravação quando "herdar" está marcado e nada mudou — evita criar
+ *     uma linha de configuração vazia (o PATCH faz CreateAsync) só para gravar
+ *     null, com uma entrada de auditoria inútil.
+ *  2. NÃO pular quando houve edição real: mexer só nas opções avançadas
+ *     (certificado autoassinado, loopback, portas) com "Definir política neste
+ *     nível" desmarcado precisa persistir. Antes era descartado em silêncio e o
+ *     checkbox voltava a false no próximo carregamento.
+ *
+ * @returns "skip" (nada a fazer), "persist" (grava a política) ou "clear"
+ *          (grava null = volta a herdar do nível acima).
+ */
+export function decideSaveAction(params: {
+  /** O operador marcou "Definir política neste nível"? */
+  ownsPolicy: boolean;
+  /** O escopo JÁ tinha política gravada antes desta edição? */
+  hasOwnPolicy: boolean;
+  /** A política atual difere da que foi carregada? */
+  isPolicyDirty: boolean;
+}): "skip" | "persist" | "clear" {
+  const { ownsPolicy, hasOwnPolicy, isPolicyDirty } = params;
+
+  if (ownsPolicy || isPolicyDirty) return "persist";
+  if (hasOwnPolicy) return "clear";
+  return "skip";
 }
 
 /** Presets de rede oferecidos como atalho na tela. */

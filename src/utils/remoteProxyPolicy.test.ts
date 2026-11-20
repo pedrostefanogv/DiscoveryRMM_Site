@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  decideSaveAction,
   EMPTY_POLICY,
   PROXY_MODE_ALLOWLIST,
   PROXY_MODE_OPEN,
@@ -144,6 +145,18 @@ describe("parsePolicy — fail-closed", () => {
     expect(parsed.allowLoopback).toBe(true);
     expect(parsed.maxResponseBytes).toBe(2048);
   });
+
+  it("insecureSkipVerify é false por padrão", () => {
+    // Default seguro: sem escolha explícita a cadeia TLS continua validada.
+    for (const raw of ["", "{}", '{"mode":"allowlist"}', "{corrompido"]) {
+      expect(parsePolicy(raw).insecureSkipVerify).toBe(false);
+    }
+  });
+
+  it("lê insecureSkipVerify quando explicitamente true", () => {
+    const parsed = parsePolicy('{"insecureSkipVerify":true}');
+    expect(parsed.insecureSkipVerify).toBe(true);
+  });
 });
 
 describe("serializePolicy", () => {
@@ -176,6 +189,76 @@ describe("serializePolicy", () => {
   it("normaliza modo desconhecido para allowlist ao serializar", () => {
     const json = serializePolicy(policy({ mode: "banana" }));
     expect(JSON.parse(json).mode).toBe(PROXY_MODE_ALLOWLIST);
+  });
+
+  it("grava insecureSkipVerify só quando true", () => {
+    // Um "false" explícito seria ruído no JSON que vai para a auditoria.
+    expect(JSON.parse(serializePolicy(policy()))).not.toHaveProperty("insecureSkipVerify");
+    expect(
+      JSON.parse(serializePolicy(policy({ insecureSkipVerify: true }))).insecureSkipVerify,
+    ).toBe(true);
+  });
+
+  it("faz round-trip de insecureSkipVerify", () => {
+    const original = policy({
+      entries: [{ cidr: "192.168.10.0/24", ports: [8006] }],
+      insecureSkipVerify: true,
+    });
+
+    const restored = parsePolicy(serializePolicy(original));
+
+    expect(restored.insecureSkipVerify).toBe(true);
+    // Compara só o que importa: o parse normaliza "note" ausente para null,
+    // então a igualdade profunda do objeto inteiro testaria a normalização,
+    // não o round-trip.
+    expect(restored.entries).toHaveLength(1);
+    expect(restored.entries[0].cidr).toBe("192.168.10.0/24");
+    expect(restored.entries[0].ports).toEqual([8006]);
+  });
+});
+
+describe("decideSaveAction — o que gravar ao salvar", () => {
+  it("pula quando herda, nada mudou e nunca teve política", () => {
+    // Evita criar linha de configuração vazia só para gravar null.
+    expect(
+      decideSaveAction({ ownsPolicy: false, hasOwnPolicy: false, isPolicyDirty: false }),
+    ).toBe("skip");
+  });
+
+  it("grava quando o operador marca 'definir neste nível'", () => {
+    expect(
+      decideSaveAction({ ownsPolicy: true, hasOwnPolicy: false, isPolicyDirty: false }),
+    ).toBe("persist");
+  });
+
+  it("GRAVA quando houve edição mesmo com 'definir neste nível' desmarcado", () => {
+    // Regressão: editar só as opções avançadas (certificado autoassinado,
+    // loopback, portas) enquanto o escopo herdava era descartado EM SILÊNCIO —
+    // o checkbox voltava a false no próximo carregamento e o operador concluía
+    // que a opção "não funcionava".
+    expect(
+      decideSaveAction({ ownsPolicy: false, hasOwnPolicy: false, isPolicyDirty: true }),
+    ).toBe("persist");
+  });
+
+  it("grava quando edita um escopo que já tinha política", () => {
+    expect(
+      decideSaveAction({ ownsPolicy: false, hasOwnPolicy: true, isPolicyDirty: true }),
+    ).toBe("persist");
+  });
+
+  it("limpa o override quando já tinha política e o operador quer herdar", () => {
+    // Desmarcou "definir neste nível": grava null para voltar a herdar.
+    expect(
+      decideSaveAction({ ownsPolicy: false, hasOwnPolicy: true, isPolicyDirty: false }),
+    ).toBe("clear");
+  });
+
+  it("prioriza gravar sobre limpar quando ambos se aplicam", () => {
+    // Edição real nunca pode ser perdida em favor de "limpar".
+    expect(
+      decideSaveAction({ ownsPolicy: true, hasOwnPolicy: true, isPolicyDirty: true }),
+    ).toBe("persist");
   });
 });
 

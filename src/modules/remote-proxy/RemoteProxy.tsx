@@ -5,6 +5,12 @@ import {
   type ProxyHttpResponse,
   type TunnelOpenOptions,
 } from './useProxyStream';
+import {
+  detectExternalDependencies,
+  injectBaseTag,
+  resolveBaseUrl,
+} from './proxyRender';
+import type { BrowsableDestination } from './proxyDestinations';
 
 interface RemoteProxyProps {
   sessionId: string;
@@ -15,14 +21,14 @@ interface RemoteProxyProps {
   jwt?: string;
   nkeySeed?: string;
   getFreshCredentials?: () => Promise<string>;
+  /**
+   * Destinos aprovados para o escopo deste agente, derivados da allowlist
+   * cadastrada. Substituem os antigos atalhos chumbados no código, que
+   * apareciam para todo cliente (inclusive sem esses equipamentos) e cujo
+   * clique era bloqueado pela própria allowlist.
+   */
+  destinations?: BrowsableDestination[];
 }
-
-// Acessos rápidos exibidos no select compacto da barra de URL.
-const QUICK_LINKS = [
-  { label: 'Roteador', url: 'http://192.168.1.1/' },
-  { label: 'Router Alt', url: 'http://192.168.0.1/' },
-  { label: 'Impressora', url: 'http://192.168.1.100/' },
-] as const;
 
 type Mode = 'http' | 'tunnel';
 
@@ -54,6 +60,7 @@ export default function RemoteProxy({
   jwt = '',
   nkeySeed = '',
   getFreshCredentials,
+  destinations = [],
 }: RemoteProxyProps) {
   const [url, setUrl] = useState('');
   const [mode, setMode] = useState<Mode>('http');
@@ -126,10 +133,37 @@ export default function RemoteProxy({
         return;
       }
       const bytes = bytesFromBase64(resp.bodyBase64);
-      const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+      const rawHtml = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+
+      // Injeta <base href> com a URL EFETIVA da resposta. Sem isto o srcdoc não
+      // tem origem e todo recurso relativo (CSS, imagens) é resolvido contra
+      // about:srcdoc e falha — a página aparece sem estilo, "quebrada".
+      // finalUrl cobre o caso de redirect (ex.: "/" -> "/portal/").
+      const baseUrl = resolveBaseUrl(trimmed, resp.finalUrl);
+      const html = injectBaseTag(rawHtml, baseUrl);
+
       setPageHtml(html);
       setPageStatus('loaded');
       pushLog('info', `${trimmed} → HTTP ${resp.statusCode ?? 200} (${bytes.length} bytes)`);
+      if (baseUrl) pushLog('info', `Base de resolução: ${baseUrl}`);
+
+      // Avisa (não bloqueia) quando a página depende de recursos que o proxy
+      // HTTP não transporta: eles exigem acesso DIRETO do navegador à internet,
+      // o que contraria o modelo do proxy e falha em rede isolada.
+      const deps = detectExternalDependencies(rawHtml);
+      if (deps.hasExternalAssets) {
+        pushLog(
+          'warn',
+          'A página referencia CSS/JS externos: o proxy transporta o documento, não os sub-recursos. Para navegar o site completo, use o modo Túnel TCP/SSH.',
+        );
+      }
+      if (deps.hasCspMeta) {
+        pushLog(
+          'warn',
+          'A página declara Content-Security-Policy: parte do conteúdo pode ser bloqueada pelo navegador dentro do frame.',
+        );
+      }
+
       if (resp.truncated) pushLog('warn', `Resposta de ${trimmed} foi truncada pelo agent.`);
     } catch (err) {
       setPageStatus('error');
@@ -184,7 +218,7 @@ export default function RemoteProxy({
             <input
               type="text"
               className="flex-1 bg-surface border border-border rounded px-3 py-1.5 text-sm text-foreground font-mono outline-none focus:border-primary/50"
-              placeholder="http://192.168.1.1/ ou http://roteador/"
+              placeholder="http://<ip-do-equipamento>/ (ex.: http://192.168.10.250:8006/)"
               value={url}
               onChange={e => setUrl(e.target.value)}
               aria-label="URL de destino na rede local"
@@ -195,19 +229,25 @@ export default function RemoteProxy({
             >
               Navegar
             </button>
-            <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Acessos rápidos">
-              {QUICK_LINKS.map(q => (
-                <button
-                  key={q.url}
-                  type="button"
-                  className="rounded px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-                  title={`${q.label} — ${q.url}`}
-                  onClick={() => { setUrl(q.url); void navigate(q.url); }}
-                >
-                  {q.label}
-                </button>
-              ))}
-            </div>
+            {destinations.length > 0 && (
+              <div
+                className="flex shrink-0 items-center gap-1 overflow-x-auto"
+                role="group"
+                aria-label="Destinos aprovados para este escopo"
+              >
+                {destinations.map(d => (
+                  <button
+                    key={d.url}
+                    type="button"
+                    className="whitespace-nowrap rounded px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                    title={`${d.label} — ${d.url}`}
+                    onClick={() => { setUrl(d.url); void navigate(d.url); }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </form>
         ) : (
           <form
@@ -275,6 +315,8 @@ export default function RemoteProxy({
       {/* Aviso de allowlist/SSRF: a política é aplicada no agent (fail closed). */}
       <div className="px-3 py-1 bg-warning/20 text-warning text-xs">
         ⚠ O agent aplica a allowlist de destinos (proteção SSRF). Destinos fora da lista são bloqueados com erro.
+        O modo HTTP transporta <strong>um documento</strong> por vez: páginas que dependem de CSS/JS
+        externos podem aparecer sem estilo. Para navegar um site completo, use o Túnel TCP/SSH.
       </div>
 
       {!hasSession && (
@@ -318,13 +360,50 @@ export default function RemoteProxy({
             />
           ) : (
             pageStatus !== 'loading' && !pageError && (
-              <div className="flex flex-col items-center justify-center h-full text-muted">
-                <div className="text-4xl mb-3">🔗</div>
-                <p className="text-sm mb-1">Proxy de Rede — bloqueio total inicial</p>
-                <p className="text-xs text-muted max-w-md text-center">
-                  O tráfego HTTP/HTTPS sai do agent pela allowlist configurada no servidor e volta
-                  por este console via NATS. Nenhuma URL externa é carregada diretamente pelo navegador.
-                </p>
+              <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-muted">
+                <div className="text-4xl">🔗</div>
+
+                {destinations.length > 0 ? (
+                  <>
+                    <p className="text-sm">
+                      Destinos aprovados para este escopo ({destinations.length}):
+                    </p>
+                    <div className="flex max-w-3xl flex-wrap justify-center gap-2">
+                      {destinations.map(d => (
+                        <button
+                          key={d.url}
+                          type="button"
+                          className="rounded-lg border border-border bg-surface px-3 py-2 text-left text-xs transition-colors hover:bg-surface-hover hover:text-foreground"
+                          title={`Abrir ${d.url}`}
+                          onClick={() => { setUrl(d.url); void navigate(d.url); }}
+                        >
+                          <span className="block font-medium text-foreground">{d.label}</span>
+                          <span className="block font-mono text-[11px] text-muted-foreground">
+                            {d.url}
+                          </span>
+                          {d.fromCidr && (
+                            <span className="block text-[10px] text-warning">
+                              endereço sugerido (rede {d.host.split('.').slice(0, 3).join('.')}.x)
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="max-w-lg text-center text-xs text-muted-foreground">
+                      Vêm da allowlist cadastrada em Configurações → Destinos do Proxy. Se o
+                      endereço sugerido não for o equipamento, digite a URL correta na barra acima.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm mb-1">Nenhum destino cadastrado para este escopo</p>
+                    <p className="max-w-md text-center text-xs">
+                      O tráfego HTTP/HTTPS sai do agent pela allowlist configurada no servidor e
+                      volta por este console via NATS. Nenhuma URL externa é carregada diretamente
+                      pelo navegador. Para liberar destinos, use Configurações → Destinos do Proxy.
+                    </p>
+                  </>
+                )}
               </div>
             )
           )}

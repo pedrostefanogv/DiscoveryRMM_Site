@@ -72,6 +72,24 @@ interface FormValues {
  */
 const SERVER_SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson"]);
 
+/**
+ * Campos de acesso remoto que ganharam TELA PRÓPRIA e por isso saem da seção
+ * genérica "Acesso remoto".
+ *
+ * A política do proxy é editada em Configurações → Destinos do Proxy, com
+ * validação de CIDR/porta e controles de herança. Expor o mesmo campo aqui como
+ * JSON cru criaria duas fontes de verdade — e uma vírgula errada derruba o proxy
+ * para bloqueio total (fail-closed) sem o operador entender o motivo.
+ *
+ * Em escopo de MÓDULO de propósito: é usado tanto no contador de pendências
+ * (useMemo, no topo do componente) quanto na renderização da seção. Declarar
+ * dentro do componente o colocaria em temporal dead zone para o useMemo.
+ */
+const REMOTE_ACCESS_SEPARATE_KEYS = new Set([
+  "remoteProxyPolicyJson",
+  "remoteProxyGlobalEntriesEnabled",
+]);
+
 type SectionKey =
   | "features"
   | "policy"
@@ -499,7 +517,15 @@ export default function ServerConfigurationPage() {
         .map((f) => f.key),
       maintenance: ["maintenanceWindowJson"],
       mcp: [] as string[],
-      remoteAccess: serverEditableFields.filter((f) => f.group === "remoteAccess").map((f) => f.key),
+      // Mesmo filtro da renderização: incluir aqui os campos de tela própria
+      // marcaria a seção como pendente por algo que ela não exibe.
+      remoteAccess: serverEditableFields
+        .filter(
+          (f) =>
+            f.group === "remoteAccess" &&
+            !REMOTE_ACCESS_SEPARATE_KEYS.has(f.key),
+        )
+        .map((f) => f.key),
       agent: serverEditableFields.filter((f) => f.group === "agent").map((f) => f.key),
       storage: serverEditableFields.filter((f) => f.group === "storage").map((f) => f.key),
       nats: serverEditableFields.filter((f) => f.group === "nats").map((f) => f.key),
@@ -602,7 +628,9 @@ export default function ServerConfigurationPage() {
   const policyFields = serverEditableFields.filter(
     (f) => f.group === "policy" && !SERVER_SEPARATE_POLICY_KEYS.has(f.key),
   );
-  const remoteAccessFields = serverEditableFields.filter((f) => f.group === "remoteAccess");
+  const remoteAccessFields = serverEditableFields.filter(
+    (f) => f.group === "remoteAccess" && !REMOTE_ACCESS_SEPARATE_KEYS.has(f.key),
+  );
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
   const natsFields = serverEditableFields.filter((f) => f.group === "nats");
   const hiddenAdvancedFieldKeys = new Set(["brandingSettingsJson"]);

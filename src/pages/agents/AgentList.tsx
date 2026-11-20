@@ -13,7 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
-import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePurgeAgent, useRequestDecommission, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePowerAction, usePurgeAgent, useRequestDecommission, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
 import { Icon, Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, Button, ConfirmDialog, Pagination } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
@@ -150,6 +150,7 @@ export default function AgentList() {
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
+  const powerAction = usePowerAction();
   const wakeOnLan = useWakeOnLan();
   const sendAgentNotification = useSendAgentNotification();
   const { hasAnyPermission } = useAuthorization();
@@ -217,6 +218,7 @@ export default function AgentList() {
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
+  const [firmwareRestartAgent, setFirmwareRestartAgent] = useState<AgentWithClient | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -630,6 +632,29 @@ export default function AgentList() {
   const handleShutdownAgent = (agent: AgentWithClient) => {
     setContextMenu(null);
     setPowerActionAgent({ agent, action: "shutdown" });
+  };
+
+  // Reinício direto no setup do firmware (BIOS/UEFI) via comando genérico
+  // "poweraction": o agent valida se a máquina é UEFI e falha de forma tipada
+  // (reportada no acompanhamento) quando for BIOS legado (Legacy/CSM).
+  const handleFirmwareRestart = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setFirmwareRestartAgent(agent);
+  };
+
+  const handleFirmwareRestartConfirm = async () => {
+    if (!firmwareRestartAgent) return;
+    const agent = firmwareRestartAgent;
+    try {
+      const response = await powerAction.mutateAsync({
+        id: agent.id,
+        data: { action: "restart-firmware", delaySeconds: 0, force: true, notifyUser: false, message: "" },
+      });
+      void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
+      setFirmwareRestartAgent(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao enviar o comando de reinício no firmware.");
+    }
   };
 
   const handleWakeOnLan = (agent: AgentWithClient) => {
@@ -1596,6 +1621,15 @@ export default function AgentList() {
                     <div className="my-1 border-t border-border" />
                     <button
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => handleFirmwareRestart(contextMenu.agent)}
+                      title="Reinicia direto no setup do firmware — somente UEFI; pode pedir a chave do BitLocker"
+                    >
+                      <Icon name="memory" className="h-4 w-4" />
+                      Reiniciar na BIOS/UEFI
+                    </button>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => {
                         setContextMenu(null);
                         setUpdatePowerAction({ agent: contextMenu.agent, action: 'restart' });
@@ -1774,6 +1808,24 @@ export default function AgentList() {
           isLoading={restartAgent.isPending || shutdownAgent.isPending}
         />
       )}
+
+      <ConfirmDialog
+        open={!!firmwareRestartAgent}
+        title="Reiniciar na BIOS/UEFI"
+        message={
+          <>
+            O computador <span className="font-semibold">{firmwareRestartAgent?.displayName ?? firmwareRestartAgent?.hostname}</span> vai{' '}
+            <span className="font-semibold">reiniciar imediatamente e entrar no setup do firmware (BIOS/UEFI)</span>.
+            {' '}Se a máquina estiver em BIOS legado (Legacy/CSM), o agente recusa e o motivo aparece no histórico do comando.
+            {' '}Aplicativos abertos serão fechados à força — <span className="font-semibold">salve o trabalho antes</span>.
+            {' '}Alterações de firmware/boot podem exigir a <span className="font-semibold">chave de recuperação do BitLocker</span> no próximo boot.
+          </>
+        }
+        confirmLabel="Reiniciar no firmware"
+        isLoading={powerAction.isPending}
+        onClose={() => { if (!powerAction.isPending) setFirmwareRestartAgent(null); }}
+        onConfirm={() => { void handleFirmwareRestartConfirm(); }}
+      />
 
       {updatePowerAction && (
         <UpdatePowerActionModal

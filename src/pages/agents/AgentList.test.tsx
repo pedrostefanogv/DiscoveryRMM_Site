@@ -105,6 +105,7 @@ vi.mock('@/hooks/useAgents', () => ({
   useApproveZeroTouch: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRestartAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useShutdownAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  usePowerAction: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useWakeOnLan: () => ({ mutateAsync: vi.fn(), isPending: false }),
   getDeleteAgentErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'erro'),
   getPurgeAgentErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'erro'),
@@ -476,6 +477,22 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     expect(screen.getByText('Reiniciar')).toBeTruthy();
     expect(screen.getByText('Desligar')).toBeTruthy();
     expect(screen.queryByText('Ligar')).toBeNull();
+  });
+
+  it('oferece "Reiniciar na BIOS/UEFI" no submenu de energia e pede confirmação', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+
+    // O verbo de firmware aparece junto de Reiniciar/Desligar.
+    const item = screen.getByText('Reiniciar na BIOS/UEFI');
+    fireEvent.click(item);
+
+    // Não dispara o comando direto: abre o dialog de confirmação (aviso de
+    // BitLocker + validação de UEFI ficam no texto).
+    const confirm = screen.getByRole('button', { name: 'Reiniciar no firmware' });
+    expect(confirm).toBeTruthy();
   });
 
   it('offline: bloqueia sessões ao vivo e mantém comandos enfileirados', () => {

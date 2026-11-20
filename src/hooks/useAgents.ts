@@ -15,6 +15,7 @@ import type {
   CreateTokenRequest,
   RestartRequest,
   ShutdownRequest,
+  PowerActionRequest,
   WakeOnLanRequest,
   StartupItemActionRequest,
   ScheduledTaskActionRequest,
@@ -556,6 +557,22 @@ export function useShutdownAgent() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data?: ShutdownRequest }) =>
       agentsApi.shutdown(id, data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.commands(vars.id) });
+    },
+  });
+}
+
+/**
+ * Comando genérico de energia. Hoje usado só para "restart-firmware"
+ * (reiniciar na BIOS/UEFI) — o agent valida a capacidade e devolve falha se a
+ * máquina estiver em BIOS legado.
+ */
+export function usePowerAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: PowerActionRequest }) =>
+      agentsApi.powerAction(id, data),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.commands(vars.id) });
     },

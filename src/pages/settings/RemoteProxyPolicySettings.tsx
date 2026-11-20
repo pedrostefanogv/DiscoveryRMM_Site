@@ -29,6 +29,7 @@ import {
   PORT_PRESETS,
   PROXY_MODE_ALLOWLIST,
   PROXY_MODE_OPEN,
+  decideSaveAction,
   formatPorts,
   parsePolicy,
   parsePorts,
@@ -73,6 +74,12 @@ export default function RemoteProxyPolicySettings() {
   const [ownsPolicy, setOwnsPolicy] = useState(true);
   /** True quando o escopo JÁ tinha política gravada (para evitar escrita inútil). */
   const [hasOwnPolicy, setHasOwnPolicy] = useState(false);
+  /**
+   * JSON da política como foi CARREGADA. Comparar com o estado atual é o que
+   * distingue "não mexeu em nada" de "editou e quer gravar" — sem isso, mudar
+   * só as opções avançadas num escopo que herda era descartado em silêncio.
+   */
+  const [loadedJson, setLoadedJson] = useState("");
 
   const [auditEntries, setAuditEntries] = useState<ConfigurationAuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -112,6 +119,7 @@ export default function RemoteProxyPolicySettings() {
         setGlobalEnabled(server.remoteProxyGlobalEntriesEnabled === true);
         setOwnsPolicy(true);
         setHasOwnPolicy(true);
+        setLoadedJson(serializePolicy(parsePolicy(server.remoteProxyPolicyJson)));
       } else {
         const config =
           scope === "client"
@@ -121,6 +129,7 @@ export default function RemoteProxyPolicySettings() {
         const owns = raw !== null && raw !== undefined && raw !== "";
         setOwnsPolicy(owns);
         setHasOwnPolicy(owns);
+        setLoadedJson(owns ? serializePolicy(parsePolicy(raw)) : "");
         setPolicy(raw ? parsePolicy(raw) : { ...EMPTY_POLICY, entries: [] });
       }
     } catch (err) {
@@ -131,6 +140,7 @@ export default function RemoteProxyPolicySettings() {
       if (err instanceof ApiError && err.status === 404 && scope !== "global") {
         setOwnsPolicy(false);
         setHasOwnPolicy(false);
+        setLoadedJson("");
         setPolicy({ ...EMPTY_POLICY, entries: [] });
       } else {
         setError(err instanceof Error ? err.message : "Falha ao carregar a política de proxy.");
@@ -212,20 +222,29 @@ export default function RemoteProxyPolicySettings() {
           remoteProxyPolicyJson: json,
           remoteProxyGlobalEntriesEnabled: globalEnabled,
         });
-      } else if (!ownsPolicy && !hasOwnPolicy) {
-        // Já herdava e o operador manteve "herdar": não há o que gravar.
-        // Chamar a API aqui criaria uma linha de configuração VAZIA (o PATCH
-        // faz CreateAsync quando não existe) só para registrar null, além de
-        // uma entrada de auditoria para uma mudança que não muda nada.
-        toast.success("Nada a salvar: este nível continua herdando.");
-        return;
       } else {
-        // null explícito = "herdar": limpa a política deste escopo.
-        const payload = { remoteProxyPolicyJson: ownsPolicy ? json : null };
+        const action = decideSaveAction({ ownsPolicy, hasOwnPolicy, isPolicyDirty });
+
+        if (action === "skip") {
+          // Herdava, mantém "herdar" e nada foi editado: gravar criaria uma
+          // linha vazia + auditoria de uma mudança que não muda nada.
+          toast.success("Nada a salvar: este nível continua herdando.");
+          return;
+        }
+
+        // "persist" grava a política; "clear" grava null (volta a herdar).
+        const payload = { remoteProxyPolicyJson: action === "persist" ? json : null };
+
         if (scope === "client") {
           await patchClientConfig(clientId, payload);
         } else {
           await patchSiteConfig(siteId, payload);
+        }
+
+        // Gravar implica passar a definir a política neste nível.
+        if (action === "persist") {
+          setOwnsPolicy(true);
+          setHasOwnPolicy(true);
         }
       }
 
@@ -240,6 +259,17 @@ export default function RemoteProxyPolicySettings() {
   };
 
   const isOpen = policy.mode === PROXY_MODE_OPEN;
+
+  /**
+   * Houve edição real em relação ao que foi carregado?
+   *
+   * Compara o JSON normalizado (não o objeto): o serialize ordena portas e omite
+   * campos vazios, então uma simples troca de ordem não conta como edição.
+   */
+  const isPolicyDirty = useMemo(
+    () => serializePolicy(policy) !== loadedJson,
+    [policy, loadedJson],
+  );
 
   return (
     <div className="space-y-6">
@@ -475,9 +505,39 @@ export default function RemoteProxyPolicySettings() {
           <Card>
             <CardHeader
               title="Opções avançadas"
-              subtitle="Portas globais, loopback e teto de resposta."
+              subtitle="Portas globais, loopback e certificado TLS."
             />
             <div className="space-y-4 p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={policy.insecureSkipVerify}
+                  onChange={(e) =>
+                    setPolicy((c) => ({ ...c, insecureSkipVerify: e.target.checked }))
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-medium">
+                    Aceitar certificado autoassinado (HTTPS)
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Necessário para Proxmox, iDRAC/iLO, switches e impressoras que servem
+                    HTTPS com certificado próprio. Sem isto, o proxy falha com
+                    "certificate signed by unknown authority".
+                  </span>
+                </span>
+              </label>
+
+              {policy.insecureSkipVerify && (
+                <div className="rounded border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                  <strong>Atenção:</strong> a validação do certificado é desligada nas
+                  conexões deste proxy. O tráfego continua cifrado, mas deixa de ser
+                  possível detectar interceptação na rede local. Prefira instalar o
+                  certificado da autoridade interna no endpoint quando for viável.
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium">Portas permitidas (todas as sessões)</label>
                 <input

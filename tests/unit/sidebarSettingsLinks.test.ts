@@ -12,6 +12,11 @@ const ROUTER_SRC = readFileSync(
   'utf8',
 );
 
+const SERVER_PAGE_SRC = readFileSync(
+  resolve(__dirname, '../../src/pages/settings/ServerConfigurationPage.tsx'),
+  'utf8',
+);
+
 /**
  * Guardas do menu lateral de Configurações.
  *
@@ -59,6 +64,26 @@ describe('menu lateral de Configurações', () => {
 
     // Um item de menu apontando para rota inexistente daria 404 silencioso.
     expect(missing, `destinos sem rota: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('a política de proxy não é editada na tela genérica de Servidor', () => {
+    // A política do proxy tem tela própria (Destinos do Proxy) com validação de
+    // CIDR/porta e herança. Expor o mesmo campo na seção "Acesso remoto" de
+    // Servidor criaria duas fontes de verdade — e um JSON cru malformado ali
+    // derruba o proxy para bloqueio total (fail-closed) em silêncio.
+    const excluded = SERVER_PAGE_SRC.match(
+      /REMOTE_ACCESS_SEPARATE_KEYS = new Set\(\[([^\]]+)\]\)/,
+    );
+    expect(excluded, 'esperava a lista de exclusão dos campos de tela própria').not.toBeNull();
+
+    const listed = excluded![1];
+    expect(listed).toContain('remoteProxyPolicyJson');
+    expect(listed).toContain('remoteProxyGlobalEntriesEnabled');
+
+    // E o filtro da renderização precisa USAR essa lista.
+    expect(SERVER_PAGE_SRC).toMatch(
+      /remoteAccessFields = serverEditableFields\.filter\([\s\S]{0,200}REMOTE_ACCESS_SEPARATE_KEYS/,
+    );
   });
 
   it('o submenu aberto comporta todos os itens de Configurações', () => {

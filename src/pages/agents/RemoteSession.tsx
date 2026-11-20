@@ -32,6 +32,11 @@ import { fullscreenApi } from '@/utils/fullscreen';
 import RemoteTerminal, { getLastFittedTermDims } from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
+import {
+  browsableDestinations,
+  type BrowsableDestination,
+} from '@/modules/remote-proxy/proxyDestinations';
+import { getSiteEffectiveConfig } from '@/services/configurationApi';
 import RemoteRdp from '@/modules/remote-rdp/RemoteRdp';
 import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
 import RegistryPanel from '@/modules/remote-registry/RegistryPanel';
@@ -394,6 +399,12 @@ export default function RemoteSession() {
   // Identidade do agente (Cliente → Site → Hostname) exibida no header para
   // evitar operar em máquinas indevidas.
   const [agentIdentity, setAgentIdentity] = useState<{ client: string; site: string; hostname: string } | null>(null);
+  /**
+   * Destinos aprovados para o escopo deste agente, derivados da allowlist
+   * resolvida (servidor → cliente → site). Alimentam os atalhos da barra de
+   * navegação do proxy, que antes eram chumbados no código.
+   */
+  const [proxyDestinations, setProxyDestinations] = useState<BrowsableDestination[]>([]);
   // Liveness por aba: falha terminal (placeholder). livenessAttemptsRef limita
   // a auto-recuperacao a 3 tentativas por sessao.
   const [livenessFailure, setLivenessFailure] = useState<Partial<Record<Tab, string>>>({});
@@ -455,6 +466,33 @@ export default function RemoteSession() {
         });
       } catch {
         // Sem permissão ou falha de rede — header fica sem identidade.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [agentId]);
+
+  // Destinos aprovados do proxy: derivados da allowlist JÁ RESOLVIDA para o site
+  // do agente. Usa a configuração efetiva (não o JSON cru de um escopo) porque é
+  // ela que reflete a herança servidor → cliente → site que o agent vai aplicar
+  // de fato — mostrar outra coisa aqui sugeriria destinos que seriam bloqueados.
+  //
+  // Best-effort: sem permissão de configuração ou em falha de rede, a lista fica
+  // vazia e o operador digita a URL normalmente.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const agent = await agentsApi.get(agentId);
+        if (cancelled || !agent.siteId) return;
+
+        const effective = await getSiteEffectiveConfig(agent.siteId);
+        if (cancelled) return;
+
+        setProxyDestinations(
+          browsableDestinations(effective.remoteProxy as never),
+        );
+      } catch {
+        if (!cancelled) setProxyDestinations([]);
       }
     })();
     return () => { cancelled = true; };
@@ -2250,6 +2288,7 @@ export default function RemoteSession() {
                       .getSessionCredentials(agentId, sessions.proxy!.sessionId)
                       .then((creds) => creds.jwt)
                   }
+                  destinations={proxyDestinations}
                 />
               </div>
             </div>

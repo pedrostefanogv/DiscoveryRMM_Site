@@ -2,7 +2,7 @@ import { formatDateTime } from '@/utils/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, usePowerAction, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import {
   AGENT_DETAIL_DEFAULT_TAB,
   agentAutostartViewFromSlug,
@@ -312,6 +312,8 @@ export default function AgentDetail() {
   // Submenu de energia ("Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
+  // Reinício direto no setup do firmware (BIOS/UEFI) — confirmado num dialog dedicado.
+  const [firmwareRestartOpen, setFirmwareRestartOpen] = useState(false);
   const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
 
@@ -374,6 +376,7 @@ export default function AgentDetail() {
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
+  const powerActionMutation = usePowerAction();
   const wakeOnLan = useWakeOnLan();
   const sendAgentNotification = useSendAgentNotification();
   const agent = useAgent(id!);
@@ -1293,6 +1296,28 @@ export default function AgentDetail() {
     setPowerAction(action);
   };
 
+  // Reinício direto no setup do firmware (BIOS/UEFI): comando genérico
+  // "poweraction". O agent valida se a máquina é UEFI e devolve falha tipada
+  // (mostrada no acompanhamento) quando for BIOS legado (Legacy/CSM).
+  const handleOpenFirmwareRestart = () => {
+    setIsPowerMenuOpen(false);
+    setFirmwareRestartOpen(true);
+  };
+
+  const handleFirmwareRestartConfirm = async () => {
+    if (!id) return;
+    try {
+      const response = await powerActionMutation.mutateAsync({
+        id,
+        data: { action: 'restart-firmware', delaySeconds: 0, force: true, notifyUser: false, message: '' },
+      });
+      void awaitAgentCommandById(id, response.commandId).then(notifyAgentCommandOutcome);
+      setFirmwareRestartOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao enviar o comando de reinício no firmware.');
+    }
+  };
+
   const handleOpenWakeOnLan = () => {
     setIsPowerMenuOpen(false);
     setWakeOnLanModalOpen(true);
@@ -1796,6 +1821,16 @@ export default function AgentDetail() {
                       >
                         <Icon name="power_settings_new" className="h-4 w-4" />
                         Desligar
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={handleOpenFirmwareRestart}
+                        disabled={restartAgent.isPending || shutdownAgent.isPending || powerActionMutation.isPending}
+                        title="Reinicia direto no setup do firmware — somente UEFI; pode pedir a chave do BitLocker"
+                      >
+                        <Icon name="memory" className="h-4 w-4" />
+                        Reiniciar na BIOS/UEFI
                       </button>
                       {/* "Ligar" não aparece com o agente online: o despertar
                           só faz sentido desligado, onde o item Wake-on-LAN é
@@ -3063,6 +3098,24 @@ export default function AgentDetail() {
         isLoading={deleteAgent.isPending}
         onClose={closeDeleteAgentModal}
         onConfirm={() => { void confirmDeleteAgent(); }}
+      />
+
+      <ConfirmDialog
+        open={firmwareRestartOpen}
+        title="Reiniciar na BIOS/UEFI"
+        message={
+          <>
+            O computador <span className="font-semibold">{a.displayName ?? a.hostname}</span> vai{' '}
+            <span className="font-semibold">reiniciar imediatamente e entrar no setup do firmware (BIOS/UEFI)</span>.
+            {' '}Se a máquina estiver em BIOS legado (Legacy/CSM), o agente recusa e o motivo aparece no histórico do comando.
+            {' '}Aplicativos abertos serão fechados à força — <span className="font-semibold">salve o trabalho antes</span>.
+            {' '}Alterações de firmware/boot podem exigir a <span className="font-semibold">chave de recuperação do BitLocker</span> no próximo boot.
+          </>
+        }
+        confirmLabel="Reiniciar no firmware"
+        isLoading={powerActionMutation.isPending}
+        onClose={() => { if (!powerActionMutation.isPending) setFirmwareRestartOpen(false); }}
+        onConfirm={() => { void handleFirmwareRestartConfirm(); }}
       />
 
       {powerAction && (

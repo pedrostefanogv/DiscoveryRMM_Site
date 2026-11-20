@@ -42,6 +42,7 @@ import type {
   ValidateTransferResponse,
   RestartRequest,
   ShutdownRequest,
+  PowerActionRequest,
   WakeOnLanRequest,
   WakeOnLanResponse,
   PowerCommandResponse,
@@ -345,6 +346,11 @@ export const agentsApi = {
 
   shutdown: (id: string, data?: ShutdownRequest) =>
     api.post<PowerCommandResponse>(`${BASE}/${id}/shutdown`, data ?? {}),
+
+  // Comando genérico de energia (hoje: restart-firmware = reiniciar na BIOS/UEFI).
+  // Passa pelo dispatcher persistente; o desfecho real vem no histórico do comando.
+  powerAction: (id: string, data: PowerActionRequest) =>
+    api.post<PowerCommandResponse>(`${BASE}/${id}/power`, data),
 
   wakeOnLan: (id: string, data?: WakeOnLanRequest) =>
     api.post<WakeOnLanResponse>(`${BASE}/${id}/wake-on-lan`, data ?? {}),
