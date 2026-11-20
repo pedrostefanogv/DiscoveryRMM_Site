@@ -349,6 +349,21 @@ export default function RemoteRdp({
     };
   }, [sessionId, jwt, natsSubject, natsUrl, nkeySeed, subj, tunnelInSubject, tunnelOutSubject]);
 
+  /**
+   * Sinal BOOLEANO de "há usuário informado".
+   *
+   * NÃO usamos o próprio `username` como dependência do efeito de conexão:
+   * ele muda a cada TECLA digitada, e o efeito faz o connect completo — cada
+   * caractere disparava uma reconexão (novo ticket, novo WebSocket, novo
+   * handshake RDCleanPath). O sintoma era a tela presa em "Negociando RDP…",
+   * com o agent refazendo o handshake em loop (visível no NATS como o mesmo
+   * response de 808 bytes repetido).
+   *
+   * O booleano só muda quando o campo passa de vazio para preenchido (e
+   * vice-versa), que é exatamente quando o gate precisa reavaliar.
+   */
+  const hasUsername = username.trim().length > 0;
+
   // ── Sessão IronRDP WASM (renderização no canvas) ──
   useEffect(() => {
     if (!sessionId || !jwt || !natsUrl) return;
@@ -362,7 +377,7 @@ export default function RemoteRdp({
     // handshake NLA fadado a falhar (visível no NATS como negociação NTLMSSP
     // que nunca conclui). Em vez de tentar às cegas, pedimos as credenciais
     // ANTES — que é o comportamento esperado pelo operador.
-    if (!username.trim()) {
+    if (!hasUsername) {
       setNeedsCredentials(true);
       setIronStatus('idle');
       setIronDetail(null);
@@ -445,16 +460,16 @@ export default function RemoteRdp({
     // NÃO incluir preflightError/connectError aqui: eles são ESCRITOS por este
     // efeito e, como dependências, causariam re-execução e dead-end (o erro
     // viraria o próprio bloqueio da retentativa).
-    // username entra como dependência porque o gate de credenciais acima precisa
-    // reavaliar quando o operador informa o usuário. password/domain NÃO entram:
-    // quem dispara a conexão é o submit (connectAttempt).
-  }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, username, cleanpathOutSubject]);
+    // hasUsername (booleano) e NÃO username (string): com a string, cada tecla
+    // digitada reconectava o IronRDP (novo ticket + novo handshake em loop) e a
+    // tela ficava presa em "Negociando RDP…". password/domain nunca entram aqui.
+  }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, hasUsername, cleanpathOutSubject]);
 
   /**
    * Envia as credenciais e tenta conectar.
    *
-   * Não colocamos username/password nas dependências do efeito: o formulário
-   * atualiza o estado e incrementa connectAttempt, que é o gatilho explícito.
+   * password/domain não entram em dependência alguma: o gatilho explícito da
+   * conexão é este submit (via connectAttempt).
    */
   const submitCredentials = useCallback((e?: FormEvent) => {
     e?.preventDefault();
