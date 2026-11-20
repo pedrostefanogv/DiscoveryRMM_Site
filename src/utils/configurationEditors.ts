@@ -500,6 +500,29 @@ export const serverEditableFields: EditableField[] = [
       "Remove as gravações de sessão após o período de retenção. Desligado, as gravações vencidas continuam armazenadas e o consumo de disco cresce sem limite — a limpeza passa a ser manual. Exige reiniciar a API.",
   },
   {
+    // Allowlist de proxy do acesso remoto (destinos pré-aprovados). Editada na
+    // tela dedicada /settings/proxy-policy, que valida CIDR/porta antes de
+    // gravar; aqui o campo existe para entrar no catálogo herdável
+    // (servidor → cliente → site) e ser reconhecido em locks/herança.
+    key: "remoteProxyPolicyJson",
+    label: "Destinos Permitidos do Proxy",
+    kind: "json",
+    defaultValue: "{}",
+    group: "remoteAccess",
+    description:
+      "Allowlist de destinos do túnel TCP/HTTP do acesso remoto. {} = bloqueio total (nenhum destino passa). Editável em Configurações → Destinos do Proxy, com herança por cliente e site.",
+  },
+  {
+    // Cadastro global pré-pronto, porém inerte: nasce desligado de propósito.
+    key: "remoteProxyGlobalEntriesEnabled",
+    label: "Usar Destinos Globais do Proxy",
+    kind: "boolean",
+    defaultValue: "false",
+    group: "remoteAccess",
+    description:
+      "Habilita os destinos de proxy cadastrados no escopo GLOBAL (servidor). Desligado, eles ficam salvos mas são ignorados — destinos de cliente e site continuam valendo normalmente. Serve para preparar uma lista global antes de liberá-la para toda a frota.",
+  },
+  {
     key: "automaticLoggingEnabled",
     label: "Log Automático",
     kind: "boolean",

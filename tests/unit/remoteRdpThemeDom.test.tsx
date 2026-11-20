@@ -31,7 +31,25 @@ vi.mock('@/api/nats', () => ({
   jwtExpiresAtUtc: () => '',
 }));
 
+import { fireEvent } from '@testing-library/react';
 import RemoteRdp from '@/modules/remote-rdp/RemoteRdp';
+
+/**
+ * Preenche o usuário e submete o formulário de credenciais.
+ *
+ * Necessário porque o componente passou a EXIGIR credenciais antes de tentar
+ * conectar (RDP sempre precisa de logon do Windows). Sem isso o gate retém a
+ * conexão e nenhum alerta chega a existir.
+ */
+async function submitCredentials(user = 'operador') {
+  const input = await waitFor(
+    () => screen.getByPlaceholderText(/usuario ou usuario@dominio/i),
+    { timeout: 4000 },
+  );
+  fireEvent.change(input, { target: { value: user } });
+  const btn = screen.getByRole('button', { name: /^conectar$/i });
+  fireEvent.click(btn);
+}
 
 function mount() {
   return render(
@@ -50,8 +68,9 @@ describe('box de erro tem fundo sólido (verificação no DOM)', () => {
 
   it('a caixa de erro carrega bg-danger + text-white e nenhum fundo translúcido', async () => {
     connectIronRdp.mockReset();
-    connectIronRdp.mockRejectedValue(new Error('username missing'));
+    connectIronRdp.mockRejectedValue(new Error('falha de conexão RDP'));
     mount();
+    await submitCredentials();
 
     const alert = await waitFor(() => screen.getByRole('alert'), { timeout: 4000 });
     const cls = alert.className;
@@ -66,8 +85,9 @@ describe('box de erro tem fundo sólido (verificação no DOM)', () => {
 
   it('o container de status não tem backdrop escuro', async () => {
     connectIronRdp.mockReset();
-    connectIronRdp.mockRejectedValue(new Error('username missing'));
+    connectIronRdp.mockRejectedValue(new Error('falha de conexão RDP'));
     const { container } = mount();
+    await submitCredentials();
     await waitFor(() => screen.getByRole('alert'), { timeout: 4000 });
 
     const html = container.innerHTML;

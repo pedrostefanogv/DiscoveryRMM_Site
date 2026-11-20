@@ -1987,6 +1987,16 @@ export interface ServerConfiguration {
   natsServerHostExternal?: string;
   natsAgentJwtTtlMinutes?: number;
   natsUserJwtTtlMinutes?: number;
+  /**
+   * Allowlist de destinos do proxy do acesso remoto (JSON, ver RemoteProxyPolicy
+   * no backend). "{}" = bloqueio total. Editável em Destinos do Proxy.
+   */
+  remoteProxyPolicyJson?: string;
+  /**
+   * Habilita o uso dos destinos de proxy cadastrados no escopo GLOBAL.
+   * Nasce false: o cadastro global fica pré-pronto, porém inerte.
+   */
+  remoteProxyGlobalEntriesEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -2023,6 +2033,11 @@ export interface ClientConfiguration {
    * efetivo é o MENOR dos dois.
    */
   mcpToolCallsPerMinute?: number | null;
+  /**
+   * Allowlist de destinos do proxy do acesso remoto (JSON). null = herda do
+   * servidor; quando definida, substitui a do servidor por inteiro.
+   */
+  remoteProxyPolicyJson?: string | null;
   lockedFieldsJson?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -2059,6 +2074,11 @@ export interface SiteConfiguration {
    * efetivo é o MENOR dos dois.
    */
   mcpToolCallsPerMinute?: number | null;
+  /**
+   * Allowlist de destinos do proxy do acesso remoto (JSON). null = herda do
+   * cliente/servidor; quando definida, substitui a do nível acima por inteiro.
+   */
+  remoteProxyPolicyJson?: string | null;
   timezone?: string | null;
   location?: string | null;
   contactPerson?: string | null;
@@ -2089,6 +2109,13 @@ export interface ResolvedConfiguration {
   agentHeartbeatIntervalSeconds: number;
   agentOnlineGraceSeconds: number;
   aiIntegration: Record<string, unknown>;
+  /**
+   * Allowlist de proxy já resolvida (servidor → cliente → site). Sempre
+   * fail-closed: ausente/ inválida cai em allowlist vazia, nunca em "open".
+   */
+  remoteProxy?: Record<string, unknown>;
+  /** Habilita os destinos de proxy cadastrados no escopo GLOBAL. */
+  remoteProxyGlobalEntriesEnabled?: boolean;
   inheritance?: Record<string, number>;
   blockedFields?: string[];
   resolvedAt: string;

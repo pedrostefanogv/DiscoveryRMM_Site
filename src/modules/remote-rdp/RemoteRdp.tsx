@@ -357,6 +357,18 @@ export default function RemoteRdp({
     // Erros de conexão ficam em estado separado para permitir retry.
     if (rdpUnavailable) return;
 
+    // CREDENCIAIS SÃO OBRIGATÓRIAS PARA RDP: o IronRDP valida presença de
+    // usuário e, sem ele, ou aborta com "username missing" ou entra num
+    // handshake NLA fadado a falhar (visível no NATS como negociação NTLMSSP
+    // que nunca conclui). Em vez de tentar às cegas, pedimos as credenciais
+    // ANTES — que é o comportamento esperado pelo operador.
+    if (!username.trim()) {
+      setNeedsCredentials(true);
+      setIronStatus('idle');
+      setIronDetail(null);
+      return;
+    }
+
     let cancelled = false;
     let handle: IronRdpSessionHandle | null = null;
 
@@ -433,9 +445,10 @@ export default function RemoteRdp({
     // NÃO incluir preflightError/connectError aqui: eles são ESCRITOS por este
     // efeito e, como dependências, causariam re-execução e dead-end (o erro
     // viraria o próprio bloqueio da retentativa).
-    // username/password/domain NÃO entram nas dependências: mudá-los não deve
-    // reconectar sozinho (o formulário dispara via submitCreds -> connectAttempt).
-  }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, cleanpathOutSubject]);
+    // username entra como dependência porque o gate de credenciais acima precisa
+    // reavaliar quando o operador informa o usuário. password/domain NÃO entram:
+    // quem dispara a conexão é o submit (connectAttempt).
+  }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, username, cleanpathOutSubject]);
 
   /**
    * Envia as credenciais e tenta conectar.
@@ -567,6 +580,10 @@ export default function RemoteRdp({
               >
                 <p className="font-semibold text-foreground">
                   Informe as credenciais do Windows desta máquina para abrir a sessão RDP.
+                </p>
+                <p className="text-muted-foreground">
+                  A sessão RDP exige um logon do Windows, por isso as credenciais são
+                  necessárias antes de conectar.
                 </p>
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="flex flex-col gap-1">

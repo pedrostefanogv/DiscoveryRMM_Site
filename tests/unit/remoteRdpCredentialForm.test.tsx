@@ -49,7 +49,7 @@ describe('RemoteRdp exibe o formulário de credenciais', () => {
     cleanup();
   });
 
-  it('mostra o formulário quando o IronRDP recusa por falta de usuário', async () => {
+  it('mostra o formulário ANTES de tentar conectar (RDP exige credenciais)', async () => {
     render(
       <RemoteRdp
         sessionId="11111111-1111-1111-1111-111111111111"
@@ -60,7 +60,9 @@ describe('RemoteRdp exibe o formulário de credenciais', () => {
       />,
     );
 
-    // O formulário só aparece APÓS a falha de credencial ser detectada.
+    // O formulário aparece IMEDIATAMENTE: sem usuário não faz sentido tentar.
+    // Tentar às cegas produzia um ciclo NTLM fadado a falhar e deixava o
+    // operador sem feedback (tela em "Negociando RDP…" indefinidamente).
     await waitFor(
       () => {
         expect(screen.getByText(/Informe as credenciais/i)).toBeTruthy();
@@ -68,13 +70,16 @@ describe('RemoteRdp exibe o formulário de credenciais', () => {
       { timeout: 4000 },
     );
 
+    // E NÃO deve ter chamado o IronRDP sem credenciais.
+    expect(connectIronRdp).not.toHaveBeenCalled();
+
     // Campos essenciais presentes.
     expect(screen.getByPlaceholderText(/usuario ou usuario@dominio/i)).toBeTruthy();
     expect(document.querySelector('input[type="password"]')).toBeTruthy();
     expect(screen.getByRole('button', { name: /conectar/i })).toBeTruthy();
   });
 
-  it('NÃO oferece "Tentar novamente" quando faltam credenciais', async () => {
+  it('o botão Conectar fica desabilitado sem usuário', async () => {
     render(
       <RemoteRdp
         sessionId="11111111-1111-1111-1111-111111111111"
@@ -89,12 +94,14 @@ describe('RemoteRdp exibe o formulário de credenciais', () => {
       expect(screen.getByText(/Informe as credenciais/i)).toBeTruthy();
     }, { timeout: 4000 });
 
-    // Com credencial faltando, o retry cego repetiria o mesmo erro em loop:
-    // o caminho correto é o formulário.
-    expect(screen.queryByRole('button', { name: /tentar novamente/i })).toBeNull();
+    // Sem usuário o submit não tem o que enviar: fica desabilitado.
+    const btn = screen.getByRole('button', { name: /^conectar$/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    // E não há erro de conexão ainda (nada foi tentado).
+    expect(screen.queryByText(/username missing/i)).toBeNull();
   });
 
-  it('mostra a mensagem de erro original em vez de [object Object]', async () => {
+  it('sem credenciais: não exibe erro cru nem fica preso em "Negociando"', async () => {
     render(
       <RemoteRdp
         sessionId="11111111-1111-1111-1111-111111111111"
@@ -106,10 +113,14 @@ describe('RemoteRdp exibe o formulário de credenciais', () => {
     );
 
     await waitFor(() => {
-      const txt = document.body.textContent ?? '';
-      expect(txt).toContain('username missing');
-      expect(txt).not.toContain('[object Object]');
-      expect(txt).not.toContain('__wbg_ptr');
+      expect(screen.getByText(/Informe as credenciais/i)).toBeTruthy();
     }, { timeout: 4000 });
+
+    const txt = document.body.textContent ?? '';
+    // Nunca vazar detalhe interno do WASM nem objeto cru.
+    expect(txt).not.toContain('[object Object]');
+    expect(txt).not.toContain('__wbg_ptr');
+    // E não deve ter começado a negociação sem credenciais.
+    expect(txt).not.toContain('Negociando RDP');
   });
 });

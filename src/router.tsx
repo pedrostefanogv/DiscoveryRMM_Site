@@ -67,6 +67,7 @@ const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfig
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const EffectiveConfigurationPage = lazy(() => import('@/pages/settings/EffectiveConfigurationPage'));
 const RemoteConsentSettings = lazy(() => import('@/pages/settings/RemoteConsentSettings'));
+const RemoteProxyPolicySettings = lazy(() => import('@/pages/settings/RemoteProxyPolicySettings'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
@@ -663,6 +664,14 @@ export const routes: RouteObject[] = [
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*', 'identity.*']}>
             <LazyPage><RemoteConsentSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/proxy-policy',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><RemoteProxyPolicySettings /></LazyPage>
           </PermissionGate>
         ),
       },

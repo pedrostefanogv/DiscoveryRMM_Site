@@ -50,6 +50,12 @@ const groups: SettingsGroup[] = [
         to: "/settings/remote-consent",
         icon: <Icon name="gpp_maybe" className="h-5 w-5" />,
       },
+      {
+        title: "Destinos Permitidos do Proxy",
+        description: "Allowlist de destinos do túnel do acesso remoto, por global, cliente e site.",
+        to: "/settings/proxy-policy",
+        icon: <Icon name="lan" className="h-5 w-5" />,
+      },
     ],
   },
   {
