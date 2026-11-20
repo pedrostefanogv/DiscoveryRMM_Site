@@ -149,7 +149,10 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
   //  2. backtrace do WASM (causa do lado Rust);
   //  3. explicação genérica pelo kind.
   if (rawMessage) {
-    info.message = rawMessage;
+    // Falha de credencial do Windows: traduz para algo acionável em vez de
+    // expor o texto cru do CredSSP.
+    const friendly = describeCredentialFailure(rawMessage);
+    info.message = friendly ?? rawMessage;
     return info;
   }
   if (wasmDetail) {
@@ -259,7 +262,20 @@ export function isCredentialError(info: IronRdpErrorInfo): boolean {
     msg.includes('credentials missing') ||
     msg.includes('credentials required') ||
     msg.includes('missing username') ||
-    msg.includes('missing password')
+    msg.includes('missing password') ||
+    // CredSSP/NLA rejeitou as credenciais no servidor Windows:
+    //   STATUS_LOGON_FAILURE (0xc000006d) = usuario ou senha incorretos
+    //   STATUS_NO_SUCH_USER  (0xc0000064) = usuario inexistente
+    //   STATUS_ACCOUNT_DISABLED / LOCKED / EXPIRED
+    msg.includes('status_logon_failure') ||
+    msg.includes('0xc000006d') ||
+    msg.includes('status_no_such_user') ||
+    msg.includes('0xc0000064') ||
+    msg.includes('status_account_disabled') ||
+    msg.includes('status_account_locked_out') ||
+    msg.includes('status_password_expired') ||
+    msg.includes('logon_failure') ||
+    msg.includes('logonfailure')
   );
 }
 
@@ -279,6 +295,36 @@ function kindName(k: unknown): string {
   };
   if (typeof k === 'number' && map[k]) return map[k];
   return 'unknown';
+}
+
+/**
+ * Traduz falhas de credencial do Windows (CredSSP/NLA) para texto acionável.
+ *
+ * O erro cru do IronRDP é longo e em inglês:
+ *   "[CredSSP] CredSSP: InvalidToken: CredSSP server returned an error status;
+ *    status is STATUS_LOGON_FAILURE [0xc000006d]"
+ */
+export function describeCredentialFailure(message: string): string | null {
+  const m = (message || '').toLowerCase();
+  if (m.includes('0xc000006d') || m.includes('status_logon_failure')) {
+    return 'Usuário ou senha incorretos. Confira o usuário, a senha e o domínio (deixe o domínio vazio para conta local).';
+  }
+  if (m.includes('0xc0000064') || m.includes('status_no_such_user')) {
+    return 'Esse usuário não existe nesta máquina. Verifique o nome ou informe o domínio correto.';
+  }
+  if (m.includes('0xc0000234') || m.includes('status_account_locked_out')) {
+    return 'A conta está bloqueada por tentativas incorretas. Desbloqueie no Windows e tente de novo.';
+  }
+  if (m.includes('0xc0000072') || m.includes('status_account_disabled')) {
+    return 'A conta está desabilitada no Windows.';
+  }
+  if (m.includes('0xc0000071') || m.includes('status_password_expired')) {
+    return 'A senha dessa conta expirou. Redefina no Windows.';
+  }
+  if (m.includes('logon_failure') || m.includes('invalidtoken')) {
+    return 'O Windows recusou o logon. Verifique usuário, senha e domínio.';
+  }
+  return null;
 }
 
 /** Explica a falha quando não há mensagem nem código disponíveis. */

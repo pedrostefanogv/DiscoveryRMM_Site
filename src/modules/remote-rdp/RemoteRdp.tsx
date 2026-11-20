@@ -128,11 +128,19 @@ export default function RemoteRdp({
   const [rdpUnavailable, setRdpUnavailable] = useState(false);
   // Contador de tentativas: cada retry consome um ticket novo (uso único).
   const [connectAttempt, setConnectAttempt] = useState(0);
-  // Credenciais RDP. Necessárias porque o IronRDP RECUSA connect() sem usuário
-  // ("username missing"). Ficam apenas em memória — nunca em localStorage.
+  // Campos do formulário de credenciais RDP. Ficam apenas em memória — nunca
+  // em localStorage.
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [domain, setDomain] = useState('');
+  // SNAPSHOT das credenciais SUBMETIDAS (no clique de "Conectar").
+  //
+  // A conexão usa ESTE valor, nunca o campo em digitação. Motivo (bug real,
+  // confirmado no log do Windows com "user=p"): ao depender do campo, o efeito
+  // de conexão disparava na PRIMEIRA TECLA — quando o usuário digitava "p" de
+  // "pedro", o IronRDP já conectava com o valor parcial "p" e o servidor
+  // respondia STATUS_NO_SUCH_USER (0xc0000064).
+  const [submitted, setSubmitted] = useState<{ username: string; password: string; domain: string } | null>(null);
   const [needsCredentials, setNeedsCredentials] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
   const [ironStatus, setIronStatus] = useState<IronRdpStatus>('idle');
@@ -349,21 +357,6 @@ export default function RemoteRdp({
     };
   }, [sessionId, jwt, natsSubject, natsUrl, nkeySeed, subj, tunnelInSubject, tunnelOutSubject]);
 
-  /**
-   * Sinal BOOLEANO de "há usuário informado".
-   *
-   * NÃO usamos o próprio `username` como dependência do efeito de conexão:
-   * ele muda a cada TECLA digitada, e o efeito faz o connect completo — cada
-   * caractere disparava uma reconexão (novo ticket, novo WebSocket, novo
-   * handshake RDCleanPath). O sintoma era a tela presa em "Negociando RDP…",
-   * com o agent refazendo o handshake em loop (visível no NATS como o mesmo
-   * response de 808 bytes repetido).
-   *
-   * O booleano só muda quando o campo passa de vazio para preenchido (e
-   * vice-versa), que é exatamente quando o gate precisa reavaliar.
-   */
-  const hasUsername = username.trim().length > 0;
-
   // ── Sessão IronRDP WASM (renderização no canvas) ──
   useEffect(() => {
     if (!sessionId || !jwt || !natsUrl) return;
@@ -374,10 +367,14 @@ export default function RemoteRdp({
 
     // CREDENCIAIS SÃO OBRIGATÓRIAS PARA RDP: o IronRDP valida presença de
     // usuário e, sem ele, ou aborta com "username missing" ou entra num
-    // handshake NLA fadado a falhar (visível no NATS como negociação NTLMSSP
-    // que nunca conclui). Em vez de tentar às cegas, pedimos as credenciais
-    // ANTES — que é o comportamento esperado pelo operador.
-    if (!hasUsername) {
+    // handshake NLA fadado a falhar. Pedimos as credenciais ANTES — o
+    // comportamento esperado pelo operador.
+    //
+    // IMPORTANTE: o gate olha o SNAPSHOT `submitted`, não os campos do
+    // formulário. Se olhasse os campos, o efeito dispararia na primeira tecla
+    // e conectaria com o usuário PARCIAL (bug real: "pedro" virava "p" e o
+    // servidor respondia STATUS_NO_SUCH_USER).
+    if (!submitted) {
       setNeedsCredentials(true);
       setIronStatus('idle');
       setIronDetail(null);
@@ -411,9 +408,10 @@ export default function RemoteRdp({
           canvas: liveCanvas,
           proxyUrl,
           destination: `127.0.0.1:3389`,
-          username,
-          password,
-          domain,
+          // Credenciais do SNAPSHOT (submetidas no clique), nunca o campo vivo.
+          username: submitted.username,
+          password: submitted.password,
+          domain: submitted.domain,
           width: liveCanvas.width || DEFAULT_WIDTH,
           height: liveCanvas.height || DEFAULT_HEIGHT,
           enableCredssp: true,
@@ -458,12 +456,17 @@ export default function RemoteRdp({
       if (sessionHandleRef.current === handle) sessionHandleRef.current = null;
     };
     // NÃO incluir preflightError/connectError aqui: eles são ESCRITOS por este
-    // efeito e, como dependências, causariam re-execução e dead-end (o erro
-    // viraria o próprio bloqueio da retentativa).
-    // hasUsername (booleano) e NÃO username (string): com a string, cada tecla
-    // digitada reconectava o IronRDP (novo ticket + novo handshake em loop) e a
-    // tela ficava presa em "Negociando RDP…". password/domain nunca entram aqui.
-  }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, hasUsername, cleanpathOutSubject]);
+    // efeito e, como dependências, causariam re-execução e dead-end.
+    //
+    // As dependências usam o SNAPSHOT submitted, nunca os campos username/
+    // password/domain. Dois bugs reais nasceram de usar os campos aqui:
+    //   1. username (string) -> cada TECLA reconectava (ticket + handshake novos
+    //      em loop) e a tela ficava presa em "Negociando RDP...";
+    //   2. hasUsername (booleano) -> disparava na PRIMEIRA tecla e conectava com
+    //      o usuário PARCIAL: "pedro" chegava como "p" no Windows, que respondia
+    //      STATUS_NO_SUCH_USER (0xc0000064).
+    // submitted só muda no clique de Conectar, junto de connectAttempt.
+  }, [sessionId, jwt, natsUrl, agentId, rdpUnavailable, connectAttempt, submitted, cleanpathOutSubject]);
 
   /**
    * Envia as credenciais e tenta conectar.
@@ -473,10 +476,16 @@ export default function RemoteRdp({
    */
   const submitCredentials = useCallback((e?: FormEvent) => {
     e?.preventDefault();
-    if (!username.trim()) return;
+    const u = username.trim();
+    if (!u) return;
+    // Congela as credenciais: a conexão usa este snapshot, não os campos vivos.
+    setSubmitted({ username: u, password, domain: domain.trim() });
     setConnectError(null);
+    // Esconde o formulário durante a tentativa; se as credenciais forem
+    // recusadas pelo Windows, o catch volta a exibi-lo para o operador corrigir.
+    setNeedsCredentials(false);
     setConnectAttempt((n) => n + 1);
-  }, [username]);
+  }, [username, password, domain]);
 
   // Limpa a senha da memória ao desmontar (troca de aba/encerramento).
   useEffect(() => () => {
