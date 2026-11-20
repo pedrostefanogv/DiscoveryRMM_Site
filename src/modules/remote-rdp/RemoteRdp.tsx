@@ -658,11 +658,16 @@ export default function RemoteRdp({
               </form>
             )}
             {/* Fundo preto SÓ no canvas: é a área do desktop remoto (letterbox). */}
+            {/* tabIndex: o canvas precisa receber FOCO para capturar teclado.
+                Sem ele o mouse funciona mas a digitacao vai para a pagina.
+                outline-none evita o anel de foco padrao do navegador por cima
+                do desktop remoto. */}
             <canvas
               ref={canvasRef}
               width={DEFAULT_WIDTH}
               height={DEFAULT_HEIGHT}
-              className="flex-1 min-h-0 w-full bg-black rounded border border-border"
+              tabIndex={0}
+              className="flex-1 min-h-0 w-full bg-black rounded border border-border outline-none focus:border-primary"
               aria-label="Área de trabalho remota"
             />
             {error && (

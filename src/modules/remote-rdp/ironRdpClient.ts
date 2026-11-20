@@ -419,6 +419,17 @@ export interface IronRdpModule {
   SessionBuilder: new () => IronSessionBuilder;
   DesktopSize: new (width: number, height: number) => unknown;
   Extension: new (ident: string, value: unknown) => unknown;
+  /** Fabrica de eventos de entrada (mouse/teclado/roda). */
+  DeviceEvent: {
+    keyPressed: (scancode: number) => unknown;
+    keyReleased: (scancode: number) => unknown;
+    mouseButtonPressed: (button: number) => unknown;
+    mouseButtonReleased: (button: number) => unknown;
+    mouseMove: (x: number, y: number) => unknown;
+    wheelRotations: (vertical: boolean, amount: number, unit: number) => unknown;
+  };
+  /** Transacao que agrupa eventos de entrada. */
+  InputTransaction: new () => { addEvent: (e: unknown) => void };
 }
 
 interface IronSessionBuilder {
@@ -449,6 +460,167 @@ interface IronSession {
   resize: (w: number, h: number, scale?: number | null, pw?: number | null, ph?: number | null) => void;
   shutdown: () => void;
   free: () => void;
+  /** Envia um lote de eventos de mouse/teclado ao desktop remoto. */
+  applyInputs: (transaction: unknown) => void;
+}
+
+
+/**
+ * Mapa de scancodes PS/2 Set 1 (KeyboardEvent.code -> scancode do RDP).
+ *
+ * Teclas estendidas levam o prefixo 0xE0 (ex.: setas, Home/End, Ctrl direito).
+ * Este mapa e o contrato do IronRDP: enviar o scancode ERRADO faz a tecla sair
+ * trocada no desktop remoto, por isso ele fica aqui, explicito e completo.
+ */
+const SCANCODE_MAP: Record<string, number> = {
+  Escape: 0x01, Digit1: 0x02, Digit2: 0x03, Digit3: 0x04,
+  Digit4: 0x05, Digit5: 0x06, Digit6: 0x07, Digit7: 0x08,
+  Digit8: 0x09, Digit9: 0x0a, Digit0: 0x0b, Minus: 0x0c,
+  Equal: 0x0d, Backspace: 0x0e, Tab: 0x0f,
+  KeyQ: 0x10, KeyW: 0x11, KeyE: 0x12, KeyR: 0x13,
+  KeyT: 0x14, KeyY: 0x15, KeyU: 0x16, KeyI: 0x17,
+  KeyO: 0x18, KeyP: 0x19, BracketLeft: 0x1a, BracketRight: 0x1b,
+  Enter: 0x1c, ControlLeft: 0x1d,
+  KeyA: 0x1e, KeyS: 0x1f, KeyD: 0x20, KeyF: 0x21,
+  KeyG: 0x22, KeyH: 0x23, KeyJ: 0x24, KeyK: 0x25,
+  KeyL: 0x26, Semicolon: 0x27, Quote: 0x28, Backquote: 0x29,
+  ShiftLeft: 0x2a, Backslash: 0x2b,
+  KeyZ: 0x2c, KeyX: 0x2d, KeyC: 0x2e, KeyV: 0x2f,
+  KeyB: 0x30, KeyN: 0x31, KeyM: 0x32, Comma: 0x33,
+  Period: 0x34, Slash: 0x35, ShiftRight: 0x36,
+  NumpadMultiply: 0x37, AltLeft: 0x38, Space: 0x39,
+  CapsLock: 0x3a,
+  F1: 0x3b, F2: 0x3c, F3: 0x3d, F4: 0x3e,
+  F5: 0x3f, F6: 0x40, F7: 0x41, F8: 0x42,
+  F9: 0x43, F10: 0x44,
+  NumLock: 0x45, ScrollLock: 0x46,
+  Numpad7: 0x47, Numpad8: 0x48, Numpad9: 0x49,
+  NumpadSubtract: 0x4a, Numpad4: 0x4b, Numpad5: 0x4c,
+  Numpad6: 0x4d, NumpadAdd: 0x4e, Numpad1: 0x4f,
+  Numpad2: 0x50, Numpad3: 0x51, Numpad0: 0x52,
+  NumpadDecimal: 0x53,
+  F11: 0x57, F12: 0x58,
+  NumpadEnter: 0xe01c, ControlRight: 0xe01d,
+  NumpadDivide: 0xe035, PrintScreen: 0xe037,
+  AltRight: 0xe038, Home: 0xe047, ArrowUp: 0xe048,
+  PageUp: 0xe049, ArrowLeft: 0xe04b, ArrowRight: 0xe04d,
+  End: 0xe04f, ArrowDown: 0xe050, PageDown: 0xe051,
+  Insert: 0xe052, Delete: 0xe053,
+  MetaLeft: 0xe05b, MetaRight: 0xe05c, ContextMenu: 0xe05d,
+  Pause: 0xe11d45,
+};
+
+/** RotationUnit.Line do IronRDP (roda do mouse em "linhas", nao pixels). */
+const WHEEL_ROTATION_UNIT_LINE = 1;
+
+/** Handle dos handlers de input anexados ao canvas. */
+export interface IronRdpInputHandle {
+  /** Remove todos os listeners. Idempotente. */
+  detach: () => void;
+}
+
+/**
+ * Anexa a captura de mouse/teclado/roda ao canvas e envia os eventos ao RDP.
+ *
+ * POR QUE ISTO E NECESSARIO: renderCanvas() apenas DESENHA a tela remota. Ele
+ * nao captura entrada. Sem estes handlers, o desktop remoto aparece mas nao
+ * aceita clique nem digitacao — e o navegador trata o clique direito como
+ * menu de contexto proprio em vez de enviar ao Windows remoto.
+ *
+ * O mapeamento de scancodes e o contrato do IronRDP: um scancode errado faz a
+ * tecla sair trocada no destino.
+ */
+export function attachInputHandlers(
+  canvas: HTMLCanvasElement,
+  session: IronSession,
+  mod: IronRdpModule,
+): IronRdpInputHandle {
+  const { DeviceEvent, InputTransaction } = mod;
+  const send = (event: unknown) => {
+    const tx = new (InputTransaction as unknown as new () => { addEvent: (e: unknown) => void })();
+    tx.addEvent(event);
+    session.applyInputs(tx);
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    // preventDefault impede o navegador de tratar a tecla (ex.: Ctrl+W, F5).
+    e.preventDefault();
+    e.stopPropagation();
+    const sc = SCANCODE_MAP[e.code];
+    if (sc === undefined) return;
+    try { send(DeviceEvent.keyPressed(sc)); } catch { /* sessao encerrada */ }
+  };
+
+  const onKeyUp = (e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sc = SCANCODE_MAP[e.code];
+    if (sc === undefined) return;
+    try { send(DeviceEvent.keyReleased(sc)); } catch { /* sessao encerrada */ }
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    try {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      // A tela remota tem resolucao propria (canvas.width/height), que pode
+      // diferir do tamanho exibido: sem escalar, o cursor fica deslocado.
+      const x = Math.round((e.clientX - rect.left) * (canvas.width / rect.width));
+      const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
+      send(DeviceEvent.mouseMove(x, y));
+    } catch { /* sessao encerrada */ }
+  };
+
+  const onMouseDown = (e: MouseEvent) => {
+    e.preventDefault();
+    // Foca o canvas para que o teclado passe a ser capturado.
+    canvas.focus();
+    try { send(DeviceEvent.mouseButtonPressed(e.button)); } catch { /* sessao encerrada */ }
+  };
+
+  const onMouseUp = (e: MouseEvent) => {
+    e.preventDefault();
+    try { send(DeviceEvent.mouseButtonReleased(e.button)); } catch { /* sessao encerrada */ }
+  };
+
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    try {
+      if (e.deltaY !== 0) {
+        send(DeviceEvent.wheelRotations(true, e.deltaY > 0 ? -1 : 1, WHEEL_ROTATION_UNIT_LINE));
+      }
+      if (e.deltaX !== 0) {
+        send(DeviceEvent.wheelRotations(false, e.deltaX > 0 ? -1 : 1, WHEEL_ROTATION_UNIT_LINE));
+      }
+    } catch { /* sessao encerrada */ }
+  };
+
+  // ESTE e o handler que resolve o sintoma relatado: sem ele, o clique direito
+  // abre o menu de contexto do NAVEGADOR em vez de ir para o Windows remoto.
+  const onContextMenu = (e: Event) => e.preventDefault();
+
+  canvas.addEventListener('keydown', onKeyDown);
+  canvas.addEventListener('keyup', onKeyUp);
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('contextmenu', onContextMenu);
+
+  let detached = false;
+  return {
+    detach: () => {
+      if (detached) return;
+      detached = true;
+      canvas.removeEventListener('keydown', onKeyDown);
+      canvas.removeEventListener('keyup', onKeyUp);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+    },
+  };
 }
 
 /**
@@ -526,6 +698,12 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
     throw Object.assign(new Error(info.message), { ironRdp: info });
   }
 
+  // Captura de entrada: sem isto o desktop aparece mas NAO aceita clique nem
+  // digitacao (e o clique direito abre o menu do NAVEGADOR).
+  const input = attachInputHandlers(canvas, session, mod);
+  // O canvas precisa receber foco para capturar teclado.
+  try { canvas.tabIndex = 0; } catch { /* atributo opcional */ }
+
   setStatus('connected', 'Sessão RDP ativa');
 
   // run() bloqueia ate a sessao terminar; nao aguardamos aqui para o componente
@@ -547,6 +725,7 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      input.detach();
       try { session.shutdown(); } catch { /* ja encerrada */ }
       try { session.free(); } catch { /* liberado */ }
     },
