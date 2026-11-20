@@ -73,6 +73,12 @@ const settingsLinks = [
   { to: '/settings/client', label: 'Cliente' },
   { to: '/settings/site', label: 'Site' },
   { to: '/settings/effective', label: 'Config. Efetiva' },
+  // Acesso remoto: consentimento e a allowlist de destinos do túnel do proxy.
+  { to: '/settings/remote-consent', label: 'Autorização Remota' },
+  { to: '/settings/proxy-policy', label: 'Destinos do Proxy' },
+  // Este menu é uma lista PRÓPRIA, paralela às rotas — registrar a página em
+  // router.tsx não a faz aparecer aqui.
+
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/notifications', label: 'Notificações' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },
@@ -107,10 +113,23 @@ type SidebarAccordionSection =
   | 'identity'
   | 'settings';
 
+/**
+ * Classe do submenu animado.
+ *
+ * O max-height fechado é 0 e o aberto precisa COMPORTAR o conteúdo. Antes era
+ * fixo em max-h-96 (384px) e "Configurações" — o maior submenu — passou a ter
+ * itens cortados: com overflow-hidden eles sumiam sem barra de rolagem, dando a
+ * impressão de menu incompleto. Cada item ocupa ~32px (py-1.5 + text-sm), então
+ * 13 itens já estouravam os 384px.
+ *
+ * max-h-[32rem] dá folga confortável (comporta ~16 itens) sem custo visual.
+ * Se um submenu passar disso, aumente aqui — de novo, é um teto de animação,
+ * não um limite de layout.
+ */
 function submenuAnimationClass(isOpen: boolean): string {
   return [
     'overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out',
-    isOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1 pointer-events-none',
+    isOpen ? 'max-h-[32rem] opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1 pointer-events-none',
   ].join(' ');
 }
 

@@ -139,12 +139,15 @@ export default function RemoteProxyPolicySettings() {
       const entries = entityId
         ? await getEntityAudit(entityType, entityId, 50)
         : await getRecentAudit(30, 200);
+      // O backend grava o fieldName EXATAMENTE como veio no corpo do PATCH, e o
+      // cliente envia camelCase (raw Dictionary<string, object> no controller).
+      // Comparar só com PascalCase deixaria o histórico vazio.
+      const relevant = new Set([
+        "remoteproxypolicyjson",
+        "remoteproxyglobalentriesenabled",
+      ]);
       setAuditEntries(
-        entries.filter(
-          (entry) =>
-            entry.fieldName === "RemoteProxyPolicyJson" ||
-            entry.fieldName === "RemoteProxyGlobalEntriesEnabled",
-        ),
+        entries.filter((entry) => relevant.has((entry.fieldName ?? "").toLowerCase())),
       );
     } catch {
       // Auditoria é informativa: falha aqui não deve quebrar a tela.
@@ -386,8 +389,14 @@ export default function RemoteProxyPolicySettings() {
           <Card>
             <CardHeader
               title="Destinos pré-aprovados"
-              subtitle="CIDR ou IP avulso. Portas vazias = todas as portas daquele destino."
+              subtitle="CIDR ou IP avulso."
             />
+            <div className="mx-4 mb-3 rounded border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+              As portas são aplicadas à <strong>sessão inteira</strong>, não só ao destino em
+              que foram digitadas: o agent mantém um único conjunto de portas. Se você
+              declarar <code>8006</code> em qualquer destino, <em>somente</em> 8006 será
+              permitida em todos eles. Deixar todas as portas vazias libera qualquer porta.
+            </div>
             <div className="space-y-3 p-4">
               {policy.entries.length === 0 && (
                 <p className="text-sm text-muted-foreground">
@@ -450,7 +459,7 @@ export default function RemoteProxyPolicySettings() {
             />
             <div className="space-y-4 p-4">
               <div>
-                <label className="block text-sm font-medium">Portas globais permitidas</label>
+                <label className="block text-sm font-medium">Portas permitidas (todas as sessões)</label>
                 <input
                   className="mt-1 w-full rounded border border-border bg-surface px-2 py-1.5 text-sm"
                   placeholder="Vazio = todas as portas"
@@ -461,7 +470,8 @@ export default function RemoteProxyPolicySettings() {
                   }}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Aplicado a TODOS os destinos. Vazio libera qualquer porta.
+                  Somadas às portas declaradas nos destinos acima. Vazio em ambos = qualquer
+                  porta.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {PORT_PRESETS.map((preset) => (
