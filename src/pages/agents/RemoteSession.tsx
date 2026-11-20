@@ -22,7 +22,8 @@ import RemoteScreenViewer, {
   type MonitorInfo,
   type RemoteScreenViewerHandle,
 } from '@/modules/remote-screen/RemoteScreenViewer';
-import { SPECIAL_KEY_GROUPS } from '@/modules/remote-screen/specialKeys';
+// Menu de teclas especiais COMPARTILHADO com o viewer RDP.
+import SpecialKeysMenu from '@/components/SpecialKeysMenu';
 import {
   inputLockButtonLabel,
   inputLockButtonTitle,
@@ -558,9 +559,7 @@ export default function RemoteSession() {
   const screenViewerRef = useRef<RemoteScreenViewerHandle | null>(null);
   const [inputLockState, setInputLockState] = useState<InputLockChangedState | null>(null);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
-  const [specialKeysOpen, setSpecialKeysOpen] = useState(false);
   const lockMenuRef = useRef<HTMLDivElement | null>(null);
-  const specialKeysMenuRef = useRef<HTMLDivElement | null>(null);
   // Popovers compactos da barra superior (sessões e ajustes finos).
   const [livenessPopoverOpen, setLivenessPopoverOpen] = useState(false);
   const livenessPopoverRef = useRef<HTMLDivElement | null>(null);
@@ -569,12 +568,11 @@ export default function RemoteSession() {
 
   // Menus/popovers: fecham ao clicar fora e ao trocar de aba.
   useEffect(() => {
-    if (!specialKeysOpen && !lockConfirmOpen && !livenessPopoverOpen && !qualitySettingsOpen) return;
+    if (!lockConfirmOpen && !livenessPopoverOpen && !qualitySettingsOpen) return;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
-      if (specialKeysOpen && !specialKeysMenuRef.current?.contains(target)) {
-        setSpecialKeysOpen(false);
-      }
+      // O menu de teclas especiais cuida do próprio fechamento (componente
+      // SpecialKeysMenu), por isso não aparece aqui.
       if (lockConfirmOpen && !lockMenuRef.current?.contains(target)) {
         setLockConfirmOpen(false);
       }
@@ -587,10 +585,10 @@ export default function RemoteSession() {
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [specialKeysOpen, lockConfirmOpen, livenessPopoverOpen, qualitySettingsOpen]);
+  }, [lockConfirmOpen, livenessPopoverOpen, qualitySettingsOpen]);
 
   useEffect(() => {
-    setSpecialKeysOpen(false);
+    // O menu de teclas fecha pela prop key={activeTab} do SpecialKeysMenu.
     setLockConfirmOpen(false);
     setLivenessPopoverOpen(false);
     setQualitySettingsOpen(false);
@@ -2531,56 +2529,14 @@ export default function RemoteSession() {
               )}
             </div>
             {/* Teclas especiais: combinações que o SO LOCAL interceptaria se
-                fossem digitadas (Ctrl+Alt+Del, Win+L, Alt+Tab, tecla Win...). */}
-            <div ref={specialKeysMenuRef} className="relative">
-              <button
-                className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
-                onClick={() => setSpecialKeysOpen((open) => !open)}
-                aria-expanded={specialKeysOpen}
-                aria-haspopup="menu"
-                title="Enviar uma combinação de teclas ao host remoto (Ctrl+Alt+Del, Win+L, Alt+Tab...)"
-              >
-                ⌨ Teclas
-              </button>
-              {specialKeysOpen && (
-                <div
-                  role="menu"
-                  aria-label="Teclas especiais"
-                  className="absolute bottom-full right-0 z-30 mb-1 max-h-72 w-64 overflow-auto rounded border border-border bg-surface p-1.5 text-xs shadow-lg"
-                >
-                  {SPECIAL_KEY_GROUPS.map((group) => (
-                    <div key={group.title} className="mb-1.5 last:mb-0">
-                      <div className="px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {group.title}
-                      </div>
-                      {group.items.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          className="block w-full rounded px-1.5 py-1 text-left text-foreground hover:bg-surface-hover"
-                          title={item.hint ?? `Enviar ${item.label} ao host remoto`}
-                          onClick={() => {
-                            screenViewerRef.current?.sendSpecialKey(item.id);
-                            setSpecialKeysOpen(false);
-                          }}
-                        >
-                          {item.label}
-                          {item.dedicated && (
-                            <span
-                              className="ml-1 text-[10px] text-warning"
-                              title="Enviada por API dedicada no agent (SAS/bloqueio)"
-                            >
-                              ★
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                fossem digitadas (Ctrl+Alt+Del, Win+L, Alt+Tab, tecla Win...).
+                Componente COMPARTILHADO com o viewer RDP.
+                key={activeTab} fecha o menu ao trocar de aba. */}
+            <SpecialKeysMenu
+              key={activeTab}
+              direction="up"
+              onSelect={(id) => screenViewerRef.current?.sendSpecialKey(id)}
+            />
             </>
           )}
           {agentId && (

@@ -15,8 +15,12 @@ import {
   preloadIronRdp,
   type IronRdpSessionHandle,
   type IronRdpStatus,
-  type SpecialKeyCombo,
 } from './ironRdpClient';
+// Menu de teclas especiais COMPARTILHADO com o acesso remoto de tela.
+import SpecialKeysMenu from '@/components/SpecialKeysMenu';
+// Reaproveita o utilitario de tela cheia do viewer de tela (fallbacks webkit/ms
+// + listener de fullscreenchange) em vez de chamar a API direto aqui.
+import { fullscreenApi } from '@/utils/fullscreen';
 
 interface RemoteRdpProps {
   sessionId: string;
@@ -159,6 +163,9 @@ export default function RemoteRdp({
   // para o operador CONFIRMAR que o Windows redimensionou de fato — sem isso não
   // há como distinguir "redimensionou" de "só esticou a imagem".
   const [desktopRes, setDesktopRes] = useState<{ width: number; height: number } | null>(null);
+  // Tela cheia do desktop remoto.
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const serviceRef = useRef<NatsService | null>(null);
   const sessionHandleRef = useRef<IronRdpSessionHandle | null>(null);
@@ -507,6 +514,30 @@ export default function RemoteRdp({
   };
 
   /**
+   * Envia a tecla especial escolhida no menu (que se fecha sozinho).
+   *
+   * O foco volta ao canvas de propósito: sem isso, o clique no menu tiraria o
+   * foco da área remota e as teclas seguintes não chegariam ao Windows.
+   */
+  const handleSpecialKey = useCallback((comboId: string) => {
+    // Devolve o foco ao canvas para o teclado seguir indo para o RDP.
+    canvasRef.current?.focus();
+    sessionHandleRef.current?.sendSpecialKeys(comboId);
+  }, []);
+
+  /** Alterna tela cheia no container do WebRDP. */
+  const toggleFullscreen = useCallback(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    // fullscreenApi ja trata fallbacks (webkit/ms) e nunca lanca.
+    void fullscreenApi.toggle(el);
+  }, []);
+
+  // Mantém o estado em sincronia com o navegador: o usuário pode sair da tela
+  // cheia por Esc ou pelo próprio navegador, sem passar pelo nosso botão.
+  useEffect(() => fullscreenApi.onChange(setIsFullscreen), []);
+
+  /**
    * Aviso exibido SOBRE o canvas quando não há sessão ativa.
    *
    * Serve a dois propósitos: (1) LIMPAR a tela — o canvas continuaria mostrando
@@ -551,7 +582,12 @@ export default function RemoteRdp({
   })();
 
   return (
-    <div className="flex flex-col h-full bg-background text-foreground">
+    <div
+      ref={rootRef}
+      className={`flex flex-col bg-background text-foreground ${
+        isFullscreen ? 'h-screen w-screen' : 'h-full'
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-surface border-b border-border text-xs">
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold shadow-sm ${tone}`}>
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/90" aria-hidden />
@@ -566,6 +602,38 @@ export default function RemoteRdp({
             stream ativo
           </span>
         )}
+        <span className="flex-1" />
+
+        {/* Teclas especiais: MESMO componente usado no acesso remoto de tela.
+            Antes eram 7 botões soltos ocupando a largura toda do rodapé. */}
+        <SpecialKeysMenu
+          onSelect={handleSpecialKey}
+          disabled={ironStatus !== 'connected'}
+          direction="down"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors"
+        />
+
+        {/* Tela cheia: o desktop remoto ocupa a tela toda. O estado é lido do
+            navegador (fullscreenchange), então Esc também atualiza o ícone. */}
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          disabled={ironStatus !== 'connected'}
+          aria-pressed={isFullscreen}
+          title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isFullscreen ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 8h3a2 2 0 0 0 2-2V3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M21 16h-3a2 2 0 0 0-2 2v3" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+            </svg>
+          )}
+          {isFullscreen ? 'Sair' : 'Tela cheia'}
+        </button>
       </div>
 
       {/* O fundo escuro do canvas NAO fica aqui: as caixas de status usam cores
@@ -715,24 +783,11 @@ export default function RemoteRdp({
         )}
       </div>
 
-      {/* Rodapé: teclas especiais que NÃO podem ser enviadas pelo teclado físico.
-          Ctrl+Alt+Del, por exemplo, é interceptado pelo SO do operador antes de
-          chegar ao navegador — precisa de injeção pelo canal RDP, como o
-          "Send Ctrl+Alt+Del" do mstsc. */}
-      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-surface border-t border-border text-xs">
-        <span className="text-muted-foreground mr-1">Teclas especiais:</span>
-        {SPECIAL_KEYS.map(({ combo, label, title }) => (
-          <button
-            key={combo}
-            type="button"
-            onClick={() => sessionHandleRef.current?.sendSpecialKeys(combo)}
-            disabled={ironStatus !== 'connected'}
-            title={title}
-            className="px-2 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {label}
-          </button>
-        ))}
+      {/* Rodapé: apenas INFORMAÇÃO (resolução e área de transferência). As
+          teclas especiais migraram para o menu do ícone de teclado na barra
+          superior — antes ocupavam a largura toda com 7 botões e poluíam a
+          tela, ao contrário da barra de conexão do mstsc. */}
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-surface border-t border-border text-xs">
         <span className="flex-1" />
         {/* Resolucao atual do Windows remoto (acompanha a janela). */}
         {ironStatus === 'connected' && desktopRes && (
@@ -756,23 +811,6 @@ export default function RemoteRdp({
     </div>
   );
 }
-
-/**
- * Teclas especiais oferecidas no rodapé.
- *
- * São combinações que o teclado físico não consegue produzir dentro do
- * navegador: o SO do operador intercepta Ctrl+Alt+Del, Win e Alt+Tab antes de a
- * página recebê-las. Por isso precisam de botão dedicado, como no mstsc.
- */
-const SPECIAL_KEYS: Array<{ combo: SpecialKeyCombo; label: string; title: string }> = [
-  { combo: 'ctrl-alt-del', label: 'Ctrl+Alt+Del', title: 'Envia a sequência de segurança (tela de logon / gerenciador de tarefas)' },
-  { combo: 'ctrl-shift-esc', label: 'Ctrl+Shift+Esc', title: 'Abre o Gerenciador de Tarefas do Windows remoto' },
-  { combo: 'alt-tab', label: 'Alt+Tab', title: 'Alterna entre as janelas do Windows remoto' },
-  { combo: 'alt-f4', label: 'Alt+F4', title: 'Fecha a janela ativa no Windows remoto' },
-  { combo: 'win', label: 'Win', title: 'Abre o menu Iniciar do Windows remoto' },
-  { combo: 'ctrl-esc', label: 'Ctrl+Esc', title: 'Abre o menu Iniciar do Windows remoto (alternativa)' },
-  { combo: 'print-screen', label: 'Print Screen', title: 'Captura a tela do Windows remoto para a área de transferência' },
-];
 
 /**
  * Monta a URL WebSocket do proxy RDCleanPath.

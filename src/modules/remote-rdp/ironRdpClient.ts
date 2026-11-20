@@ -72,13 +72,15 @@ export interface IronRdpSessionHandle {
   /** Redimensiona o desktop remoto. */
   resize: (width: number, height: number) => void;
   /**
-   * Envia uma combinacao de teclas especiais (ex.: Ctrl+Alt+Del).
+   * Envia uma tecla especial pelo ID canonico (ex.: 'ctrl+alt+del').
    *
-   * Necessario porque algumas combinacoes nao podem ser produzidas pelo
-   * teclado fisico no contexto do navegador (Ctrl+Alt+Del e interceptado pelo
-   * SO do operador) e precisam de injecao pelo canal RDP.
+   * Necessario porque combinacoes como Ctrl+Alt+Del, Win e Alt+Tab sao
+   * interceptadas pelo SO do OPERADOR antes de chegarem ao navegador; precisam
+   * de injecao pelo canal RDP.
+   *
+   * IDs desconhecidos sao ignorados (o menu so oferece os validos).
    */
-  sendSpecialKeys: (combo: SpecialKeyCombo) => void;
+  sendSpecialKeys: (comboId: string) => void;
 }
 
 /** Erro tipado vindo do IronRDP, com detalhes do RDCleanPath. */
@@ -680,32 +682,43 @@ export function attachInputHandlers(
 }
 
 
-/** Combinacoes que nao existem como uma unica tecla fisica. */
-export type SpecialKeyCombo =
-  | 'ctrl-alt-del'
-  | 'alt-tab'
-  | 'ctrl-shift-esc'
-  | 'alt-f4'
-  | 'win'
-  | 'ctrl-esc'
-  | 'print-screen';
-
 /**
- * Sequencias de scancodes PS/2 Set 1 de cada combinacao (modificadores primeiro).
+ * Sequencias de scancodes PS/2 Set 1 das teclas especiais, indexadas pelos IDs
+ * CANONICOS de `remote-screen/specialKeys.ts`.
+ *
+ * REAPROVEITAMENTO DELIBERADO: os IDs vem da allow-list fechada que o AGENT ja
+ * usa no canal `.input` do screen sharing. Manter uma lista propria de rotulos
+ * aqui criaria duas fontes de verdade que divergem com o tempo (rotulo, hint e
+ * agrupamento ja existem la). Este mapa so acrescenta o que faltava para o
+ * caminho RDP: a sequencia de scancodes.
+ *
+ * Modificadores vem PRIMEIRO na sequencia (ver sendSpecialKeys, que solta na
+ * ordem inversa).
  *
  * Ctrl+Alt+Del: o TermService reconhece a sequencia vinda do canal RDP como
- * Secure Attention Sequence (o mesmo que o "Send Ctrl+Alt+Del" do mstsc).
- * Enviar como teclas NORMAIS nao funcionaria no console local, mas pelo RDP o
- * servidor faz a injecao privilegiada.
+ * Secure Attention Sequence — e o mesmo caminho do "Enviar Ctrl+Alt+Del" do
+ * mstsc, com injecao privilegiada no servidor.
  */
-const SPECIAL_KEY_SEQUENCES: Record<SpecialKeyCombo, number[]> = {
-  'ctrl-alt-del': [0x1d, 0x38, 0xe053],
-  'alt-tab': [0x38, 0x0f],
-  'ctrl-shift-esc': [0x1d, 0x2a, 0x01],
-  'alt-f4': [0x38, 0x3e],
+export const RDP_SPECIAL_KEY_SEQUENCES: Record<string, number[]> = {
+  // Segurança
+  'ctrl+alt+del': [0x1d, 0x38, 0xe053],
+  'win+l': [0xe05b, 0x26],
+  // Gerenciamento
+  'ctrl+shift+esc': [0x1d, 0x2a, 0x01],
+  'ctrl+esc': [0x1d, 0x01],
+  'alt+tab': [0x38, 0x0f],
+  'alt+shift+tab': [0x38, 0x2a, 0x0f],
+  'alt+f4': [0x38, 0x3e],
+  // Windows
   'win': [0xe05b],
-  'ctrl-esc': [0x1d, 0x01],
-  'print-screen': [0xe037],
+  'win+d': [0xe05b, 0x20],
+  'win+e': [0xe05b, 0x12],
+  'win+r': [0xe05b, 0x13],
+  'win+x': [0xe05b, 0x2d],
+  'win+tab': [0xe05b, 0x0f],
+  // Captura de tela
+  'printscreen': [0xe037],
+  'alt+printscreen': [0x38, 0xe037],
 };
 
 /**
@@ -1033,9 +1046,9 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
       if (disposed) return;
       try { session.resize(w, h); } catch { /* sessao encerrada */ }
     },
-    sendSpecialKeys: (combo: SpecialKeyCombo) => {
+    sendSpecialKeys: (comboId: string) => {
       if (disposed) return;
-      const seq = SPECIAL_KEY_SEQUENCES[combo];
+      const seq = RDP_SPECIAL_KEY_SEQUENCES[comboId];
       if (!seq) return;
       try {
         const tx = new mod.InputTransaction();
