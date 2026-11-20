@@ -6,7 +6,6 @@ import {
   type NatsCredentialsResponse,
   type NatsService,
 } from '@/api/nats';
-import { apiFetchResponse } from '@/api/client';
 import { remoteSessionsApi } from '@/api/remote-sessions';
 import { parseTunnelControl, type TunnelControlMsg } from '@/modules/remote-proxy/proxyFrame';
 import {
@@ -15,6 +14,7 @@ import {
   preloadIronRdp,
   type IronRdpSessionHandle,
   type IronRdpStatus,
+  type SpecialKeyCombo,
 } from './ironRdpClient';
 
 interface RemoteRdpProps {
@@ -26,8 +26,7 @@ interface RemoteRdpProps {
   jwt?: string;
   nkeySeed?: string;
   getFreshCredentials?: () => Promise<string>;
-  /** Porta local (máquina do operador) apontada pelo arquivo .rdp. */
-  rdpLocalPort?: number;
+
 }
 
 type RdpStatus = 'idle' | 'connecting' | 'connected' | 'error';
@@ -38,9 +37,6 @@ const STATUS_LABEL: Record<RdpStatus, string> = {
   connected: 'Túnel RDP ativo',
   error: 'Falha no túnel RDP',
 };
-
-/** Porta padrão do túnel RDP no loopback (mesma da API: /rdp-file?localPort=33890). */
-const DEFAULT_RDP_LOCAL_PORT = 33890;
 
 /** Dimensões iniciais do desktop remoto. */
 const DEFAULT_WIDTH = 1280;
@@ -116,7 +112,6 @@ export default function RemoteRdp({
   jwt = '',
   nkeySeed = '',
   getFreshCredentials,
-  rdpLocalPort = DEFAULT_RDP_LOCAL_PORT,
 }: RemoteRdpProps) {
   const [status, setStatus] = useState<RdpStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -144,10 +139,12 @@ export default function RemoteRdp({
   const [needsCredentials, setNeedsCredentials] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
   const [ironStatus, setIronStatus] = useState<IronRdpStatus>('idle');
-  const [ironDetail, setIronDetail] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+
   const [connectError, setConnectError] = useState<string | null>(null);
+  // Aviso de area de transferencia: o navegador pode BLOQUEAR a leitura/escrita
+  // do clipboard (permissao ou aba sem foco). Sem avisar, o operador conclui
+  // que o recurso nao existe em vez de ajustar a permissao.
+  const [clipboardNote, setClipboardNote] = useState<string | null>(null);
 
   const serviceRef = useRef<NatsService | null>(null);
   const sessionHandleRef = useRef<IronRdpSessionHandle | null>(null);
@@ -166,45 +163,6 @@ export default function RemoteRdp({
   const cleanpathOutSubject = `${subj}.rdp.cleanpath.out`;
 
   useEffect(() => { jwtRef.current = jwt; }, [jwt]);
-
-  // ── Download do arquivo .rdp (cliente nativo mstsc) ──
-  const handleDownloadRdp = useCallback(async () => {
-    if (!sessionId || !agentId) return;
-    setDownloading(true);
-    setDownloadError(null);
-    try {
-      const res = await apiFetchResponse(
-        `/api/v1/remote-sessions/${encodeURIComponent(agentId)}/${encodeURIComponent(sessionId)}/rdp-file?localPort=${rdpLocalPort}`,
-      );
-      if (!res.ok) {
-        throw new Error(`Falha ao obter o arquivo .rdp (HTTP ${res.status}).`);
-      }
-      const content = await res.text();
-      // A porta local do .rdp só existe se o operador estiver rodando o
-      // forwarder (discovery-agent.exe --rdp-tunnel) na própria máquina. Sem
-      // isso o mstsc falha com "não foi possível conectar". Avisamos em vez de
-      // entregar um link morto silenciosamente.
-      setDownloadError(
-        `Arquivo .rdp baixado apontando para 127.0.0.1:${rdpLocalPort}. Para o mstsc conectar, ` +
-        'o forwarder precisa estar ativo nesta máquina: discovery-agent.exe --rdp-tunnel ' +
-        `--api-url=<api> --agent-id=${agentId} --session-id=${sessionId}`,
-      );
-      const blob = new Blob([content], { type: 'application/x-rdp' });
-      const href = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = href;
-      anchor.download = `sessao-rdp-${sessionId}.rdp`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      // Revoga depois de dar tempo do download iniciar.
-      setTimeout(() => URL.revokeObjectURL(href), 10_000);
-    } catch (err) {
-      setDownloadError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setDownloading(false);
-    }
-  }, [sessionId, agentId, rdpLocalPort]);
 
   // ── Conexão NATS do túnel RDP (apenas preflight/controle) ──
   useEffect(() => {
@@ -377,7 +335,6 @@ export default function RemoteRdp({
     if (!submitted) {
       setNeedsCredentials(true);
       setIronStatus('idle');
-      setIronDetail(null);
       return;
     }
 
@@ -421,10 +378,21 @@ export default function RemoteRdp({
           // (a API o consome no upgrade e o agent valida presença/formato).
           authToken: ticket.ticket,
           callbacks: {
-            onStatus: (s, detail) => {
+            onStatus: (s) => {
               if (cancelled) return;
               setIronStatus(s);
-              if (detail) setIronDetail(detail);
+            },
+            onClipboard: (ev) => {
+              if (cancelled) return;
+              if (ev.ok) {
+                setClipboardNote(null);
+                return;
+              }
+              setClipboardNote(
+                ev.direction === 'toRemote'
+                  ? 'O navegador bloqueou a LEITURA da área de transferência. Permita o acesso ao clipboard neste site para colar do seu computador no Windows remoto.'
+                  : 'O navegador bloqueou a ESCRITA na área de transferência (a aba precisa estar em foco para copiar do Windows remoto).',
+              );
             },
             onError: (msg) => {
               if (cancelled) return;
@@ -518,6 +486,50 @@ export default function RemoteRdp({
     error: 'Erro no RDP',
   };
 
+  /**
+   * Aviso exibido SOBRE o canvas quando não há sessão ativa.
+   *
+   * Serve a dois propósitos: (1) LIMPAR a tela — o canvas continuaria mostrando
+   * o último frame da sessão encerrada, dando a impressão de que ela segue
+   * viva; (2) explicar o estado, em vez de deixar um retângulo preto mudo.
+   */
+  const overlayState: { icon: string; title: string; detail?: string } = (() => {
+    switch (ironStatus) {
+      case 'loading':
+        return {
+          icon: '⏳',
+          title: 'Carregando cliente RDP…',
+          detail: 'O binário do WebRDP (~5 MB) é baixado apenas na primeira conexão.',
+        };
+      case 'connecting':
+        return {
+          icon: '🔗',
+          title: 'Conectando à máquina remota…',
+          detail: 'Negociando o túnel e a autenticação.',
+        };
+      case 'closed':
+        return {
+          icon: '⏹',
+          title: 'Sessão remota encerrada',
+          detail: 'Use Reconectar para abrir uma nova sessão.',
+        };
+      case 'error':
+        return {
+          icon: '⛔',
+          title: 'Falha na sessão RDP',
+          detail: 'Veja a mensagem de erro acima para o motivo.',
+        };
+      default:
+        return {
+          icon: '🖥',
+          title: 'Aguardando conexão',
+          // Texto DELIBERADAMENTE diferente do formulário: repetir
+          // "Informe as credenciais" aqui seria redundante na tela.
+          detail: 'A área de trabalho remota aparecerá aqui após a autenticação.',
+        };
+    }
+  })();
+
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-surface border-b border-border text-xs">
@@ -534,16 +546,6 @@ export default function RemoteRdp({
             stream ativo
           </span>
         )}
-        <span className="flex-1" />
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors disabled:opacity-50"
-          onClick={() => { void handleDownloadRdp(); }}
-          disabled={downloading || !sessionId || !agentId}
-          title="Baixa o arquivo .rdp (mstsc). Requer o discovery-agent.exe --rdp-tunnel rodando na sua máquina apontando para esta sessão."
-        >
-          ⬇ Baixar arquivo .rdp
-        </button>
       </div>
 
       {/* O fundo escuro do canvas NAO fica aqui: as caixas de status usam cores
@@ -592,11 +594,7 @@ export default function RemoteRdp({
                 ✓ RDP pronto no agent (TermService: {preflight.termServiceState ?? '—'}, porta {preflight.port ?? 3389}).
               </div>
             )}
-            {ironDetail && !preflightError && (
-              <div className="rounded-md border border-border bg-surface-light px-3 py-2 text-muted-foreground text-xs">
-                {ironDetail}
-              </div>
-            )}
+
             {needsCredentials && (
               <form
                 onSubmit={submitCredentials}
@@ -657,35 +655,98 @@ export default function RemoteRdp({
                 </p>
               </form>
             )}
-            {/* Fundo preto SÓ no canvas: é a área do desktop remoto (letterbox). */}
-            {/* tabIndex: o canvas precisa receber FOCO para capturar teclado.
-                Sem ele o mouse funciona mas a digitacao vai para a pagina.
-                outline-none evita o anel de foco padrao do navegador por cima
-                do desktop remoto. */}
-            <canvas
-              ref={canvasRef}
-              width={DEFAULT_WIDTH}
-              height={DEFAULT_HEIGHT}
-              tabIndex={0}
-              className="flex-1 min-h-0 w-full bg-black rounded border border-border outline-none focus:border-primary"
-              aria-label="Área de trabalho remota"
-            />
+            {/* Wrapper relativo: permite sobrepor o canvas com o aviso de estado.
+                O canvas precisa continuar MONTADO (o IronRDP escreve nele), então
+                não o removemos — cobrimos. */}
+            <div className="relative flex-1 min-h-0 w-full">
+              {/* Fundo preto SÓ no canvas: é a área do desktop remoto (letterbox). */}
+              {/* tabIndex: o canvas precisa receber FOCO para capturar teclado.
+                  Sem ele o mouse funciona mas a digitacao vai para a pagina.
+                  outline-none evita o anel de foco padrao do navegador por cima
+                  do desktop remoto. */}
+              <canvas
+                ref={canvasRef}
+                width={DEFAULT_WIDTH}
+                height={DEFAULT_HEIGHT}
+                tabIndex={0}
+                className="w-full h-full bg-black rounded border border-border outline-none focus:border-primary"
+                aria-label="Área de trabalho remota"
+              />
+              {/* LIMPA A TELA ao encerrar: sem esta camada o canvas continuaria
+                  exibindo o ULTIMO FRAME da sessão morta, como se ainda
+                  estivesse conectado. O overlay é opaco e cobre esse resíduo. */}
+              {ironStatus !== 'connected' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded bg-black text-white text-center px-4">
+                  <div className="text-4xl" aria-hidden>{overlayState.icon}</div>
+                  <p className="text-sm font-medium">{overlayState.title}</p>
+                  {overlayState.detail && (
+                    <p className="text-xs text-white/70 max-w-md">{overlayState.detail}</p>
+                  )}
+                </div>
+              )}
+            </div>
             {error && (
               <div className="rounded-md bg-danger px-3 py-2 text-white text-xs font-medium shadow-sm" role="alert">
                 ⛔ {error}
               </div>
             )}
-            {downloadError && (
-              <div className="rounded-md bg-warning px-3 py-2 text-white text-xs font-medium shadow-sm">
-                {downloadError}
-              </div>
-            )}
+
           </div>
+        )}
+      </div>
+
+      {/* Rodapé: teclas especiais que NÃO podem ser enviadas pelo teclado físico.
+          Ctrl+Alt+Del, por exemplo, é interceptado pelo SO do operador antes de
+          chegar ao navegador — precisa de injeção pelo canal RDP, como o
+          "Send Ctrl+Alt+Del" do mstsc. */}
+      <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-surface border-t border-border text-xs">
+        <span className="text-muted-foreground mr-1">Teclas especiais:</span>
+        {SPECIAL_KEYS.map(({ combo, label, title }) => (
+          <button
+            key={combo}
+            type="button"
+            onClick={() => sessionHandleRef.current?.sendSpecialKeys(combo)}
+            disabled={ironStatus !== 'connected'}
+            title={title}
+            className="px-2 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {label}
+          </button>
+        ))}
+        <span className="flex-1" />
+        {/* Estado da area de transferencia: texto discreto, so aparece quando
+            ha algo a dizer (falha de permissao, area de transferencia inativa). */}
+        {ironStatus === 'connected' && !clipboardNote && (
+          <span className="text-muted-foreground" title="Copiar no Windows remoto e colar no seu PC, e vice-versa">
+            Área de transferência sincronizada
+          </span>
+        )}
+        {clipboardNote && (
+          <span className="text-warning" role="status">
+            {clipboardNote}
+          </span>
         )}
       </div>
     </div>
   );
 }
+
+/**
+ * Teclas especiais oferecidas no rodapé.
+ *
+ * São combinações que o teclado físico não consegue produzir dentro do
+ * navegador: o SO do operador intercepta Ctrl+Alt+Del, Win e Alt+Tab antes de a
+ * página recebê-las. Por isso precisam de botão dedicado, como no mstsc.
+ */
+const SPECIAL_KEYS: Array<{ combo: SpecialKeyCombo; label: string; title: string }> = [
+  { combo: 'ctrl-alt-del', label: 'Ctrl+Alt+Del', title: 'Envia a sequência de segurança (tela de logon / gerenciador de tarefas)' },
+  { combo: 'ctrl-shift-esc', label: 'Ctrl+Shift+Esc', title: 'Abre o Gerenciador de Tarefas do Windows remoto' },
+  { combo: 'alt-tab', label: 'Alt+Tab', title: 'Alterna entre as janelas do Windows remoto' },
+  { combo: 'alt-f4', label: 'Alt+F4', title: 'Fecha a janela ativa no Windows remoto' },
+  { combo: 'win', label: 'Win', title: 'Abre o menu Iniciar do Windows remoto' },
+  { combo: 'ctrl-esc', label: 'Ctrl+Esc', title: 'Abre o menu Iniciar do Windows remoto (alternativa)' },
+  { combo: 'print-screen', label: 'Print Screen', title: 'Captura a tela do Windows remoto para a área de transferência' },
+];
 
 /**
  * Monta a URL WebSocket do proxy RDCleanPath.

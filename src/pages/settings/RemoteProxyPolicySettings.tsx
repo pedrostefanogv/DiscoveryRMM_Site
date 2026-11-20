@@ -11,6 +11,7 @@ import {
   Select,
 } from "@/components/ui";
 import { useAllSites, useClients } from "@/hooks";
+import { ApiError } from "@/api/client";
 import {
   getClientConfig,
   getEntityAudit,
@@ -70,6 +71,8 @@ export default function RemoteProxyPolicySettings() {
   const [globalEnabled, setGlobalEnabled] = useState(false);
   /** null = este escopo não define política (herda do nível acima). */
   const [ownsPolicy, setOwnsPolicy] = useState(true);
+  /** True quando o escopo JÁ tinha política gravada (para evitar escrita inútil). */
+  const [hasOwnPolicy, setHasOwnPolicy] = useState(false);
 
   const [auditEntries, setAuditEntries] = useState<ConfigurationAuditEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -108,19 +111,30 @@ export default function RemoteProxyPolicySettings() {
         setPolicy(parsePolicy(server.remoteProxyPolicyJson));
         setGlobalEnabled(server.remoteProxyGlobalEntriesEnabled === true);
         setOwnsPolicy(true);
-      } else if (scope === "client") {
-        const config = await getClientConfig(clientId);
-        const raw = config.remoteProxyPolicyJson ?? null;
-        setOwnsPolicy(raw !== null && raw !== undefined && raw !== "");
-        setPolicy(raw ? parsePolicy(raw) : { ...EMPTY_POLICY, entries: [] });
+        setHasOwnPolicy(true);
       } else {
-        const config = await getSiteConfig(siteId);
+        const config =
+          scope === "client"
+            ? await getClientConfig(clientId)
+            : await getSiteConfig(siteId);
         const raw = config.remoteProxyPolicyJson ?? null;
-        setOwnsPolicy(raw !== null && raw !== undefined && raw !== "");
+        const owns = raw !== null && raw !== undefined && raw !== "";
+        setOwnsPolicy(owns);
+        setHasOwnPolicy(owns);
         setPolicy(raw ? parsePolicy(raw) : { ...EMPTY_POLICY, entries: [] });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao carregar a política de proxy.");
+      // 404 = este cliente/site ainda NÃO tem linha de configuração própria.
+      // Isso é o estado NORMAL de quem nunca foi configurado (tudo herda do
+      // nível acima), não um erro: sem este tratamento a tela morria em
+      // "Client config for <guid> not found" ao abrir um cliente novo.
+      if (err instanceof ApiError && err.status === 404 && scope !== "global") {
+        setOwnsPolicy(false);
+        setHasOwnPolicy(false);
+        setPolicy({ ...EMPTY_POLICY, entries: [] });
+      } else {
+        setError(err instanceof Error ? err.message : "Falha ao carregar a política de proxy.");
+      }
     } finally {
       setLoading(false);
     }
@@ -198,15 +212,21 @@ export default function RemoteProxyPolicySettings() {
           remoteProxyPolicyJson: json,
           remoteProxyGlobalEntriesEnabled: globalEnabled,
         });
-      } else if (scope === "client") {
-        // null explícito = "herdar": limpa a política deste escopo.
-        await patchClientConfig(clientId, {
-          remoteProxyPolicyJson: ownsPolicy ? json : null,
-        });
+      } else if (!ownsPolicy && !hasOwnPolicy) {
+        // Já herdava e o operador manteve "herdar": não há o que gravar.
+        // Chamar a API aqui criaria uma linha de configuração VAZIA (o PATCH
+        // faz CreateAsync quando não existe) só para registrar null, além de
+        // uma entrada de auditoria para uma mudança que não muda nada.
+        toast.success("Nada a salvar: este nível continua herdando.");
+        return;
       } else {
-        await patchSiteConfig(siteId, {
-          remoteProxyPolicyJson: ownsPolicy ? json : null,
-        });
+        // null explícito = "herdar": limpa a política deste escopo.
+        const payload = { remoteProxyPolicyJson: ownsPolicy ? json : null };
+        if (scope === "client") {
+          await patchClientConfig(clientId, payload);
+        } else {
+          await patchSiteConfig(siteId, payload);
+        }
       }
 
       toast.success("Destinos do proxy salvos.");

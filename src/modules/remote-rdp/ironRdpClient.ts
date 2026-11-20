@@ -23,6 +23,8 @@ export interface IronRdpCallbacks {
   onStatus?: (status: IronRdpStatus, detail?: string) => void;
   onError?: (message: string) => void;
   onTerminated?: (reason: string) => void;
+  /** Sincronizacao de area de transferencia (bidirecional). */
+  onClipboard?: (event: IronRdpClipboardEvent) => void;
 }
 
 /** Opcoes de conexao. */
@@ -46,12 +48,29 @@ export interface IronRdpConnectOptions {
   callbacks?: IronRdpCallbacks;
 }
 
+/** Notificacao de sincronizacao de area de transferencia. */
+export interface IronRdpClipboardEvent {
+  /** toLocal = Windows remoto -> navegador; toRemote = navegador -> Windows. */
+  direction: 'toLocal' | 'toRemote';
+  ok: boolean;
+  /** Motivo da falha (ex.: permissao negada, documento sem foco). */
+  reason?: string;
+}
+
 /** Handle da sessao ativa. */
 export interface IronRdpSessionHandle {
   /** Encerra a sessao e libera recursos WASM. */
   dispose: () => void;
   /** Redimensiona o desktop remoto. */
   resize: (width: number, height: number) => void;
+  /**
+   * Envia uma combinacao de teclas especiais (ex.: Ctrl+Alt+Del).
+   *
+   * Necessario porque algumas combinacoes nao podem ser produzidas pelo
+   * teclado fisico no contexto do navegador (Ctrl+Alt+Del e interceptado pelo
+   * SO do operador) e precisam de injecao pelo canal RDP.
+   */
+  sendSpecialKeys: (combo: SpecialKeyCombo) => void;
 }
 
 /** Erro tipado vindo do IronRDP, com detalhes do RDCleanPath. */
@@ -149,14 +168,16 @@ export function describeIronError(err: unknown): IronRdpErrorInfo {
   //  2. backtrace do WASM (causa do lado Rust);
   //  3. explicação genérica pelo kind.
   if (rawMessage) {
-    // Falha de credencial do Windows: traduz para algo acionável em vez de
-    // expor o texto cru do CredSSP.
-    const friendly = describeCredentialFailure(rawMessage);
-    info.message = friendly ?? rawMessage;
+    // Erros crus e em inglês do Windows/CredSSP: traduz para algo acionável em
+    // vez de expor o texto do protocolo ao operador.
+    info.message =
+      describeCredentialFailure(rawMessage)
+      ?? describeProtocolError(rawMessage)
+      ?? rawMessage;
     return info;
   }
   if (wasmDetail) {
-    info.message = wasmDetail;
+    info.message = describeProtocolError(wasmDetail) ?? wasmDetail;
     return info;
   }
   info.message = explainByKind(info);
@@ -327,6 +348,29 @@ export function describeCredentialFailure(message: string): string | null {
   return null;
 }
 
+/**
+ * Traduz erros de PROTOCOLO do RDP que não são de credencial nem de proxy.
+ *
+ * O caso mais comum em operação é a sessão ser derrubada por outra conexão com
+ * a MESMA conta: o Windows permite apenas uma sessão RDP por usuário, então a
+ * segunda conexão encerra a primeira.
+ */
+export function describeProtocolError(message: string): string | null {
+  const m = (message || '').toLowerCase();
+  if (m.includes('another user connected')) {
+    return 'Outra conexão com esta máquina usando a mesma conta encerrou esta sessão. '
+      + 'O Windows permite apenas UMA sessão remota por usuário: feche a outra janela '
+      + '(ou a sessão no console dessa conta) e conecte novamente.';
+  }
+  if (m.includes('protocol independent error') && m.includes('disconnect')) {
+    return 'A sessão remota foi encerrada pelo servidor. Reconecte para continuar.';
+  }
+  if (m.includes('session') && m.includes('taken over')) {
+    return 'Esta sessão foi assumida por outra conexão. Reconecte para continuar.';
+  }
+  return null;
+}
+
 /** Explica a falha quando não há mensagem nem código disponíveis. */
 function explainByKind(info: IronRdpErrorInfo): string {
   switch (info.kind) {
@@ -430,6 +474,8 @@ export interface IronRdpModule {
   };
   /** Transacao que agrupa eventos de entrada. */
   InputTransaction: new () => { addEvent: (e: unknown) => void };
+  /** Conteudo de area de transferencia enviado ao remoto (CLIPRDR). */
+  ClipboardData: new () => { addText: (mimeType: string, text: string) => void };
 }
 
 interface IronSessionBuilder {
@@ -462,6 +508,8 @@ interface IronSession {
   free: () => void;
   /** Envia um lote de eventos de mouse/teclado ao desktop remoto. */
   applyInputs: (transaction: unknown) => void;
+  /** Entrega o conteudo do clipboard local ao Windows remoto (CLIPRDR). */
+  onClipboardPaste: (content: unknown) => Promise<void>;
 }
 
 
@@ -623,6 +671,114 @@ export function attachInputHandlers(
   };
 }
 
+
+/** Combinacoes que nao existem como uma unica tecla fisica. */
+export type SpecialKeyCombo =
+  | 'ctrl-alt-del'
+  | 'alt-tab'
+  | 'ctrl-shift-esc'
+  | 'alt-f4'
+  | 'win'
+  | 'ctrl-esc'
+  | 'print-screen';
+
+/**
+ * Sequencias de scancodes PS/2 Set 1 de cada combinacao (modificadores primeiro).
+ *
+ * Ctrl+Alt+Del: o TermService reconhece a sequencia vinda do canal RDP como
+ * Secure Attention Sequence (o mesmo que o "Send Ctrl+Alt+Del" do mstsc).
+ * Enviar como teclas NORMAIS nao funcionaria no console local, mas pelo RDP o
+ * servidor faz a injecao privilegiada.
+ */
+const SPECIAL_KEY_SEQUENCES: Record<SpecialKeyCombo, number[]> = {
+  'ctrl-alt-del': [0x1d, 0x38, 0xe053],
+  'alt-tab': [0x38, 0x0f],
+  'ctrl-shift-esc': [0x1d, 0x2a, 0x01],
+  'alt-f4': [0x38, 0x3e],
+  'win': [0xe05b],
+  'ctrl-esc': [0x1d, 0x01],
+  'print-screen': [0xe037],
+};
+
+/**
+ * Anexa a sincronizacao BIDIRECIONAL de area de transferencia.
+ *
+ * Direcao 1 — remoto -> navegador: o CLIPRDR do RDP avisa quando o clipboard
+ *   do Windows muda; escrevemos o texto no clipboard do navegador.
+ * Direcao 2 — navegador -> remoto: quando o usuario cola no Windows remoto, o
+ *   IronRDP pede o clipboard local; lemos e enviamos via onClipboardPaste().
+ *
+ * LIMITES DO NAVEGADOR (nao do RDP):
+ *  - writeText() exige contexto seguro (HTTPS) e documento com foco;
+ *  - readText() pode exigir PERMISSAO explicita (no Firefox, 'clipboard-read')
+ *    e costuma falhar se a aba nao estiver em foco.
+ * Nenhuma das duas pode derrubar a sessao: qualquer falha e reportada ao
+ * callback e o RDP segue funcionando.
+ */
+function attachClipboardHandlers(
+  builder: IronSessionBuilder,
+  mod: IronRdpModule,
+  sessionRef: { current: IronSession | null },
+  notify?: (direction: 'toLocal' | 'toRemote', ok: boolean, reason?: string) => void,
+): void {
+  // ── Direcao 1: clipboard do Windows remoto -> clipboard do navegador ──
+  builder.remoteClipboardChangedCallback((data: unknown) => {
+    void (async () => {
+      try {
+        const cd = data as { isEmpty?: () => boolean; items?: () => Array<{ mimeType: () => string; value: () => unknown }> };
+        if (!cd || typeof cd.items !== 'function') return;
+        if (typeof cd.isEmpty === 'function' && cd.isEmpty()) return;
+
+        const items = cd.items();
+        // CLIPRDR manda texto como 'text/plain' (as vezes com charset).
+        const textItem = items.find((i) => (i.mimeType() || '').toLowerCase().startsWith('text/'));
+        if (!textItem) return; // imagens/arquivos nao sao suportados aqui
+
+        const value = textItem.value();
+        const text = typeof value === 'string' ? value : String(value ?? '');
+        if (!text) return;
+
+        if (!navigator.clipboard?.writeText) {
+          notify?.('toLocal', false, 'Clipboard API indisponivel (exige HTTPS).');
+          return;
+        }
+        await navigator.clipboard.writeText(text);
+        notify?.('toLocal', true);
+      } catch (err) {
+        // Documento sem foco e a causa mais comum; nao e erro fatal.
+        notify?.('toLocal', false, err instanceof Error ? err.message : String(err));
+      }
+    })();
+  });
+
+  // ── Direcao 2: clipboard do navegador -> clipboard do Windows remoto ──
+  builder.forceClipboardUpdateCallback(() => {
+    void (async () => {
+      const session = sessionRef.current;
+      if (!session) return;
+      const send = async (text: string) => {
+        const data = new mod.ClipboardData();
+        if (text) data.addText('text/plain', text);
+        await session.onClipboardPaste(data);
+      };
+      try {
+        if (!navigator.clipboard?.readText) {
+          // Sem permissao de leitura enviamos vazio: isso sinaliza ao remoto
+          // que o clipboard local esta vazio, em vez de travar o canal.
+          await send('');
+          notify?.('toRemote', false, 'Clipboard API indisponivel (exige HTTPS).');
+          return;
+        }
+        const text = await navigator.clipboard.readText();
+        await send(text ?? '');
+        notify?.('toRemote', true);
+      } catch (err) {
+        try { await send(''); } catch { /* canal ja encerrado */ }
+        notify?.('toRemote', false, err instanceof Error ? err.message : String(err));
+      }
+    })();
+  });
+}
 /**
  * Conecta ao WebRDP. Devolve um handle para encerrar/redimensionar.
  *
@@ -688,6 +844,13 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
     } catch { /* estilo inválido — mantém o padrão */ }
   });
 
+  // Os callbacks de clipboard sao registrados no BUILDER (antes do connect),
+  // mas precisam da sessao para enviar dados. O ref e preenchido logo apos.
+  const sessionRef: { current: IronSession | null } = { current: null };
+  attachClipboardHandlers(builder, mod, sessionRef, (direction, ok, reason) => {
+    callbacks.onClipboard?.({ direction, ok, reason });
+  });
+
   let session: IronSession;
   try {
     session = await builder.connect();
@@ -703,6 +866,9 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
   const input = attachInputHandlers(canvas, session, mod);
   // O canvas precisa receber foco para capturar teclado.
   try { canvas.tabIndex = 0; } catch { /* atributo opcional */ }
+
+  // Disponibiliza a sessao para os callbacks de clipboard registrados acima.
+  sessionRef.current = session;
 
   setStatus('connected', 'Sessão RDP ativa');
 
@@ -725,6 +891,7 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      sessionRef.current = null;
       input.detach();
       try { session.shutdown(); } catch { /* ja encerrada */ }
       try { session.free(); } catch { /* liberado */ }
@@ -732,6 +899,19 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
     resize: (w: number, h: number) => {
       if (disposed) return;
       try { session.resize(w, h); } catch { /* sessao encerrada */ }
+    },
+    sendSpecialKeys: (combo: SpecialKeyCombo) => {
+      if (disposed) return;
+      const seq = SPECIAL_KEY_SEQUENCES[combo];
+      if (!seq) return;
+      try {
+        const tx = new mod.InputTransaction();
+        // Pressiona os modificadores e a tecla, depois SOLTA na ordem inversa
+        // (soltar o modificador antes da tecla deixaria a tecla "presa").
+        for (const sc of seq) tx.addEvent(mod.DeviceEvent.keyPressed(sc));
+        for (const sc of [...seq].reverse()) tx.addEvent(mod.DeviceEvent.keyReleased(sc));
+        session.applyInputs(tx);
+      } catch { /* sessao encerrada */ }
     },
   };
 }
