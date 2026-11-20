@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState,
+  type FormEvent, type Ref,
+} from 'react';
 import {
   createNatsService,
   jwtExpiresAtUtc,
@@ -16,8 +19,6 @@ import {
   type IronRdpSessionHandle,
   type IronRdpStatus,
 } from './ironRdpClient';
-// Menu de teclas especiais COMPARTILHADO com o acesso remoto de tela.
-import SpecialKeysMenu from '@/components/SpecialKeysMenu';
 // Reaproveita o utilitario de tela cheia do viewer de tela (fallbacks webkit/ms
 // + listener de fullscreenchange) em vez de chamar a API direto aqui.
 import { fullscreenApi } from '@/utils/fullscreen';
@@ -38,7 +39,28 @@ interface RemoteRdpProps {
    */
   minDesktopWidth?: number;
   minDesktopHeight?: number;
+  /**
+   * Mensagens de teclas especiais e tela cheia são controladas pelo PAI (barra
+   * de rodapé unificada), como já acontece na aba Tela — por isso o viewer
+   * expõe um handle em vez de desenhar os próprios botões.
+   */
+  ref?: Ref<RemoteRdpHandle>;
+  /** Estado da tela cheia, para o pai desenhar o ícone certo. */
+  onFullscreenChange?: (isFullscreen: boolean) => void;
+  /** Resolução atual do desktop remoto (mostrada no rodapé do pai). */
+  onDesktopResize?: (width: number, height: number) => void;
+  /** Estado da área de transferência (mostrado no rodapé do pai). */
+  onClipboardState?: (note: string | null) => void;
+  /** Estado da sessão IronRDP, para o pai habilitar os controles do rodapé. */
+  onIronStatus?: (status: IronRdpStatus) => void;
+}
 
+/** Controles que o rodapé do pai aciona neste viewer. */
+export interface RemoteRdpHandle {
+  /** Envia uma combinação de teclas especiais (id canônico). */
+  sendSpecialKey: (id: string) => void;
+  /** Entra/sai da tela cheia. */
+  toggleFullscreen: () => void;
 }
 
 type RdpStatus = 'idle' | 'connecting' | 'connected' | 'error';
@@ -126,6 +148,11 @@ export default function RemoteRdp({
   getFreshCredentials,
   minDesktopWidth = MIN_DESKTOP_HD.width,
   minDesktopHeight = MIN_DESKTOP_HD.height,
+  ref,
+  onFullscreenChange,
+  onDesktopResize,
+  onClipboardState,
+  onIronStatus,
 }: RemoteRdpProps) {
   const [status, setStatus] = useState<RdpStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -155,14 +182,8 @@ export default function RemoteRdp({
   const [ironStatus, setIronStatus] = useState<IronRdpStatus>('idle');
 
   const [connectError, setConnectError] = useState<string | null>(null);
-  // Aviso de area de transferencia: o navegador pode BLOQUEAR a leitura/escrita
-  // do clipboard (permissao ou aba sem foco). Sem avisar, o operador conclui
-  // que o recurso nao existe em vez de ajustar a permissao.
-  const [clipboardNote, setClipboardNote] = useState<string | null>(null);
-  // Resolução atual do desktop remoto (acompanha a janela). Mostrada no rodapé
-  // para o operador CONFIRMAR que o Windows redimensionou de fato — sem isso não
-  // há como distinguir "redimensionou" de "só esticou a imagem".
-  const [desktopRes, setDesktopRes] = useState<{ width: number; height: number } | null>(null);
+  // Resolução e área de transferência são EXIBIDAS no rodapé unificado do pai,
+  // por isso este componente apenas as NOTIFICA (sem estado local duplicado).
   // Tela cheia do desktop remoto.
   const [isFullscreen, setIsFullscreen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -407,19 +428,19 @@ export default function RemoteRdp({
             },
             onDesktopResize: (w, h) => {
               if (cancelled) return;
-              setDesktopRes({ width: w, height: h });
+              // O rodapé do pai mostra a resolução (fonte: IronRDP, não chute).
+              onDesktopResize?.(w, h);
             },
             onClipboard: (ev) => {
               if (cancelled) return;
               if (ev.ok) {
-                setClipboardNote(null);
+                onClipboardState?.(null);
                 return;
               }
-              setClipboardNote(
-                ev.direction === 'toRemote'
-                  ? 'O navegador bloqueou a LEITURA da área de transferência. Permita o acesso ao clipboard neste site para colar do seu computador no Windows remoto.'
-                  : 'O navegador bloqueou a ESCRITA na área de transferência (a aba precisa estar em foco para copiar do Windows remoto).',
-              );
+              const note = ev.direction === 'toRemote'
+                ? 'O navegador bloqueou a LEITURA da área de transferência. Permita o acesso ao clipboard neste site para colar do seu computador no Windows remoto.'
+                : 'O navegador bloqueou a ESCRITA na área de transferência (a aba precisa estar em foco para copiar do Windows remoto).';
+              onClipboardState?.(note);
             },
             onError: (msg) => {
               if (cancelled) return;
@@ -533,9 +554,26 @@ export default function RemoteRdp({
     void fullscreenApi.toggle(el);
   }, []);
 
+  // Controles acionados pelo RODAPÉ do pai (barra unificada, como na aba Tela).
+  useImperativeHandle(ref, () => ({
+    sendSpecialKey: (id: string) => handleSpecialKey(id),
+    toggleFullscreen: () => toggleFullscreen(),
+  }), [handleSpecialKey, toggleFullscreen]);
+
   // Mantém o estado em sincronia com o navegador: o usuário pode sair da tela
   // cheia por Esc ou pelo próprio navegador, sem passar pelo nosso botão.
   useEffect(() => fullscreenApi.onChange(setIsFullscreen), []);
+
+  // O ícone de tela cheia vive no rodapé do PAI: ele precisa saber o estado.
+  useEffect(() => {
+    onFullscreenChange?.(isFullscreen);
+  }, [isFullscreen, onFullscreenChange]);
+
+  // Idem para o estado da sessão: os controles do rodapé do pai só podem ser
+  // acionados quando o RDP está de fato conectado.
+  useEffect(() => {
+    onIronStatus?.(ironStatus);
+  }, [ironStatus, onIronStatus]);
 
   /**
    * Aviso exibido SOBRE o canvas quando não há sessão ativa.
@@ -584,11 +622,12 @@ export default function RemoteRdp({
   return (
     <div
       ref={rootRef}
-      className={`flex flex-col bg-background text-foreground ${
+      className={`relative flex flex-col bg-background text-foreground ${
         isFullscreen ? 'h-screen w-screen' : 'h-full'
       }`}
     >
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-surface border-b border-border text-xs">
+      {/* Em TELA CHEIA a barra some: o pedido é ver SOMENTE a tela remota. */}
+      <div className={`flex flex-wrap items-center gap-2 px-3 py-2 bg-surface border-b border-border text-xs ${isFullscreen ? 'hidden' : ''}`}>
         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold shadow-sm ${tone}`}>
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/90" aria-hidden />
           {STATUS_LABEL[status]}
@@ -604,42 +643,28 @@ export default function RemoteRdp({
         )}
         <span className="flex-1" />
 
-        {/* Teclas especiais: MESMO componente usado no acesso remoto de tela.
-            Antes eram 7 botões soltos ocupando a largura toda do rodapé. */}
-        <SpecialKeysMenu
-          onSelect={handleSpecialKey}
-          disabled={ironStatus !== 'connected'}
-          direction="down"
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors"
-        />
-
-        {/* Tela cheia: o desktop remoto ocupa a tela toda. O estado é lido do
-            navegador (fullscreenchange), então Esc também atualiza o ícone. */}
-        <button
-          type="button"
-          onClick={toggleFullscreen}
-          disabled={ironStatus !== 'connected'}
-          aria-pressed={isFullscreen}
-          title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border-strong bg-surface-light text-foreground font-medium hover:bg-surface-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {isFullscreen ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M3 8h3a2 2 0 0 0 2-2V3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M21 16h-3a2 2 0 0 0-2 2v3" />
-            </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
-            </svg>
-          )}
-          {isFullscreen ? 'Sair' : 'Tela cheia'}
-        </button>
+        {/* Preflight do agent SUBIU para cá: antes era um box de largura total
+            dentro da área da tela, roubando altura do desktop remoto. Como chip,
+            fica junto dos outros estados e libera a área útil. */}
+        {preflight && preflight.ready && !preflightError && (
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success text-white font-semibold shadow-sm"
+            title={`RDP pronto no agent (TermService: ${preflight.termServiceState ?? '—'}, porta ${preflight.port ?? 3389})`}
+          >
+            ✓ RDP pronto
+            <span className="font-normal opacity-90">
+              (TermService: {preflight.termServiceState ?? '—'}, porta {preflight.port ?? 3389})
+            </span>
+          </span>
+        )}
       </div>
 
       {/* O fundo escuro do canvas NAO fica aqui: as caixas de status usam cores
           semanticas e, sobre um backdrop preto translucido, ficavam lavadas no
           tema claro. O preto fica apenas no canvas (letterbox do desktop). */}
-      <div className="flex-1 min-h-0 overflow-auto p-2 bg-background">
+      {/* A área da tela ocupa TODO o espaço restante; em tela cheia sem
+          padding, para a tela remota ficar sozinha. */}
+      <div className={`flex-1 min-h-0 bg-background ${isFullscreen ? 'p-0' : 'p-2'}`}>
         {!sessionId || !jwt ? (
           <div className="flex flex-col items-center justify-center h-full text-muted">
             <div className="text-4xl mb-3">🖥</div>
@@ -677,11 +702,7 @@ export default function RemoteRdp({
                 )}
               </div>
             )}
-            {preflight && preflight.ready && !preflightError && (
-              <div className="rounded-md bg-success px-3 py-2 text-white text-xs font-medium shadow-sm">
-                ✓ RDP pronto no agent (TermService: {preflight.termServiceState ?? '—'}, porta {preflight.port ?? 3389}).
-              </div>
-            )}
+
 
             {needsCredentials && (
               <form
@@ -746,7 +767,7 @@ export default function RemoteRdp({
             {/* Wrapper relativo: permite sobrepor o canvas com o aviso de estado.
                 O canvas precisa continuar MONTADO (o IronRDP escreve nele), então
                 não o removemos — cobrimos. */}
-            <div className="relative flex-1 min-h-0 w-full">
+            <div className="relative flex-1 min-h-0 w-full flex items-center justify-center bg-black rounded overflow-hidden">
               {/* Fundo preto SÓ no canvas: é a área do desktop remoto (letterbox). */}
               {/* tabIndex: o canvas precisa receber FOCO para capturar teclado.
                   Sem ele o mouse funciona mas a digitacao vai para a pagina.
@@ -757,14 +778,14 @@ export default function RemoteRdp({
                 width={DEFAULT_WIDTH}
                 height={DEFAULT_HEIGHT}
                 tabIndex={0}
-                className="w-full h-full bg-black rounded border border-border outline-none focus:border-primary"
+                className="max-w-full max-h-full bg-black outline-none"
                 aria-label="Área de trabalho remota"
               />
               {/* LIMPA A TELA ao encerrar: sem esta camada o canvas continuaria
                   exibindo o ULTIMO FRAME da sessão morta, como se ainda
                   estivesse conectado. O overlay é opaco e cobre esse resíduo. */}
               {ironStatus !== 'connected' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded bg-black text-white text-center px-4">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black text-white text-center px-4">
                   <div className="text-4xl" aria-hidden>{overlayState.icon}</div>
                   <p className="text-sm font-medium">{overlayState.title}</p>
                   {overlayState.detail && (
@@ -773,6 +794,22 @@ export default function RemoteRdp({
                 </div>
               )}
             </div>
+
+            {/* Saída da tela cheia: em fullscreen as barras somem (o pedido é ver
+                SOMENTE a tela remota). Este botão vive DENTRO do elemento que
+                entra em tela cheia — fora dele ficaria invisível. Esc também
+                funciona. */}
+            {isFullscreen && (
+              <button
+                type="button"
+                className="absolute top-2 left-2 z-50 inline-flex h-7 w-7 items-center justify-center rounded bg-surface/70 text-sm text-foreground opacity-70 shadow ring-1 ring-border backdrop-blur-sm transition-opacity hover:bg-surface hover:opacity-100"
+                onClick={toggleFullscreen}
+                title="Sair da tela cheia (Esc)"
+                aria-label="Sair da tela cheia"
+              >
+                ⤢
+              </button>
+            )}
             {error && (
               <div className="rounded-md bg-danger px-3 py-2 text-white text-xs font-medium shadow-sm" role="alert">
                 ⛔ {error}
@@ -783,31 +820,6 @@ export default function RemoteRdp({
         )}
       </div>
 
-      {/* Rodapé: apenas INFORMAÇÃO (resolução e área de transferência). As
-          teclas especiais migraram para o menu do ícone de teclado na barra
-          superior — antes ocupavam a largura toda com 7 botões e poluíam a
-          tela, ao contrário da barra de conexão do mstsc. */}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-surface border-t border-border text-xs">
-        <span className="flex-1" />
-        {/* Resolucao atual do Windows remoto (acompanha a janela). */}
-        {ironStatus === 'connected' && desktopRes && (
-          <span className="text-muted-foreground font-mono" title="Resolução atual da área de trabalho remota">
-            {desktopRes.width}×{desktopRes.height}
-          </span>
-        )}
-        {/* Estado da area de transferencia: texto discreto, so aparece quando
-            ha algo a dizer (falha de permissao, area de transferencia inativa). */}
-        {ironStatus === 'connected' && !clipboardNote && (
-          <span className="text-muted-foreground" title="Copiar no Windows remoto e colar no seu PC, e vice-versa">
-            Área de transferência sincronizada
-          </span>
-        )}
-        {clipboardNote && (
-          <span className="text-warning" role="status">
-            {clipboardNote}
-          </span>
-        )}
-      </div>
     </div>
   );
 }

@@ -24,6 +24,8 @@ import RemoteScreenViewer, {
 } from '@/modules/remote-screen/RemoteScreenViewer';
 // Menu de teclas especiais COMPARTILHADO com o viewer RDP.
 import SpecialKeysMenu from '@/components/SpecialKeysMenu';
+import type { RemoteRdpHandle } from '@/modules/remote-rdp/RemoteRdp';
+import type { IronRdpStatus } from '@/modules/remote-rdp/ironRdpClient';
 import {
   inputLockButtonLabel,
   inputLockButtonTitle,
@@ -105,12 +107,17 @@ interface TabSession {
 // Detecta o erro específico do backend quando já existe uma sessão ativa no agent
 // ("Agent already has N active session(s) (max M). Use force=true to override.").
 // Usado para acionar o fluxo de sobreposição (force=true) apenas nesse caso.
-function isSessionConflictError(err: unknown): boolean {
+export function isSessionConflictError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  // Aceita "has" e "have" ("Agent already has/have N active session(s)") ou a dica
-  // explícita "force=true to override" — evita regressão se a mensagem mudar.
+  // Aceita "has" e "have" ("Agent already has/have N active session(s)").
+  //
+  // ATENÇÃO ao kind no meio: o backend inclui o TIPO da sessão na mensagem
+  // ("Agent already has 1 active Rdp session(s)"), então exigir "active session"
+  // colado NUNCA casava — o aviso de conflito não aparecia e o operador só via
+  // o toast de erro, sem a opção de forçar. Aceitamos uma palavra opcional
+  // entre "active" e "session" (Rdp, Screen, Terminal...).
   return /already\s+(has|have)/i.test(msg)
-    && /active session/i.test(msg);
+    && /active\s+(?:\w+\s+)?session/i.test(msg);
 }
 
 const LIVENESS_LABELS: Record<string, string> = {
@@ -557,6 +564,15 @@ export default function RemoteSession() {
   // O envio depende do WebSocket do viewer: o pai usa o handle imperativo e
   // recebe o estado do bloqueio pelo callback do viewer (fonte: agent).
   const screenViewerRef = useRef<RemoteScreenViewerHandle | null>(null);
+  // Controles da aba RDP (teclas especiais / tela cheia) vivem no rodapé
+  // unificado, como na aba Tela — o viewer só expõe o handle.
+  const rdpViewerRef = useRef<RemoteRdpHandle | null>(null);
+  const [rdpFullscreen, setRdpFullscreen] = useState(false);
+  const [rdpDesktopRes, setRdpDesktopRes] = useState<{ width: number; height: number } | null>(null);
+  const [rdpClipboardNote, setRdpClipboardNote] = useState<string | null>(null);
+  const [rdpIronStatus, setRdpIronStatus] = useState<IronRdpStatus>('idle');
+  /** Controles do rodapé só habilitam com a sessão RDP de fato conectada. */
+  const rdpConnected = rdpIronStatus === 'connected';
   const [inputLockState, setInputLockState] = useState<InputLockChangedState | null>(null);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
   const lockMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2319,6 +2335,11 @@ export default function RemoteSession() {
                       .getSessionCredentials(agentId, sessions.rdp!.sessionId)
                       .then((creds) => creds.jwt)
                   }
+                  ref={rdpViewerRef}
+                  onFullscreenChange={setRdpFullscreen}
+                  onDesktopResize={(w, h) => setRdpDesktopRes({ width: w, height: h })}
+                  onClipboardState={setRdpClipboardNote}
+                  onIronStatus={setRdpIronStatus}
                 />
               </div>
             </div>
@@ -2360,6 +2381,30 @@ export default function RemoteSession() {
             <span className="mx-1 h-4 w-px bg-border" />
           </>
         )}
+        {/* Controles da aba RDP — MESMA posição e padrão da aba Tela: teclas
+            especiais (componente compartilhado) e tela cheia no rodapé, não em
+            uma barra própria do viewer. */}
+        {activeTab === 'rdp' && sessions.rdp && (
+          <>
+            <SpecialKeysMenu
+              direction="up"
+              disabled={!rdpConnected}
+              onSelect={(id) => rdpViewerRef.current?.sendSpecialKey(id)}
+            />
+            <button
+              type="button"
+              className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded disabled:opacity-40"
+              onClick={() => rdpViewerRef.current?.toggleFullscreen()}
+              disabled={!rdpConnected}
+              aria-pressed={rdpFullscreen}
+              title={rdpFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+            >
+              {rdpFullscreen ? '⤢ Sair' : '⛶ Tela cheia'}
+            </button>
+            <span className="mx-1 h-4 w-px bg-border" />
+          </>
+        )}
+
         {/* Controles específicos da aba Terminal: select de shell + status */}
         {activeTab === 'terminal' && sessions.terminal && (
           <>
@@ -2537,6 +2582,26 @@ export default function RemoteSession() {
               direction="up"
               onSelect={(id) => screenViewerRef.current?.sendSpecialKey(id)}
             />
+            </>
+          )}
+          {/* Indicadores da aba RDP: resolução REAL (lida do IronRDP) e estado
+              da área de transferência. Ficam à direita, junto do chat. */}
+          {activeTab === 'rdp' && sessions.rdp && (
+            <>
+              <span className="flex-1" />
+              {rdpConnected && rdpDesktopRes && (
+                <span
+                  className="text-muted-foreground font-mono"
+                  title="Resolução atual da área de trabalho remota (fonte: cliente RDP)"
+                >
+                  {rdpDesktopRes.width}×{rdpDesktopRes.height}
+                </span>
+              )}
+              {rdpConnected && (
+                rdpClipboardNote
+                  ? <span className="text-warning max-w-md truncate" role="status" title={rdpClipboardNote}>{rdpClipboardNote}</span>
+                  : <span className="text-muted-foreground" title="Copiar no Windows remoto e colar no seu PC, e vice-versa">Área de transferência sincronizada</span>
+              )}
             </>
           )}
           {agentId && (

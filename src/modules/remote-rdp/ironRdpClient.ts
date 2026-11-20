@@ -520,6 +520,11 @@ interface IronSession {
   applyInputs: (transaction: unknown) => void;
   /** Entrega o conteudo do clipboard local ao Windows remoto (CLIPRDR). */
   onClipboardPaste: (content: unknown) => Promise<void>;
+  /**
+   * Resolucao ATUAL da area de trabalho remota, lida do proprio IronRDP.
+   * E a fonte da verdade do resize: nunca assumir que o pedido foi aplicado.
+   */
+  desktopSize: () => { width: number; height: number };
 }
 
 
@@ -832,6 +837,8 @@ export function computeDesktopSize(
 /** Handle do controle de redimensionamento (remove o observer). */
 export interface IronRdpResizeHandle {
   detach: () => void;
+  /** Forca um novo ajuste de resolucao (ex.: ao sair da tela cheia). */
+  reapply: () => void;
 }
 
 /**
@@ -843,6 +850,9 @@ export interface IronRdpResizeHandle {
  *
  * Exige Windows 8.1+ no alvo (suporte a atualização dinâmica de resolução).
  */
+/** Quantas vezes reenviar um resize antes de desistir. */
+const RESIZE_MAX_ATTEMPTS = 8;
+
 export function attachResizeHandlers(
   canvas: HTMLCanvasElement,
   session: IronSession,
@@ -850,25 +860,76 @@ export function attachResizeHandlers(
   minHeight: number,
   onResized?: (width: number, height: number) => void,
 ): IronRdpResizeHandle {
-  let lastW = 0;
-  let lastH = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Tamanho alvo pendente (ainda não confirmado pelo servidor). */
+  let pending: { width: number; height: number } | null = null;
+  let attempt = 0;
+  let stopped = false;
+
+  /** Lê do IronRDP a resolução REAL da área de trabalho remota. */
+  const currentDesktop = (): { width: number; height: number } | null => {
+    try {
+      const ds = session.desktopSize();
+      if (ds && ds.width > 0 && ds.height > 0) {
+        return { width: ds.width, height: ds.height };
+      }
+    } catch { /* sessao encerrada */ }
+    return null;
+  };
+
+  /**
+   * Envia o resize pendente e CONFIRMA pelo desktopSize().
+   *
+   * Por que confirmar/retentar: o Display Control (MS-RDPEDISP) só fica
+   * disponível algum tempo DEPOIS da conexão — o WASM registra literalmente
+   * "Could not encode a resize: Display Control capabilities have not been
+   * received" se pedirmos cedo demais. O primeiro resize era enviado
+   * imediatamente após o connect e descartado em silêncio; como o tamanho da
+   * janela não mudava depois, nunca havia nova tentativa e o desktop remoto
+   * ficava na resolução antiga (imagem pequena num canvas grande).
+   */
+  const attemptResize = () => {
+    if (stopped || !pending) return;
+    const target = pending;
+
+    const cur = currentDesktop();
+    if (cur && cur.width === target.width && cur.height === target.height) {
+      // Aplicado: nada a fazer.
+      pending = null;
+      attempt = 0;
+      onResized?.(cur.width, cur.height);
+      return;
+    }
+
+    try {
+      session.resize(target.width, target.height);
+    } catch { /* sessao encerrada */ }
+
+    // Reporta o que VALEMOS agora; a UI mostra a resolução real, não a pedida.
+    const now = currentDesktop();
+    if (now) onResized?.(now.width, now.height);
+
+    attempt += 1;
+    if (attempt <= RESIZE_MAX_ATTEMPTS) {
+      // Backoff: dá tempo ao servidor de abrir o canal de Display Control.
+      retryTimer = setTimeout(attemptResize, Math.min(250 * attempt, 2000));
+    }
+  };
+
+  const scheduleResize = (width: number, height: number) => {
+    pending = { width, height };
+    attempt = 0;
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    attemptResize();
+  };
 
   const apply = () => {
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const { width, height } = computeDesktopSize(rect.width, rect.height, minWidth, minHeight);
-    if (width === lastW && height === lastH) return;
-    lastW = width;
-    lastH = height;
-    try {
-      // Buffer do canvas = resolução remota (define a nitidez do que o IronRDP
-      // desenha). O tamanho EXIBIDO continua sendo o do CSS.
-      canvas.width = width;
-      canvas.height = height;
-      session.resize(width, height);
-      onResized?.(width, height);
-    } catch { /* sessao encerrada */ }
+    if (pending && pending.width === width && pending.height === height) return;
+    scheduleResize(width, height);
   };
 
   // Redimensionar dispara dezenas de eventos por segundo. O servidor não
@@ -881,12 +942,12 @@ export function attachResizeHandlers(
   let observer: ResizeObserver | null = null;
   try {
     observer = new ResizeObserver(onResize);
-    // Observa o canvas: o ResizeObserver mede o tamanho CSS (não o buffer),
-    // então ajustar canvas.width/height NÃO realimenta o observer.
+    // Observa o canvas: o ResizeObserver mede o tamanho CSS.
     observer.observe(canvas);
   } catch { /* ambiente sem ResizeObserver */ }
 
-  // Aplica o tamanho inicial imediatamente.
+  // O tamanho INICIAL é enviado já; o retry cuida de reaplicar quando o
+  // Display Control ficar pronto.
   apply();
 
   let detached = false;
@@ -894,8 +955,15 @@ export function attachResizeHandlers(
     detach: () => {
       if (detached) return;
       detached = true;
+      stopped = true;
       if (timer !== null) clearTimeout(timer);
+      if (retryTimer !== null) clearTimeout(retryTimer);
       observer?.disconnect();
+    },
+    reapply: () => {
+      // Útil quando a UI quer forçar um novo ajuste (ex.: saiu da tela cheia).
+      pending = null;
+      apply();
     },
   };
 }

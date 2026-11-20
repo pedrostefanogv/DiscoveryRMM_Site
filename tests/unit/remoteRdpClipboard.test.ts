@@ -10,6 +10,10 @@ const RDP_SRC = readFileSync(
   resolve(__dirname, '../../src/modules/remote-rdp/RemoteRdp.tsx'),
   'utf8',
 );
+const SESSION_SRC = readFileSync(
+  resolve(__dirname, '../../src/pages/agents/RemoteSession.tsx'),
+  'utf8',
+);
 
 /**
  * Área de transferência BIDIRECIONAL entre o Windows remoto e o navegador.
@@ -59,9 +63,11 @@ describe('clipboard bidirecional', () => {
   });
 
   it('a UI informa quando o navegador bloqueia o clipboard', () => {
-    expect(RDP_SRC).toContain('clipboardNote');
+    // O aviso é RENDERIZADO no rodapé unificado do pai; o viewer só notifica.
+    expect(RDP_SRC).toContain('onClipboardState');
     expect(RDP_SRC).toContain('onClipboard');
-    expect(RDP_SRC).toContain('Área de transferência sincronizada');
     expect(RDP_SRC).toContain('bloqueou a LEITURA');
+    expect(SESSION_SRC).toContain('rdpClipboardNote');
+    expect(SESSION_SRC).toContain('Área de transferência sincronizada');
   });
 });

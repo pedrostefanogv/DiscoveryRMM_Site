@@ -11,6 +11,10 @@ const RDP_SRC = readFileSync(
   resolve(__dirname, '../../src/modules/remote-rdp/RemoteRdp.tsx'),
   'utf8',
 );
+const SESSION_SRC = readFileSync(
+  resolve(__dirname, '../../src/pages/agents/RemoteSession.tsx'),
+  'utf8',
+);
 
 const HD = MIN_DESKTOP_HD;
 
@@ -74,7 +78,16 @@ describe('redimensionamento dinâmico ligado ao canvas', () => {
 
   it('usa o canal oficial de Display Control do RDP', () => {
     // Não é só esticar a imagem: o Windows remapeia a área de trabalho.
-    expect(CLIENT_SRC).toContain('session.resize(width, height)');
+    expect(CLIENT_SRC).toContain('session.resize(target.width, target.height)');
+  });
+
+  it('CONFIRMA o resize pelo desktopSize() em vez de assumir que aplicou', () => {
+    // O Display Control só fica pronto DEPOIS da conexão: pedir cedo demais é
+    // descartado em silêncio ("capabilities have not been received"). Sem
+    // confirmar/retentar, a resolução ficava na antiga.
+    expect(CLIENT_SRC).toContain('session.desktopSize()');
+    expect(CLIENT_SRC).toContain('attemptResize');
+    expect(CLIENT_SRC).toContain('RESIZE_MAX_ATTEMPTS');
   });
 
   it('agrupa eventos para não spammar PDUs de resize', () => {
@@ -92,10 +105,12 @@ describe('redimensionamento dinâmico ligado ao canvas', () => {
     expect(CLIENT_SRC).toContain('observer?.disconnect()');
   });
 
-  it('a UI mostra a resolução atual para validar o recurso', () => {
+  it('a resolução aparece no rodapé unificado do PAI', () => {
+    // Foi para o rodapé compartilhado, junto dos controles — sem rodapé próprio
+    // no viewer (dois rodapés empilhados).
     expect(RDP_SRC).toContain('onDesktopResize');
-    expect(RDP_SRC).toContain('desktopRes');
-    expect(RDP_SRC).toMatch(/\{desktopRes\.width\}×\{desktopRes\.height\}/);
+    expect(SESSION_SRC).toContain('rdpDesktopRes');
+    expect(SESSION_SRC).toMatch(/\{rdpDesktopRes\.width\}×\{rdpDesktopRes\.height\}/);
   });
 
   it('o mínimo é configurável (HD por padrão, FHD disponível)', () => {

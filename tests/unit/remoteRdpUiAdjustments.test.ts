@@ -38,18 +38,11 @@ describe('ajustes de UI do WebRDP', () => {
     expect(RDP_SRC).toContain('IRON_LABEL[ironStatus]');
   });
 
-  it('o rodapé ficou só informativo (sem botões de tecla)', () => {
-    // Checa o BLOCO do rodapé, não o arquivo inteiro: um comentário explicativo
-    // no topo menciona "Teclas especiais:" e daria falso positivo (mesma
-    // armadilha do teste de localStorage, que casava o próprio comentário).
-    const footer = RDP_SRC.slice(RDP_SRC.indexOf('{/* Rodapé: apenas INFORMAÇÃO'));
-    expect(footer.length).toBeGreaterThan(0);
-    // Sem botões e sem a lista de teclas nesse bloco.
-    expect(footer).not.toContain('<button');
-    expect(footer).not.toContain('SPECIAL_KEY_GROUPS');
-    // Mas continua mostrando resolução e área de transferência.
-    expect(footer).toContain('desktopRes');
-    expect(footer).toContain('clipboardNote');
+  it('o viewer RDP NÃO tem rodapé próprio', () => {
+    // Antes havia um rodapé interno com resolução/clipboard, que empilhava com
+    // o rodapé unificado do pai. Agora tudo vive na barra única.
+    expect(RDP_SRC).not.toContain('Rodapé: apenas INFORMAÇÃO');
+    expect(RDP_SRC).not.toContain('border-t border-border text-xs');
   });
 });
 
@@ -63,11 +56,12 @@ describe('ajustes de UI do WebRDP', () => {
  */
 describe('menu de teclas especiais (componente COMPARTILHADO)', () => {
   it('o RDP usa o mesmo componente do acesso remoto de tela', () => {
-    // Este é o ponto do reaproveitamento: um único menu para os dois viewers.
-    expect(RDP_SRC).toContain('SpecialKeysMenu');
-    expect(RDP_SRC).toContain("from '@/components/SpecialKeysMenu'");
+    // O menu vive no RODAPÉ DO PAI (como na aba Tela); o viewer RDP só expõe o
+    // handle. Este é o ponto do reaproveitamento: UM menu para os dois viewers.
     expect(SESSION_SRC).toContain('SpecialKeysMenu');
     expect(SESSION_SRC).toContain("from '@/components/SpecialKeysMenu'");
+    expect(RDP_SRC).toContain('RemoteRdpHandle');
+    expect(RDP_SRC).toContain('sendSpecialKey');
   });
 
   it('nenhum dos dois mantém menu próprio duplicado', () => {
@@ -98,10 +92,17 @@ describe('menu de teclas especiais (componente COMPARTILHADO)', () => {
   });
 
   it('permite abrir para cima (rodapé) ou para baixo (barra superior)', () => {
-    // O viewer de tela tem o botão no rodapé; sem 'up' o menu sairia da tela.
+    // Os DOIS viewers usam o menu no rodapé (abre para cima); sem 'up' o menu
+    // sairia da tela.
     expect(MENU_SRC).toContain("direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'");
-    expect(RDP_SRC).toContain('direction="down"');
     expect(SESSION_SRC).toContain('direction="up"');
+  });
+
+  it('os controles do RDP ficam no rodapé unificado, junto do chat', () => {
+    expect(SESSION_SRC).toContain('rdpViewerRef');
+    expect(SESSION_SRC).toContain("activeTab === 'rdp' && sessions.rdp");
+    expect(SESSION_SRC).toContain('rdpViewerRef.current?.toggleFullscreen()');
+    expect(SESSION_SRC).toContain('rdpViewerRef.current?.sendSpecialKey(');
   });
 
   it('devolve o foco ao canvas após enviar (teclado segue indo para o RDP)', () => {
@@ -158,7 +159,16 @@ describe('tela cheia', () => {
   });
 
   it('tem botão com rótulo que muda conforme o estado', () => {
-    expect(RDP_SRC).toContain("'Tela cheia'");
-    expect(RDP_SRC).toContain("'Sair da tela cheia'");
+    expect(SESSION_SRC).toContain("'⛶ Tela cheia'");
+    expect(SESSION_SRC).toContain("'⤢ Sair'");
+  });
+
+  it('em tela cheia some TUDO menos a tela remota', () => {
+    // Barra superior e padding do container saem em fullscreen.
+    expect(RDP_SRC).toMatch(/\$\{isFullscreen \? 'hidden' : ''\}/);
+    expect(RDP_SRC).toMatch(/isFullscreen \? 'p-0' : 'p-2'/);
+    // A saída fica DENTRO do elemento que entra em tela cheia (fora dele
+    // ficaria invisível).
+    expect(RDP_SRC).toContain('{isFullscreen && (');
   });
 });

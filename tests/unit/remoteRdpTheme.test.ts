@@ -33,8 +33,12 @@ describe('cores do WebRDP legíveis nos dois temas', () => {
   });
 
   it('alertas usam fundo sólido com texto branco', () => {
+    // O alerta de ERRO continua sendo uma caixa de largura total.
     expect(RDP_SRC).toContain('bg-danger px-3 py-2 text-white');
-    expect(RDP_SRC).toContain('bg-success px-3 py-2 text-white');
+    // O antigo box verde do preflight migrou para um CHIP na barra superior
+    // (ocupava altura da área da tela sem necessidade).
+    expect(RDP_SRC).not.toContain('bg-success px-3 py-2 text-white');
+    expect(RDP_SRC).toContain('bg-success text-white');
   });
 
   it('não usa mais fundos semânticos translúcidos', () => {
