@@ -11,6 +11,7 @@ import { parseTunnelControl, type TunnelControlMsg } from '@/modules/remote-prox
 import {
   connectIronRdp,
   describeIronError,
+  MIN_DESKTOP_HD,
   preloadIronRdp,
   type IronRdpSessionHandle,
   type IronRdpStatus,
@@ -26,6 +27,13 @@ interface RemoteRdpProps {
   jwt?: string;
   nkeySeed?: string;
   getFreshCredentials?: () => Promise<string>;
+  /**
+   * Resolução MÍNIMA do desktop remoto. A resolução acompanha a janela do
+   * navegador, mas nunca fica abaixo disto. Default: HD (1280x720).
+   * Para exigir Full HD, use MIN_DESKTOP_FHD (1920x1080).
+   */
+  minDesktopWidth?: number;
+  minDesktopHeight?: number;
 
 }
 
@@ -112,6 +120,8 @@ export default function RemoteRdp({
   jwt = '',
   nkeySeed = '',
   getFreshCredentials,
+  minDesktopWidth = MIN_DESKTOP_HD.width,
+  minDesktopHeight = MIN_DESKTOP_HD.height,
 }: RemoteRdpProps) {
   const [status, setStatus] = useState<RdpStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +155,10 @@ export default function RemoteRdp({
   // do clipboard (permissao ou aba sem foco). Sem avisar, o operador conclui
   // que o recurso nao existe em vez de ajustar a permissao.
   const [clipboardNote, setClipboardNote] = useState<string | null>(null);
+  // Resolução atual do desktop remoto (acompanha a janela). Mostrada no rodapé
+  // para o operador CONFIRMAR que o Windows redimensionou de fato — sem isso não
+  // há como distinguir "redimensionou" de "só esticou a imagem".
+  const [desktopRes, setDesktopRes] = useState<{ width: number; height: number } | null>(null);
 
   const serviceRef = useRef<NatsService | null>(null);
   const sessionHandleRef = useRef<IronRdpSessionHandle | null>(null);
@@ -371,6 +385,8 @@ export default function RemoteRdp({
           domain: submitted.domain,
           width: liveCanvas.width || DEFAULT_WIDTH,
           height: liveCanvas.height || DEFAULT_HEIGHT,
+          minDesktopWidth,
+          minDesktopHeight,
           enableCredssp: true,
           // proxy_auth do RDCleanPath. O agent é fail-closed: sem isto ele
           // responde Error PDU 401 e o canvas fica preto. Reutilizamos o ticket
@@ -381,6 +397,10 @@ export default function RemoteRdp({
             onStatus: (s) => {
               if (cancelled) return;
               setIronStatus(s);
+            },
+            onDesktopResize: (w, h) => {
+              if (cancelled) return;
+              setDesktopRes({ width: w, height: h });
             },
             onClipboard: (ev) => {
               if (cancelled) return;
@@ -714,6 +734,12 @@ export default function RemoteRdp({
           </button>
         ))}
         <span className="flex-1" />
+        {/* Resolucao atual do Windows remoto (acompanha a janela). */}
+        {ironStatus === 'connected' && desktopRes && (
+          <span className="text-muted-foreground font-mono" title="Resolução atual da área de trabalho remota">
+            {desktopRes.width}×{desktopRes.height}
+          </span>
+        )}
         {/* Estado da area de transferencia: texto discreto, so aparece quando
             ha algo a dizer (falha de permissao, area de transferencia inativa). */}
         {ironStatus === 'connected' && !clipboardNote && (

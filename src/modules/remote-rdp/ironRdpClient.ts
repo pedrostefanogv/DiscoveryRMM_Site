@@ -25,6 +25,8 @@ export interface IronRdpCallbacks {
   onTerminated?: (reason: string) => void;
   /** Sincronizacao de area de transferencia (bidirecional). */
   onClipboard?: (event: IronRdpClipboardEvent) => void;
+  /** Nova resolucao aplicada ao desktop remoto (acompanha a janela). */
+  onDesktopResize?: (width: number, height: number) => void;
 }
 
 /** Opcoes de conexao. */
@@ -45,6 +47,12 @@ export interface IronRdpConnectOptions {
   enableCredssp?: boolean;
   /** Token de autorizacao do proxy (proxy_auth do RDCleanPath). */
   authToken?: string;
+  /**
+   * Resolucao MINIMA do desktop remoto. A resolucao acompanha a janela, mas
+   * nunca fica abaixo disto. Default: HD (1280x720).
+   */
+  minDesktopWidth?: number;
+  minDesktopHeight?: number;
   callbacks?: IronRdpCallbacks;
 }
 
@@ -779,6 +787,105 @@ function attachClipboardHandlers(
     })();
   });
 }
+
+/** Tamanhos mínimos suportados para o desktop remoto. */
+export const MIN_DESKTOP_HD = { width: 1280, height: 720 } as const;
+export const MIN_DESKTOP_FHD = { width: 1920, height: 1080 } as const;
+
+/**
+ * Calcula a resolução do desktop remoto a partir do tamanho exibido do canvas.
+ *
+ * Regra: a resolução ACOMPANHA a janela (1:1) e nunca fica abaixo do mínimo.
+ * Quando a janela é menor que o mínimo, a escala é UNIFORME (mesma proporção do
+ * container) em vez de forçar cada eixo independentemente.
+ *
+ * Por que uniforme: se forçássemos largura e altura separadamente, o desktop
+ * remoto teria uma proporção diferente da janela e o navegador ESTICARIA a
+ * imagem — texto e janelas do Windows ficariam distorcidos. Com escala uniforme
+ * o navegador apenas REDUZ a imagem, sem deformar.
+ */
+export function computeDesktopSize(
+  cssWidth: number,
+  cssHeight: number,
+  minWidth: number,
+  minHeight: number,
+): { width: number; height: number } {
+  const w = Math.max(1, Math.floor(cssWidth));
+  const h = Math.max(1, Math.floor(cssHeight));
+  const scale = Math.max(1, minWidth / w, minHeight / h);
+  return { width: Math.round(w * scale), height: Math.round(h * scale) };
+}
+
+/** Handle do controle de redimensionamento (remove o observer). */
+export interface IronRdpResizeHandle {
+  detach: () => void;
+}
+
+/**
+ * Mantém a resolução do Windows remoto acompanhando o tamanho do canvas.
+ *
+ * Usa o canal oficial de Display Control do RDP (MS-RDPEDISP): o IronRDP envia
+ * um DisplayControlPdu e o Windows REMAPEIA a área de trabalho — não é só
+ * esticar a imagem no navegador.
+ *
+ * Exige Windows 8.1+ no alvo (suporte a atualização dinâmica de resolução).
+ */
+export function attachResizeHandlers(
+  canvas: HTMLCanvasElement,
+  session: IronSession,
+  minWidth: number,
+  minHeight: number,
+  onResized?: (width: number, height: number) => void,
+): IronRdpResizeHandle {
+  let lastW = 0;
+  let lastH = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const apply = () => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const { width, height } = computeDesktopSize(rect.width, rect.height, minWidth, minHeight);
+    if (width === lastW && height === lastH) return;
+    lastW = width;
+    lastH = height;
+    try {
+      // Buffer do canvas = resolução remota (define a nitidez do que o IronRDP
+      // desenha). O tamanho EXIBIDO continua sendo o do CSS.
+      canvas.width = width;
+      canvas.height = height;
+      session.resize(width, height);
+      onResized?.(width, height);
+    } catch { /* sessao encerrada */ }
+  };
+
+  // Redimensionar dispara dezenas de eventos por segundo. O servidor não
+  // precisa de cada pixel: agrupa em uma única atualização.
+  const onResize = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(apply, 150);
+  };
+
+  let observer: ResizeObserver | null = null;
+  try {
+    observer = new ResizeObserver(onResize);
+    // Observa o canvas: o ResizeObserver mede o tamanho CSS (não o buffer),
+    // então ajustar canvas.width/height NÃO realimenta o observer.
+    observer.observe(canvas);
+  } catch { /* ambiente sem ResizeObserver */ }
+
+  // Aplica o tamanho inicial imediatamente.
+  apply();
+
+  let detached = false;
+  return {
+    detach: () => {
+      if (detached) return;
+      detached = true;
+      if (timer !== null) clearTimeout(timer);
+      observer?.disconnect();
+    },
+  };
+}
 /**
  * Conecta ao WebRDP. Devolve um handle para encerrar/redimensionar.
  *
@@ -789,7 +896,10 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
   const {
     canvas, proxyUrl, destination = '127.0.0.1:3389',
     username, password, domain, width, height,
-    enableCredssp = true, authToken, callbacks = {},
+    enableCredssp = true, authToken,
+    minDesktopWidth = MIN_DESKTOP_HD.width,
+    minDesktopHeight = MIN_DESKTOP_HD.height,
+    callbacks = {},
   } = opts;
 
   const setStatus = (s: IronRdpStatus, d?: string) => callbacks.onStatus?.(s, d);
@@ -802,10 +912,24 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
 
   setStatus('connecting', 'Conectando ao túnel RDP…');
 
+  // A resolucao INICIAL vem do tamanho real do canvas (nao de um valor fixo):
+  // assim a sessao ja abre no tamanho da janela, sem um primeiro resize.
+  const initial = (() => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      return computeDesktopSize(rect.width, rect.height, minDesktopWidth, minDesktopHeight);
+    }
+    // Sem layout ainda (canvas oculto): usa o minimo, ou o valor informado.
+    return {
+      width: Math.max(minDesktopWidth, width || minDesktopWidth),
+      height: Math.max(minDesktopHeight, height || minDesktopHeight),
+    };
+  })();
+
   const builder = new mod.SessionBuilder();
   builder.destination(destination);
   builder.proxyAddress(proxyUrl);
-  builder.desktopSize(new mod.DesktopSize(width, height));
+  builder.desktopSize(new mod.DesktopSize(initial.width, initial.height));
   builder.renderCanvas(canvas);
 
   // ATENÇÃO: o connect() do WASM VALIDA a presença destes campos e aborta com
@@ -870,6 +994,14 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
   // Disponibiliza a sessao para os callbacks de clipboard registrados acima.
   sessionRef.current = session;
 
+  // Resolucao ACOMPANHA a janela (via Display Control do RDP), respeitando o
+  // minimo configurado. Sem isto o desktop remoto fica com a resolucao do
+  // momento da conexao e o navegador so estica/reduz a imagem.
+  const resize = attachResizeHandlers(
+    canvas, session, minDesktopWidth, minDesktopHeight,
+    (w, h) => callbacks.onDesktopResize?.(w, h),
+  );
+
   setStatus('connected', 'Sessão RDP ativa');
 
   // run() bloqueia ate a sessao terminar; nao aguardamos aqui para o componente
@@ -892,6 +1024,7 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
       if (disposed) return;
       disposed = true;
       sessionRef.current = null;
+      resize.detach();
       input.detach();
       try { session.shutdown(); } catch { /* ja encerrada */ }
       try { session.free(); } catch { /* liberado */ }

@@ -1,0 +1,106 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { computeDesktopSize, MIN_DESKTOP_FHD, MIN_DESKTOP_HD } from '@/modules/remote-rdp/ironRdpClient';
+
+const CLIENT_SRC = readFileSync(
+  resolve(__dirname, '../../src/modules/remote-rdp/ironRdpClient.ts'),
+  'utf8',
+);
+const RDP_SRC = readFileSync(
+  resolve(__dirname, '../../src/modules/remote-rdp/RemoteRdp.tsx'),
+  'utf8',
+);
+
+const HD = MIN_DESKTOP_HD;
+
+/**
+ * A resolução do Windows remoto acompanha a janela do navegador (via Display
+ * Control do RDP), mas nunca fica abaixo de um mínimo.
+ *
+ * Ponto crítico: quando a janela é menor que o mínimo, a escala precisa ser
+ * UNIFORME. Se cada eixo fosse forçado independentemente, a proporção do
+ * desktop remoto ficaria diferente da janela e o navegador ESTICARIA a imagem,
+ * distorcendo texto e janelas do Windows.
+ */
+describe('computeDesktopSize', () => {
+  it('usa 1:1 quando a janela já é maior que o mínimo', () => {
+    const r = computeDesktopSize(1920, 1080, HD.width, HD.height);
+    expect(r).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('nunca desce abaixo do mínimo', () => {
+    const r = computeDesktopSize(800, 600, HD.width, HD.height);
+    expect(r.width).toBeGreaterThanOrEqual(HD.width);
+    expect(r.height).toBeGreaterThanOrEqual(HD.height);
+  });
+
+  it('mantém a proporção da janela ao escalar (sem distorção)', () => {
+    const cssW = 800;
+    const cssH = 600;
+    const r = computeDesktopSize(cssW, cssH, HD.width, HD.height);
+    // A razão tem de ser preservada (tolerância de 1px por arredondamento).
+    expect(Math.abs(r.width / r.height - cssW / cssH)).toBeLessThan(0.01);
+  });
+
+  it('respeita o mínimo em FHD quando configurado', () => {
+    const r = computeDesktopSize(1024, 768, MIN_DESKTOP_FHD.width, MIN_DESKTOP_FHD.height);
+    expect(r.width).toBeGreaterThanOrEqual(MIN_DESKTOP_FHD.width);
+    expect(r.height).toBeGreaterThanOrEqual(MIN_DESKTOP_FHD.height);
+  });
+
+  it('janela larga e baixa ainda respeita a altura mínima', () => {
+    // Caso comum: janela muito larga e de pouca altura (barra de tarefas etc.).
+    const r = computeDesktopSize(2400, 400, HD.width, HD.height);
+    expect(r.height).toBeGreaterThanOrEqual(HD.height);
+    expect(r.width).toBeGreaterThan(2400);
+  });
+
+  it('lida com medidas degeneradas sem gerar NaN/zero', () => {
+    for (const [w, h] of [[0, 0], [-10, 50], [0.4, 0.4]]) {
+      const r = computeDesktopSize(w, h, HD.width, HD.height);
+      expect(Number.isFinite(r.width)).toBe(true);
+      expect(r.width).toBeGreaterThan(0);
+      expect(r.height).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('redimensionamento dinâmico ligado ao canvas', () => {
+  it('observa o tamanho do canvas', () => {
+    expect(CLIENT_SRC).toContain('new ResizeObserver(');
+    expect(CLIENT_SRC).toContain('observer.observe(canvas)');
+  });
+
+  it('usa o canal oficial de Display Control do RDP', () => {
+    // Não é só esticar a imagem: o Windows remapeia a área de trabalho.
+    expect(CLIENT_SRC).toContain('session.resize(width, height)');
+  });
+
+  it('agrupa eventos para não spammar PDUs de resize', () => {
+    expect(CLIENT_SRC).toContain('clearTimeout(timer)');
+    expect(CLIENT_SRC).toContain('setTimeout(apply, 150)');
+  });
+
+  it('a resolução inicial vem do tamanho real do canvas', () => {
+    expect(CLIENT_SRC).toContain('canvas.getBoundingClientRect()');
+    expect(CLIENT_SRC).toContain('computeDesktopSize(rect.width, rect.height');
+  });
+
+  it('remove o observer no dispose (sem vazamento)', () => {
+    expect(CLIENT_SRC).toContain('resize.detach()');
+    expect(CLIENT_SRC).toContain('observer?.disconnect()');
+  });
+
+  it('a UI mostra a resolução atual para validar o recurso', () => {
+    expect(RDP_SRC).toContain('onDesktopResize');
+    expect(RDP_SRC).toContain('desktopRes');
+    expect(RDP_SRC).toMatch(/\{desktopRes\.width\}×\{desktopRes\.height\}/);
+  });
+
+  it('o mínimo é configurável (HD por padrão, FHD disponível)', () => {
+    expect(CLIENT_SRC).toContain('MIN_DESKTOP_HD');
+    expect(CLIENT_SRC).toContain('MIN_DESKTOP_FHD');
+    expect(RDP_SRC).toContain('minDesktopWidth');
+  });
+});
