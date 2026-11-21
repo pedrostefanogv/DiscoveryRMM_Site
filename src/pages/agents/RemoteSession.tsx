@@ -251,6 +251,8 @@ export default function RemoteSession() {
   // Kinds para os quais o WebRTC está autorizado na config EFETIVA do site
   // (herdada). Vazio = WebRTC desligado, e toda sessão sobe em NATS.
   const [webRtcKinds, setWebRtcKinds] = useState<string[]>([]);
+  const webRtcKindsRef = useRef<string[]>([]);
+  const siteConfigReadyRef = useRef<Promise<void> | null>(null);
 
   // Transporte FORÇADO pela URL (diagnóstico: ?transport=nats ignora a política).
   // Continua existindo porque é útil para isolar um problema de rede sem mexer
@@ -278,7 +280,8 @@ export default function RemoteSession() {
       if (requestedTransport === 'webrtc') return 'webrtc';
       // Sem override na URL: pede WebRTC quando a política herdável autoriza
       // ESTE kind. O agente revalida e decide de fato.
-      return webRtcKinds.includes(kind) ? 'webrtc' : 'nats';
+      const activeKinds = webRtcKindsRef.current.length > 0 ? webRtcKindsRef.current : webRtcKinds;
+      return activeKinds.includes(kind) ? 'webrtc' : 'nats';
     },
     [requestedTransport, webRtcKinds],
   );
@@ -561,8 +564,12 @@ export default function RemoteSession() {
   // vazia e o operador digita a URL normalmente.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const loadPromise = (async () => {
+      if (!agentId) return;
       try {
+        await tokenReadyRef.current?.promise;
+        if (cancelled) return;
+
         const agent = await agentsApi.get(agentId);
         if (cancelled || !agent.siteId) return;
 
@@ -580,11 +587,18 @@ export default function RemoteSession() {
         //
         // Best-effort: sem permissão de configuração o pedido fica em NATS, que
         // é o caminho que sempre funciona.
-        setWebRtcKinds(resolveWebRtcKinds(effective));
+        const kinds = resolveWebRtcKinds(effective);
+        webRtcKindsRef.current = kinds;
+        setWebRtcKinds(kinds);
       } catch {
-        if (!cancelled) setProxyDestinations([]);
+        if (!cancelled) {
+          setProxyDestinations([]);
+          webRtcKindsRef.current = [];
+          setWebRtcKinds([]);
+        }
       }
     })();
+    siteConfigReadyRef.current = loadPromise;
     return () => { cancelled = true; };
   }, [agentId]);
 
@@ -1100,6 +1114,14 @@ export default function RemoteSession() {
       // 'services' comparte a mesma sessão/subject de 'processes' (backend
       // RemoteSessionKind.Processes). Enviamos o kind 'processes' no request.
       const kind = tab === 'screen' ? 'screen' : tab === 'services' ? 'processes' : tab; // screen | terminal | files | processes | proxy
+      // Aguarda a configuração efetiva do site (com timeout curto) antes de
+      // decidir o transporte, evitando corrida no clique imediato em "Conectar".
+      if (!requestedTransport && siteConfigReadyRef.current) {
+        await Promise.race([
+          siteConfigReadyRef.current,
+          new Promise<void>((resolve) => setTimeout(resolve, 2500)),
+        ]);
+      }
       // Sessão de tela nasce já no perfil do modo escolhido (HD = ultra/WebP;
       // Auto/Manual preservam o perfil padrão do viewer). Lê o snapshot ATUAL:
       // o run pode ter começado antes de o usuário trocar o modo.
