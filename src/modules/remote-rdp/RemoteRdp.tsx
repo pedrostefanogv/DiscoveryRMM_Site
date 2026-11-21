@@ -61,6 +61,16 @@ export interface RemoteRdpHandle {
   sendSpecialKey: (id: string) => void;
   /** Entra/sai da tela cheia. */
   toggleFullscreen: () => void;
+  /**
+   * Pede ao navegador a permissão de LEITURA da área de transferência.
+   *
+   * PRECISA ser chamado de um clique: o navegador só exibe o prompt de
+   * permissão dentro de um gesto do usuário. No callback automático de
+   * clipboard (assíncrono, sem gesto) a leitura falha com NotAllowedError e o
+   * navegador NUNCA pergunta — era por isso que o aviso aparecia sempre e o
+   * operador não tinha como resolver.
+   */
+  grantClipboard: () => Promise<void>;
 }
 
 type RdpStatus = 'idle' | 'connecting' | 'connected' | 'error';
@@ -554,11 +564,45 @@ export default function RemoteRdp({
     void fullscreenApi.toggle(el);
   }, []);
 
+  /**
+   * Libera a leitura da área de transferência (chamado por um CLIQUE no rodapé).
+   *
+   * O navegador só mostra o prompt de permissão dentro de um gesto do usuário.
+   * Depois de concedida, o conteúdo local é enviado imediatamente ao Windows
+   * remoto, e os próximos pastes passam a funcionar sozinhos.
+   */
+  const grantClipboard = useCallback(async () => {
+    if (!navigator.clipboard?.readText) {
+      onClipboardState?.(
+        'Este navegador não expõe a área de transferência por script (exige HTTPS e navegador atualizado).',
+      );
+      return;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      // Envia já o que está copiado, para o operador não precisar colar de novo.
+      const session = sessionHandleRef.current;
+      if (!session) return; // sessão caiu: não limpar o aviso sem nada enviado
+      await session.pasteClipboard(text ?? '');
+      onClipboardState?.(null);
+    } catch (err) {
+      // Negado, ou o navegador não mostrou prompt algum. A mensagem precisa
+      // dizer o que fazer no navegador, não só que falhou.
+      const motivo = err instanceof Error && err.name === 'NotAllowedError'
+        ? 'Permissão negada.'
+        : 'O navegador não liberou a leitura.';
+      onClipboardState?.(
+        `${motivo} Clique no ícone de permissões na barra de endereço e libere a Área de transferência para este site.`,
+      );
+    }
+  }, [onClipboardState]);
+
   // Controles acionados pelo RODAPÉ do pai (barra unificada, como na aba Tela).
   useImperativeHandle(ref, () => ({
     sendSpecialKey: (id: string) => handleSpecialKey(id),
     toggleFullscreen: () => toggleFullscreen(),
-  }), [handleSpecialKey, toggleFullscreen]);
+    grantClipboard: () => grantClipboard(),
+  }), [handleSpecialKey, toggleFullscreen, grantClipboard]);
 
   // Mantém o estado em sincronia com o navegador: o usuário pode sair da tela
   // cheia por Esc ou pelo próprio navegador, sem passar pelo nosso botão.
@@ -767,8 +811,22 @@ export default function RemoteRdp({
             {/* Wrapper relativo: permite sobrepor o canvas com o aviso de estado.
                 O canvas precisa continuar MONTADO (o IronRDP escreve nele), então
                 não o removemos — cobrimos. */}
-            <div className="relative flex-1 min-h-0 w-full flex items-center justify-center bg-black rounded overflow-hidden">
+            <div className="relative flex-1 min-h-0 w-full bg-black rounded overflow-hidden">
               {/* Fundo preto SÓ no canvas: é a área do desktop remoto (letterbox). */}
+              {/*
+                object-contain: o canvas ocupa TODA a área útil e o navegador
+                escala a imagem remota MANTENDO a proporção (letterbox interno).
+
+                Por que não deixar no tamanho intrínseco: o desktop remoto só
+                preenche a janela quando o servidor aplica o resize via Display
+                Control — e há servidores que não abrem esse canal. Nesses casos
+                a imagem ficava pequena no meio de uma área preta, com péssimo
+                aproveitamento (pior ainda em tela cheia). Com contain, a área é
+                aproveitada SEMPRE; quando o resize funciona, o resultado é 1:1.
+
+                O mapeamento do mouse desconta escala e faixas — ver
+                toRemoteCoords() em ironRdpClient.ts.
+              */}
               {/* tabIndex: o canvas precisa receber FOCO para capturar teclado.
                   Sem ele o mouse funciona mas a digitacao vai para a pagina.
                   outline-none evita o anel de foco padrao do navegador por cima
@@ -778,7 +836,7 @@ export default function RemoteRdp({
                 width={DEFAULT_WIDTH}
                 height={DEFAULT_HEIGHT}
                 tabIndex={0}
-                className="max-w-full max-h-full bg-black outline-none"
+                className="w-full h-full object-contain bg-black outline-none"
                 aria-label="Área de trabalho remota"
               />
               {/* LIMPA A TELA ao encerrar: sem esta camada o canvas continuaria

@@ -113,6 +113,42 @@ describe('redimensionamento dinâmico ligado ao canvas', () => {
     expect(SESSION_SRC).toMatch(/\{rdpDesktopRes\.width\}×\{rdpDesktopRes\.height\}/);
   });
 
+  /**
+   * Achados da revisão de bugs.
+   */
+  it('não desiste do resize em DEFINITIVO após esgotar as tentativas', () => {
+    // Antes o alvo ficava preso: o apply() retornava cedo (mesmo tamanho) e um
+    // resize posterior nunca era tentado.
+    const body = CLIENT_SRC.slice(
+      CLIENT_SRC.indexOf('const attemptResize'),
+      CLIENT_SRC.indexOf('const scheduleResize'),
+    );
+    const esgotou = body.slice(body.indexOf('attempt <= RESIZE_MAX_ATTEMPTS'));
+    expect(esgotou).toContain('pending = null');
+  });
+
+  it('só confia no desktopSize() DEPOIS de enviar um resize', () => {
+    // Se o IronRDP reportasse o valor PEDIDO e não o aplicado, confiar na
+    // primeira checagem faria desistir sem nunca ter pedido nada.
+    expect(CLIENT_SRC).toContain('if (attempt > 0 && cur && cur.width === target.width');
+  });
+
+  it('zera o timer de retry ao disparar (sem timer órfão)', () => {
+    expect(CLIENT_SRC).toContain('retryTimer = null;');
+  });
+
+  it('libera objetos wasm-bindgen (memória vive no heap do WASM)', () => {
+    // FinalizationRegistry cobre, mas depender do GC acumulava memória: a
+    // transação é criada a CADA evento de mouse.
+    expect(CLIENT_SRC).toContain('function freeWasm(');
+    expect(CLIENT_SRC).toContain('freeWasm(tx)');
+    expect(CLIENT_SRC).toContain('freeWasm(data)');
+  });
+
+  it('não tem código morto de resize (reapply removido)', () => {
+    expect(CLIENT_SRC).not.toContain('reapply');
+  });
+
   it('o mínimo é configurável (HD por padrão, FHD disponível)', () => {
     expect(CLIENT_SRC).toContain('MIN_DESKTOP_HD');
     expect(CLIENT_SRC).toContain('MIN_DESKTOP_FHD');

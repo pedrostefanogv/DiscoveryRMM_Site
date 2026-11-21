@@ -72,6 +72,11 @@ export interface IronRdpSessionHandle {
   /** Redimensiona o desktop remoto. */
   resize: (width: number, height: number) => void;
   /**
+   * Envia um texto ao clipboard remoto (usado depois de o operador liberar a
+   * permissao, para o conteudo local ja valer sem esperar novo paste).
+   */
+  pasteClipboard: (text: string) => Promise<void>;
+  /**
    * Envia uma tecla especial pelo ID canonico (ex.: 'ctrl+alt+del').
    *
    * Necessario porque combinacoes como Ctrl+Alt+Del, Win e Alt+Tab sao
@@ -520,6 +525,8 @@ interface IronSession {
   applyInputs: (transaction: unknown) => void;
   /** Entrega o conteudo do clipboard local ao Windows remoto (CLIPRDR). */
   onClipboardPaste: (content: unknown) => Promise<void>;
+  /** Envia um texto do clipboard local ao remoto (usado ao liberar permissao). */
+  pasteText: (text: string) => Promise<void>;
   /**
    * Resolucao ATUAL da area de trabalho remota, lida do proprio IronRDP.
    * E a fonte da verdade do resize: nunca assumir que o pedido foi aplicado.
@@ -576,6 +583,62 @@ const SCANCODE_MAP: Record<string, number> = {
 /** RotationUnit.Line do IronRDP (roda do mouse em "linhas", nao pixels). */
 const WHEEL_ROTATION_UNIT_LINE = 1;
 
+/**
+ * Libera explicitamente um objeto wasm-bindgen.
+ *
+ * A memoria desses objetos vive no HEAP DO WASM, nao no heap do JS: o
+ * wasm-bindgen depende de `free()` (ou do FinalizationRegistry, quando o objeto
+ * JS e coletado) para devolve-la. Como criamos uma transacao a CADA evento de
+ * mouse, depender so do GC acumulava memoria durante a sessao.
+ *
+ * Best-effort: liberar duas vezes nao pode derrubar a sessao.
+ */
+function freeWasm(obj: unknown): void {
+  try {
+    (obj as { free?: () => void } | null | undefined)?.free?.();
+  } catch { /* ja liberado */ }
+}
+
+/**
+ * Converte um ponto da area do canvas para coordenadas da tela remota.
+ *
+ * O canvas e exibido com `object-fit: contain`: ele ocupa TODA a area util e a
+ * imagem e escalada mantendo a proporcao, o que cria faixas (letterbox) quando
+ * a proporcao da janela difere da resolucao remota.
+ *
+ * E preciso descontar a ESCALA e o DESLOCAMENTO das faixas. Usar apenas
+ * `larguraRemota / larguraExibida` (erro comum) desloca o clique exatamente nas
+ * faixas, e o erro cresce conforme a diferenca de proporcao.
+ *
+ * Devolve null quando o ponto cai FORA da imagem (na faixa preta) — nao ha o
+ * que enviar ao Windows nesse caso.
+ *
+ * @param offsetX posicao do ponteiro relativa ao canto do canvas
+ * @param offsetY idem, vertical
+ * @param displayW largura exibida do canvas (CSS px)
+ * @param displayH altura exibida do canvas (CSS px)
+ * @param remoteW resolucao remota (buffer do canvas)
+ * @param remoteH idem, vertical
+ */
+export function mapPointerToRemote(
+  offsetX: number,
+  offsetY: number,
+  displayW: number,
+  displayH: number,
+  remoteW: number,
+  remoteH: number,
+): { x: number; y: number } | null {
+  if (displayW <= 0 || displayH <= 0 || remoteW <= 0 || remoteH <= 0) return null;
+  const scale = Math.min(displayW / remoteW, displayH / remoteH);
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+  const padX = (displayW - remoteW * scale) / 2;
+  const padY = (displayH - remoteH * scale) / 2;
+  const x = Math.round((offsetX - padX) / scale);
+  const y = Math.round((offsetY - padY) / scale);
+  if (x < 0 || y < 0 || x >= remoteW || y >= remoteH) return null;
+  return { x, y };
+}
+
 /** Handle dos handlers de input anexados ao canvas. */
 export interface IronRdpInputHandle {
   /** Remove todos os listeners. Idempotente. */
@@ -603,6 +666,9 @@ export function attachInputHandlers(
     const tx = new (InputTransaction as unknown as new () => { addEvent: (e: unknown) => void })();
     tx.addEvent(event);
     session.applyInputs(tx);
+    // applyInputs processa a transacao de forma sincrona; devolver a memoria
+    // evita acumular um objeto por evento de mouse/teclado.
+    freeWasm(tx);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -622,15 +688,33 @@ export function attachInputHandlers(
     try { send(DeviceEvent.keyReleased(sc)); } catch { /* sessao encerrada */ }
   };
 
+  /**
+   * Converte a posicao do ponteiro para as coordenadas da tela remota.
+   *
+   * O canvas e exibido com `object-fit: contain`: ele ocupa toda a area util e a
+   * IMAGEM e escalada mantendo a proporcao, deixando faixas (letterbox) quando a
+   * proporcao da janela difere da resolucao remota.
+   *
+   * Sem descontar escala E deslocamento das faixas, o clique sai deslocado do
+   * ponto apontado — erro classico de clientes que so usam `width/rect.width`.
+   */
+  const toRemoteCoords = (e: MouseEvent): { x: number; y: number } | null => {
+    const rect = canvas.getBoundingClientRect();
+    return mapPointerToRemote(
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+      rect.width,
+      rect.height,
+      canvas.width,
+      canvas.height,
+    );
+  };
+
   const onMouseMove = (e: MouseEvent) => {
     try {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      // A tela remota tem resolucao propria (canvas.width/height), que pode
-      // diferir do tamanho exibido: sem escalar, o cursor fica deslocado.
-      const x = Math.round((e.clientX - rect.left) * (canvas.width / rect.width));
-      const y = Math.round((e.clientY - rect.top) * (canvas.height / rect.height));
-      send(DeviceEvent.mouseMove(x, y));
+      const p = toRemoteCoords(e);
+      if (!p) return;
+      send(DeviceEvent.mouseMove(p.x, p.y));
     } catch { /* sessao encerrada */ }
   };
 
@@ -638,7 +722,14 @@ export function attachInputHandlers(
     e.preventDefault();
     // Foca o canvas para que o teclado passe a ser capturado.
     canvas.focus();
-    try { send(DeviceEvent.mouseButtonPressed(e.button)); } catch { /* sessao encerrada */ }
+    try {
+      // Move ANTES de pressionar: garante que o Windows clique na posicao
+      // apontada, mesmo se o mousemove anterior foi descartado por estar na
+      // faixa de letterbox.
+      const p = toRemoteCoords(e);
+      if (p) send(DeviceEvent.mouseMove(p.x, p.y));
+      send(DeviceEvent.mouseButtonPressed(e.button));
+    } catch { /* sessao encerrada */ }
   };
 
   const onMouseUp = (e: MouseEvent) => {
@@ -786,6 +877,7 @@ function attachClipboardHandlers(
         const data = new mod.ClipboardData();
         if (text) data.addText('text/plain', text);
         await session.onClipboardPaste(data);
+        freeWasm(data);
       };
       try {
         if (!navigator.clipboard?.readText) {
@@ -837,8 +929,6 @@ export function computeDesktopSize(
 /** Handle do controle de redimensionamento (remove o observer). */
 export interface IronRdpResizeHandle {
   detach: () => void;
-  /** Forca um novo ajuste de resolucao (ex.: ao sair da tela cheia). */
-  reapply: () => void;
 }
 
 /**
@@ -894,7 +984,11 @@ export function attachResizeHandlers(
     const target = pending;
 
     const cur = currentDesktop();
-    if (cur && cur.width === target.width && cur.height === target.height) {
+    // Só confiamos no desktopSize() DEPOIS de já termos enviado um resize neste
+    // ciclo. Se ele refletir o valor PEDIDO (e não o aplicado pelo servidor),
+    // confiar logo na primeira checagem faria desistir sem nunca ter pedido
+    // nada — e era exatamente esse o caso quando o canvas media a si mesmo.
+    if (attempt > 0 && cur && cur.width === target.width && cur.height === target.height) {
       // Aplicado: nada a fazer.
       pending = null;
       attempt = 0;
@@ -913,14 +1007,28 @@ export function attachResizeHandlers(
     attempt += 1;
     if (attempt <= RESIZE_MAX_ATTEMPTS) {
       // Backoff: dá tempo ao servidor de abrir o canal de Display Control.
-      retryTimer = setTimeout(attemptResize, Math.min(250 * attempt, 2000));
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        attemptResize();
+      }, Math.min(250 * attempt, 2000));
+      return;
     }
+
+    // Esgotou as tentativas (o servidor pode não abrir o Display Control).
+    // LIBERA o alvo: sem isso ele ficava preso, o apply() retornava cedo para
+    // sempre (mesmo tamanho) e um resize posterior NUNCA era tentado — o
+    // viewer desistia em definitivo após a primeira falha.
+    pending = null;
+    attempt = 0;
   };
 
   const scheduleResize = (width: number, height: number) => {
     pending = { width, height };
     attempt = 0;
-    if (retryTimer !== null) clearTimeout(retryTimer);
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
     attemptResize();
   };
 
@@ -959,11 +1067,6 @@ export function attachResizeHandlers(
       if (timer !== null) clearTimeout(timer);
       if (retryTimer !== null) clearTimeout(retryTimer);
       observer?.disconnect();
-    },
-    reapply: () => {
-      // Útil quando a UI quer forçar um novo ajuste (ex.: saiu da tela cheia).
-      pending = null;
-      apply();
     },
   };
 }
@@ -1114,6 +1217,16 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
       if (disposed) return;
       try { session.resize(w, h); } catch { /* sessao encerrada */ }
     },
+    pasteClipboard: async (text: string) => {
+      if (disposed) return;
+      const data = new mod.ClipboardData();
+      if (text) data.addText('text/plain', text);
+      try {
+        await session.onClipboardPaste(data);
+      } finally {
+        freeWasm(data);
+      }
+    },
     sendSpecialKeys: (comboId: string) => {
       if (disposed) return;
       const seq = RDP_SPECIAL_KEY_SEQUENCES[comboId];
@@ -1125,6 +1238,7 @@ export async function connectIronRdp(opts: IronRdpConnectOptions): Promise<IronR
         for (const sc of seq) tx.addEvent(mod.DeviceEvent.keyPressed(sc));
         for (const sc of [...seq].reverse()) tx.addEvent(mod.DeviceEvent.keyReleased(sc));
         session.applyInputs(tx);
+        freeWasm(tx);
       } catch { /* sessao encerrada */ }
     },
   };

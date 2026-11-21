@@ -1692,6 +1692,13 @@ export default function RemoteSession() {
     return fullscreenApi.onChange((fs) => setScreenFullscreen(fs));
   }, []);
 
+  // O estado de tela cheia do RDP também precisa de um listener AQUI, no pai.
+  // O viewer é DESMONTADO ao trocar de aba; sem isto ninguém mais notificaria e
+  // o pai ficaria com o rótulo do botão preso em "Sair" fora da tela cheia.
+  useEffect(() => {
+    return fullscreenApi.onChange((fs) => setRdpFullscreen(fs));
+  }, []);
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'screen', label: 'Tela' },
     { key: 'terminal', label: 'Terminal' },
@@ -2599,7 +2606,20 @@ export default function RemoteSession() {
               )}
               {rdpConnected && (
                 rdpClipboardNote
-                  ? <span className="text-warning max-w-md truncate" role="status" title={rdpClipboardNote}>{rdpClipboardNote}</span>
+                  ? (
+                    // O aviso precisa ser ACIONÁVEL: o prompt de permissão do
+                    // navegador só aparece dentro de um gesto do usuário, então
+                    // sem este botão não havia como liberar a área de
+                    // transferência — só restava ler a mensagem.
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded bg-warning/20 text-warning hover:bg-warning/30 transition-colors"
+                      onClick={() => { void rdpViewerRef.current?.grantClipboard(); }}
+                      title={rdpClipboardNote}
+                    >
+                      🔓 Permitir área de transferência
+                    </button>
+                  )
                   : <span className="text-muted-foreground" title="Copiar no Windows remoto e colar no seu PC, e vice-versa">Área de transferência sincronizada</span>
               )}
             </>

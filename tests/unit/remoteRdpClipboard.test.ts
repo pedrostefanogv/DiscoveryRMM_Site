@@ -56,6 +56,34 @@ describe('clipboard bidirecional', () => {
     expect(CLIENT_SRC).toContain("await send('')");
   });
 
+  /**
+   * O navegador SÓ exibe o prompt de permissão de clipboard dentro de um gesto
+   * do usuário. No callback automático (assíncrono, sem gesto) readText() falha
+   * com NotAllowedError e o navegador NUNCA pergunta — o operador via o aviso
+   * para sempre, sem forma de resolver.
+   *
+   * Correção: um botão no rodapé chama grantClipboard(), que roda DENTRO do
+   * clique e por isso dispara o prompt.
+   */
+  it('oferece um botão que PEDE a permissão (dentro de um gesto do usuário)', () => {
+    expect(SESSION_SRC).toContain('Permitir área de transferência');
+    expect(SESSION_SRC).toContain('rdpViewerRef.current?.grantClipboard()');
+    expect(RDP_SRC).toContain('grantClipboard');
+    expect(RDP_SRC).toContain('navigator.clipboard.readText()');
+  });
+
+  it('ao liberar, envia já o conteúdo local ao remoto', () => {
+    // O operador não deve precisar copiar/colar de novo.
+    expect(RDP_SRC).toContain('pasteClipboard');
+    expect(CLIENT_SRC).toContain('pasteClipboard');
+    expect(CLIENT_SRC).toContain('session.onClipboardPaste(data)');
+  });
+
+  it('explica o que fazer no navegador quando a permissão é negada', () => {
+    expect(RDP_SRC).toContain('NotAllowedError');
+    expect(RDP_SRC).toContain('ícone de permissões na barra de endereço');
+  });
+
   it('a sessão fica disponível aos callbacks registrados antes do connect', () => {
     // Os callbacks são setados no builder ANTES de existir sessão.
     expect(CLIENT_SRC).toContain('sessionRef.current = session');
