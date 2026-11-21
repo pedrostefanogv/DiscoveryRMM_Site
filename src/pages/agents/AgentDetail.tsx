@@ -164,6 +164,27 @@ function agentCommitHash(commitHash: string | null | undefined): string | null {
 // A opção "Todos" usa este tamanho em uma única requisição.
 const SOFTWARE_MAX_PAGE_SIZE = 2000;
 
+const PAGE_SIZE_OPTIONS = [
+  { value: '10', label: '10 por página' },
+  { value: '30', label: '30 por página' },
+  { value: '50', label: '50 por página' },
+  { value: '100', label: '100 por página' },
+  { value: 'max', label: 'Todos' },
+];
+
+const SOCKET_STATE_OPTIONS = [
+  { value: 'all', label: 'Todos os estados' },
+  { value: 'open', label: 'Somente abertas (sem TIME_WAIT)' },
+  { value: 'ESTABLISHED', label: 'ESTABLISHED' },
+  { value: 'TIME_WAIT', label: 'TIME_WAIT' },
+  { value: 'CLOSE_WAIT', label: 'CLOSE_WAIT' },
+];
+
+const SOFTWARE_ORDER_OPTIONS = [
+  { value: 'desc', label: 'Mais recente primeiro' },
+  { value: 'asc', label: 'Mais antigo primeiro' },
+];
+
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -203,6 +224,7 @@ export default function AgentDetail() {
   const [isOpeningRemoteControl, setIsOpeningRemoteControl] = useState(false);
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
+  const [zeroTouchConfirmOpen, setZeroTouchConfirmOpen] = useState(false);
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
   const [isRefreshingConnections, setIsRefreshingConnections] = useState(false);
   const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
@@ -920,6 +942,64 @@ export default function AgentDetail() {
     resetSocketsPagination();
   };
 
+  const softwareColumns = useMemo<Column<AgentSoftwareInventoryItem>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Aplicativo',
+        sortable: false,
+        render: (item) => (
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium text-foreground" title={item.name}>
+              {item.name}
+            </span>
+            {updatingSoftwareId === item.inventoryId && (
+              <Icon name="refresh" className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'version',
+        header: 'Versão',
+        className: 'font-mono whitespace-nowrap',
+        sortable: false,
+        render: (item) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>{item.version ?? '\u2014'}</span>
+            {item.updateAvailable && item.availableVersion && (
+              <Badge color="warning">&rarr; {item.availableVersion}</Badge>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'actions',
+        header: '',
+        className: 'text-right w-12',
+        sortable: false,
+        render: (item) => (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="px-2"
+            aria-label={`Ações para ${item.name}`}
+            title="Mais ações"
+            onClick={(event) => {
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              setSoftwareMenu({ x: rect.right - 200, y: rect.bottom + 4, item });
+            }}
+          >
+            <Icon name="more_vert" className="h-4 w-4" />
+          </Button>
+        ),
+      },
+    ],
+    [updatingSoftwareId],
+  );
+
+
   if (agent.isLoading) return <Loading />;
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
 
@@ -1266,18 +1346,18 @@ export default function AgentDetail() {
     }
   };
 
-  const handleApproveZeroTouch = async () => {
+  const handleApproveZeroTouch = () => {
     if (!id || !isZeroTouchPending || !canManageAgent || isApprovingZeroTouch) return;
+    setZeroTouchConfirmOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      `Aprovar o provisionamento Zero-Touch do agente "${a.displayName ?? a.hostname}"?`,
-    );
-    if (!confirmed) return;
-
+  const handleConfirmApproveZeroTouch = async () => {
+    if (!id || !isZeroTouchPending || !canManageAgent || isApprovingZeroTouch) return;
     setIsApprovingZeroTouch(true);
     try {
       await approveZeroTouch.mutateAsync(id);
       toast.success('Agente aprovado para comunicação com a API.');
+      setZeroTouchConfirmOpen(false);
       await agent.refetch();
     } catch (error) {
       const message = error instanceof ApiError
@@ -1543,61 +1623,11 @@ export default function AgentDetail() {
     }
   };
 
-  const pageSizeOptions = [
-    { value: '10', label: '10 por página' },
-    { value: '30', label: '30 por página' },
-    { value: '50', label: '50 por página' },
-    { value: '100', label: '100 por página' },
-    { value: 'max', label: 'Todos' },
-  ];
-  // Filtro de estado TCP. "open" exclui conexões já encerradas — tira o ruído
-  // de TIME_WAIT que faz o próprio discovery-service.exe dominar a lista.
-  const socketStateOptions = [
-    { value: 'all', label: 'Todos os estados' },
-    { value: 'open', label: 'Somente abertas (sem TIME_WAIT)' },
-    { value: 'ESTABLISHED', label: 'ESTABLISHED' },
-    { value: 'TIME_WAIT', label: 'TIME_WAIT' },
-    { value: 'CLOSE_WAIT', label: 'CLOSE_WAIT' },
-  ];
-  const softwareOrderOptions = [
-    { value: 'desc', label: 'Mais recente primeiro' },
-    { value: 'asc', label: 'Mais antigo primeiro' },
-  ];
+
   // Lista enxuta de propósito: só Aplicativo e Versão. As colunas Fonte, Ações e
   // Última coleta saíram — a origem e as datas ficam no detalhe, e as ações
   // passaram para o menu de contexto (botão direito), deixando a varredura da
   // lista muito mais limpa.
-  const softwareColumns: Column<AgentSoftwareInventoryItem>[] = [
-    {
-      key: 'name',
-      header: 'Aplicativo',
-      sortable: false,
-      render: item => (
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium text-foreground" title={item.name}>
-            {item.name}
-          </span>
-          {updatingSoftwareId === item.inventoryId && (
-            <Icon name="refresh" className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'version',
-      header: 'Versão',
-      className: 'font-mono whitespace-nowrap',
-      sortable: false,
-      render: item => (
-        <div className="flex flex-wrap items-center gap-2">
-          <span>{item.version ?? '\u2014'}</span>
-          {item.updateAvailable && item.availableVersion && (
-            <Badge color="warning">&rarr; {item.availableVersion}</Badge>
-          )}
-        </div>
-      ),
-    },
-  ];
 
   // Ações no botão direito. "Ver detalhes" vem primeiro por ser a ação
   // inofensiva e mais usada; atualizar/desinstalar só aparecem quando aplicáveis,
@@ -1669,6 +1699,7 @@ export default function AgentDetail() {
           : []),
       ]
     : [];
+
 
   return (
     <div className="space-y-6">
@@ -1897,7 +1928,7 @@ export default function AgentDetail() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Tooltip
           position="bottom"
-          delay={1200}
+          delay={300}
           className="block h-full"
           variant="hover-card"
           content={(
@@ -1943,7 +1974,7 @@ export default function AgentDetail() {
         </div>
         <Tooltip
           position="bottom"
-          delay={1200}
+          delay={300}
           className="block h-full"
           variant="hover-card"
           content={(
@@ -1989,7 +2020,7 @@ export default function AgentDetail() {
         </Tooltip>
         <Tooltip
           position="bottom"
-          delay={1200}
+          delay={300}
           className="block h-full"
           variant="hover-card"
           content={(
@@ -2116,7 +2147,7 @@ export default function AgentDetail() {
         </Tooltip>
         <Tooltip
           position="bottom"
-          delay={1200}
+          delay={300}
           className="block h-full"
           variant="hover-card"
           content={(
@@ -2545,19 +2576,31 @@ export default function AgentDetail() {
                     </div>
 
                     <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_200px_160px_auto_auto]" onSubmit={handleApplySoftwareFilters}>
-                      <Input
-                        value={softwareSearchInput}
-                        onChange={(e) => setSoftwareSearchInput(e.target.value)}
-                        placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
-                      />
+                      <div className="relative">
+                        <Input
+                          value={softwareSearchInput}
+                          onChange={(e) => setSoftwareSearchInput(e.target.value)}
+                          placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
+                        />
+                        {softwareSearchInput && (
+                          <button
+                            type="button"
+                            onClick={handleClearSoftwareSearch}
+                            aria-label="Limpar busca de aplicativos"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                          >
+                            <Icon name="close" className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                       <Select
                         value={softwareOrder}
-                        options={softwareOrderOptions}
+                        options={SOFTWARE_ORDER_OPTIONS}
                         onChange={(e) => handleSoftwareOrderChange(e.target.value as 'asc' | 'desc')}
                       />
                       <Select
                         value={softwareLimitSelected}
-                        options={pageSizeOptions}
+                        options={PAGE_SIZE_OPTIONS}
                         onChange={(e) => handleSoftwareLimitChange(e.target.value)}
                       />
                       <Button type="submit" variant="secondary" size="sm">
@@ -2814,14 +2857,26 @@ export default function AgentDetail() {
                         </div>
                       )}
                       <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplyPortsSearch}>
-                        <Input
-                          value={listeningPortsSearchInput}
-                          onChange={(e) => setListeningPortsSearchInput(e.target.value)}
-                          placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
-                        />
+                        <div className="relative">
+                          <Input
+                            value={listeningPortsSearchInput}
+                            onChange={(e) => setListeningPortsSearchInput(e.target.value)}
+                            placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
+                          />
+                          {listeningPortsSearchInput && (
+                            <button
+                              type="button"
+                              onClick={handleClearPortsSearch}
+                              aria-label="Limpar busca de portas"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                            >
+                              <Icon name="close" className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                         <Select
                           value={listeningPortsLimit}
-                          options={pageSizeOptions}
+                          options={PAGE_SIZE_OPTIONS}
                           onChange={(e) => handlePortsLimitChange(e.target.value)}
                         />
                         <Button type="submit" variant="secondary" size="sm">
@@ -2891,19 +2946,31 @@ export default function AgentDetail() {
                         </div>
                       )}
                       <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
-                        <Input
-                          value={openSocketsSearchInput}
-                          onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
-                          placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
-                        />
+                        <div className="relative">
+                          <Input
+                            value={openSocketsSearchInput}
+                            onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
+                            placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
+                          />
+                          {openSocketsSearchInput && (
+                            <button
+                              type="button"
+                              onClick={handleClearSocketsSearch}
+                              aria-label="Limpar busca de conexões"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                            >
+                              <Icon name="close" className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                         <Select
                           value={openSocketsStateFilter}
-                          options={socketStateOptions}
+                          options={SOCKET_STATE_OPTIONS}
                           onChange={(e) => handleSocketsStateChange(e.target.value)}
                         />
                         <Select
                           value={openSocketsLimit}
-                          options={pageSizeOptions}
+                          options={PAGE_SIZE_OPTIONS}
                           onChange={(e) => handleSocketsLimitChange(e.target.value)}
                         />
                         <Button type="submit" variant="secondary" size="sm">
@@ -3365,6 +3432,17 @@ export default function AgentDetail() {
           onClose={() => setSoftwareMenu(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={zeroTouchConfirmOpen}
+        title="Aprovar provisionamento Zero-Touch"
+        message={`Aprovar o provisionamento Zero-Touch do agente "${a.displayName ?? a.hostname}"?`}
+        confirmLabel="Aprovar"
+        tone="primary"
+        isLoading={isApprovingZeroTouch}
+        onConfirm={() => void handleConfirmApproveZeroTouch()}
+        onClose={() => { if (!isApprovingZeroTouch) setZeroTouchConfirmOpen(false); }}
+      />
     </div>
   );
 }

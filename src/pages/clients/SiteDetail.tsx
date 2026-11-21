@@ -19,6 +19,7 @@ import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
 import { AgentContextMenu } from '@/components/agents/AgentContextMenu';
 import type { AgentCardAgent } from '@/components/agents/AgentCard';
 import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
+import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
 import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
 import { RecentLogsCard } from '@/components/entity/RecentLogsCard';
 import { DashboardSummaryCard } from '@/components/entity/DashboardSummaryCard';
@@ -41,11 +42,6 @@ type SiteTab = 'chamados' | 'logs' | 'agentes';
 
 const SITE_TAB_IDS: SiteTab[] = ['chamados', 'logs', 'agentes'];
 
-const SITE_TABS: DetailTab<SiteTab>[] = [
-  { id: 'chamados', label: 'Chamados', icon: "confirmation_number" },
-  { id: 'logs', label: 'Logs', icon: "article" },
-  { id: 'agentes', label: 'Agentes', icon: "desktop_windows" },
-];
 
 export default function SiteDetail() {
   const { id: clientId, siteId } = useParams<{ id: string; siteId: string }>();
@@ -58,6 +54,7 @@ export default function SiteDetail() {
 
   const [editSiteOpen, setEditSiteOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deployModalOpen, setDeployModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [agentMenu, setAgentMenu] = useState<{ x: number; y: number; agent: AgentCardAgent } | null>(null);
@@ -91,6 +88,26 @@ export default function SiteDetail() {
   const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
   const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
+  const siteTabs = useMemo<DetailTab<SiteTab>[]>(
+    () => [
+      { id: 'chamados', label: 'Chamados', icon: 'confirmation_number', badge: ticketsArray.length },
+      { id: 'logs', label: 'Logs', icon: 'article', badge: logsArray.length },
+      { id: 'agentes', label: 'Agentes', icon: 'desktop_windows', badge: agentsArray.length },
+    ],
+    [ticketsArray.length, logsArray.length, agentsArray.length],
+  );
+  const resolvedClientName = client.data?.name ?? '';
+  const resolvedSiteName = site.data?.name ?? '';
+  const agentsWithSite = useMemo(
+    () =>
+      agentsArray.map((agent) => ({
+        ...agent,
+        clientName: resolvedClientName,
+        clientId: clientId!,
+        siteName: resolvedSiteName,
+      })),
+    [agentsArray, resolvedClientName, clientId, resolvedSiteName],
+  );
 
   // Aba ativa lida da querystring (?tab=chamados, ?tab=agentes...). Valores
   // desconhecidos caem em "chamados". Fica antes dos early returns (Rules of Hooks).
@@ -160,6 +177,23 @@ export default function SiteDetail() {
   const onlineAgents = agentsArray.filter((agent) => isAgentOnlineNow(agent, now)).length;
   const totalTickets = ticketsArray.length;
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
+  const isRefreshing =
+    client.isFetching ||
+    site.isFetching ||
+    agents.isFetching ||
+    tickets.isFetching ||
+    logs.isFetching ||
+    softwareSnapshot.isFetching ||
+    dashboard.isFetching;
+  const handleRefreshAll = () => {
+    void client.refetch();
+    void site.refetch();
+    void agents.refetch();
+    void tickets.refetch();
+    void logs.refetch();
+    void softwareSnapshot.refetch();
+    void dashboard.refetch();
+  };
 
   const handleDelete = () => {
     if (agentsArray.length > 0) {
@@ -242,6 +276,9 @@ export default function SiteDetail() {
           {currentSite.isActive ? 'Ativo' : 'Inativo'}
         </Badge>
         <WindowSelector value={range} onChange={handleWindowChange} />
+        <Button size="sm" variant="secondary" onClick={handleRefreshAll} disabled={isRefreshing}>
+          <Icon name="refresh" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Atualizar
+        </Button>
         <Button
           size="sm"
           variant="ghost"
@@ -296,7 +333,7 @@ export default function SiteDetail() {
         />
         <StatCard
           icon="confirmation_number"
-          label="Chamados do site"
+          label="Chamados"
           value={dashboard.isLoading ? (tickets.isLoading ? '—' : totalTickets) : dashboard.data?.tickets.open ?? totalTickets}
           tone="warning"
           onClick={() => goToTab('chamados')}
@@ -330,18 +367,23 @@ export default function SiteDetail() {
         {dashboard.data ? (
           <DashboardSummaryCard
             data={dashboard.data}
-            title="Dashboard do Site"
+            title="Resumo do Site"
             subtitle={`Agregado da janela ${range}`}
           />
         ) : dashboard.isLoading ? (
           <Card>
-            <CardHeader title="Dashboard do Site" subtitle={`Agregado da janela ${range}`} />
+            <CardHeader title="Resumo do Site" subtitle={`Agregado da janela ${range}`} />
             <p className="text-sm text-muted">Carregando resumo...</p>
           </Card>
         ) : (
           <Card>
-            <CardHeader title="Dashboard do Site" subtitle={`Agregado da janela ${range}`} />
-            <p className="text-sm text-muted">Não foi possível carregar o resumo desta janela.</p>
+            <CardHeader title="Resumo do Site" subtitle={`Agregado da janela ${range}`} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">Não foi possível carregar o resumo desta janela.</p>
+              <Button size="sm" variant="secondary" onClick={() => void dashboard.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
           </Card>
         )}
       </section>
@@ -352,7 +394,7 @@ export default function SiteDetail() {
         </div>
 
         <Card>
-          <CardHeader title="Informações do Site" />
+          <CardHeader title="Informações" />
           <dl className="space-y-3 text-sm">
             <div>
               <dt className="text-muted">Cliente</dt>
@@ -401,7 +443,7 @@ export default function SiteDetail() {
 
       {/* Abas de recursos: Chamados · Logs · Agentes */}
       <DetailTabs
-        tabs={SITE_TABS}
+        tabs={siteTabs}
         active={activeTab}
         onChange={handleSelectTab}
         ariaLabel="Seções do site"
@@ -437,30 +479,36 @@ export default function SiteDetail() {
         {activeTab === 'agentes' && (
           <Card>
             <CardHeader
-              title="Agentes do Site"
+              title="Agentes"
               subtitle={`${onlineAgents} de ${totalAgents} online`}
               action={
-                <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
-                  <Icon name="group" className="h-4 w-4" /> Gerenciar
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => navigate(`/agents?client=${currentClient.id}&site=${currentSite.id}`)}>
+                    <Icon name="group" className="h-4 w-4" /> Gerenciar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDeployModalOpen(true)}
+                    aria-label="Criar token de deploy"
+                    title="Criar token de deploy"
+                  >
+                    <Icon name="key" className="h-4 w-4" /> Deploy
+                  </Button>
+                </div>
               }
             />
             {totalAgents === 0 && !agents.isLoading ? (
               <EmptyState
                 icon="desktop_windows"
                 title="Nenhum agente neste site"
-                description="Gere um token de deploy no cliente para instalar agentes neste site."
-                action={{ label: 'Ver tokens de deploy', onClick: () => navigate('/deploy') }}
+                description="Gere um token de deploy para instalar o agente nas máquinas deste site."
+                action={{ label: 'Criar token de deploy', onClick: () => setDeployModalOpen(true) }}
                 className="py-8"
               />
             ) : (
               <AgentCollectionView
-                agents={agentsArray.map((agent) => ({
-                  ...agent,
-                  clientName: currentClient.name,
-                  clientId: currentClient.id,
-                  siteName: currentSite.name,
-                }))}
+                agents={agentsWithSite}
                 now={now}
                 isLoading={agents.isLoading}
                 emptyMessage="Nenhum agente neste site"
@@ -478,6 +526,16 @@ export default function SiteDetail() {
           </Card>
         )}
       </div>
+
+      {deployModalOpen && (
+        <CreateDeployTokenModal
+        open
+        onClose={() => setDeployModalOpen(false)}
+        clientId={currentClient.id}
+        sites={[{ id: currentSite.id, name: currentSite.name }]}
+        defaultSiteId={currentSite.id}
+      />
+      )}
 
       <SiteFormModal
         open={editSiteOpen}

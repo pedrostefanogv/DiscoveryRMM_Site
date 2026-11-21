@@ -43,12 +43,6 @@ type ClientTab = 'sites' | 'chamados' | 'logs' | 'agentes';
 
 const CLIENT_TAB_IDS: ClientTab[] = ['sites', 'chamados', 'logs', 'agentes'];
 
-const CLIENT_TABS: DetailTab<ClientTab>[] = [
-  { id: 'sites', label: 'Sites', icon: "apartment" },
-  { id: 'chamados', label: 'Chamados', icon: "confirmation_number" },
-  { id: 'logs', label: 'Logs', icon: "article" },
-  { id: 'agentes', label: 'Agentes', icon: "desktop_windows" },
-];
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -113,6 +107,28 @@ export default function ClientDetail() {
     }
     return map;
   }, [agentsArray, now]);
+
+  const clientTabs = useMemo<DetailTab<ClientTab>[]>(
+    () => [
+      { id: 'sites', label: 'Sites', icon: 'apartment', badge: sitesArray.length },
+      { id: 'chamados', label: 'Chamados', icon: 'confirmation_number', badge: ticketsArray.length },
+      { id: 'logs', label: 'Logs', icon: 'article', badge: logsArray.length },
+      { id: 'agentes', label: 'Agentes', icon: 'desktop_windows', badge: agentsArray.length },
+    ],
+    [sitesArray.length, ticketsArray.length, logsArray.length, agentsArray.length],
+  );
+
+  const clientName = client.data?.name ?? '';
+  const agentsWithClient = useMemo(
+    () =>
+      agentsArray.map((agent) => ({
+        ...agent,
+        clientName,
+        clientId: id!,
+        siteName: siteNameMap.get(agent.siteId),
+      })),
+    [agentsArray, clientName, id, siteNameMap],
+  );
 
   if (client.isLoading) return <Loading />;
   if (client.isError || !client.data) return <ErrorDisplay onRetry={() => void client.refetch()} />;
@@ -214,6 +230,23 @@ export default function ClientDetail() {
   const totalTickets = ticketsArray.length;
   const recentTickets = ticketsArray.slice(0, 6);
   const recentLogs = logsArray.slice(0, 8);
+  const isRefreshing =
+    client.isFetching ||
+    sites.isFetching ||
+    agents.isFetching ||
+    tickets.isFetching ||
+    logs.isFetching ||
+    softwareSnapshot.isFetching ||
+    clientDashboard.isFetching;
+  const handleRefreshAll = () => {
+    void client.refetch();
+    void sites.refetch();
+    void agents.refetch();
+    void tickets.refetch();
+    void logs.refetch();
+    void softwareSnapshot.refetch();
+    void clientDashboard.refetch();
+  };
 
   return (
     <div className="space-y-6">
@@ -234,6 +267,9 @@ export default function ClientDetail() {
       >
         <Badge color={c.isActive ? 'success' : 'slate'}>{c.isActive ? 'Ativo' : 'Inativo'}</Badge>
         <WindowSelector value={range} onChange={handleWindowChange} />
+        <Button size="sm" variant="secondary" onClick={handleRefreshAll} disabled={isRefreshing}>
+          <Icon name="refresh" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} /> Atualizar
+        </Button>
         <Button
           size="sm"
           variant="ghost"
@@ -310,10 +346,17 @@ export default function ClientDetail() {
         <StatCard
           icon="confirmation_number"
           label="Chamados"
-          value={tickets.isLoading ? '—' : totalTickets}
+          value={clientDashboard.isLoading ? (tickets.isLoading ? '—' : totalTickets) : clientDashboard.data?.tickets.open ?? totalTickets}
           tone="warning"
           onClick={() => goToTab('chamados')}
           active={activeTab === 'chamados'}
+          trend={
+            clientDashboard.data && clientDashboard.data.tickets.slaBreachedOpen > 0 ? (
+              <span className="text-xs font-medium text-danger">
+                {clientDashboard.data.tickets.slaBreachedOpen} SLA violado
+              </span>
+            ) : undefined
+          }
         />
       </div>
 
@@ -333,7 +376,12 @@ export default function ClientDetail() {
         ) : (
           <Card>
             <CardHeader title="Resumo do Cliente" subtitle={`Agregado da janela ${range}`} />
-            <p className="text-sm text-muted">Não foi possível carregar o resumo desta janela.</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">Não foi possível carregar o resumo desta janela.</p>
+              <Button size="sm" variant="secondary" onClick={() => void clientDashboard.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
           </Card>
         )}
       </section>
@@ -379,7 +427,7 @@ export default function ClientDetail() {
 
       {/* Abas de recursos: Sites · Chamados · Logs · Agentes */}
       <DetailTabs
-        tabs={CLIENT_TABS}
+        tabs={clientTabs}
         active={activeTab}
         onChange={handleSelectTab}
         ariaLabel="Seções do cliente"
@@ -397,8 +445,8 @@ export default function ClientDetail() {
               title="Sites"
               subtitle={`${totalSites} total · ${activeSites} ativo(s)`}
               action={
-                <Button size="sm" variant="ghost" onClick={() => setSiteModalOpen(true)} aria-label="Cadastrar site">
-                  <Icon name="add" className="h-4 w-4" />
+                <Button size="sm" variant="primary" onClick={() => setSiteModalOpen(true)} aria-label="Cadastrar site">
+                  <Icon name="add" className="h-4 w-4" /> Novo site
                 </Button>
               }
             />
@@ -479,7 +527,7 @@ export default function ClientDetail() {
               subtitle={`${onlineAgents} de ${totalAgents} online`}
               action={
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
+                  <Button size="sm" variant="ghost" onClick={() => navigate(`/agents?client=${c.id}`)}>
                     <Icon name="group" className="h-4 w-4" /> Gerenciar
                   </Button>
                   <Button
@@ -504,12 +552,7 @@ export default function ClientDetail() {
               />
             ) : (
               <AgentCollectionView
-                agents={agentsArray.map((agent) => ({
-                  ...agent,
-                  clientName: c.name,
-                  clientId: c.id,
-                  siteName: siteNameMap.get(agent.siteId),
-                }))}
+                agents={agentsWithClient}
                 now={now}
                 isLoading={agents.isLoading}
                 emptyMessage="Nenhum agente"

@@ -7,7 +7,6 @@ export interface DetailTab<Id extends string> {
   icon: MaterialSymbolName;
   /**
    * Contador/rótulo curto exibido ao lado do texto (ex.: quantidade de itens).
-   * Opcional: as abas de Clientes/Sites usam só texto.
    */
   badge?: ReactNode;
 }
@@ -21,15 +20,12 @@ interface DetailTabsProps<Id extends string> {
   /**
    * Prefixo estável usado para os ids de aba e do painel, permitindo ao
    * chamador apontar `aria-labelledby`/scroll para o painel ativo.
-   * Ex.: prefix "client-tabs" -> aba "client-tabs-tab-sites" e painel
-   * "client-tabs-panel".
    */
   panelIdPrefix?: string;
 }
 
 /**
- * Barra de abas em "segmented control", no mesmo estilo visual usado em
- * DepartmentDetailPage (Geral / Campos customizados / Equipe).
+ * Barra de abas padronizada do sistema (linha única com borda inferior ativa).
  * Presentational: o estado ativo fica com quem chama.
  */
 export function DetailTabs<Id extends string>({
@@ -39,11 +35,18 @@ export function DetailTabs<Id extends string>({
   ariaLabel,
   panelIdPrefix,
 }: DetailTabsProps<Id>) {
-  // Fallback de id para quando o chamador não informa um prefixo estável.
   const generatedId = useId();
   const prefix = panelIdPrefix ?? generatedId;
   const tabId = (id: Id) => `${prefix}-tab-${id}`;
-  const panelId = `${prefix}-panel`;
+
+  const selectWithScroll = (id: Id) => {
+    onChange(id);
+    document.getElementById(tabId(id))?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    });
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (tabs.length === 0) return;
@@ -58,7 +61,7 @@ export function DetailTabs<Id extends string>({
 
     event.preventDefault();
     const target = tabs[targetIndex];
-    onChange(target.id);
+    selectWithScroll(target.id);
     document.getElementById(tabId(target.id))?.focus();
   };
 
@@ -67,7 +70,7 @@ export function DetailTabs<Id extends string>({
       id={`${prefix}-tablist`}
       role="tablist"
       aria-label={ariaLabel}
-      className="inline-flex flex-wrap rounded-xl border border-border bg-surface-light p-1"
+      className="flex flex-nowrap overflow-x-auto border-b border-border gap-1"
     >
       {tabs.map(({ id, label, icon, badge }, index) => {
         const isActive = id === active;
@@ -78,16 +81,20 @@ export function DetailTabs<Id extends string>({
             type="button"
             role="tab"
             aria-selected={isActive}
-            aria-controls={panelId}
             tabIndex={isActive ? 0 : -1}
-            onClick={() => onChange(id)}
+            onClick={() => selectWithScroll(id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'bg-primary/20 text-foreground' : 'text-muted hover:text-foreground'}`}
+            className={[
+              'relative flex-none whitespace-nowrap inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              isActive
+                ? 'text-primary after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary'
+                : 'text-text-secondary hover:text-text-primary',
+            ].join(' ')}
           >
-            <Icon name={icon} className="mr-1.5 inline h-4 w-4" aria-hidden="true" />
-            {label}
+            <Icon name={icon} className="h-4 w-4" aria-hidden="true" />
+            <span>{label}</span>
             {badge !== undefined && badge !== null ? (
-              <span className="ml-1.5 rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">
+              <span className="rounded-full bg-surface-light px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
                 {badge}
               </span>
             ) : null}

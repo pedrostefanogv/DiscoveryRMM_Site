@@ -190,6 +190,32 @@ export function useAgentHeartbeat(
   );
 }
 
+/**
+ * Assinatura leve apenas dos campos de identidade/sessão do heartbeat.
+ * Retorna string primitiva para que ticks de CPU/RAM/disco não re-renderizem
+ * a página inteira de detalhe do agente.
+ */
+export function useAgentHeartbeatSummary(agentId: string): string {
+  return useSyncExternalStore(
+    subscribeFlushed,
+    () => {
+      const hb = heartbeatStore.getHeartbeat(agentId);
+      if (!hb) return '';
+      const fresh = isHeartbeatTimestampFresh(hb.timestampUtc, Date.now(), undefined, hb.receivedAtUtc);
+      if (!fresh) return '';
+      return JSON.stringify([
+        hb.status,
+        hb.loggedUser ?? null,
+        hb.loggedUserSince ?? null,
+        hb.ipAddress ?? null,
+        hb.hostname ?? null,
+        hb.agentVersion ?? null,
+      ]);
+    },
+    () => '',
+  );
+}
+
 /** React hook — returns ALL heartbeats, updated reactively */
 export function useAllAgentHeartbeats(): ReadonlyMap<string, HeartbeatPayload> {
   return useSyncExternalStore(

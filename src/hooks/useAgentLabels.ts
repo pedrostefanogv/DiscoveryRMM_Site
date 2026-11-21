@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
-import type { AgentLabel } from '@/modules/agent-labels/types';
+import { AgentLabelApplyMode, type AgentLabel } from '@/modules/agent-labels/types';
 
 /** Limite alinhado ao backend (ListAgentLabelsBatchQueryHandler). */
 const MAX_AGENTS_PER_REQUEST = 500;
@@ -129,6 +129,50 @@ export function useAgentIdsByLabel(label: string | null, pageSize = 500) {
       return { ids, total, truncated: true };
     },
     enabled: Boolean(label),
+    staleTime: 60_000,
+  });
+}
+
+/** Labels aplicadas a um agente específico, ordenadas alfabeticamente. */
+export function useAgentLabelsForAgent(agentId: string | undefined) {
+  return useQuery({
+    queryKey: ['agentLabels', 'agent', agentId],
+    queryFn: async () => {
+      const data = await agentLabelsApi.getAgentLabels(agentId!);
+      return [...data].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+    },
+    enabled: Boolean(agentId),
+    staleTime: 30_000,
+  });
+}
+
+/** Histórico de aplicação/remoção de labels do agente. */
+export function useAgentLabelHistory(agentId: string | undefined, enabled = true, limit = 50) {
+  return useQuery({
+    queryKey: ['agentLabels', 'history', agentId, limit],
+    queryFn: () => agentLabelsApi.getHistory(agentId!, limit),
+    enabled: Boolean(agentId) && enabled,
+    staleTime: 30_000,
+  });
+}
+
+/** Opções de labels manuais (regras em modo Manual + labels manuais distintas já usadas). */
+export function useManualLabelOptions(enabled = true) {
+  return useQuery({
+    queryKey: ['agentLabels', 'manualOptions'],
+    queryFn: async () => {
+      const [rules, manualDistinct] = await Promise.all([
+        agentLabelsApi.getRules(true).catch(() => []),
+        agentLabelsApi.getDistinctLabels(500, 'Manual').catch(() => []),
+      ]);
+      const manualFromRules = rules
+        .filter((rule) => rule.applyMode === AgentLabelApplyMode.Manual && rule.isEnabled)
+        .map((rule) => rule.label);
+      return [...new Set([...manualFromRules, ...manualDistinct])]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    },
+    enabled,
     staleTime: 60_000,
   });
 }
