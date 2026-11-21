@@ -1175,7 +1175,16 @@ export default function AgentList() {
           <Icon name="refresh" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           Atualizar
         </Button>
-        <Button variant="primary" onClick={() => navigate('/deploy/tokens')}>
+        <Button
+          variant="primary"
+          onClick={() => {
+            const params = new URLSearchParams();
+            if (filterClient) params.set('client', filterClient);
+            if (filterSite) params.set('site', filterSite);
+            const query = params.toString();
+            navigate(query ? `/deploy?${query}` : '/deploy');
+          }}
+        >
           <Icon name="add" className="h-4 w-4" />
           Instalar agente
         </Button>

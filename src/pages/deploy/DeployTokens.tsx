@@ -1,8 +1,24 @@
 import { formatDateTime } from '@/utils/format';
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-
-import {  Icon, Badge, Button, Card, CardHeader, Input, Modal, Pagination, Select, TextArea, PageHeader, ConfirmDialog } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmDialog,
+  ErrorDisplay,
+  Icon,
+  Input,
+  Loading,
+  Modal,
+  PageHeader,
+  Pagination,
+  Select,
+  TextArea,
+} from '@/components/ui';
+import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
 import {
   useCreateDeployTokenAndDownload,
   useDeployTokens,
@@ -11,13 +27,13 @@ import {
 } from '@/hooks/useDeployTokens';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
+import { useNowTick } from '@/hooks/useNowTick';
 import { agentUpdatesApi, ApiError, deployTokensApi } from '@/api';
 import { genericInstallerUrl } from '@/api/deploy-tokens';
 import type {
   CreateDeployTokenAndDownloadRequest,
   DeployInstallerType,
   DeployToken,
-  ListDeployTokensParams,
 } from '@/api';
 import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
 import toast from 'react-hot-toast';
@@ -33,6 +49,37 @@ type TokenStatus = 'active' | 'expired' | 'revoked';
 type TokenStatusFilter = 'all' | TokenStatus;
 type TokenPeriodFilter = 'all' | '24h' | '7d' | '30d';
 type TokenSortBy = 'created-desc' | 'created-asc' | 'expires-asc' | 'expires-desc' | 'status';
+
+const CREATION_PRESETS: Array<{
+  id: string;
+  label: string;
+  hint: string;
+  expiresInHours: number;
+  multiUse: boolean;
+}> = [
+  { id: 'single-2h', label: 'Uso único (2h)', hint: '1 máquina · curto prazo', expiresInHours: 2, multiUse: false },
+  { id: 'standard-24h', label: 'Onboarding padrão (24h)', hint: '1 máquina · 24 horas', expiresInHours: 24, multiUse: false },
+  { id: 'batch-7d', label: 'Implantação em lote (7d)', hint: 'Multiuso · 7 dias', expiresInHours: 168, multiUse: true },
+];
+
+const INSTALLER_OPTIONS: Array<{
+  value: DeployInstallerType;
+  title: string;
+  badge?: string;
+  description: string;
+}> = [
+  {
+    value: 'online',
+    title: 'Instalador mínimo (.exe)',
+    badge: 'Recomendado',
+    description: '~2 MB — baixa os pacotes durante a instalação (requer internet).',
+  },
+  {
+    value: 'offline',
+    title: 'Pacote offline completo (.exe)',
+    description: '~150 MB — inclui todos os binários para ambientes sem internet.',
+  },
+];
 
 function triggerInstallerDownload(fileName: string, blob: Blob) {
   const objectUrl = URL.createObjectURL(blob);
@@ -152,14 +199,16 @@ function matchesPeriod(createdAt: string, period: TokenPeriodFilter, nowMs: numb
 }
 
 export default function DeployTokens() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const createAndDownload = useCreateDeployTokenAndDownload();
   const revokeToken = useRevokeDeployToken();
   const [revokeTarget, setRevokeTarget] = useState<{ token: DeployToken; message: string } | null>(null);
   const downloadInstaller = useDownloadDeployInstaller();
 
-  const [activeTab, setActiveTab] = useState<DeployTab>('create');
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const initialTab = searchParams.get('tab') === 'manage' ? 'manage' : 'create';
+  const [activeTab, setActiveTab] = useState<DeployTab>(initialTab);
+  const [selectedClientId, setSelectedClientId] = useState(() => searchParams.get('client') ?? '');
+  const [selectedSiteId, setSelectedSiteId] = useState(() => searchParams.get('site') ?? '');
   const [installerType, setInstallerType] = useState<DeployInstallerType>('online');
 
   const [form, setForm] = useState<DeployTokenFormState>({
@@ -171,14 +220,15 @@ export default function DeployTokens() {
   const [downloadingTokenId, setDownloadingTokenId] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
   const [revokedTokenIds, setRevokedTokenIds] = useState<Set<string>>(new Set());
+  const [copiedPrefixId, setCopiedPrefixId] = useState<string | null>(null);
   // A API não expõe o token cru na listagem; o download por token exige que o
   // operador informe o valor original (única fonte confiável do segredo).
   const [downloadPrompt, setDownloadPrompt] = useState<DeployToken | null>(null);
   const [downloadPromptValue, setDownloadPromptValue] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  const [tokensFilter, setTokensFilter] = useState<ListDeployTokensParams | null>(null);
   const [tokenSearch, setTokenSearch] = useState('');
+  const deferredTokenSearch = useDeferredValue(tokenSearch);
   const [statusFilter, setStatusFilter] = useState<TokenStatusFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<TokenPeriodFilter>('all');
   const [sortBy, setSortBy] = useState<TokenSortBy>('created-desc');
@@ -187,11 +237,54 @@ export default function DeployTokens() {
 
   const clients = useClients(false);
   const sites = useSites(selectedClientId, false);
-  const deployTokens = useDeployTokens(tokensFilter ?? {}, { enabled: tokensFilter !== null });
+  const hasScope = Boolean(selectedClientId && selectedSiteId);
+  const deployTokens = useDeployTokens(
+    { clientId: selectedClientId, siteId: selectedSiteId },
+    { enabled: activeTab === 'manage' && hasScope },
+  );
 
-  const activeClients = (clients.data ?? []).filter(client => client.isActive);
-  const activeSites = (sites.data ?? []).filter(site => site.isActive);
-  const nowMs = Date.now();
+  const activeClients = useMemo(
+    () => (clients.data ?? []).filter(client => client.isActive),
+    [clients.data],
+  );
+  const activeSites = useMemo(
+    () => (sites.data ?? []).filter(site => site.isActive),
+    [sites.data],
+  );
+  const nowMs = useNowTick(60_000);
+
+  // Auto-seleciona cliente/site único ativo quando não há seleção definida.
+  useEffect(() => {
+    if (!selectedClientId && activeClients.length === 1) {
+      setSelectedClientId(activeClients[0].id);
+    }
+  }, [activeClients, selectedClientId]);
+
+  useEffect(() => {
+    if (selectedClientId && !selectedSiteId && activeSites.length === 1) {
+      setSelectedSiteId(activeSites[0].id);
+    }
+  }, [activeSites, selectedClientId, selectedSiteId]);
+
+  // Sincroniza escopo e aba ativa com a URL.
+  useEffect(() => {
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev);
+        if (selectedClientId) next.set('client', selectedClientId);
+        else next.delete('client');
+
+        if (selectedSiteId) next.set('site', selectedSiteId);
+        else next.delete('site');
+
+        if (activeTab === 'manage') next.set('tab', 'manage');
+        else next.delete('tab');
+
+        return next;
+      },
+      { replace: true },
+    );
+  }, [activeTab, selectedClientId, selectedSiteId, setSearchParams]);
 
   const listedTokens = useMemo(
     () => [...(deployTokens.data ?? [])].sort(
@@ -225,7 +318,7 @@ export default function DeployTokens() {
   }, [listedTokens, revokedTokenIds, nowMs]);
 
   const filteredTokens = useMemo(() => {
-    const normalizedSearch = tokenSearch.trim().toLowerCase();
+    const normalizedSearch = deferredTokenSearch.trim().toLowerCase();
 
     const filtered = listedTokens.filter(token => {
       const status = getTokenStatus(token, revokedTokenIds, nowMs);
@@ -279,7 +372,7 @@ export default function DeployTokens() {
     });
 
     return sorted;
-  }, [listedTokens, revokedTokenIds, nowMs, statusFilter, periodFilter, sortBy, tokenSearch]);
+  }, [listedTokens, revokedTokenIds, nowMs, statusFilter, periodFilter, sortBy, deferredTokenSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTokens.length / pageSize));
   const pagedTokens = useMemo(() => {
@@ -289,7 +382,7 @@ export default function DeployTokens() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, periodFilter, sortBy, tokenSearch, pageSize, tokensFilter]);
+  }, [statusFilter, periodFilter, sortBy, deferredTokenSearch, pageSize, selectedClientId, selectedSiteId]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -338,7 +431,6 @@ export default function DeployTokens() {
   }
 
   function resetListingState() {
-    setTokensFilter(null);
     setRevokedTokenIds(new Set());
     setDownloadPrompt(null);
     setDownloadPromptValue('');
@@ -380,45 +472,25 @@ export default function DeployTokens() {
       toast.error('Selecione o site.');
       return;
     }
+    if (
+      form.expiresInHours !== null &&
+      (!Number.isInteger(form.expiresInHours) || form.expiresInHours < 1 || form.expiresInHours > 8760)
+    ) {
+      toast.error('Informe uma validade entre 1 e 8760 horas.');
+      return;
+    }
 
     createAndDownload.mutate(buildDownloadPayload(), {
-      onSuccess: (result) => {
+      onSuccess: result => {
         triggerInstallerDownload(result.fileName, result.blob);
         toast.success('Instalador gerado com sucesso. Download iniciado.');
+        void deployTokens.refetch();
       },
-      onError: () => toast.error('Erro ao gerar instalador.'),
+      onError: error => {
+        const msg = error instanceof ApiError ? error.message : 'Erro ao gerar instalador.';
+        toast.error(msg);
+      },
     });
-  }
-
-  function handleLoadIssuedTokens() {
-    if (!selectedClientId) {
-      toast.error('Selecione o cliente.');
-      return;
-    }
-
-    if (!selectedSiteId) {
-      toast.error('Selecione o site.');
-      return;
-    }
-
-    const nextFilter: ListDeployTokensParams = {
-      clientId: selectedClientId,
-      siteId: selectedSiteId,
-    };
-
-    const sameFilter =
-      tokensFilter?.clientId === nextFilter.clientId
-      && tokensFilter?.siteId === nextFilter.siteId;
-
-    if (sameFilter) {
-      void deployTokens.refetch();
-      return;
-    }
-
-    setRevokedTokenIds(new Set());
-    setDownloadPrompt(null);
-    setDownloadPromptValue('');
-    setTokensFilter(nextFilter);
   }
 
   function handleDownloadInstallerByToken(tokenId: string, rawToken: string) {
@@ -433,11 +505,13 @@ export default function DeployTokens() {
         installerType,
       },
       {
-        onSuccess: (result) => {
+        onSuccess: result => {
           triggerInstallerDownload(result.fileName, result.blob);
           toast.success('Download iniciado com sucesso.');
+          setDownloadPrompt(null);
+          setDownloadPromptValue('');
         },
-        onError: (error) => {
+        onError: error => {
           toast.error(mapInstallerFlowError(error, 'baixar instalador'));
         },
         onSettled: () => {
@@ -477,7 +551,7 @@ export default function DeployTokens() {
         setRevokeTarget(null);
         toast.success('Deploy token revogado com sucesso.');
       },
-      onError: (error) => {
+      onError: error => {
         toast.error(error.message || 'Não foi possível revogar o deploy token.');
       },
       onSettled: () => {
@@ -486,30 +560,56 @@ export default function DeployTokens() {
     });
   }
 
+  async function handleCopyPrefix(token: DeployToken) {
+    if (!token.tokenPrefix) return;
+    try {
+      await navigator.clipboard.writeText(token.tokenPrefix);
+      setCopiedPrefixId(token.id);
+      window.setTimeout(() => setCopiedPrefixId(current => (current === token.id ? null : current)), 2000);
+    } catch {
+      toast.error('Não foi possível copiar o prefixo.');
+    }
+  }
+
+  const tabs: DetailTab<DeployTab>[] = [
+    { id: 'create', label: 'Criar instalador / token', icon: 'add_circle' },
+    {
+      id: 'manage',
+      label: 'Gerenciar tokens',
+      icon: 'list',
+      badge: hasScope && deployTokens.data ? tokenStats.active : undefined,
+    },
+  ];
+
+  const hasActiveFilters =
+    Boolean(tokenSearch.trim()) ||
+    statusFilter !== 'all' ||
+    periodFilter !== 'all' ||
+    sortBy !== 'created-desc';
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Instalação de Agentes" description="Console de provisionamento com criação e gestão operacional de deploy tokens." />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="secondary"
-            onClick={handleDownloadGenericInstaller}
-            loading={downloadGenericInstaller.isPending}
-          >
-            <Icon name="download" className="h-4 w-4" />
-            Baixar instalador zero-touch
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              refreshAgentUpdateBuild.mutate();
-            }}
-            loading={refreshAgentUpdateBuild.isPending}
-          >
-            Rebuildar agente de atualização
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Instalação de Agentes"
+        description="Console de provisionamento com criação e gestão operacional de deploy tokens."
+      >
+        <Button
+          variant="secondary"
+          onClick={handleDownloadGenericInstaller}
+          loading={downloadGenericInstaller.isPending}
+        >
+          <Icon name="download" className="h-4 w-4" />
+          Baixar instalador zero-touch
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => refreshAgentUpdateBuild.mutate()}
+          loading={refreshAgentUpdateBuild.isPending}
+        >
+          <Icon name="refresh" className="h-4 w-4" />
+          Rebuildar agente de atualização
+        </Button>
+      </PageHeader>
 
       <Card>
         <CardHeader
@@ -523,7 +623,7 @@ export default function DeployTokens() {
             onChange={e => handleClientChange(e.target.value)}
             options={[
               { value: '', label: clients.isLoading ? 'Carregando clientes...' : 'Selecione um cliente' },
-              ...(activeClients.map(client => ({ value: client.id, label: client.name }))),
+              ...activeClients.map(client => ({ value: client.id, label: client.name })),
             ]}
           />
           <Select
@@ -540,60 +640,94 @@ export default function DeployTokens() {
                     ? 'Carregando sites...'
                     : 'Selecione um site',
               },
-              ...(activeSites.map(site => ({ value: site.id, label: site.name }))),
+              ...activeSites.map(site => ({ value: site.id, label: site.name })),
             ]}
           />
         </div>
       </Card>
 
-      <div className="inline-flex rounded-xl border border-border bg-surface-light p-1">
-        <button
-          type="button"
-          onClick={() => setActiveTab('create')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'create' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          Criar token
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('manage')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'manage' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          Gerenciar tokens
-        </button>
-      </div>
+      <DetailTabs
+        tabs={tabs}
+        active={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Seções de implantação de agentes"
+        panelIdPrefix="deploy-tabs"
+      />
 
-      {activeTab === 'create' ? (
-        <>
+      <div
+        id="deploy-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`deploy-tabs-tab-${activeTab}`}
+      >
+        {activeTab === 'create' ? (
           <Card>
             <CardHeader
               title="Criar agente para instalação"
-              subtitle="Gere token, baixe instalador mínimo ou pacote completo para onboarding."
+              subtitle="Gere apenas o token ou baixe o instalador mínimo / pacote completo para onboarding."
             />
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="rounded-xl border border-border bg-surface-light p-3">
-                <div className="mb-2 text-xs uppercase tracking-wide text-muted">Presets rápidos</div>
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+                  Presets rápidos
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyCreationPreset({
-                      multiUse: false,
-                      expiresInHours: 24,
-                    })}
-                  >
-                    Onboarding padrão (24h)
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyCreationPreset({
-                      multiUse: true,
-                      expiresInHours: 168,
-                    })}
-                  >
-                    Implantação em lote (7d)
-                  </Button>
+                  {CREATION_PRESETS.map(preset => {
+                    const isActive =
+                      form.expiresInHours === preset.expiresInHours &&
+                      Boolean(form.multiUse) === preset.multiUse;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() =>
+                          applyCreationPreset({
+                            multiUse: preset.multiUse,
+                            expiresInHours: preset.expiresInHours,
+                          })
+                        }
+                        aria-pressed={isActive}
+                        className={`rounded-lg border px-3 py-1.5 text-left transition-colors ${
+                          isActive
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground'
+                        }`}
+                      >
+                        <div className="text-xs font-medium">{preset.label}</div>
+                        <div className="text-[11px] opacity-80">{preset.hint}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="block text-sm font-medium text-foreground">
+                  Tipo de instalador para download
+                </span>
+                <div className="grid gap-3 md:grid-cols-2" role="radiogroup" aria-label="Tipo de instalador">
+                  {INSTALLER_OPTIONS.map(option => {
+                    const selected = installerType === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setInstallerType(option.value)}
+                        className={`flex flex-col items-start gap-1 rounded-xl border p-3.5 text-left transition-colors ${
+                          selected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-surface-light hover:border-border-strong'
+                        }`}
+                      >
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-foreground">{option.title}</span>
+                          {option.badge && <Badge color="primary">{option.badge}</Badge>}
+                        </div>
+                        <p className="text-xs text-muted">{option.description}</p>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -602,17 +736,7 @@ export default function DeployTokens() {
                 placeholder="Ex: Onboarding notebooks filial SP"
                 value={form.description ?? ''}
                 onChange={e => setForm(current => ({ ...current, description: e.target.value || null }))}
-                rows={3}
-              />
-
-              <Select
-                label="Tipo de instalador para download"
-                value={installerType}
-                onChange={e => setInstallerType(e.target.value as DeployInstallerType)}
-                options={[
-                  { value: 'online', label: 'Instalador mínimo (.exe) — ~2 MB, requer internet' },
-                  { value: 'offline', label: 'Pacote offline completo (.exe) — ~150 MB, sem internet' },
-                ]}
+                rows={2}
               />
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -620,24 +744,25 @@ export default function DeployTokens() {
                   label="Expira em (horas)"
                   type="number"
                   min={1}
+                  max={8760}
                   value={form.expiresInHours ?? ''}
                   onChange={e => {
                     const raw = e.target.value;
                     setForm(current => ({ ...current, expiresInHours: raw === '' ? null : Number(raw) }));
                   }}
                 />
-                <label className="flex items-center gap-2 self-end rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-muted-foreground">
+                <label className="flex cursor-pointer items-center gap-2 self-end rounded-xl border border-border bg-surface-light px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground">
                   <input
                     type="checkbox"
                     checked={Boolean(form.multiUse)}
                     onChange={e => setForm(current => ({ ...current, multiUse: e.target.checked }))}
                     className="rounded border-border bg-surface-light"
                   />
-                  Permitir multiuso
+                  Permitir multiuso (várias máquinas)
                 </label>
               </div>
 
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
                 <Button
                   variant="secondary"
                   onClick={() => setCreateModalOpen(true)}
@@ -657,226 +782,291 @@ export default function DeployTokens() {
               </div>
             </div>
           </Card>
-        </>
-      ) : (
-        <>
-          <Card>
-            <CardHeader
-              title="Gerenciar tokens emitidos"
-              subtitle={tokensFilter
-                ? 'Acompanhe status, validade e ações por token.'
-                : 'Selecione o escopo e carregue a listagem para iniciar a gestão.'}
-              action={(
-                <Button
-                  variant="secondary"
-                  onClick={handleLoadIssuedTokens}
-                  disabled={!selectedClientId || !selectedSiteId}
-                  loading={deployTokens.isFetching}
-                >
-                  {tokensFilter ? 'Atualizar listagem' : 'Carregar tokens'}
-                </Button>
-              )}
-            />
+        ) : (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader
+                title="Gerenciar tokens emitidos"
+                subtitle={
+                  hasScope
+                    ? 'Acompanhe status, validade e ações por token do escopo selecionado.'
+                    : 'Selecione cliente e site acima para visualizar os tokens emitidos.'
+                }
+                action={
+                  hasScope ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void deployTokens.refetch()}
+                      loading={deployTokens.isFetching}
+                    >
+                      <Icon name="refresh" className="h-4 w-4" />
+                      Atualizar
+                    </Button>
+                  ) : undefined
+                }
+              />
 
-            {tokensFilter === null ? (
-              <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
-                Defina cliente e site e clique em Carregar tokens para abrir o painel operacional.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  <MetricCard label="Total carregados" value={tokenStats.total} tone="slate" />
-                  <MetricCard label="Ativos" value={tokenStats.active} tone="success" />
-                  <MetricCard label="Expirados" value={tokenStats.expired} tone="slate" />
-                  <MetricCard label="Revogados" value={tokenStats.revoked} tone="danger" />
-                  <MetricCard label="Expiram hoje" value={tokenStats.expiringSoon} tone="warning" />
+              {!hasScope ? (
+                <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
+                  Selecione um <strong>Cliente</strong> e um <strong>Site</strong> no escopo acima para listar os tokens automaticamente.
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                  <Input
-                    label="Busca"
-                    placeholder="Descrição, ID ou prefixo do token"
-                    value={tokenSearch}
-                    onChange={e => setTokenSearch(e.target.value)}
-                    className="xl:col-span-2"
-                  />
-                  <Select
-                    label="Status"
-                    value={statusFilter}
-                    onChange={e => setStatusFilter(e.target.value as TokenStatusFilter)}
-                    options={[
-                      { value: 'all', label: 'Todos' },
-                      { value: 'active', label: 'Ativo' },
-                      { value: 'expired', label: 'Expirado' },
-                      { value: 'revoked', label: 'Revogado' },
-                    ]}
-                  />
-                  <Select
-                    label="Período"
-                    value={periodFilter}
-                    onChange={e => setPeriodFilter(e.target.value as TokenPeriodFilter)}
-                    options={[
-                      { value: 'all', label: 'Sem recorte' },
-                      { value: '24h', label: 'Últimas 24h' },
-                      { value: '7d', label: 'Últimos 7 dias' },
-                      { value: '30d', label: 'Últimos 30 dias' },
-                    ]}
-                  />
-                  <Select
-                    label="Ordenação"
-                    value={sortBy}
-                    onChange={e => setSortBy(e.target.value as TokenSortBy)}
-                    options={[
-                      { value: 'created-desc', label: 'Mais recentes' },
-                      { value: 'created-asc', label: 'Mais antigos' },
-                      { value: 'expires-asc', label: 'Expira primeiro' },
-                      { value: 'expires-desc', label: 'Expira por último' },
-                      { value: 'status', label: 'Status' },
-                    ]}
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface-light px-3 py-2">
-                  <div className="text-sm text-muted">
-                    {filteredTokens.length} tokens após filtros
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    <MetricCard
+                      label="Total carregados"
+                      value={tokenStats.total}
+                      tone="slate"
+                      active={statusFilter === 'all'}
+                      onClick={() => setStatusFilter('all')}
+                    />
+                    <MetricCard
+                      label="Ativos"
+                      value={tokenStats.active}
+                      tone="success"
+                      active={statusFilter === 'active'}
+                      onClick={() => setStatusFilter(current => (current === 'active' ? 'all' : 'active'))}
+                    />
+                    <MetricCard
+                      label="Expirados"
+                      value={tokenStats.expired}
+                      tone="slate"
+                      active={statusFilter === 'expired'}
+                      onClick={() => setStatusFilter(current => (current === 'expired' ? 'all' : 'expired'))}
+                    />
+                    <MetricCard
+                      label="Revogados"
+                      value={tokenStats.revoked}
+                      tone="danger"
+                      active={statusFilter === 'revoked'}
+                      onClick={() => setStatusFilter(current => (current === 'revoked' ? 'all' : 'revoked'))}
+                    />
+                    <MetricCard
+                      label="Expiram em 24h"
+                      value={tokenStats.expiringSoon}
+                      tone="warning"
+                      onClick={() => setStatusFilter('active')}
+                    />
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+                    <div className="relative xl:col-span-2">
+                      <Input
+                        label="Busca"
+                        placeholder="Descrição, ID ou prefixo do token"
+                        value={tokenSearch}
+                        onChange={e => setTokenSearch(e.target.value)}
+                      />
+                      {tokenSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setTokenSearch('')}
+                          aria-label="Limpar busca de tokens"
+                          className="absolute right-2.5 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                        >
+                          <Icon name="close" className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                     <Select
-                      label="Tipo de instalador"
+                      label="Status"
+                      value={statusFilter}
+                      onChange={e => setStatusFilter(e.target.value as TokenStatusFilter)}
+                      options={[
+                        { value: 'all', label: 'Todos' },
+                        { value: 'active', label: 'Ativo' },
+                        { value: 'expired', label: 'Expirado' },
+                        { value: 'revoked', label: 'Revogado' },
+                      ]}
+                    />
+                    <Select
+                      label="Período"
+                      value={periodFilter}
+                      onChange={e => setPeriodFilter(e.target.value as TokenPeriodFilter)}
+                      options={[
+                        { value: 'all', label: 'Sem recorte' },
+                        { value: '24h', label: 'Últimas 24h' },
+                        { value: '7d', label: 'Últimos 7 dias' },
+                        { value: '30d', label: 'Últimos 30 dias' },
+                      ]}
+                    />
+                    <Select
+                      label="Ordenação"
+                      value={sortBy}
+                      onChange={e => setSortBy(e.target.value as TokenSortBy)}
+                      options={[
+                        { value: 'created-desc', label: 'Mais recentes' },
+                        { value: 'created-asc', label: 'Mais antigos' },
+                        { value: 'expires-asc', label: 'Expira primeiro' },
+                        { value: 'expires-desc', label: 'Expira por último' },
+                        { value: 'status', label: 'Status' },
+                      ]}
+                    />
+                    <Select
+                      label="Instalador ao baixar"
                       value={installerType}
                       onChange={e => setInstallerType(e.target.value as DeployInstallerType)}
                       options={[
-                        { value: 'online', label: 'Instalador mínimo (.exe) — Recomendado' },
-                        { value: 'offline', label: 'Pacote offline completo (.exe)' },
+                        { value: 'online', label: 'Mínimo (~2 MB)' },
+                        { value: 'offline', label: 'Offline (~150 MB)' },
                       ]}
                     />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setTokenSearch('');
-                        setStatusFilter('all');
-                        setPeriodFilter('all');
-                        setSortBy('created-desc');
-                        setPageSize(10);
-                      }}
-                    >
-                      Limpar filtros
-                    </Button>
                   </div>
-                </div>
-                <p className="text-xs text-muted">
-                  <strong>Instalador mínimo:</strong> ~2 MB, baixa o restante durante a instalação (requer internet).
-                  {' '}<strong>Pacote offline:</strong> ~150 MB, instalação completa sem internet.
-                </p>
-              </div>
-            )}
-          </Card>
 
-          {tokensFilter !== null && (
-            <Card>
-              {deployTokens.isLoading && listedTokens.length === 0 ? (
-                <p className="text-sm text-muted">Carregando tokens...</p>
-              ) : deployTokens.isError ? (
-                <p className="text-sm text-danger">Não foi possível carregar os deploy tokens.</p>
-              ) : filteredTokens.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
-                  Nenhum token corresponde aos filtros atuais.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pagedTokens.map(token => {
-                    const status = getTokenStatus(token, revokedTokenIds, nowMs);
-                    const statusUi = statusBadge(status);
-                    const isRevoked = status === 'revoked';
-                    const canDownload = status === 'active';
-
-                    return (
-                      <div
-                        key={token.id}
-                        className="rounded-xl border border-border bg-surface-light p-4"
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+                    <span>
+                      {filteredTokens.length} {filteredTokens.length === 1 ? 'token' : 'tokens'} após filtros
+                    </span>
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setTokenSearch('');
+                          setStatusFilter('all');
+                          setPeriodFilter('all');
+                          setSortBy('created-desc');
+                        }}
                       >
-                        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                          <div className="min-w-0 space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge color={statusUi.color}>{statusUi.label}</Badge>
-                              <Badge color="slate">Usos: {token.usedCount ?? 0}</Badge>
-                              <Badge color="slate">Criado em {formatDateTime(token.createdAt)}</Badge>
-                              <Badge color={status === 'active' ? 'warning' : 'slate'}>
-                                {formatExpiryRelative(token.expiresAt, nowMs)}
-                              </Badge>
-                            </div>
-
-                            {token.description ? (
-                              <p className="text-sm text-muted-foreground">{token.description}</p>
-                            ) : (
-                              <p className="text-sm text-muted">Sem descrição</p>
-                            )}
-
-                            <div className="rounded-lg border border-border bg-black/20 p-3">
-                              <p className="break-all font-mono text-xs text-foreground">
-                                {token.tokenPrefix || '—'}
-                                <span className="ml-2 text-muted">(prefixo público — o token completo não é exposto)</span>
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 items-start gap-2">
-                            <Button
-                              variant="secondary"
-                              onClick={() => {
-                                setDownloadPrompt(token);
-                                setDownloadPromptValue('');
-                              }}
-                              disabled={!canDownload}
-                            >
-                              Baixar {installerType === 'offline' ? 'pacote offline' : 'instalador mínimo'}
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              onClick={() => handleRevokeToken(token)}
-                              loading={revokingTokenId === token.id}
-                              disabled={isRevoked}
-                            >
-                              Revogar
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-                    <Select
-                      label="Itens por página"
-                      value={String(pageSize)}
-                      onChange={e => setPageSize(Number(e.target.value) || 10)}
-                      options={[
-                        { value: '10', label: '10 por página' },
-                        { value: '20', label: '20 por página' },
-                        { value: '50', label: '50 por página' },
-                      ]}
-                    />
-                    <Pagination
-                      className="flex-1"
-                      page={page}
-                      totalPages={totalPages}
-                      onPageChange={setPage}
-                      totalItems={filteredTokens.length}
-                      pageSize={pageSize}
-                    />
+                        Limpar filtros
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
             </Card>
-          )}
-        </>
-      )}
+
+            {hasScope && (
+              <Card>
+                {deployTokens.isLoading && listedTokens.length === 0 ? (
+                  <Loading message="Carregando deploy tokens..." />
+                ) : deployTokens.isError ? (
+                  <ErrorDisplay
+                    message="Não foi possível carregar os deploy tokens."
+                    onRetry={() => void deployTokens.refetch()}
+                  />
+                ) : filteredTokens.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
+                    {listedTokens.length === 0
+                      ? 'Nenhum deploy token emitido para este site.'
+                      : 'Nenhum token corresponde aos filtros atuais.'}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pagedTokens.map(token => {
+                      const status = getTokenStatus(token, revokedTokenIds, nowMs);
+                      const statusUi = statusBadge(status);
+                      const isRevoked = status === 'revoked';
+                      const canDownload = status === 'active';
+
+                      return (
+                        <div
+                          key={token.id}
+                          className="rounded-xl border border-border bg-surface-light p-4"
+                        >
+                          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="min-w-0 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge color={statusUi.color}>{statusUi.label}</Badge>
+                                <Badge color="slate">Usos: {token.usedCount ?? 0}</Badge>
+                                <Badge color="slate">Criado em {formatDateTime(token.createdAt)}</Badge>
+                                <Badge color={status === 'active' ? 'warning' : 'slate'}>
+                                  {formatExpiryRelative(token.expiresAt, nowMs)}
+                                </Badge>
+                              </div>
+
+                              {token.description ? (
+                                <p className="text-sm text-foreground">{token.description}</p>
+                              ) : (
+                                <p className="text-sm text-muted">Sem descrição</p>
+                              )}
+
+                              <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+                                <p className="min-w-0 break-all font-mono text-xs text-foreground">
+                                  {token.tokenPrefix || '—'}
+                                  <span className="ml-2 text-muted">(prefixo público — o token completo não é exposto)</span>
+                                </p>
+                                {token.tokenPrefix && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleCopyPrefix(token)}
+                                    aria-label={`Copiar prefixo ${token.tokenPrefix}`}
+                                    title="Copiar prefixo"
+                                    className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                                  >
+                                    <Icon
+                                      name={copiedPrefixId === token.id ? 'check' : 'content_copy'}
+                                      className="h-3.5 w-3.5"
+                                    />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-start gap-2">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  setDownloadPrompt(token);
+                                  setDownloadPromptValue('');
+                                }}
+                                disabled={!canDownload}
+                              >
+                                <Icon name="download" className="h-4 w-4" />
+                                Baixar {installerType === 'offline' ? 'pacote offline' : 'instalador mínimo'}
+                              </Button>
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted hover:text-danger"
+                                onClick={() => handleRevokeToken(token)}
+                                loading={revokingTokenId === token.id}
+                                disabled={isRevoked}
+                              >
+                                <Icon name="block" className="h-4 w-4" />
+                                Revogar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                      <Select
+                        label="Itens por página"
+                        value={String(pageSize)}
+                        onChange={e => setPageSize(Number(e.target.value) || 10)}
+                        options={[
+                          { value: '10', label: '10 por página' },
+                          { value: '20', label: '20 por página' },
+                          { value: '50', label: '50 por página' },
+                        ]}
+                      />
+                      <Pagination
+                        className="flex-1"
+                        page={page}
+                        totalPages={totalPages}
+                        onPageChange={setPage}
+                        totalItems={filteredTokens.length}
+                        pageSize={pageSize}
+                      />
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
 
       <Modal
         open={downloadPrompt !== null}
         onClose={() => {
+          if (downloadingTokenId !== null) return;
           setDownloadPrompt(null);
           setDownloadPromptValue('');
         }}
@@ -893,6 +1083,7 @@ export default function DeployTokens() {
             value={downloadPromptValue}
             onChange={e => setDownloadPromptValue(e.target.value)}
             placeholder="Cole o token completo"
+            disabled={downloadingTokenId !== null}
           />
           <div className="flex justify-end gap-2">
             <Button
@@ -901,6 +1092,7 @@ export default function DeployTokens() {
                 setDownloadPrompt(null);
                 setDownloadPromptValue('');
               }}
+              disabled={downloadingTokenId !== null}
             >
               Cancelar
             </Button>
@@ -909,10 +1101,8 @@ export default function DeployTokens() {
                 const target = downloadPrompt;
                 if (!target) return;
                 handleDownloadInstallerByToken(target.id, downloadPromptValue);
-                setDownloadPrompt(null);
-                setDownloadPromptValue('');
               }}
-              disabled={!downloadPromptValue.trim()}
+              disabled={!downloadPromptValue.trim() || downloadingTokenId !== null}
               loading={downloadingTokenId !== null}
             >
               Baixar
@@ -925,14 +1115,15 @@ export default function DeployTokens() {
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         clientId={selectedClientId}
-        sites={activeSites.map((site) => ({ id: site.id, name: site.name }))}
+        sites={activeSites.map(site => ({ id: site.id, name: site.name }))}
         defaultSiteId={selectedSiteId}
+        onCreated={() => void deployTokens.refetch()}
       />
 
       <ConfirmDialog
         open={Boolean(revokeTarget)}
         title="Revogar deploy token"
-        message={revokeTarget?.message ?? ""}
+        message={revokeTarget?.message ?? ''}
         confirmLabel="Revogar"
         tone="danger"
         isLoading={revokeToken.isPending}
@@ -947,10 +1138,14 @@ function MetricCard({
   label,
   value,
   tone,
+  active,
+  onClick,
 }: {
   label: string;
   value: number;
   tone: 'slate' | 'success' | 'warning' | 'danger';
+  active?: boolean;
+  onClick?: () => void;
 }) {
   const toneClass: Record<typeof tone, string> = {
     slate: 'text-foreground border-border bg-surface-light',
@@ -960,9 +1155,16 @@ function MetricCard({
   };
 
   return (
-    <div className={`rounded-xl border px-3 py-2 ${toneClass[tone]}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`w-full rounded-xl border px-3 py-2 text-left transition-all hover:brightness-105 ${toneClass[tone]} ${
+        active ? 'ring-2 ring-primary/50' : ''
+      }`}
+    >
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </div>
+      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+    </button>
   );
 }
