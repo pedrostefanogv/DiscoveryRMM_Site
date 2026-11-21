@@ -88,6 +88,8 @@ const SERVER_SEPARATE_POLICY_KEYS = new Set(["maintenanceWindowJson"]);
 const REMOTE_ACCESS_SEPARATE_KEYS = new Set([
   "remoteProxyPolicyJson",
   "remoteProxyGlobalEntriesEnabled",
+  "remoteAccessWebRtcPolicyJson",
+  "remoteAccessWebRtcEnabled",
 ]);
 
 type SectionKey =

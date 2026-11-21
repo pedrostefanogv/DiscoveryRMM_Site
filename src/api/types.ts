@@ -1997,6 +1997,18 @@ export interface ServerConfiguration {
    * Nasce false: o cadastro global fica pré-pronto, porém inerte.
    */
   remoteProxyGlobalEntriesEnabled?: boolean;
+  /**
+   * Política de WebRTC do acesso remoto (JSON, ver RemoteAccessWebRtcPolicy no
+   * backend): STUN/TURN, kinds e fallback. "{}" = WebRTC desligado, isto é, todo
+   * o tráfego pelo NATS (o comportamento anterior). Editável em WebRTC.
+   */
+  remoteAccessWebRtcPolicyJson?: string;
+  /**
+   * Kill switch herdável do WebRTC. Separado do blob de propósito: desligar num
+   * site não apaga a configuração de STUN/TURN que ele já tinha. Efetivo apenas
+   * com o blob e esta flag ligados.
+   */
+  remoteAccessWebRtcEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -2038,6 +2050,13 @@ export interface ClientConfiguration {
    * servidor; quando definida, substitui a do servidor por inteiro.
    */
   remoteProxyPolicyJson?: string | null;
+  /**
+   * Política de WebRTC do acesso remoto (JSON). null = herda do servidor;
+   * quando definida, substitui a do servidor por inteiro.
+   */
+  remoteAccessWebRtcPolicyJson?: string | null;
+  /** WebRTC habilitado (null = herda servidor). */
+  remoteAccessWebRtcEnabled?: boolean | null;
   lockedFieldsJson?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -2079,6 +2098,13 @@ export interface SiteConfiguration {
    * cliente/servidor; quando definida, substitui a do nível acima por inteiro.
    */
   remoteProxyPolicyJson?: string | null;
+  /**
+   * Política de WebRTC do acesso remoto (JSON). null = herda do cliente/servidor;
+   * quando definida, substitui a do nível acima por inteiro.
+   */
+  remoteAccessWebRtcPolicyJson?: string | null;
+  /** WebRTC habilitado (null = herda cliente/servidor). */
+  remoteAccessWebRtcEnabled?: boolean | null;
   timezone?: string | null;
   location?: string | null;
   contactPerson?: string | null;

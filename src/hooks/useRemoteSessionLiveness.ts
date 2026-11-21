@@ -15,6 +15,10 @@ import {
   useSessionLiveness,
   type SessionLivenessStatus,
 } from "@/hooks/useSessionLiveness";
+import {
+  parseTransportControlFrame,
+  type TransportInfo,
+} from "@/modules/remote-shared/transportIndicator";
 
 export type RemoteSessionConnectionState =
   | "connecting"
@@ -39,6 +43,14 @@ export interface UseRemoteSessionLivenessOptions {
   onPeerLost?: () => void;
   onExpired?: (reason: string) => void;
   onKeepAlive?: (expiresAtUtc: string, maxExpiresAtUtc?: string | null) => void;
+  /**
+   * Estado do transporte da sessão (WebRTC vs NATS vs fallback), publicado pelo
+   * agent no .control. Alimenta o selo do indicador.
+   *
+   * É um callback em vez de estado interno porque o consumidor decide ONDE
+   * exibir — a tela usa no cabeçalho, e o viewer de tela pode usar no overlay.
+   */
+  onTransport?: (info: TransportInfo) => void;
 }
 
 export interface RemoteSessionLivenessState {
@@ -198,6 +210,30 @@ export function useRemoteSessionLiveness(
             ? envelope.payload.reason
             : "encerrada";
         optionsRef.current.onExpired?.(reason);
+        return;
+      }
+
+      // Estado do transporte (WebRTC vs NATS vs fallback). O agent publica
+      // quando a negociação começa e SEMPRE que cai para NATS no meio da
+      // sessão — é assim que o operador descobre que o selo mudou sem
+      // precisar recarregar a página.
+      if (envelope.type === "transport_info") {
+        const info = parseTransportControlFrame({
+          action: "transport_info",
+          sessionId: envelope.sessionId,
+          transport: envelope.payload?.transport ?? envelope.payload,
+        });
+        if (info) optionsRef.current.onTransport?.(info);
+        return;
+      }
+
+      // O tipo "transport_info" vem no payload achatado em alguns caminhos
+      // (o frame pode carregar o bloco direto). Tentamos essa forma também,
+      // porque perder a transição para fallback deixaria o selo mentindo.
+      const direct = parseTransportControlFrame(envelope.payload);
+      if (direct) {
+        optionsRef.current.onTransport?.(direct);
+        return;
       }
     };
 

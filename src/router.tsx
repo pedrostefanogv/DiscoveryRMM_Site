@@ -68,6 +68,7 @@ const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurat
 const EffectiveConfigurationPage = lazy(() => import('@/pages/settings/EffectiveConfigurationPage'));
 const RemoteConsentSettings = lazy(() => import('@/pages/settings/RemoteConsentSettings'));
 const RemoteProxyPolicySettings = lazy(() => import('@/pages/settings/RemoteProxyPolicySettings'));
+const RemoteAccessWebRtcSettings = lazy(() => import('@/pages/settings/RemoteAccessWebRtcSettings'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
@@ -672,6 +673,14 @@ export const routes: RouteObject[] = [
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><RemoteProxyPolicySettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/remote-webrtc',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><RemoteAccessWebRtcSettings /></LazyPage>
           </PermissionGate>
         ),
       },

@@ -17,7 +17,15 @@ export type RemoteSessionControlType =
   | "closed"
   // KVM input lock: comando do viewer e estado autoritativo do agent.
   | "inputLock"
-  | "inputLockChanged";
+  | "inputLockChanged"
+  /**
+   * Estado do transporte da sessão publicado pelo agent (WebRTC vs NATS vs
+   * fallback). Alimenta o selo do indicador no console.
+   *
+   * Cabe no teto de 512 bytes porque carrega apenas o ESTADO e o motivo — nunca
+   * o SDP, que trafega nos subjects dedicados .webrtc.in/.webrtc.out.
+   */
+  | "transport_info";
 export type RemoteSessionControlRole = "viewer" | "agent" | "server";
 
 export interface RemoteSessionControlEnvelope {
@@ -37,6 +45,7 @@ const ALLOWED_TYPES: readonly RemoteSessionControlType[] = [
   "closed",
   "inputLock",
   "inputLockChanged",
+  "transport_info",
 ];
 
 const ALLOWED_ROLES = ["viewer", "agent", "server"] as const;

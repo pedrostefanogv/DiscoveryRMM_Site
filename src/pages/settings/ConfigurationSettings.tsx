@@ -56,6 +56,13 @@ const groups: SettingsGroup[] = [
         to: "/settings/proxy-policy",
         icon: <Icon name="lan" className="h-5 w-5" />,
       },
+      {
+        title: "WebRTC do Acesso Remoto",
+        description:
+          "Transporte direto (peer-to-peer) para tela, túnel RDP/TCP e arquivos, com STUN/TURN. Por global, cliente e site.",
+        to: "/settings/remote-webrtc",
+        icon: <Icon name="settings_input_antenna" className="h-5 w-5" />,
+      },
     ],
   },
   {

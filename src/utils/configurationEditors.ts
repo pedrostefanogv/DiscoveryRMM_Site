@@ -523,6 +523,31 @@ export const serverEditableFields: EditableField[] = [
       "Habilita os destinos de proxy cadastrados no escopo GLOBAL (servidor). Desligado, eles ficam salvos mas são ignorados — destinos de cliente e site continuam valendo normalmente. Serve para preparar uma lista global antes de liberá-la para toda a frota.",
   },
   {
+    // Política de WebRTC do acesso remoto (STUN/TURN, kinds, fallback). Editada
+    // na tela dedicada /settings/remote-webrtc, que valida as URLs e a regra
+    // "relayOnly exige TURN" antes de gravar; aqui o campo existe para entrar no
+    // catálogo herdável (servidor → cliente → site) e ser reconhecido em
+    // locks/herança — sem esta entrada o campo some da tela de configuração.
+    key: "remoteAccessWebRtcPolicyJson",
+    label: "WebRTC do Acesso Remoto",
+    kind: "json",
+    defaultValue: "{}",
+    group: "remoteAccess",
+    description:
+      "Transporte direto (peer-to-peer) para tela, túnel RDP/TCP e arquivos, com STUN/TURN configuráveis. {} = WebRTC desligado, isto é, todo o tráfego pelo NATS. Editável em Configurações → WebRTC, com herança por cliente e site.",
+  },
+  {
+    // Kill switch separado do blob: desligar num site não apaga a configuração
+    // de STUN/TURN que ele já tinha. Efetivo apenas com o blob E esta flag.
+    key: "remoteAccessWebRtcEnabled",
+    label: "Habilitar WebRTC",
+    kind: "boolean",
+    defaultValue: "false",
+    group: "remoteAccess",
+    description:
+      "Liga o transporte WebRTC nas sessões remotas configuradas. Desligado (padrão), todo o tráfego continua pelo NATS. Só tem efeito quando a política de WebRTC também está ligada.",
+  },
+  {
     key: "automaticLoggingEnabled",
     label: "Log Automático",
     kind: "boolean",

@@ -76,6 +76,7 @@ const settingsLinks = [
   // Acesso remoto: consentimento e a allowlist de destinos do túnel do proxy.
   { to: '/settings/remote-consent', label: 'Autorização Remota' },
   { to: '/settings/proxy-policy', label: 'Destinos do Proxy' },
+  { to: '/settings/remote-webrtc', label: 'WebRTC' },
   // Este menu é uma lista PRÓPRIA, paralela às rotas — registrar a página em
   // router.tsx não a faz aparecer aqui.
 
@@ -122,14 +123,17 @@ type SidebarAccordionSection =
  * impressão de menu incompleto. Cada item ocupa ~32px (py-1.5 + text-sm), então
  * 13 itens já estouravam os 384px.
  *
- * max-h-[32rem] dá folga confortável (comporta ~16 itens) sem custo visual.
+ * max-h-[36rem] (576px) dá folga confortável (comporta ~18 itens) sem custo
+ * visual. Subiu de 32rem quando "WebRTC" entrou na lista e os 17 itens passaram
+ * a estourar o teto anterior — o guard em tests/unit/sidebarSettingsLinks.test.ts
+ * detecta exatamente esse caso.
  * Se um submenu passar disso, aumente aqui — de novo, é um teto de animação,
  * não um limite de layout.
  */
 function submenuAnimationClass(isOpen: boolean): string {
   return [
     'overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out',
-    isOpen ? 'max-h-[32rem] opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1 pointer-events-none',
+    isOpen ? 'max-h-[36rem] opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1 pointer-events-none',
   ].join(' ');
 }
 

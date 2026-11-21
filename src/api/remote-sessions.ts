@@ -5,20 +5,22 @@ import { api, apiFetchResponse } from './client';
 /**
  * Codec aceito pelo runtime do agent.
  *
- * 'h264' NÃO é válido para novas sessões: o transporte WebRTC (único que o
- * suportava) foi removido e o agent desativou o encoder por licença/patente AVC
- * (Discovery/src/app/core/remotesession/codec_selector.go; a API rejeita via
- * QualityProfileMapping.IsCodecValidForTransport).
+ * 'h264' NÃO é válido em NENHUM transporte — inclusive WebRTC. O encoder AVC
+ * está desativado por licença/patente e o WebRTC negocia VP8/VP9 internamente.
+ * A API rejeita via QualityProfileMapping.IsCodecValidForTransport.
  */
 export type RemoteCodecInput = 'jpeg' | 'webp';
 
 /**
  * Transporte aceito para novas sessões.
  *
- * 'webrtc' NÃO é válido: o agent normaliza qualquer pedido de webrtc (ou vazio)
- * para NATS (Discovery/src/app/core/remotesession/manager.go, normalizeTransport).
+ * 'webrtc' é aceito, mas só é EFETIVO quando a política herdável de WebRTC está
+ * ligada para o escopo do agente E o kind desta sessão está na lista
+ * (RemoteAccessWebRtcPolicyJson / RemoteAccessWebRtcEnabled, editável em
+ * Configurações → WebRTC). Fora disso a sessão sobe em NATS — o pedido não
+ * falha, e o indicador de transporte mostra que o caminho efetivo é o relayado.
  */
-export type RemoteTransportInput = 'nats' | 'http';
+export type RemoteTransportInput = 'nats' | 'http' | 'webrtc';
 
 export interface StartRemoteSessionRequest {
     agentId: string;

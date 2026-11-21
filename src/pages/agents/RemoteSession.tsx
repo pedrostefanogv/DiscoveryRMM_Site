@@ -45,6 +45,14 @@ import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
 import RegistryPanel from '@/modules/remote-registry/RegistryPanel';
 import { RemoteServices } from '@/modules/remote-processes/RemoteServices';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
+// O componente mora em TransportBadge.tsx (e a lógica em transportIndicator.ts)
+// para não colidir com o nome do módulo de lógica num filesystem
+// case-insensitive — o TS recusa dois arquivos que só diferem por caixa.
+import { TransportBadge } from '@/modules/remote-shared/TransportBadge';
+import {
+  resolveWebRtcKinds,
+  type TransportInfo,
+} from '@/modules/remote-shared/transportIndicator';
 import {
   onCrossTabMessage,
   postCrossTabMessage,
@@ -139,6 +147,7 @@ function SessionLivenessBadge({
   session,
   attemptsRef,
   onStatusChange,
+  onTransport,
   onFatal,
   onRecreate,
 }: {
@@ -149,6 +158,8 @@ function SessionLivenessBadge({
   session: TabSession;
   attemptsRef: { current: Partial<Record<Tab, number>> };
   onStatusChange: (tab: Tab, status: string) => void;
+  /** Estado do transporte da sessão (WebRTC vs NATS vs fallback). */
+  onTransport: (tab: Tab, info: TransportInfo) => void;
   onFatal: (tab: Tab, reason: string) => void;
   onRecreate: (tab: Tab) => Promise<void>;
 }) {
@@ -208,6 +219,7 @@ function SessionLivenessBadge({
     },
     onPeerLost: () => { void attemptRecover('sem-resposta'); },
     onExpired: (reason) => { void attemptRecover(reason); },
+    onTransport: (info) => onTransport(tab, info),
   });
 
   const status = liveness.status;
@@ -234,7 +246,23 @@ export default function RemoteSession() {
   const [searchParams] = useSearchParams();
 
   const agentId = searchParams.get('agentId') ?? '';
-  const transport = searchParams.get('transport') ?? 'nats';
+  // Kinds para os quais o WebRTC está autorizado na config EFETIVA do site
+  // (herdada). Vazio = WebRTC desligado, e toda sessão sobe em NATS.
+  const [webRtcKinds, setWebRtcKinds] = useState<string[]>([]);
+
+  // Kind da sessão pedida, derivado do parâmetro `kind` da URL (mesmo contrato
+  // que a API aceita). Default "all": a tela de acesso remoto abre com todas as
+  // capacidades, e "all" cobre a política que autorizou tela.
+  const sessionKindForTransport = searchParams.get('kind') ?? 'all';
+
+  // Transporte pedido: o parâmetro da URL manda (permite forçar NATS para
+  // diagnóstico); na ausência dele, pedimos WebRTC quando a política autoriza
+  // ESTE kind. O agente é quem decide de fato — o pedido aqui só evita abrir
+  // mão do P2P quando ele está configurado.
+  const requestedTransport = searchParams.get('transport');
+  const transport =
+    requestedTransport ??
+    (webRtcKinds.includes(sessionKindForTransport) ? 'webrtc' : 'nats');
   const quality = searchParams.get('quality') ?? 'unlimited';
   const codec = searchParams.get('codec') ?? 'webp';
   // O token NÃO vem mais da query string (vazava em histórico/Referer/logs).
@@ -416,6 +444,32 @@ export default function RemoteSession() {
   // Liveness por aba: falha terminal (placeholder). livenessAttemptsRef limita
   // a auto-recuperacao a 3 tentativas por sessao.
   const [livenessFailure, setLivenessFailure] = useState<Partial<Record<Tab, string>>>({});
+
+  // Estado do TRANSPORTE por aba (WebRTC vs NATS vs fallback), publicado pelo
+  // agent no .control. Vive no PAI porque o selo fica no cabeçalho, que é
+  // compartilhado por todas as abas — e a pergunta "por onde esta sessão está
+  // passando?" vale igualmente para tela, arquivos, terminal e RDP.
+  const [transportByTab, setTransportByTab] = useState<Partial<Record<Tab, TransportInfo>>>({});
+
+  const handleTransport = useCallback((tab: Tab, info: TransportInfo) => {
+    setTransportByTab((prev) => {
+      const current = prev[tab];
+      // Evita re-render quando nada mudou: o agent republica o estado a cada
+      // queda/recuperação e um objeto novo idêntico forçaria render do
+      // cabeçalho inteiro à toa.
+      if (
+        current &&
+        current.state === info.state &&
+        current.reason === info.reason &&
+        current.hasStun === info.hasStun &&
+        current.hasTurn === info.hasTurn &&
+        current.relayOnly === info.relayOnly
+      ) {
+        return prev;
+      }
+      return { ...prev, [tab]: info };
+    });
+  }, []);
   // Último status reportado por aba (para o chip compacto refletir o pior caso).
   const [livenessStatuses, setLivenessStatuses] = useState<Partial<Record<Tab, string>>>({});
   const livenessAttemptsRef = useRef<Partial<Record<Tab, number>>>({});
@@ -499,6 +553,15 @@ export default function RemoteSession() {
         setProxyDestinations(
           browsableDestinations(effective.remoteProxy as never),
         );
+
+        // WebRTC: lido da config EFETIVA do site (herdada de servidor → cliente
+        // → site). O console pede "webrtc" apenas quando a política está ligada;
+        // o agente revalida e, se algo não fechar, a sessão sobe em NATS com o
+        // motivo exposto no indicador de transporte.
+        //
+        // Best-effort: sem permissão de configuração o pedido fica em NATS, que
+        // é o caminho que sempre funciona.
+        setWebRtcKinds(resolveWebRtcKinds(effective));
       } catch {
         if (!cancelled) setProxyDestinations([]);
       }
@@ -1853,6 +1916,7 @@ export default function RemoteSession() {
                           session={session}
                           attemptsRef={livenessAttemptsRef}
                           onStatusChange={handleLivenessStatus}
+                          onTransport={handleTransport}
                           onFatal={handleLivenessFatal}
                           onRecreate={handleLivenessRecreate}
                         />
@@ -2036,6 +2100,11 @@ export default function RemoteSession() {
               )}
             </>
           )}
+
+          {/* Indicador do transporte: WebRTC (direto) vs NATS (relayado) vs
+              fallback. Fica no cabeçalho porque a pergunta "por onde esta sessão
+              está passando?" vale para TODAS as abas, não só a de tela. */}
+          <TransportBadge info={transportByTab[activeTab] ?? null} />
 
           <span className="mx-0.5 h-4 w-px bg-border" />
           <Button variant="danger" size="sm" onClick={handleStop} title="Encerra todas as sessões ativas e fecha esta janela">Fechar</Button>
