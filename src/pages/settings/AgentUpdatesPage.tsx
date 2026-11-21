@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
-import { Icon,
+import {
+  Icon,
   Badge,
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   ErrorDisplay,
   Loading,
   PageHeader,
@@ -37,6 +39,8 @@ interface RolloutStats {
 
 export default function AgentUpdatesPage() {
   const [syncLoading, setSyncLoading] = useState(false);
+  const [promoteTarget, setPromoteTarget] = useState<Release | null>(null);
+  const [promoting, setPromoting] = useState(false);
 
   const { data: releases = [], isLoading, error, refetch } = useQuery({
     queryKey: ['agent-updates-releases'],
@@ -75,7 +79,7 @@ export default function AgentUpdatesPage() {
   };
 
   if (isLoading) return <Loading message="Carregando releases..." />;
-  if (error) return <ErrorDisplay message={(error as Error).message} />;
+  if (error) return <ErrorDisplay message={(error as Error).message} onRetry={() => refetch()} />;
 
   return (
     <div className="space-y-6">
@@ -162,15 +166,7 @@ export default function AgentUpdatesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={async () => {
-                        try {
-                          await agentUpdatesApi.promoteRelease(release.id);
-                          toast.success('Release promovida');
-                          refetch();
-                        } catch {
-                          toast.error('Erro ao promover');
-                        }
-                      }}
+                      onClick={() => setPromoteTarget(release)}
                     >
                       <Icon name="rocket_launch" className="w-4 h-4 mr-1" />
                       Promover
@@ -182,6 +178,30 @@ export default function AgentUpdatesPage() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={!!promoteTarget}
+        onClose={() => setPromoteTarget(null)}
+        onConfirm={async () => {
+          if (!promoteTarget) return;
+          setPromoting(true);
+          try {
+            await agentUpdatesApi.promoteRelease(promoteTarget.id);
+            toast.success(`Release ${promoteTarget.version} promovida para produção`);
+            setPromoteTarget(null);
+            refetch();
+          } catch {
+            toast.error('Erro ao promover');
+          } finally {
+            setPromoting(false);
+          }
+        }}
+        title="Promover release para a frota?"
+        message={`A versão ${promoteTarget?.version ?? ''} passará a ser distribuída como release promovida para os agentes.`}
+        confirmLabel="Promover"
+        tone="primary"
+        isLoading={promoting}
+      />
     </div>
   );
 }

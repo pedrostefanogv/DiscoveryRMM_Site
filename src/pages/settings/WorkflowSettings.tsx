@@ -6,13 +6,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { useWorkflowStates, useWorkflowTransitions, useCreateWorkflowState, useUpdateWorkflowState, useDeleteWorkflowState, useCreateWorkflowTransition, useDeleteWorkflowTransition } from '@/hooks/useWorkflow';
 import { useClients } from '@/hooks/useClients';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
-import {  Icon, Card, CardHeader, Badge, Button, Modal, Input, Select, Loading, ErrorDisplay, PageHeader } from '@/components/ui';
+import {  Icon, Card, CardHeader, Badge, Button, Modal, Input, Select, Loading, ErrorDisplay, PageHeader, ConfirmDialog } from '@/components/ui';
 import { TicketStateBadge, stateColorVars } from '@/components/tickets/TicketStateBadge';
 import type { WorkflowState } from '@/api';
 import { buildStateTicketCounts, buildWorkflowReorder, sortStatesByOrder } from './workflowUtils';
 import toast from 'react-hot-toast';
 
-export default function WorkflowSettings() {
+export default function WorkflowSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const [clientId, setClientId] = useState('');
   const clientsQuery = useClients();
   const selectedClientId = clientId || undefined;
@@ -78,8 +78,10 @@ export default function WorkflowSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Workflow" description="Gerencie estados e transições de chamados"   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      {!embedded && (
+        <PageHeader title="Workflow" description="Gerencie estados e transições de chamados"   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
+      )}
 
       <div className="max-w-md">
         <Select
@@ -252,10 +254,13 @@ function StateCard({ state, ticketCount, showCount, reorderDisabled, onEdit }: {
     opacity: isDragging ? 0.6 : 1,
   };
 
-  const handleDelete = () => {
-    if (!confirm(`Excluir estado "${state.name}"?`)) return;
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const handleConfirmDelete = () => {
     deleteState.mutate(state.id, {
-      onSuccess: () => toast.success('Estado excluído'),
+      onSuccess: () => {
+        setConfirmDeleteOpen(false);
+        toast.success('Estado excluído');
+      },
       onError: (error) =>
         toast.error(error instanceof Error ? error.message : 'Erro ao excluir o estado'),
     });
@@ -293,12 +298,22 @@ function StateCard({ state, ticketCount, showCount, reorderDisabled, onEdit }: {
           )}
         </div>
       </div>
-      <button onClick={onEdit} aria-label="Editar estado" title="Editar estado" className="p-1 text-muted hover:text-foreground transition-colors">
+      <button type="button" onClick={onEdit} aria-label="Editar estado" title="Editar estado" className="p-1 text-muted hover:text-foreground transition-colors">
         <Icon name="edit" className="h-4 w-4" />
       </button>
-      <button onClick={handleDelete} aria-label="Excluir estado" className="p-1 text-muted hover:text-danger transition-colors">
+      <button type="button" onClick={() => setConfirmDeleteOpen(true)} aria-label="Excluir estado" className="p-1 text-muted hover:text-danger transition-colors">
         <Icon name="delete" className="h-4 w-4" />
       </button>
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Excluir estado"
+        message={`Excluir estado "${state.name}"?`}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteState.isPending}
+        onConfirm={handleConfirmDelete}
+        onClose={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }

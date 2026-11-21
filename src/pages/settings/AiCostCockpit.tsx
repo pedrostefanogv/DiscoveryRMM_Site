@@ -1,7 +1,8 @@
 import { formatDate } from '@/utils/format';
 import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { Icon,
+import {
+  Icon,
   Badge,
   Button,
   Card,
@@ -213,6 +214,12 @@ export default function AiCostCockpit() {
               showPagination={false}
               emptyMessage="Nenhum consumo no período"
             />
+            <div className="px-4 pb-3">
+              <Badge color="slate">
+                <Icon name="paid" className="mr-1 h-3 w-3" />
+                Orçamento em vermelho indica 100%+ do mensal consumido
+              </Badge>
+            </div>
           </Card>
 
           <Card>
@@ -225,12 +232,6 @@ export default function AiCostCockpit() {
               showPagination={false}
               emptyMessage="Nenhuma ferramenta usada"
             />
-            <div className="px-4 pb-3">
-              <Badge color="slate">
-                <Icon name="paid" className="mr-1 h-3 w-3" />
-                Orçamento em vermelho indica 100%+ do mensal consumido
-              </Badge>
-            </div>
           </Card>
         </>
       )}

@@ -159,7 +159,7 @@ function sensorItemFromDefinition(definition: SensorDefinition): SensorItem {
  * Filtros e busca vivem na URL (useSearchParams) com o mesmo padrão da página de
  * frota: o link filtrado fica compartilhável e sobrevive ao F5.
  */
-export default function SensorsManagePage() {
+export default function SensorsManagePage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -478,27 +478,37 @@ export default function SensorsManagePage() {
     [handleToggleActive],
   );
 
+  const actionButtons = (
+    <>
+      <Button onClick={() => setCreating(true)}>
+        <Icon name="add" className="h-4 w-4" />
+        Novo sensor
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={() => void definitions.refetch()}
+        disabled={definitions.isFetching}
+      >
+        <Icon name="refresh" className="h-4 w-4" />
+        Atualizar
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Gerenciar sensores"
-        description="Todas as definições de sensor (global, cliente, site e agente): edite limiares, alvos e ative ou desative o monitoramento."
-        onBack={() => navigate("/sensors")}
-        backLabel="Voltar para a visão de frota"
-      >
-        <Button onClick={() => setCreating(true)}>
-          <Icon name="add" className="h-4 w-4" />
-          Novo sensor
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => void definitions.refetch()}
-          disabled={definitions.isFetching}
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
+      ) : (
+        <PageHeader
+          title="Gerenciar sensores"
+          description="Todas as definições de sensor (global, cliente, site e agente): edite limiares, alvos e ative ou desative o monitoramento."
+          onBack={() => navigate("/sensors")}
+          backLabel="Voltar para a visão de frota"
         >
-          <Icon name="refresh" className="h-4 w-4" />
-          Atualizar
-        </Button>
-      </PageHeader>
+          {actionButtons}
+        </PageHeader>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <Select

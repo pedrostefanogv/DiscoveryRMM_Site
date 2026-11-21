@@ -168,7 +168,7 @@ export default function TicketTemplatesPage() {
                     ) : (
                       <Badge color="slate"><Icon name="public" className="mr-0.5 inline h-3 w-3" />Global</Badge>
                     )}
-                    {t.departmentId && <Badge color="accent">Departamento</Badge>}
+                    {t.departmentId && <Badge color="accent">{departmentMap.get(t.departmentId) ?? 'Departamento'}</Badge>}
                     {questionCount > 0 && <Badge color="success">{questionCount} pergunta(s)</Badge>}
                     {fieldCount > 0 && <Badge color="slate">{fieldCount} campo(s) padrão</Badge>}
                     {isDeleted && <Badge color="danger">Excluído {formatDeletedAt(t.deletedAt)}</Badge>}

@@ -5,6 +5,8 @@ import {
     type NatsCredentialsResponse,
     type NatsService,
 } from '@/api/nats';
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
+import { RemoteWebRtcPeer } from '@/modules/remote-shared/webrtcPeer';
 import {
     decodeBinaryFileFrame,
     encodeBinaryFileFrame,
@@ -25,6 +27,8 @@ interface UseFilesStreamOptions {
     nkeySeed?: string;
     /** Callback para renovar o JWT NATS escopado antes ou após expiração (60 min). */
     getFreshCredentials?: () => Promise<string>;
+    /** Configuração WebRTC efetiva da sessão. */
+    webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 interface UseFilesStreamReturn {
@@ -134,6 +138,7 @@ export function useFilesStream({
     jwt,
     nkeySeed = '',
     getFreshCredentials,
+    webrtc,
 }: UseFilesStreamOptions): UseFilesStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -149,6 +154,9 @@ export function useFilesStream({
     // Transporte nats.js (NatsService): o mesmo cliente comprovado no trace
     // do servidor (Cloudflare → túnel → auth callout → entrega).
     const serviceRef = useRef<NatsService | null>(null);
+    const webRtcPeerRef = useRef<RemoteWebRtcPeer | null>(null);
+    const webrtcRef = useRef(webrtc);
+    webrtcRef.current = webrtc;
     const jwtRef = useRef(jwt);
     const freshCredsRef = useRef(getFreshCredentials);
     freshCredsRef.current = getFreshCredentials;
@@ -161,6 +169,8 @@ export function useFilesStream({
     const dataSubject = `${subj}.files.data`;
     const readySubject = `${subj}.files.ready`;
     const progressSubject = `${subj}.files.progress`;
+    const webrtcInSubject = `${subj}.webrtc.in`;
+    const webrtcOutSubject = `${subj}.webrtc.out`;
 
     const waitForReady = useCallback((timeoutMs = 10000) => new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -182,7 +192,7 @@ export function useFilesStream({
         agentSupportsBinaryRef.current = false;
         agentDataSubjectRef.current = false;
 
-        const subjectAllowList = [respSubject, readySubject, progressSubject];
+        const subjectAllowList = [respSubject, readySubject, progressSubject, webrtcOutSubject];
         const buildCreds = (token: string): NatsCredentialsResponse => ({
             jwt: token,
             nkeySeed,
@@ -190,7 +200,7 @@ export function useFilesStream({
             // O JWT escopado da sessão tem TTL próprio: usa o claim exp do
             // próprio token (fallback 60 min quando ilegível).
             expiresAtUtc: jwtExpiresAtUtc(token),
-            publishSubjects: [reqSubject],
+            publishSubjects: [reqSubject, webrtcInSubject],
             subscribeSubjects: subjectAllowList,
         });
         const service = createNatsService({
@@ -210,6 +220,7 @@ export function useFilesStream({
         serviceRef.current = service;
         service.setPreSuppliedCredentials(buildCreds(jwt));
 
+        let webRtcStarted = false;
         const offState = service.onConnectionStateChange((state) => {
             if (!mounted || !mountedRef.current) return;
             if (state === 'connected') {
@@ -218,6 +229,10 @@ export function useFilesStream({
                 const waiters = readyWaitersRef.current;
                 readyWaitersRef.current = [];
                 waiters.forEach((w) => w.resolve());
+                if (!webRtcStarted && webrtcRef.current?.enabled && webRtcPeerRef.current) {
+                    webRtcStarted = true;
+                    void webRtcPeerRef.current.start();
+                }
             } else if (state === 'auth_error') {
                 setError('Autenticação NATS expirada ou recusada.');
                 setIsConnected(false);
@@ -312,6 +327,35 @@ export function useFilesStream({
             progressCallbacksRef.current.forEach((cb) => cb(parsed as unknown as FilesProgressInfo));
         };
 
+        const handleWebRtcOutRaw = (raw: Uint8Array) => {
+            if (!mounted) return;
+            void webRtcPeerRef.current?.handleSignal(textDecoder.decode(raw));
+        };
+        const handleWebRtcOutJson = (parsed: Record<string, unknown>) => {
+            if (!mounted) return;
+            void webRtcPeerRef.current?.handleSignal(JSON.stringify(parsed));
+        };
+        if (webrtcRef.current?.enabled) {
+            webRtcPeerRef.current?.close();
+            webRtcPeerRef.current = new RemoteWebRtcPeer({
+                config: webrtcRef.current,
+                channels: ['files'],
+                sendSignal: (frame) => {
+                    void service.publish(webrtcInSubject, frame as unknown as Record<string, unknown>).catch(() => {});
+                },
+                onMessage: (label, buf) => {
+                    if (label === 'files' && mounted) {
+                        handleRespRaw(new Uint8Array(buf));
+                    }
+                },
+            });
+            if (hasRawSub && rawService.subscribeRaw) {
+                void rawService.subscribeRaw(webrtcOutSubject, handleWebRtcOutRaw, { connectIfNeeded: false });
+            } else {
+                void service.subscribe(webrtcOutSubject, handleWebRtcOutJson as never, { connectIfNeeded: false });
+            }
+        }
+
         // Registra subscrições ANTES do connect() para que restoreSubscriptions()
         // ative todos os listeners antes do estado 'connected' ser emitido.
         if (hasRawSub && rawService.subscribeRaw) {
@@ -340,9 +384,13 @@ export function useFilesStream({
                 if (dataSubActive) {
                     rawService.unsubscribeRaw(dataSubject, handleRespRaw);
                 }
+                rawService.unsubscribeRaw(webrtcOutSubject, handleWebRtcOutRaw);
             } else {
                 service.unsubscribe(respSubject, handleResp as never);
+                service.unsubscribe(webrtcOutSubject, handleWebRtcOutJson as never);
             }
+            webRtcPeerRef.current?.close();
+            webRtcPeerRef.current = null;
             service.unsubscribe(readySubject, handleReady as never);
             service.unsubscribe(progressSubject, handleProgress as never);
 
@@ -409,6 +457,9 @@ export function useFilesStream({
                 typeof rawService.publishRaw === 'function'
             ) {
                 const frame = encodeBinaryFileFrame(headerPayload, data);
+                if (webRtcPeerRef.current?.send('files', frame)) {
+                    return;
+                }
                 void rawService.publishRaw(targetPutSubject, frame).catch(handlePublishError);
                 return;
             }
@@ -419,6 +470,9 @@ export function useFilesStream({
                 // Array de números estouraria o payload NATS (2MB) para chunks grandes.
                 ...(data && data.length > 0 ? { data: bytesToBase64(data) } : {}),
             };
+            if (webRtcPeerRef.current?.send('files', JSON.stringify(jsonPayload))) {
+                return;
+            }
             void service.publish(reqSubject, jsonPayload).catch(handlePublishError);
         });
     }, [dataSubject, reqSubject, waitForReady]);

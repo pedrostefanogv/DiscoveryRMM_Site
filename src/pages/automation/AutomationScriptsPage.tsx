@@ -16,6 +16,7 @@ import { Icon,
   Modal,
   Pagination,
   Select,
+  ConfirmDialog,
 PageHeader,
 } from "@/components/ui";
 import { type AutomationScriptSummary } from "@/api";
@@ -63,6 +64,7 @@ export default function AutomationScriptsPage() {
   });
 
   const deleteMutation = useDeleteAutomationScript();
+  const [deleteTarget, setDeleteTarget] = useState<AutomationScriptSummary | null>(null);
 
   const canPrev = page > 1 && !list.isFetching;
   const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
@@ -125,19 +127,7 @@ export default function AutomationScriptsPage() {
         icon: <Icon name="delete" className="h-4 w-4" />,
         danger: true,
         separatorBefore: true,
-        onClick: () => {
-          if (!window.confirm(`Excluir o script ${script.name}?`)) return;
-          deleteMutation.mutate(
-            {
-              id: script.id,
-              correlationId: buildCorrelationId("script-delete"),
-            },
-            {
-              onSuccess: () => toast.success("Script excluido"),
-              onError: () => toast.error("Falha ao excluir script"),
-            },
-          );
-        },
+        onClick: () => setDeleteTarget(script),
       },
     ];
   }, [contextMenu, navigate, deleteMutation]);
@@ -303,6 +293,32 @@ export default function AutomationScriptsPage() {
         </p>
         <AutomationScriptAuditTrail scriptId={auditScriptId ?? ""} />
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir script"
+        message={deleteTarget ? `Excluir o script ${deleteTarget.name}?` : ""}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(
+            {
+              id: deleteTarget.id,
+              correlationId: buildCorrelationId("script-delete"),
+            },
+            {
+              onSuccess: () => {
+                setDeleteTarget(null);
+                toast.success("Script excluido");
+              },
+              onError: () => toast.error("Falha ao excluir script"),
+            },
+          );
+        }}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

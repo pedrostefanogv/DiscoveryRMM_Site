@@ -219,7 +219,6 @@ describe("IamRolesPage - permissões em lote", () => {
 
   it("remove VÁRIAS permissões já vinculadas numa única chamada de lote", async () => {
     mocks.rolePermissions = [PERM_USERS_VIEW, PERM_USERS_EDIT];
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     renderPage();
     selectRole("Operador N1");
@@ -237,11 +236,12 @@ describe("IamRolesPage - permissões em lote", () => {
       }),
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Remover" }));
+
     await waitFor(() => {
       expect(mocks.bulkRemoveMutateAsync).toHaveBeenCalledTimes(1);
     });
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(mocks.bulkRemoveMutateAsync).toHaveBeenCalledWith({
       permissionIds: ["perm-1", "perm-2"],
     });
@@ -250,8 +250,6 @@ describe("IamRolesPage - permissões em lote", () => {
   });
 
   it("não executa o lote de remoção quando a confirmação é recusada", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-
     renderPage();
     selectRole("Operador N1");
 
@@ -264,9 +262,7 @@ describe("IamRolesPage - permissões em lote", () => {
       }),
     );
 
-    await waitFor(() => {
-      expect(window.confirm).toHaveBeenCalledTimes(1);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(mocks.bulkRemoveMutateAsync).not.toHaveBeenCalled();
   });
 

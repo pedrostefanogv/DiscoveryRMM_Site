@@ -13,6 +13,7 @@ import { Icon,
   Loading,
   Select,
 PageHeader,
+  ConfirmDialog,
 } from '@/components/ui';
 import { reportSchedulesApi } from '@/api';
 import type { ReportSchedule, CreateReportScheduleRequest, UpdateReportScheduleRequest } from '@/api';
@@ -60,6 +61,7 @@ const DEFAULT_FORM: FormState = {
 export default function ReportSchedulesPage() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
 
@@ -313,10 +315,7 @@ export default function ReportSchedulesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        if (confirm('Excluir este agendamento?'))
-                          deleteMutation.mutate(schedule.id);
-                      }}
+                      onClick={() => setDeleteTargetId(schedule.id)}
                       title="Excluir"
                     >
                       <Icon name="delete" className="w-4 h-4 text-danger" />
@@ -328,6 +327,22 @@ export default function ReportSchedulesPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTargetId)}
+        title="Excluir agendamento"
+        message="Excluir este agendamento?"
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (!deleteTargetId) return;
+          deleteMutation.mutate(deleteTargetId, {
+            onSuccess: () => setDeleteTargetId(null),
+          });
+        }}
+        onClose={() => setDeleteTargetId(null)}
+      />
     </div>
   );
 }

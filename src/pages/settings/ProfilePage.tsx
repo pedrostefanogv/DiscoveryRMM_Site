@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select,
+  ConfirmDialog,
 PageHeader,
 } from "@/components/ui";
 import { ApiError, authApi } from "@/api";
@@ -79,6 +80,7 @@ export default function ProfilePage() {
 
   const [registeringKey, setRegisteringKey] = useState(false);
   const [fido2ModalOpen, setFido2ModalOpen] = useState(false);
+  const [deleteKeyTarget, setDeleteKeyTarget] = useState<{ key: SecurityKeyView; authToken: string } | null>(null);
   const [fido2KeyName, setFido2KeyName] = useState("Meu dispositivo");
   const [registerMethod, setRegisterMethod] = useState<"Fido2" | "Totp">("Fido2");
   const [totpSetup, setTotpSetup] = useState<{
@@ -292,13 +294,14 @@ export default function ProfilePage() {
 
   const removeKey = async (key: SecurityKeyView, authToken: string) => {
     if (!key.id) return;
-    if (!window.confirm(`Remover a chave "${key.name}"? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
+    setDeleteKeyTarget({ key, authToken });
+  };
 
+  const handleConfirmRemoveKey = async () => {
+    if (!deleteKeyTarget?.key.id) return;
     try {
-      if (!key.id) return;
-      await deleteMfaKey.mutateAsync({ keyId: key.id, token: authToken });
+      await deleteMfaKey.mutateAsync({ keyId: deleteKeyTarget.key.id, token: deleteKeyTarget.authToken });
+      setDeleteKeyTarget(null);
       toast.success("Chave removida com sucesso.");
       await securityQuery.refetch();
     } catch (error) {
@@ -786,6 +789,17 @@ export default function ProfilePage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteKeyTarget)}
+        title="Remover chave de segurança"
+        message={deleteKeyTarget ? `Remover a chave "${deleteKeyTarget.key.name}"? Esta ação não pode ser desfeita.` : ""}
+        confirmLabel="Remover"
+        tone="danger"
+        isLoading={deleteMfaKey.isPending}
+        onConfirm={() => void handleConfirmRemoveKey()}
+        onClose={() => setDeleteKeyTarget(null)}
+      />
     </div>
   );
 }

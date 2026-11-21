@@ -18,6 +18,7 @@ import { Icon,
   type PermissionOption,
 
 PageHeader,
+  ConfirmDialog,
 } from "@/components/ui";
 import {
   type CreateRoleRequest,
@@ -105,7 +106,7 @@ function getMfaRequirementLabel(value: MfaRequirement) {
   return MFA_REQUIREMENT_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
 
-export default function IamRolesPage() {
+export default function IamRolesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const rolesQuery = useIamRoles();
   const permissionsCatalogQuery = useIamPermissionsCatalog();
 
@@ -116,6 +117,7 @@ export default function IamRolesPage() {
   const [selectedRole, setSelectedRole] = useState<RoleDto | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RoleDto | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RoleDto | null>(null);
 
   const { hasAnyPermission } = useAuthorization();
   const canWrite = hasAnyPermission(["roles.write", "roles.*", "identity.*", "admin.*"]);
@@ -176,7 +178,7 @@ export default function IamRolesPage() {
                 size="sm"
                 onClick={(event) => {
                   event.stopPropagation();
-                  void handleDelete(item);
+                  setDeleteTarget(item);
                 }}
                 aria-label="Excluir role"
                 title="Excluir role"
@@ -191,22 +193,20 @@ export default function IamRolesPage() {
     [canDelete, canWrite],
   );
 
-  const handleDelete = async (role: RoleDto) => {
-    const confirmed = window.confirm(`Excluir role \"${role.name}\"?`);
-    if (!confirmed) return;
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteRole.mutateAsync(role.id);
+      await deleteRole.mutateAsync(deleteTarget.id);
       toast.success("Role removida com sucesso.");
-      if (selectedRole?.id === role.id) {
+      if (selectedRole?.id === deleteTarget.id) {
         setSelectedRole(null);
       }
+      setDeleteTarget(null);
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível remover a role."));
     }
   };
-
-  if (rolesQuery.isLoading) {
+if (rolesQuery.isLoading) {
     return <Loading message="Carregando roles..." />;
   }
 
@@ -225,8 +225,10 @@ export default function IamRolesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Roles e Permissões" description="Gerencie roles customizadas e atribua permissões do catálogo disponível na API."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      {!embedded && (
+        <PageHeader title="Roles e Permissões" description="Gerencie roles customizadas e atribua permissões do catálogo disponível na API."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
+      )}
 
       <Card>
         <CardHeader
@@ -249,6 +251,17 @@ export default function IamRolesPage() {
           emptyMessage="Nenhuma role encontrada."
         />
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir role"
+        message={deleteTarget ? `Excluir role "${deleteTarget.name}"?` : ""}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteRole.isPending}
+        onConfirm={() => void handleConfirmDelete()}
+        onClose={() => setDeleteTarget(null)}
+      />
 
       {selected && (
         <RolePermissionsPanel
@@ -533,20 +546,23 @@ function RolePermissionsPanel({
     }
   };
 
-  const removeSelected = async () => {
+  const [confirmBulkRemoveOpen, setConfirmBulkRemoveOpen] = useState(false);
+
+  const removeSelected = () => {
+    if (selectedLinked.length === 0) return;
+    setConfirmBulkRemoveOpen(true);
+  };
+
+  const handleConfirmRemoveSelected = async () => {
     const ids = selectedLinked;
     if (ids.length === 0) return;
-
-    const confirmed = window.confirm(
-      `Remover ${ids.length} permissão(ões) da role "${role.name}"?`,
-    );
-    if (!confirmed) return;
 
     try {
       const result = await bulkRemovePermissions.mutateAsync({
         permissionIds: ids,
       });
       setLinkedIds([]);
+      setConfirmBulkRemoveOpen(false);
       toast.success(
         `${result.removed} permissão(ões) removida(s). ${result.skipped} não estava(m) vinculada(s).`,
       );
@@ -718,6 +734,16 @@ function RolePermissionsPanel({
           Roles de sistema não podem ser alteradas ou ter permissões modificadas.
         </div>
       )}
+      <ConfirmDialog
+        open={confirmBulkRemoveOpen}
+        title="Remover permissões"
+        message={`Remover ${selectedLinked.length} permissão(ões) da role "${role.name}"?`}
+        confirmLabel="Remover"
+        tone="danger"
+        isLoading={bulkRemovePermissions.isPending}
+        onConfirm={() => void handleConfirmRemoveSelected()}
+        onClose={() => setConfirmBulkRemoveOpen(false)}
+      />
     </Card>
   );
 }

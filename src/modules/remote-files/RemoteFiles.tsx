@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from "@/components/ui";
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
 
 import { useFilesStream, decodeFileData, type DriveInfo, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
 import { FileIcon } from './fileIcons';
@@ -40,6 +41,7 @@ interface RemoteFilesProps {
   jwt?: string;
   nkeySeed?: string;
   getFreshCredentials?: () => Promise<string>;
+  webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 function formatSize(bytes: number): string {
@@ -50,8 +52,9 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-// Chunk size para upload/download (256KB — alinhado ao agent Transfer)
+// Chunk size para upload/download (256KB no NATS; 192KB no WebRTC para caber no teto SCTP com header 'DF')
 const CHUNK_SIZE = 256 * 1024;
+const WEBRTC_CHUNK_SIZE = 192 * 1024;
 const TRANSFER_WINDOW = 4;
 
 function formatSpeed(bps: number): string {
@@ -104,7 +107,9 @@ export default function RemoteFiles({
   jwt,
   nkeySeed,
   getFreshCredentials,
+  webrtc,
 }: RemoteFilesProps) {
+  const effectiveChunkSize = webrtc?.enabled ? WEBRTC_CHUNK_SIZE : CHUNK_SIZE;
   const [currentPath, setCurrentPath] = useState('C:\\');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -160,6 +165,7 @@ export default function RemoteFiles({
     jwt: jwt || '',
     nkeySeed,
     getFreshCredentials,
+    webrtc,
   });
 
   // Atualiza a lista de unidades lógicas. Usada no files.ready, no fallback de
@@ -407,7 +413,7 @@ export default function RemoteFiles({
       if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
         throw new Error('Download cancelado');
       }
-      const firstResp = await sendRequest('get', entry.path, undefined, { chunkIndex: 0, chunkSize: CHUNK_SIZE });
+      const firstResp = await sendRequest('get', entry.path, undefined, { chunkIndex: 0, chunkSize: effectiveChunkSize });
       if (!firstResp.success) {
         setError(`Download ${entry.name}: ${firstResp.error || 'falha'}`);
         return;
@@ -463,7 +469,7 @@ export default function RemoteFiles({
               }
               const chunkIdx = nextFetch++;
               if (chunkIdx >= totalChunks) return;
-              const resp = await sendRequest('get', entry.path, undefined, { chunkIndex: chunkIdx, chunkSize: CHUNK_SIZE });
+              const resp = await sendRequest('get', entry.path, undefined, { chunkIndex: chunkIdx, chunkSize: effectiveChunkSize });
               if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
                 aborted = true;
                 throw new Error('Download cancelado');
@@ -523,7 +529,7 @@ export default function RemoteFiles({
     setError(null);
     setBusy(`Upload ${file.name}`);
 
-    const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    const totalChunks = Math.max(1, Math.ceil(file.size / effectiveChunkSize));
     const startedAt = performance.now();
     let loadedBytes = 0;
     let lastEmit = 0;
@@ -547,10 +553,10 @@ export default function RemoteFiles({
         if (cancelTransfersRef.current.has(tid) || !mountedRef.current) {
           throw new Error('Upload cancelado');
         }
-        const start = chunkIdx * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const start = chunkIdx * effectiveChunkSize;
+        const end = Math.min(start + effectiveChunkSize, file.size);
         const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
-        const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: chunkIdx, chunkSize: CHUNK_SIZE, totalChunks });
+        const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: chunkIdx, chunkSize: effectiveChunkSize, totalChunks });
         if (!resp.success) {
           throw new Error(resp.error || 'falha no upload');
         }

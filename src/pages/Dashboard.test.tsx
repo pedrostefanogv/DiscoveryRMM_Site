@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -138,6 +138,7 @@ function renderDashboard() {
 }
 
 afterEach(() => {
+  cleanup();
   mocks.realtime = undefined;
   mocks.summary = undefined;
 });
@@ -210,6 +211,7 @@ describe('Dashboard', () => {
 
     renderDashboard();
 
+    fireEvent.click(screen.getByRole('tab', { name: /Infraestrutura/ }));
     expect(screen.getByTestId('object-storage-card')).toBeTruthy();
     expect(screen.getByTestId('p2p-card')).toBeTruthy();
   });

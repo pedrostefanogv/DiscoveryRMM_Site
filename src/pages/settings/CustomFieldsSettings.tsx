@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from "react-router-dom";
 import toast from 'react-hot-toast';
-import {  Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader } from '@/components/ui';
+import {  Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader, ConfirmDialog } from '@/components/ui';
 import {
   CustomFieldDataType,
   CustomFieldRuntimeAccessMode,
@@ -121,6 +121,7 @@ export default function CustomFieldsSettings() {
   const createDefinition = useCreateCustomFieldDefinition();
   const updateDefinition = useUpdateCustomFieldDefinition();
   const deleteDefinition = useDeleteCustomFieldDefinition();
+  const [deleteTarget, setDeleteTarget] = useState<CustomFieldDefinition | null>(null);
   const upsertValue = useUpsertCustomFieldValue();
 
   useEffect(() => {
@@ -404,13 +405,15 @@ export default function CustomFieldsSettings() {
     }
   }
 
-  async function handleDeleteDefinition(definition: CustomFieldDefinition) {
-    if (!confirm(`Desativar o custom field "${definition.label}"?`)) {
-      return;
-    }
+  function handleDeleteDefinition(definition: CustomFieldDefinition) {
+    setDeleteTarget(definition);
+  }
 
+  async function handleConfirmDeleteDefinition() {
+    if (!deleteTarget) return;
     try {
-      await deleteDefinition.mutateAsync(definition.id);
+      await deleteDefinition.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
       toast.success('Definição desativada.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Falha ao desativar definição.'));
@@ -634,6 +637,17 @@ export default function CustomFieldsSettings() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Desativar custom field"
+        message={deleteTarget ? `Desativar o custom field "${deleteTarget.label}"?` : ""}
+        confirmLabel="Desativar"
+        tone="danger"
+        isLoading={deleteDefinition.isPending}
+        onConfirm={() => void handleConfirmDeleteDefinition()}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

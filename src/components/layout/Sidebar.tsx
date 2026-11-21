@@ -86,9 +86,7 @@ const settingsLinks = [
 
 const identityLinks = [
   { to: '/identity/authentication', label: 'Perfil e Segurança' },
-  { to: '/identity/users', label: 'Usuários e Acesso' },
-  { to: '/identity/groups', label: 'Grupos de Usuários' },
-  { to: '/identity/roles', label: 'Roles e Permissões' },
+  { to: '/identity/access', label: 'Usuários, Grupos e Roles' },
 ];
 
 interface SidebarProps {
@@ -675,13 +673,19 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         {!effectiveCollapsed && (
           <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen} inert={!identityOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-              {visibleIdentityLinks.map(({ to, label }) => (
+              {visibleIdentityLinks.map(({ to, label }) => {
+                const isIdentityHubPath =
+                  to === '/identity/access' &&
+                  (location.pathname.startsWith('/identity/users') ||
+                    location.pathname.startsWith('/identity/groups') ||
+                    location.pathname.startsWith('/identity/roles'));
+                return (
                 <NavLink
                   key={to}
                   to={to}
                   className={({ isActive }) =>
                     `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                      isActive
+                      isActive || isIdentityHubPath
                         ? 'bg-surface-hover text-foreground'
                         : 'text-muted hover:bg-surface-light hover:text-foreground'
                     }`
@@ -689,7 +693,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                 >
                   {label}
                 </NavLink>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

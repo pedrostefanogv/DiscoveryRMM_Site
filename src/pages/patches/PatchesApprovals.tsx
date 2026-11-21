@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Icon, Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import {
@@ -28,6 +28,7 @@ export default function PatchesApprovals() {
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PatchApproval | null>(null);
 
   const [formScope, setFormScope] = useState<PatchApprovalScopeType>("Global");
   const [formClientId, setFormClientId] = useState("");
@@ -118,7 +119,7 @@ export default function PatchesApprovals() {
       header: "",
       className: "text-right",
       render: (rule) => (
-        <Button size="sm" variant="danger" onClick={() => void handleDelete(rule)} disabled={deleteApproval.isPending}>
+        <Button size="sm" variant="danger" onClick={() => setDeleteTarget(rule)} disabled={deleteApproval.isPending}>
           <Icon name="delete" className="h-4 w-4" />
           Remover
         </Button>
@@ -241,6 +242,20 @@ export default function PatchesApprovals() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          void handleDelete(deleteTarget).finally(() => setDeleteTarget(null));
+        }}
+        title="Remover regra de aprovação?"
+        message={`A regra para "${deleteTarget?.updateKey ?? ""}" no escopo ${deleteTarget?.scopeType ?? ""} será removida.`}
+        confirmLabel="Remover"
+        tone="danger"
+        isLoading={deleteApproval.isPending}
+      />
     </div>
   );
 }

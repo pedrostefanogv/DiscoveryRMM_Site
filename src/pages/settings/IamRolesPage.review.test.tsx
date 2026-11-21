@@ -174,7 +174,6 @@ beforeEach(() => {
   mocks.unitRemove.mockReset().mockResolvedValue({});
   mocks.toastSuccess.mockReset();
   mocks.toastError.mockReset();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -328,6 +327,7 @@ describe('REVIEW IamRolesPage — hipótese 5: lote vs unitário (FOCO)', () => 
     mocks.bulkRemove.mockResolvedValue({ removed: 3, skipped: 0 });
 
     fireEvent.click(screen.getByRole('button', { name: /Remover 3 permissão\(ões\) selecionada\(s\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
 
     await waitFor(() => expect(mocks.bulkRemove).toHaveBeenCalledTimes(1));
     // A página ordena as vinculadas por GRUPO e depois por rótulo
@@ -344,16 +344,15 @@ describe('REVIEW IamRolesPage — hipótese 5: lote vs unitário (FOCO)', () => 
     expect(mocks.bulkRemove.mock.calls.length).toBe(1);
   });
 
-  it('window.confirm = false não dispara NENHUMA mutação de remoção', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('cancelar no ConfirmDialog não dispara NENHUMA mutação de remoção', async () => {
     mocks.linked = catalogo(3);
     renderPagina();
     abrirPainel('Operador');
 
     fireEvent.click(botaoLoteVinculadas(3));
     fireEvent.click(screen.getByRole('button', { name: /Remover 3 permissão\(ões\) selecionada\(s\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
-    expect(window.confirm).toHaveBeenCalled();
     expect(mocks.bulkRemove).not.toHaveBeenCalled();
     expect(mocks.unitRemove).not.toHaveBeenCalled();
     // A seleção continua de pé (o operador cancelou, não perdeu o trabalho).
@@ -413,6 +412,7 @@ describe('REVIEW IamRolesPage — hipótese 6: erro de rede/ApiError', () => {
 
     fireEvent.click(botaoLoteVinculadas(2));
     fireEvent.click(screen.getByRole('button', { name: /Remover 2 permissão\(ões\) selecionada\(s\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
 
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('Roles de sistema não podem ser alteradas.'),
@@ -468,6 +468,7 @@ describe('REVIEW IamRolesPage — hipótese 7: idempotência ({added:0, skipped:
 
     fireEvent.click(botaoLoteVinculadas(2));
     fireEvent.click(screen.getByRole('button', { name: /Remover 2 permissão\(ões\) selecionada\(s\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
 
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledTimes(1));
     const mensagem = mocks.toastSuccess.mock.calls[0][0] as string;
@@ -570,6 +571,7 @@ describe('REVIEW IamRolesPage — lista vinculada: filtro não perde seleção',
     expect(screen.getByRole('button', { name: /Remover 5 permissão\(ões\) selecionada\(s\)/ })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Remover 5 permissão\(ões\) selecionada\(s\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remover' }));
 
     await waitFor(() => expect(mocks.bulkRemove).toHaveBeenCalledTimes(1));
     // As 5 continuam sendo removidas, inclusive as escondidas pelo filtro.

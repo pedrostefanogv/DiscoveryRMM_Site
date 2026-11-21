@@ -10,7 +10,7 @@ import {
 import { useDepartments } from '@/hooks/useDepartments';
 import { useSlaCalendars } from '@/hooks/useSlaCalendars';
 import { useClients } from '@/hooks/useClients';
-import {  Icon, Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay, PageHeader } from '@/components/ui';
+import {  Icon, Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay, PageHeader, ConfirmDialog } from '@/components/ui';
 import type { WorkflowProfile, CreateWorkflowProfileRequest, UpdateWorkflowProfileRequest, TicketPriority } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -22,7 +22,7 @@ const PRIORITY_OPTIONS = [
   { value: 'Critical', label: 'Crítica' },
 ];
 
-export default function WorkflowProfileSettings() {
+export default function WorkflowProfileSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const [clientId, setClientId]     = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<WorkflowProfile | null>(null);
@@ -65,8 +65,10 @@ export default function WorkflowProfileSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Perfis de Workflow" description="Configure SLA e prioridade padrão por departamento"   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      {!embedded && (
+        <PageHeader title="Perfis de Workflow" description="Configure SLA e prioridade padrão por departamento"   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
+      )}
 
       <Card>
         <div className="flex flex-wrap items-end gap-3">
@@ -127,10 +129,13 @@ export default function WorkflowProfileSettings() {
 function ProfileRow({ profile, deptName, clientName, calendarName, onEdit }: { profile: WorkflowProfile; deptName: string; clientName: string | null; calendarName: string | null; onEdit: () => void }) {
   const del = useDeleteWorkflowProfile();
 
-  const handleDelete = () => {
-    if (!confirm(`Excluir perfil "${profile.name}"?`)) return;
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const handleConfirmDelete = () => {
     del.mutate(profile.id, {
-      onSuccess: () => toast.success('Perfil excluído'),
+      onSuccess: () => {
+        setConfirmDeleteOpen(false);
+        toast.success('Perfil excluído');
+      },
       onError:   () => toast.error('Erro ao excluir'),
     });
   };
@@ -153,12 +158,22 @@ function ProfileRow({ profile, deptName, clientName, calendarName, onEdit }: { p
       <div className="flex items-center gap-2 shrink-0">
         {clientName ? <Badge color="accent">{clientName}</Badge> : <Badge color="slate">Global</Badge>}
         {!profile.isActive && <Badge color="warning">Inativo</Badge>}
-        <button onClick={onEdit} aria-label="Editar" className="p-1 text-muted hover:text-foreground transition-colors">
+        <button type="button" onClick={onEdit} aria-label="Editar perfil" className="p-1 text-muted hover:text-foreground transition-colors">
           <Icon name="edit" className="h-4 w-4" />
         </button>
-        <button onClick={handleDelete} aria-label="Excluir" className="p-1 text-muted hover:text-danger transition-colors">
+        <button type="button" onClick={() => setConfirmDeleteOpen(true)} aria-label="Excluir perfil" className="p-1 text-muted hover:text-danger transition-colors">
           <Icon name="delete" className="h-4 w-4" />
         </button>
+        <ConfirmDialog
+          open={confirmDeleteOpen}
+          title="Excluir perfil"
+          message={`Excluir perfil "${profile.name}"?`}
+          confirmLabel="Excluir"
+          tone="danger"
+          isLoading={del.isPending}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setConfirmDeleteOpen(false)}
+        />
       </div>
     </div>
   );

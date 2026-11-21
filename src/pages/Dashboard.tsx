@@ -1,5 +1,5 @@
 import { formatBytes as formatBytesBase } from '@/utils/format';
-import { memo, useState } from 'react';
+import { memo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
@@ -8,14 +8,30 @@ import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 import { ObjectStorageCard } from '@/components/platform/ObjectStorageCard';
 import { AgentUpdatesInventoryCard } from '@/components/dashboard/AgentUpdatesInventoryCard';
-import { Icon, type MaterialSymbolName, StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay,
-PageHeader,
+import {
+  Icon,
+  type MaterialSymbolName,
+  StatCard,
+  Card,
+  CardHeader,
+  Badge,
+  Button,
+  SkeletonDashboard,
+  ErrorDisplay,
+  PageHeader,
 } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { usePatchSnapshot } from '@/hooks/usePatches';
 import { usePatchesRealtime } from '@/hooks/usePatchesRealtime';
 import type { DashboardWindow } from '@/api/dashboard';
+
+type DashboardTab = 'operational' | 'infrastructure';
+
+const DASHBOARD_TABS: { id: DashboardTab; label: string; icon: MaterialSymbolName }[] = [
+  { id: 'operational', label: 'Visão Operacional', icon: 'dashboard' },
+  { id: 'infrastructure', label: 'Infraestrutura & Plataforma', icon: 'dns' },
+];
 
 const formatBytes = (value?: number | null) => formatBytesBase(value, '0 B');
 
@@ -97,7 +113,12 @@ export default function Dashboard() {
   const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);
   // "range" (e não "window") para não sombrear o objeto global window.
   const [range, setRange] = useState<DashboardWindow>('24h');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('operational');
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const tabRefs = useRef<Record<DashboardTab, HTMLButtonElement | null>>({
+    operational: null,
+    infrastructure: null,
+  });
 
   const dashboard = useDashboardSummary('global', range);
   // Invalida o summary quando eventos NATS chegam: o dashboard global estava
@@ -186,6 +207,24 @@ export default function Dashboard() {
     }
   };
 
+  const selectTab = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    tabRefs.current[tab]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % DASHBOARD_TABS.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + DASHBOARD_TABS.length) % DASHBOARD_TABS.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = DASHBOARD_TABS.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const target = DASHBOARD_TABS[nextIndex];
+    selectTab(target.id);
+    tabRefs.current[target.id]?.focus();
+  };
+
   // Alertas operacionais exibidos no topo (SLA, agentes em erro, logs, infra).
   type DashboardAlert = { id: string; tone: 'danger' | 'warning'; message: string; onClick?: () => void };
   const alerts: DashboardAlert[] = [];
@@ -225,9 +264,26 @@ export default function Dashboard() {
     { label: 'Offline', value: agentsOffline, bg: 'bg-danger' },
     { label: 'Stale', value: agentsStale, bg: 'bg-warning' },
     { label: 'Manutenção', value: agentsMaintenance, bg: 'bg-primary' },
-    { label: 'Erro', value: agentsError, bg: 'bg-accent' },
+    { label: 'Erro', value: agentsError, bg: 'bg-danger' },
   ];
   const agentSegmentTotal = agentSegments.reduce((acc, segment) => acc + segment.value, 0);
+
+  const cmdSuccessColor: 'slate' | 'success' | 'danger' = !cmds?.total
+    ? 'slate'
+    : (cmds.successRate ?? 0) >= 80
+      ? 'success'
+      : 'danger';
+
+  const autoSuccessColor: 'slate' | 'success' | 'danger' = !auto?.total
+    ? 'slate'
+    : (auto.successRate ?? 0) >= 80
+      ? 'success'
+      : 'danger';
+
+  const natsState = healthState(realtime?.natsConnected);
+  const natsTcpState = healthState(realtime?.natsTcpReachable);
+  const redisState = healthState(realtime?.redisConnected);
+  const dbState = healthState(database?.connected);
 
   return (
     <div className="space-y-6">
@@ -252,7 +308,7 @@ export default function Dashboard() {
           </>
         }
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
             {WINDOWS.map(w => (
               <button
@@ -313,358 +369,425 @@ export default function Dashboard() {
               </span>
             ),
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => navigate('/service-board')}
+          >
+            Abrir Service Board
+            <Icon name="arrow_forward" className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ) : (
-        <div role="status" className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm text-success">
-          <Icon name="check_circle" className="h-4 w-4 shrink-0" />
-          Nenhum alerta crítico na janela de {rangeLabel.toLowerCase()}.
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm text-success">
+          <span className="flex items-center gap-2">
+            <Icon name="check_circle" className="h-4 w-4 shrink-0" />
+            Nenhum alerta crítico na janela de {rangeLabel.toLowerCase()}.
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/service-board')}
+          >
+            Service Board
+            <Icon name="arrow_forward" className="h-3.5 w-3.5" />
+          </Button>
         </div>
       )}
 
-      {/* Linha 1 – KPIs principais */} 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => navigate('/agents')}
-          className="text-left"
-          aria-label="Abrir página de agentes"
-        >
-          <StatCard
-            icon="desktop_windows"
-            label="Agentes"
-            value={agentsTotal}
-            tone="accent"
-            trend={
-              <span className="text-xs text-muted">
-                {agentsOnline} online / {agentsOffline} offline
-              </span>
-            }
-          />
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/tickets')}
-          className="text-left"
-          aria-label="Abrir página de chamados"
-        >
-          <StatCard
-            icon="confirmation_number"
-            label="Chamados Abertos"
-            value={ticketsOpen}
-            tone="warning"
-            trend={
-              ticketsSlaBreached > 0 ? (
-                <Badge color="danger">{ticketsSlaBreached} SLA</Badge>
-              ) : (
-                <span className="text-xs text-muted">{ds?.tickets.closed ?? 0} fechados</span>
-              )
-            }
-          />
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/software/inventory')}
-          className="text-left"
-          aria-label="Abrir inventário de softwares"
-        >
-          <StatCard
-            icon="web_asset"
-            label="Softwares instalados"
-            value={softwareSnapshot.isLoading ? '\u2014' : totalInstalledSoftware}
-            tone="success"
-            trend={softwareSnapshot.isError ? <Badge color="danger">indisponível</Badge> : undefined}
-          />
-        </button>
-        {canViewPatches && (
-        <button
-          type="button"
-          onClick={() => navigate('/patches')}
-          className="text-left"
-          aria-label="Abrir gerenciador de atualizações"
-        >
-          <StatCard
-            icon="gpp_maybe"
-            label="Conformidade de patches"
-            value={patchSnapshot.isLoading ? '\u2014' : (patchSnapshot.data?.compliancePercent ?? 0).toFixed(1) + '%'}
-            tone={(patchSnapshot.data?.criticalPending ?? 0) > 0 ? 'warning' : 'success'}
-            trend={
-              patchSnapshot.isError ? (
-                <Badge color="danger">indisponível</Badge>
-              ) : (
-                <span className="text-xs text-muted">
-                  {patchSnapshot.data?.totalPending ?? 0} pendente(s) · {patchSnapshot.data?.rebootPendingAgents ?? 0} reinício
-                </span>
-              )
-            }
-          />
-        </button>
-        )}
-        <button
-          type="button"
-          onClick={() => navigate('/clients')}
-          className="text-left"
-          aria-label="Abrir página de clientes"
-        >
-          <StatCard
-            icon="group"
-            label="Clientes"
-            value={ds?.clients.total ?? '\u2014'}
-            tone="primary"
-            trend={
-              ds?.clients.active !== undefined ? (
-                <span className="text-xs text-muted">{ds.clients.active} ativo{ds.clients.active !== 1 ? 's' : ''}</span>
-              ) : undefined
-            }
-          />
-        </button>
-      </div>
-
-      {/* Atualizações & Inventário dos Agentes: detalhamento do que o KPI de
-          conformidade só resume em %. Reaproveita o snapshot já consultado. */}
-      {canViewPatches && (
-        <AgentUpdatesInventoryCard
-          snapshot={patchSnapshot.data}
-          isLoading={patchSnapshot.isLoading}
-          isError={patchSnapshot.isError}
-          isFetching={patchSnapshot.isFetching}
-          onRefresh={() => void patchSnapshot.refetch()}
-        />
-      )}
-
-      {/* Linha 2 – Saúde dos Agentes + Comandos */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Saúde dos Agentes"
-            subtitle={`Distribuição de status • ${rangeLabel}`}
-          />
-          {agentSegmentTotal > 0 && (
-            <div
-              role="img"
-              aria-label={'Distribuição de status: ' + agentSegments.map((segment) => segment.label + ' ' + segment.value).join(', ')}
-              className="mb-3 flex h-2.5 w-full overflow-hidden rounded-full bg-surface-light"
+      {/* Abas: Visão Operacional | Infraestrutura & Plataforma */}
+      <div
+        role="tablist"
+        aria-label="Seções do Dashboard"
+        className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-border"
+      >
+        {DASHBOARD_TABS.map((tab, index) => {
+          const isSelected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              ref={(el) => {
+                tabRefs.current[tab.id] = el;
+              }}
+              id={`dashboard-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => selectTab(tab.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+              className={`relative flex-none inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                isSelected
+                  ? 'text-foreground after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary'
+                  : 'text-muted hover:text-foreground'
+              }`}
             >
-              {agentSegments.map((segment) =>
-                segment.value > 0 ? (
-                  <div
-                    key={segment.label}
-                    className={segment.bg}
-                    style={{ width: (segment.value / agentSegmentTotal) * 100 + '%' }}
-                    title={segment.label + ': ' + segment.value}
-                  />
-                ) : null,
-              )}
-            </div>
-          )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <StatusBar label="Online" value={agentsOnline} total={agentTotalForBars(ds)} color="text-success" bg="bg-success" />
-            <StatusBar label="Offline" value={agentsOffline} total={agentTotalForBars(ds)} color="text-danger" bg="bg-danger" />
-            <StatusBar label="Stale" value={agentsStale} total={agentTotalForBars(ds)} color="text-warning" bg="bg-warning" />
-            <StatusBar label="Manutenção" value={agentsMaintenance} total={agentTotalForBars(ds)} color="text-primary" bg="bg-primary" />
-            {agentsError > 0 && (
-              <StatusBar label="Erro" value={agentsError} total={agentTotalForBars(ds)} color="text-danger" bg="bg-danger" />
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Comandos"
-            subtitle={`Execuções na janela • ${rangeLabel}`}
-          />
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <MetricTile label="Pending" value={cmds?.pending ?? 0} icon="schedule" />
-            <MetricTile label="Sent" value={cmds?.sent ?? 0} icon="bolt" />
-            <MetricTile label="Running" value={cmds?.running ?? 0} icon="monitoring" />
-            <MetricTile label="Completed" value={cmds?.completed ?? 0} icon="check_circle" />
-            <MetricTile
-              label="Falhas*"
-              value={cmds?.failed ?? 0}
-              icon="cancel"
-              title="Falhas agregam Failed + Timeout + Canceladas (por isso o total fecha)."
-            />
-            <MetricTile label="Total" value={cmds?.total ?? 0} icon="memory" />
-            <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
-              <div className="flex items-center gap-1.5 text-muted">
-                <Icon name="bolt" className="h-3.5 w-3.5" />
-                <span>Sucesso</span>
-              </div>
-              <p className={`mt-1 text-base font-semibold ${(cmds?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
-                {cmds?.total ? formatPercent(cmds.successRate) : '\u2014'}
-              </p>
-            </div>
-          </div>
-        </Card>
+              <Icon name={tab.icon} className="h-4 w-4" aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Linha 3 – Automação + Logs */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Automação"
-            subtitle={`Execuções na janela • ${rangeLabel}`}
-          />
-          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <MetricTile label="Dispatched" value={auto?.dispatched ?? 0} icon="bolt" />
-            <MetricTile label="Acknowledged" value={auto?.acknowledged ?? 0} icon="monitoring" />
-            <MetricTile label="Completed" value={auto?.completed ?? 0} icon="check_circle" />
-            <MetricTile label="Failed" value={auto?.failed ?? 0} icon="cancel" />
-            <MetricTile
-              label="Canceladas"
-              value={auto?.cancelled ?? 0}
-              icon="cancel"
-              title="Canceladas contam no total, mas ficam fora da taxa de sucesso."
-            />
-            <MetricTile label="Total" value={auto?.total ?? 0} icon="memory" />
-            <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
-              <div className="flex items-center gap-1.5 text-muted">
-                <Icon name="bolt" className="h-3.5 w-3.5" />
-                <span>Sucesso</span>
-              </div>
-              <p className={`mt-1 text-base font-semibold ${(auto?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
-                {auto?.total ? formatPercent(auto.successRate) : '\u2014'}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Distribuição de Logs"
-            subtitle={`Entradas na janela • ${rangeLabel}`}
-          />
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-lg bg-danger/10 px-3 py-2" title="Erros agregam Error + Fatal.">
-              <div className="flex items-center gap-1.5">
-                <Icon name="warning" className="h-3.5 w-3.5 text-danger" />
-                <span className="text-muted">Erros/Fatal</span>
-              </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.error ?? 0}</p>
-            </div>
-            <div className="rounded-lg bg-warning/10 px-3 py-2">
-              <div className="flex items-center gap-1.5">
-                <Icon name="warning" className="h-3.5 w-3.5 text-warning" />
-                <span className="text-muted">Avisos</span>
-              </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.warn ?? 0}</p>
-            </div>
-            <div className="rounded-lg bg-surface-light px-3 py-2" title="Info agregar Info + Debug + Trace.">
-              <div className="flex items-center gap-1.5 text-muted">
-                <Icon name="monitoring" className="h-3.5 w-3.5" />
-                <span>Info/Debug</span>
-              </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.info ?? 0}</p>
-            </div>
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <div className="flex items-center gap-1.5 text-muted">
-                <Icon name="database" className="h-3.5 w-3.5" />
-                <span>Total</span>
-              </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.total ?? 0}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Linha 4 – Saúde da Plataforma + Métricas do Processo */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Saúde da Plataforma"
-            subtitle="Conectividade em tempo real e infraestrutura"
-          />
-          {realtimeStats.isError && (
-            <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-              <span>Não foi possível carregar as métricas de infraestrutura.</span>
-              <Button variant="ghost" size="sm" onClick={() => void realtimeStats.refetch()}>
-                Tentar novamente
-              </Button>
-            </div>
-          )}
-          <div className="space-y-3 text-sm">
-            <HealthRow
-              icon="monitoring"
-              label="NATS"
-              state={healthState(realtime?.natsConnected)}
-              detail={realtime?.natsConnectionState}
-            />
-
-            <HealthRow
-              icon="lan"
-              label="NATS TCP"
-              state={healthState(realtime?.natsTcpReachable)}
-              labels={TCP_BADGE}
-              detail={
-                realtime?.natsTcpLatencyMs != null
-                  ? `${realtime.natsTcpLatencyMs} ms`
-                  : realtime?.natsLastError ?? undefined
+      {activeTab === 'operational' ? (
+        <div
+          role="tabpanel"
+          aria-labelledby="dashboard-tab-operational"
+          tabIndex={0}
+          className="space-y-6"
+        >
+          {/* Linha 1 – KPIs principais (grid alinhado sem card órfão em xl) */}
+          <div className={`grid gap-4 sm:grid-cols-2 ${canViewPatches ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
+            <StatCard
+              icon="desktop_windows"
+              label="Agentes"
+              value={agentsTotal}
+              tone="accent"
+              onClick={() => navigate('/agents')}
+              trend={
+                <span className="text-xs text-muted tabular-nums">
+                  {agentsOnline} online / {agentsOffline} offline
+                </span>
               }
             />
-
-            <HealthRow
-              icon="database"
-              label="Redis"
-              state={healthState(realtime?.redisConnected)}
-              detail={typeof realtime?.redisPingMs === 'number' ? `${realtime.redisPingMs} ms` : undefined}
+            <StatCard
+              icon="confirmation_number"
+              label="Chamados Abertos"
+              value={ticketsOpen}
+              tone="warning"
+              onClick={() => navigate('/tickets')}
+              trend={
+                ticketsSlaBreached > 0 ? (
+                  <Badge color="danger">{ticketsSlaBreached} SLA</Badge>
+                ) : (
+                  <span className="text-xs text-muted tabular-nums">{ds?.tickets.closed ?? 0} fechados</span>
+                )
+              }
             />
-
-            <HealthRow
-              icon="dns"
-              label="Banco de dados"
-              state={healthState(database?.connected)}
-              detail={database?.provider ?? undefined}
+            <StatCard
+              icon="web_asset"
+              label="Softwares instalados"
+              value={softwareSnapshot.isLoading ? '\u2014' : totalInstalledSoftware}
+              tone="success"
+              onClick={() => navigate('/software/inventory')}
+              trend={softwareSnapshot.isError ? <Badge color="danger">indisponível</Badge> : undefined}
             />
+            {canViewPatches && (
+              <StatCard
+                icon="gpp_maybe"
+                label="Conformidade de patches"
+                value={patchSnapshot.isLoading ? '\u2014' : (patchSnapshot.data?.compliancePercent ?? 0).toFixed(1) + '%'}
+                tone={(patchSnapshot.data?.criticalPending ?? 0) > 0 ? 'warning' : 'success'}
+                onClick={() => navigate('/patches')}
+                trend={
+                  patchSnapshot.isError ? (
+                    <Badge color="danger">indisponível</Badge>
+                  ) : (
+                    <span className="text-xs text-muted tabular-nums">
+                      {patchSnapshot.data?.totalPending ?? 0} pendente(s) · {patchSnapshot.data?.rebootPendingAgents ?? 0} reinício
+                    </span>
+                  )
+                }
+              />
+            )}
+            <StatCard
+              icon="group"
+              label="Clientes"
+              value={ds?.clients.total ?? '\u2014'}
+              tone="primary"
+              onClick={() => navigate('/clients')}
+              trend={
+                ds?.clients.active !== undefined ? (
+                  <span className="text-xs text-muted tabular-nums">
+                    {ds.clients.active} ativo{ds.clients.active !== 1 ? 's' : ''}
+                  </span>
+                ) : undefined
+              }
+            />
+          </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-muted">
-              <div className="rounded-lg bg-surface-light px-3 py-2">
-                <p className="text-muted">Agentes online</p>
-                <p className="mt-0.5 text-sm font-semibold text-foreground">{agentsOnline}</p>
+          {/* Faixa compacta de saúde da infraestrutura com atalho para diagnóstico */}
+          <Card padding={false} className="px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span className="font-semibold uppercase tracking-wider text-muted">Infraestrutura</span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  NATS <Badge color={HEALTH_BADGE[natsState].color}>{HEALTH_BADGE[natsState].label}</Badge>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  NATS TCP <Badge color={TCP_BADGE[natsTcpState].color}>{TCP_BADGE[natsTcpState].label}</Badge>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  Redis <Badge color={HEALTH_BADGE[redisState].color}>{HEALTH_BADGE[redisState].label}</Badge>
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  Banco <Badge color={HEALTH_BADGE[dbState].color}>{HEALTH_BADGE[dbState].label}</Badge>
+                </span>
               </div>
-              <div className="rounded-lg bg-surface-light px-3 py-2">
-                <p className="text-muted">NATS RTT</p>
-                <p className="mt-0.5 text-sm font-semibold text-foreground">
-                  {typeof realtime?.natsRttMs === 'number' ? `${realtime.natsRttMs} ms` : '\u2014'}
-                </p>
+              <Button variant="ghost" size="sm" onClick={() => selectTab('infrastructure')}>
+                Diagnóstico completo
+                <Icon name="arrow_forward" className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </Card>
+
+          {/* Atualizações & Inventário dos Agentes */}
+          {canViewPatches && (
+            <AgentUpdatesInventoryCard
+              snapshot={patchSnapshot.data}
+              isLoading={patchSnapshot.isLoading}
+              isError={patchSnapshot.isError}
+              isFetching={patchSnapshot.isFetching}
+              onRefresh={() => void patchSnapshot.refetch()}
+            />
+          )}
+
+          {/* Linha 2 – Saúde dos Agentes + Comandos */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader
+                title="Saúde dos Agentes"
+                subtitle={`Distribuição de status • ${rangeLabel}`}
+                action={
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/agents')}>
+                    Ver agentes
+                    <Icon name="arrow_forward" className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
+              {agentSegmentTotal > 0 && (
+                <div
+                  role="img"
+                  aria-label={'Distribuição de status: ' + agentSegments.map((segment) => segment.label + ' ' + segment.value).join(', ')}
+                  className="mb-3 flex h-2.5 w-full overflow-hidden rounded-full bg-surface-light"
+                >
+                  {agentSegments.map((segment) =>
+                    segment.value > 0 ? (
+                      <div
+                        key={segment.label}
+                        className={segment.bg}
+                        style={{ width: (segment.value / agentSegmentTotal) * 100 + '%' }}
+                        title={segment.label + ': ' + segment.value}
+                      />
+                    ) : null,
+                  )}
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <StatusBar label="Online" value={agentsOnline} total={agentTotalForBars(ds)} color="text-success" bg="bg-success" />
+                <StatusBar label="Offline" value={agentsOffline} total={agentTotalForBars(ds)} color="text-danger" bg="bg-danger" />
+                <StatusBar label="Stale" value={agentsStale} total={agentTotalForBars(ds)} color="text-warning" bg="bg-warning" />
+                <StatusBar label="Manutenção" value={agentsMaintenance} total={agentTotalForBars(ds)} color="text-primary" bg="bg-primary" />
+                {agentsError > 0 && (
+                  <StatusBar label="Erro" value={agentsError} total={agentTotalForBars(ds)} color="text-danger" bg="bg-danger" />
+                )}
               </div>
-            </div>
-          </div>
-        </Card>
+            </Card>
 
-        <Card>
-          <CardHeader
-            title="Métricas do Processo"
-            subtitle={application?.environment
-              ? `${application.environment} • ${application.machineName ?? 'host'}`
-              : 'Uso de recursos do backend'}
-          />
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <MetricTile label="Working Set" value={workingSet} icon="memory" />
-            <MetricTile label="GC Heap" value={gcHeap} icon="database" />
-            <MetricTile label="Threads" value={processMetrics?.threadCount ?? '\u2014'} icon="monitoring" />
-            <MetricTile label="Uptime" value={formatUptime(uptimeValue)} icon="dns" />
+            <Card>
+              <CardHeader
+                title="Comandos"
+                subtitle={`Execuções na janela • ${rangeLabel}`}
+                action={
+                  <Badge color={cmdSuccessColor}>
+                    Sucesso: {cmds?.total ? formatPercent(cmds.successRate) : '\u2014'}
+                  </Badge>
+                }
+              />
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                <MetricTile label="Pending" value={cmds?.pending ?? 0} icon="schedule" />
+                <MetricTile label="Sent" value={cmds?.sent ?? 0} icon="bolt" />
+                <MetricTile label="Running" value={cmds?.running ?? 0} icon="monitoring" />
+                <MetricTile label="Completed" value={cmds?.completed ?? 0} icon="check_circle" />
+                <MetricTile
+                  label="Falhas*"
+                  value={cmds?.failed ?? 0}
+                  icon="cancel"
+                  title="Falhas agregam Failed + Timeout + Canceladas (por isso o total fecha)."
+                />
+                <MetricTile label="Total" value={cmds?.total ?? 0} icon="memory" />
+              </div>
+            </Card>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <p className="text-muted">ThreadPool worker</p>
-              <p className="mt-0.5 text-sm font-semibold text-foreground">
-                {workerAvailable ?? '\u2014'} disp / {workerMin ?? '\u2014'} min
-              </p>
-            </div>
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <p className="text-muted">ThreadPool IO</p>
-              <p className="mt-0.5 text-sm font-semibold text-foreground">
-                {ioAvailable ?? '\u2014'} disp / {ioMin ?? '\u2014'} min
-              </p>
-            </div>
+
+          {/* Linha 3 – Automação + Logs */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader
+                title="Automação"
+                subtitle={`Execuções na janela • ${rangeLabel}`}
+                action={
+                  <div className="flex items-center gap-2">
+                    <Badge color={autoSuccessColor}>
+                      Sucesso: {auto?.total ? formatPercent(auto.successRate) : '\u2014'}
+                    </Badge>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/automation/operations')}>
+                      Operações
+                      <Icon name="arrow_forward" className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                }
+              />
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                <MetricTile label="Dispatched" value={auto?.dispatched ?? 0} icon="bolt" />
+                <MetricTile label="Acknowledged" value={auto?.acknowledged ?? 0} icon="monitoring" />
+                <MetricTile label="Completed" value={auto?.completed ?? 0} icon="check_circle" />
+                <MetricTile label="Failed" value={auto?.failed ?? 0} icon="cancel" />
+                <MetricTile
+                  label="Canceladas"
+                  value={auto?.cancelled ?? 0}
+                  icon="cancel"
+                  title="Canceladas contam no total, mas ficam fora da taxa de sucesso."
+                />
+                <MetricTile label="Total" value={auto?.total ?? 0} icon="memory" />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader
+                title="Distribuição de Logs"
+                subtitle={`Entradas na janela • ${rangeLabel}`}
+                action={
+                  <Button variant="ghost" size="sm" onClick={() => navigate('/logs')}>
+                    Abrir logs
+                    <Icon name="arrow_forward" className="h-3.5 w-3.5" />
+                  </Button>
+                }
+              />
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-lg bg-danger/10 px-3 py-2" title="Erros agregam Error + Fatal.">
+                  <div className="flex items-center gap-1.5">
+                    <Icon name="warning" className="h-3.5 w-3.5 text-danger" />
+                    <span className="text-muted">Erros/Fatal</span>
+                  </div>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{logs?.error ?? 0}</p>
+                </div>
+                <div className="rounded-lg bg-warning/10 px-3 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <Icon name="warning" className="h-3.5 w-3.5 text-warning" />
+                    <span className="text-muted">Avisos</span>
+                  </div>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{logs?.warn ?? 0}</p>
+                </div>
+                <div className="rounded-lg bg-surface-light px-3 py-2" title="Info agregar Info + Debug + Trace.">
+                  <div className="flex items-center gap-1.5 text-muted">
+                    <Icon name="monitoring" className="h-3.5 w-3.5" />
+                    <span>Info/Debug</span>
+                  </div>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{logs?.info ?? 0}</p>
+                </div>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <div className="flex items-center gap-1.5 text-muted">
+                    <Icon name="database" className="h-3.5 w-3.5" />
+                    <span>Total</span>
+                  </div>
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{logs?.total ?? 0}</p>
+                </div>
+              </div>
+            </Card>
           </div>
-        </Card>
-      </div>
+        </div>
+      ) : (
+        <div
+          role="tabpanel"
+          aria-labelledby="dashboard-tab-infrastructure"
+          tabIndex={0}
+          className="space-y-6"
+        >
+          {/* Saúde da Plataforma + Métricas do Processo */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader
+                title="Saúde da Plataforma"
+                subtitle="Conectividade em tempo real e infraestrutura"
+              />
+              {realtimeStats.isError && (
+                <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+                  <span>Não foi possível carregar as métricas de infraestrutura.</span>
+                  <Button variant="ghost" size="sm" onClick={() => void realtimeStats.refetch()}>
+                    Tentar novamente
+                  </Button>
+                </div>
+              )}
+              <div className="space-y-3 text-sm">
+                <HealthRow
+                  icon="monitoring"
+                  label="NATS"
+                  state={natsState}
+                  detail={realtime?.natsConnectionState}
+                />
 
-      {/* Linha 5 – Object Storage (S3): métricas passivas + probe cacheado */}
-      <ObjectStorageCard />
+                <HealthRow
+                  icon="lan"
+                  label="NATS TCP"
+                  state={natsTcpState}
+                  labels={TCP_BADGE}
+                  detail={
+                    realtime?.natsTcpLatencyMs != null
+                      ? `${realtime.natsTcpLatencyMs} ms`
+                      : realtime?.natsLastError ?? undefined
+                  }
+                />
 
-      {/* Linha 6 – Métricas P2P */}
-      <P2PMetricsCard window={range} />
+                <HealthRow
+                  icon="database"
+                  label="Redis"
+                  state={redisState}
+                  detail={typeof realtime?.redisPingMs === 'number' ? `${realtime.redisPingMs} ms` : undefined}
+                />
+
+                <HealthRow
+                  icon="dns"
+                  label="Banco de dados"
+                  state={dbState}
+                  detail={database?.provider ?? undefined}
+                />
+
+                <div className="rounded-lg bg-surface-light px-3 py-2 text-xs text-muted">
+                  <p className="text-muted">NATS RTT</p>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                    {typeof realtime?.natsRttMs === 'number' ? `${realtime.natsRttMs} ms` : '\u2014'}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <Card>
+              <CardHeader
+                title="Métricas do Processo"
+                subtitle={application?.environment
+                  ? `${application.environment} • ${application.machineName ?? 'host'}`
+                  : 'Uso de recursos do backend'}
+              />
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <MetricTile label="Working Set" value={workingSet} icon="memory" />
+                <MetricTile label="GC Heap" value={gcHeap} icon="database" />
+                <MetricTile label="Threads" value={processMetrics?.threadCount ?? '\u2014'} icon="monitoring" />
+                <MetricTile label="Uptime" value={formatUptime(uptimeValue)} icon="dns" />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-muted">ThreadPool worker</p>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                    {workerAvailable ?? '\u2014'} disp / {workerMin ?? '\u2014'} min
+                  </p>
+                </div>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-muted">ThreadPool IO</p>
+                  <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                    {ioAvailable ?? '\u2014'} disp / {ioMin ?? '\u2014'} min
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Object Storage (S3) + Métricas P2P */}
+          <ObjectStorageCard />
+          <P2PMetricsCard window={range} />
+        </div>
+      )}
     </div>
   );
 }
@@ -707,7 +830,7 @@ const StatusBar = memo(function StatusBar({
     <div className="rounded-lg bg-surface-light px-3 py-2">
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted">{label}</span>
-        <span className={`font-semibold ${color}`}>{value}</span>
+        <span className={`font-semibold tabular-nums ${color}`}>{value}</span>
       </div>
       <progress
         value={pct}
@@ -763,7 +886,7 @@ const MetricTile = memo(function MetricTile({
         <Icon name={icon} className="h-3.5 w-3.5" />
         <span>{label}</span>
       </div>
-      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
+      <p className="mt-1 text-base font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );
 });

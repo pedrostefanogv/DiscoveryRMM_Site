@@ -16,6 +16,7 @@ import { Icon,
   type Column,
 
 PageHeader,
+  ConfirmDialog,
 } from "@/components/ui";
 import {
   type AssignGroupRoleRequest,
@@ -53,7 +54,7 @@ const SCOPE_OPTIONS = [
   { value: "Site", label: "Site" },
 ];
 
-export default function IamGroupsPage() {
+export default function IamGroupsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const groupsQuery = useIamGroups();
   const usersQuery = useIamUsers();
   const rolesQuery = useIamRoles();
@@ -68,6 +69,8 @@ export default function IamGroupsPage() {
   const [selectedGroup, setSelectedGroup] = useState<UserGroupDto | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserGroupDto | null>(null);
+  const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<UserGroupDto | null>(null);
 
   const { hasAnyPermission } = useAuthorization();
   const canWrite = hasAnyPermission(["groups.write", "groups.*", "identity.*", "admin.*"]);
@@ -145,7 +148,7 @@ export default function IamGroupsPage() {
                 size="sm"
                 onClick={(event) => {
                   event.stopPropagation();
-                  void handleDelete(item);
+                  setDeleteTarget(item);
                 }}
                   aria-label="Excluir grupo"
                   title="Excluir grupo"
@@ -160,22 +163,20 @@ export default function IamGroupsPage() {
     [canDelete, canWrite],
   );
 
-  const handleDelete = async (group: UserGroupDto) => {
-    const confirmed = window.confirm(`Excluir grupo \"${group.name}\"?`);
-    if (!confirmed) return;
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteGroup.mutateAsync(group.id);
+      await deleteGroup.mutateAsync(deleteTarget.id);
       toast.success("Grupo removido com sucesso.");
-      if (selectedGroup?.id === group.id) {
+      if (selectedGroup?.id === deleteTarget.id) {
         setSelectedGroup(null);
       }
+      setDeleteTarget(null);
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível remover o grupo."));
     }
   };
-
-  if (groupsQuery.isLoading) {
+if (groupsQuery.isLoading) {
     return <Loading message="Carregando grupos de usuários..." />;
   }
 
@@ -189,17 +190,27 @@ export default function IamGroupsPage() {
   }
 
   const groups = groupsQuery.data ?? [];
+  const q = search.trim().toLowerCase();
+  const filteredGroups = q
+    ? groups.filter(
+        (g) =>
+          g.name.toLowerCase().includes(q) ||
+          (g.description ?? "").toLowerCase().includes(q),
+      )
+    : groups;
   const selected = selectedGroup ? groups.find((group) => group.id === selectedGroup.id) ?? null : null;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Grupos de Usuários" description="Organize usuários por grupo e vincule roles por escopo para controlar acesso."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      {!embedded && (
+        <PageHeader title="Grupos de Usuários" description="Organize usuários por grupo e vincule roles por escopo para controlar acesso."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
+      )}
 
       <Card>
         <CardHeader
           title="Grupos"
-          subtitle={`${groups.length} registro(s)`}
+          subtitle={`${filteredGroups.length} de ${groups.length} registro(s)`}
           action={
             canWrite ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -209,14 +220,33 @@ export default function IamGroupsPage() {
           }
         />
 
+        <div className="mb-4 max-w-sm">
+          <Input
+            placeholder="Buscar por nome ou descrição..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar grupos"
+          />
+        </div>
         <DataTable
           columns={groupColumns}
-          data={groups}
+          data={filteredGroups}
           keyExtractor={(item) => item.id}
           onRowClick={(item) => setSelectedGroup(item)}
           emptyMessage="Nenhum grupo encontrado."
         />
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Excluir grupo"
+        message={deleteTarget ? `Excluir grupo "${deleteTarget.name}"?` : ""}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteGroup.isPending}
+        onConfirm={() => void handleConfirmDelete()}
+        onClose={() => setDeleteTarget(null)}
+      />
 
       {selected && (
         <GroupAssignmentsPanel

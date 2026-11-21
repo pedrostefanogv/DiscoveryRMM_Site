@@ -43,7 +43,7 @@ const WORST_SEVERITY_META: Record<
  * pending/unknown são por STATUS e somam "total"; "stale" é uma dimensão
  * SEPARADA (sensores sem dado recente) e não entra nessa soma.
  */
-export default function SensorsFleetPage() {
+export default function SensorsFleetPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   /**
    * Os filtros vivem na URL (`?clientId=...&siteId=...`): o link da frota
@@ -194,35 +194,47 @@ export default function SensorsFleetPage() {
     [],
   );
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Sensores"
-        description="Visão agregada do monitoramento por dispositivo: o que está OK, o que precisa de atenção e quais agentes concentram falhas."
+  const actionButtons = (
+    <>
+      <Button
+        variant="secondary"
+        onClick={() => void summary.refetch()}
+        disabled={summary.isFetching}
       >
-        <Button
-          variant="secondary"
-          onClick={() => void summary.refetch()}
-          disabled={summary.isFetching}
-        >
-          <Icon name="refresh" className="h-4 w-4" />
-          Atualizar
-        </Button>
-        {/* Criação em UM clique a partir da frota: o parâmetro `?new=1` faz a
-            tela de gerenciamento abrir com o modal de criação já aberto (o
-            consumo do parâmetro vive em SensorsManagePage). */}
-        <Button variant="primary" onClick={() => navigate("/sensors/manage?new=1")}>
-          <Icon name="add" className="h-4 w-4" />
-          Novo sensor
-        </Button>
-        {/* Gerenciamento das DEFINIÇÕES (editar/excluir/ativar). A frota mostra
-            o estado agregado; o CRUD vive em /sensors/manage. Secundário para
-            manter apenas UM botão primário no header. */}
+        <Icon name="refresh" className="h-4 w-4" />
+        Atualizar
+      </Button>
+      {/* Criação em UM clique a partir da frota: o parâmetro `?new=1` faz a
+          tela de gerenciamento abrir com o modal de criação já aberto (o
+          consumo do parâmetro vive em SensorsManagePage). */}
+      <Button variant="primary" onClick={() => navigate("/sensors/manage?new=1")}>
+        <Icon name="add" className="h-4 w-4" />
+        Novo sensor
+      </Button>
+      {/* Gerenciamento das DEFINIÇÕES (editar/excluir/ativar). A frota mostra
+          o estado agregado; o CRUD vive em /sensors/manage. Secundário para
+          manter apenas UM botão primário no header. */}
+      {!embedded && (
         <Button variant="secondary" onClick={() => navigate("/sensors/manage")}>
           <Icon name="settings" className="h-4 w-4" />
           Gerenciar
         </Button>
-      </PageHeader>
+      )}
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
+      ) : (
+        <PageHeader
+          title="Sensores"
+          description="Visão agregada do monitoramento por dispositivo: o que está OK, o que precisa de atenção e quais agentes concentram falhas."
+        >
+          {actionButtons}
+        </PageHeader>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <Select

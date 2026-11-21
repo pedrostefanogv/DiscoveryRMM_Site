@@ -11,6 +11,7 @@ import {
   type BandwidthPolicy,
   type ChangeBandwidthRequest,
   type ChangeQualityRequest,
+  type RemoteSessionResponse,
   type StartRemoteSessionRequest,
 } from '@/api/remote-sessions';
 import { useRemoteSessionLiveness } from '@/hooks/useRemoteSessionLiveness';
@@ -110,6 +111,7 @@ interface TabSession {
     missedPingsBeforeClose: number;
     initialGraceSeconds: number;
   };
+  webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 // Detecta o erro específico do backend quando já existe uma sessão ativa no agent
@@ -1215,6 +1217,7 @@ export default function RemoteSession() {
             kind: session.kind,
             qualityProfile: session.qualityProfile,
             codec: session.codec,
+            webrtc: session.webrtc,
           },
         };
       });
@@ -1416,6 +1419,7 @@ export default function RemoteSession() {
           kind: session.kind,
           qualityProfile: session.qualityProfile,
           codec: session.codec,
+          webrtc: session.webrtc,
         },
       }));
     };
@@ -1694,6 +1698,7 @@ export default function RemoteSession() {
           kind: session.kind,
           qualityProfile: session.qualityProfile,
           codec: session.codec,
+          webrtc: session.webrtc,
         },
       }));
     };
@@ -2174,6 +2179,7 @@ export default function RemoteSession() {
                   nkeySeed={screenSession.nkeySeed}
                   quality={liveQuality}
                   codec={liveCodec}
+                  webrtc={screenSession.webrtc}
                   onError={(msg) => setErrorMsg(msg)}
                   onLatency={() => {}}
                   onMonitors={(mons) => setMonitors(mons)}
@@ -2265,6 +2271,7 @@ export default function RemoteSession() {
                   natsUrl={sessions.files.natsUrl}
                   jwt={sessions.files.jwt}
                   nkeySeed={sessions.files.nkeySeed}
+                  webrtc={sessions.files.webrtc}
                   // Renovação do JWT NATS escopado em sessões longas (mesmo
                   // padrão do Terminal): o hook refaz o fetch de credenciais.
                   getFreshCredentials={() =>
@@ -2426,6 +2433,7 @@ export default function RemoteSession() {
                   natsUrl={sessions.rdp.natsUrl}
                   jwt={sessions.rdp.jwt}
                   nkeySeed={sessions.rdp.nkeySeed}
+                  webrtc={sessions.rdp.webrtc}
                   getFreshCredentials={() =>
                     remoteSessionsApi
                       .getSessionCredentials(agentId, sessions.rdp!.sessionId)

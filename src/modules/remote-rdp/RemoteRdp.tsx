@@ -9,7 +9,9 @@ import {
   type NatsCredentialsResponse,
   type NatsService,
 } from '@/api/nats';
-import { remoteSessionsApi } from '@/api/remote-sessions';
+import { remoteSessionsApi, type RemoteSessionResponse } from '@/api/remote-sessions';
+import { RemoteWebRtcPeer } from '@/modules/remote-shared/webrtcPeer';
+import { registerWebRtcWebSocketRoute } from './webrtcWebSocketShim';
 import { parseTunnelControl, type TunnelControlMsg } from '@/modules/remote-proxy/proxyFrame';
 import {
   connectIronRdp,
@@ -32,6 +34,7 @@ interface RemoteRdpProps {
   jwt?: string;
   nkeySeed?: string;
   getFreshCredentials?: () => Promise<string>;
+  webrtc?: RemoteSessionResponse['webrtc'];
   /**
    * Resolução MÍNIMA do desktop remoto. A resolução acompanha a janela do
    * navegador, mas nunca fica abaixo disto. Default: HD (1280x720).
@@ -156,6 +159,7 @@ export default function RemoteRdp({
   jwt = '',
   nkeySeed = '',
   getFreshCredentials,
+  webrtc,
   minDesktopWidth = MIN_DESKTOP_HD.width,
   minDesktopHeight = MIN_DESKTOP_HD.height,
   ref,
@@ -199,6 +203,9 @@ export default function RemoteRdp({
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const serviceRef = useRef<NatsService | null>(null);
+  const webRtcPeerRef = useRef<RemoteWebRtcPeer | null>(null);
+  const webrtcRef = useRef(webrtc);
+  webrtcRef.current = webrtc;
   const sessionHandleRef = useRef<IronRdpSessionHandle | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const jwtRef = useRef(jwt);
@@ -208,6 +215,8 @@ export default function RemoteRdp({
   const subj = useMemo(() => natsSubject.replace(/-/g, ''), [natsSubject]);
   const tunnelInSubject = `${subj}.tunnel.in`;
   const tunnelOutSubject = `${subj}.tunnel.out`;
+  const webrtcInSubject = `${subj}.webrtc.in`;
+  const webrtcOutSubject = `${subj}.webrtc.out`;
 
   // Subject DEDICADO do RDCleanPath. NÃO usar .tunnel.out: no site, o
   // RemoteProxy deriva o subject do mesmo natsSubject e os dois parsers
@@ -232,8 +241,8 @@ export default function RemoteRdp({
       nkeySeed,
       publicKey: '',
       expiresAtUtc: jwtExpiresAtUtc(token),
-      publishSubjects: [tunnelInSubject],
-      subscribeSubjects: [tunnelOutSubject],
+      publishSubjects: [tunnelInSubject, webrtcInSubject],
+      subscribeSubjects: [tunnelOutSubject, webrtcOutSubject],
     });
 
     const service = createNatsService({
@@ -330,6 +339,11 @@ export default function RemoteRdp({
     type RawCapable = { subscribeRaw?: (s: string, cb: (d: Uint8Array) => void, o?: { connectIfNeeded?: boolean }) => Promise<boolean>; unsubscribeRaw?: (s: string, cb: (d: Uint8Array) => void) => void };
     const rawService = service as unknown as RawCapable;
     const hasRaw = typeof rawService.subscribeRaw === 'function' && !!rawService.subscribeRaw;
+    const textDecoder = new TextDecoder();
+    const handleWebRtcOut = (raw: Uint8Array) => {
+      if (!mounted) return;
+      void webRtcPeerRef.current?.handleSignal(textDecoder.decode(raw));
+    };
 
     void (async () => {
       setStatus((prev) => (prev === 'idle' ? 'connecting' : prev));
@@ -341,10 +355,26 @@ export default function RemoteRdp({
         // era abortada e os frames nunca chegavam).
         if (hasRaw && rawService.subscribeRaw) {
           await rawService.subscribeRaw(tunnelOutSubject, handleTunnelOut, { connectIfNeeded: false });
+          if (webrtcRef.current?.enabled) {
+            await rawService.subscribeRaw(webrtcOutSubject, handleWebRtcOut, { connectIfNeeded: false });
+          }
         } else {
           await service.subscribe(tunnelOutSubject, (() => { /* fallback sem raw */ }) as never, { connectIfNeeded: false });
         }
         if (!mounted) return;
+        if (webrtcRef.current?.enabled && hasRaw) {
+          webRtcPeerRef.current?.close();
+          const peer = new RemoteWebRtcPeer({
+            config: webrtcRef.current,
+            channels: ['rdp-cleanpath'],
+            sendSignal: (frame) => {
+              void service.publish(webrtcInSubject, frame as unknown as Record<string, unknown>).catch(() => {});
+            },
+            onMessage: () => {},
+          });
+          webRtcPeerRef.current = peer;
+          void peer.start();
+        }
         // Pede o preflight RDP ao agent pelo canal de controle do túnel.
         void service.publish(tunnelInSubject, { op: 'preflight', protocol: 'rdp' }).catch(() => { /* best-effort */ });
       } else {
@@ -359,13 +389,16 @@ export default function RemoteRdp({
       offAuth();
       if (hasRaw && typeof rawService.unsubscribeRaw === 'function') {
         rawService.unsubscribeRaw(tunnelOutSubject, handleTunnelOut);
+        rawService.unsubscribeRaw(webrtcOutSubject, handleWebRtcOut);
       } else {
         try { service.unsubscribe(tunnelOutSubject, (() => { /* noop */ }) as never); } catch { /* teardown */ }
       }
+      webRtcPeerRef.current?.close();
+      webRtcPeerRef.current = null;
       if (serviceRef.current === service) serviceRef.current = null;
       void service.dispose().catch(() => { /* teardown best-effort */ });
     };
-  }, [sessionId, jwt, natsSubject, natsUrl, nkeySeed, subj, tunnelInSubject, tunnelOutSubject]);
+  }, [sessionId, jwt, natsSubject, natsUrl, nkeySeed, subj, tunnelInSubject, tunnelOutSubject, webrtcInSubject, webrtcOutSubject]);
 
   // ── Sessão IronRDP WASM (renderização no canvas) ──
   useEffect(() => {
@@ -392,6 +425,7 @@ export default function RemoteRdp({
 
     let cancelled = false;
     let handle: IronRdpSessionHandle | null = null;
+    let unregisterWebRtcRoute: (() => void) | null = null;
 
     void (async () => {
       try {
@@ -412,7 +446,17 @@ export default function RemoteRdp({
         // Pedido o MAIS TARDE possível, imediatamente antes de conectar.
         const ticket = await remoteSessionsApi.issueTunnelTicket(agentId, sessionId);
         if (cancelled) return;
-        const proxyUrl = buildProxyUrl(natsUrl, agentId, sessionId, ticket.ticket);
+        let proxyUrl = buildProxyUrl(natsUrl, agentId, sessionId, ticket.ticket);
+        const peer = webRtcPeerRef.current;
+        if (peer) {
+          const open = await peer.waitForChannelOpen('rdp-cleanpath', 1500);
+          if (cancelled) return;
+          if (open) {
+            const virtualUrl = `wss://webrtc-rdp.local/${sessionId}/${connectAttempt}`;
+            unregisterWebRtcRoute = registerWebRtcWebSocketRoute(virtualUrl, peer, 'rdp-cleanpath');
+            proxyUrl = virtualUrl;
+          }
+        }
         const h = await connectIronRdp({
           canvas: liveCanvas,
           proxyUrl,
@@ -478,6 +522,8 @@ export default function RemoteRdp({
 
     return () => {
       cancelled = true;
+      unregisterWebRtcRoute?.();
+      unregisterWebRtcRoute = null;
       if (handle) handle.dispose();
       if (sessionHandleRef.current === handle) sessionHandleRef.current = null;
     };

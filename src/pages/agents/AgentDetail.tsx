@@ -1694,13 +1694,15 @@ export default function AgentDetail() {
             size="sm"
             variant="ghost"
             onClick={() => setIsPowerMenuOpen((current) => !current)}
+            aria-haspopup="menu"
+            aria-expanded={isPowerMenuOpen}
           >
             <Icon name="power_settings_new" className="h-4 w-4" />
             Ações
             <Icon name="expand_more" className="h-4 w-4" />
           </Button>
           {isPowerMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] rounded-lg border border-border bg-surface shadow-xl">
+            <div role="menu" className="absolute right-0 top-full z-50 mt-2 min-w-[220px] rounded-lg border border-border bg-surface shadow-xl">
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
@@ -1795,6 +1797,10 @@ export default function AgentDetail() {
                 >
                   <button
                     type="button"
+                    role="menuitem"
+                    aria-haspopup="menu"
+                    aria-expanded={powerSubmenuOpen}
+                    onClick={() => setPowerSubmenuOpen((open) => !open)}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 dark:text-amber-300 dark:hover:bg-amber-500/10"
                     disabled={restartAgent.isPending || shutdownAgent.isPending}
                   >

@@ -2,7 +2,7 @@ import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
-import {  Icon, Badge, Button, Card, CardHeader, Input, Modal, Pagination, Select, TextArea, PageHeader } from '@/components/ui';
+import {  Icon, Badge, Button, Card, CardHeader, Input, Modal, Pagination, Select, TextArea, PageHeader, ConfirmDialog } from '@/components/ui';
 import {
   useCreateDeployTokenAndDownload,
   useDeployTokens,
@@ -154,6 +154,7 @@ function matchesPeriod(createdAt: string, period: TokenPeriodFilter, nowMs: numb
 export default function DeployTokens() {
   const createAndDownload = useCreateDeployTokenAndDownload();
   const revokeToken = useRevokeDeployToken();
+  const [revokeTarget, setRevokeTarget] = useState<{ token: DeployToken; message: string } | null>(null);
   const downloadInstaller = useDownloadDeployInstaller();
 
   const [activeTab, setActiveTab] = useState<DeployTab>('create');
@@ -453,17 +454,18 @@ export default function DeployTokens() {
       : 'Sem expiração';
 
     const confirmation = [
-      'Revogar este deploy token?',
-      '',
       `Token (prefixo): ${token.tokenPrefix}`,
       `Criado em: ${createdAt}`,
       `Validade: ${expiresAt}`,
-      '',
       'Após revogar, downloads com este token deixam de funcionar.',
-    ].join('\n');
+    ].join(' · ');
 
-    if (!window.confirm(confirmation)) return;
+    setRevokeTarget({ token, message: confirmation });
+  }
 
+  function handleConfirmRevokeToken() {
+    if (!revokeTarget) return;
+    const { token } = revokeTarget;
     setRevokingTokenId(token.id);
     revokeToken.mutate(token.id, {
       onSuccess: () => {
@@ -472,6 +474,7 @@ export default function DeployTokens() {
           next.add(token.id);
           return next;
         });
+        setRevokeTarget(null);
         toast.success('Deploy token revogado com sucesso.');
       },
       onError: (error) => {
@@ -924,6 +927,17 @@ export default function DeployTokens() {
         clientId={selectedClientId}
         sites={activeSites.map((site) => ({ id: site.id, name: site.name }))}
         defaultSiteId={selectedSiteId}
+      />
+
+      <ConfirmDialog
+        open={Boolean(revokeTarget)}
+        title="Revogar deploy token"
+        message={revokeTarget?.message ?? ""}
+        confirmLabel="Revogar"
+        tone="danger"
+        isLoading={revokeToken.isPending}
+        onConfirm={handleConfirmRevokeToken}
+        onClose={() => setRevokeTarget(null)}
       />
     </div>
   );

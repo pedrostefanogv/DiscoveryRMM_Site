@@ -42,8 +42,7 @@ const PatchesOverview = lazy(() => import('@/pages/patches/PatchesOverview'));
 const PatchesUpdatesPage = lazy(() => import('@/pages/patches/PatchesUpdatesPage'));
 const PatchesApprovals = lazy(() => import('@/pages/patches/PatchesApprovals'));
 const PatchesPolicy = lazy(() => import('@/pages/patches/PatchesPolicy'));
-const SensorsFleetPage = lazy(() => import('@/pages/sensors/SensorsFleetPage'));
-const SensorsManagePage = lazy(() => import('@/pages/sensors/SensorsManagePage'));
+const SensorsHubPage = lazy(() => import('@/pages/sensors/SensorsHubPage'));
 const ScriptSensorEditorPage = lazy(() => import('@/pages/sensors/ScriptSensorEditorPage'));
 const PatchesCompliance = lazy(() => import('@/pages/patches/PatchesCompliance'));
 const ServiceBoardPage = lazy(() => import('@/pages/service-board/ServiceBoardPage'));
@@ -56,10 +55,10 @@ const AutomationTasksPage = lazy(() => import('@/pages/automation/AutomationTask
 const AutomationOperationsPage = lazy(() => import('@/pages/automation/AutomationOperationsPage'));
 const AutomationAuditPage = lazy(() => import('@/pages/automation/AutomationAuditPage'));
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
-const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
+const WorkflowHubPage = lazy(() => import('@/pages/settings/WorkflowHubPage'));
 const DepartmentSettings = lazy(() => import('@/pages/settings/DepartmentSettings'));
 const DepartmentDetailPage = lazy(() => import('@/pages/settings/DepartmentDetailPage'));
-const WorkflowProfileSettings = lazy(() => import('@/pages/settings/WorkflowProfileSettings'));
+
 const ConfigurationSettings = lazy(() => import('@/pages/settings/ConfigurationSettings'));
 const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfigurationPage'));
 const ScopeConfigurationPage = lazy(() => import('@/pages/settings/ScopeConfigurationPage'));
@@ -72,9 +71,9 @@ const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSetti
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
 const CustomFieldsSettings = lazy(() => import('@/pages/settings/CustomFieldsSettings'));
 const ProfilePage = lazy(() => import('@/pages/settings/ProfilePage'));
-const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
-const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
-const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
+const IamHubPage = lazy(() => import('@/pages/settings/IamHubPage'));
+
+
 const DatabaseMaintenanceSettings = lazy(() => import('@/pages/settings/DatabaseMaintenanceSettings'));
 const McpToolsSettings = lazy(() => import('@/pages/settings/McpToolsSettings'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
@@ -462,7 +461,7 @@ export const routes: RouteObject[] = [
         path: 'sensors',
         element: (
           <PermissionGate anyOf={['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']}>
-            <LazyPage><SensorsFleetPage /></LazyPage>
+            <LazyPage><SensorsHubPage initialTab="fleet" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -472,7 +471,7 @@ export const routes: RouteObject[] = [
         path: 'sensors/manage',
         element: (
           <PermissionGate anyOf={['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']}>
-            <LazyPage><SensorsManagePage /></LazyPage>
+            <LazyPage><SensorsHubPage initialTab="manage" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -718,7 +717,7 @@ export const routes: RouteObject[] = [
         path: 'settings/workflow',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'workflow.*', 'admin.*']}>
-            <LazyPage><WorkflowSettings /></LazyPage>
+            <LazyPage><WorkflowHubPage initialTab="states" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -730,7 +729,7 @@ export const routes: RouteObject[] = [
         path: 'settings/workflow-profiles',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'workflow.*', 'admin.*']}>
-            <LazyPage><WorkflowProfileSettings /></LazyPage>
+            <LazyPage><WorkflowHubPage initialTab="profiles" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -813,10 +812,18 @@ export const routes: RouteObject[] = [
         errorElement: <PageErrorBoundary />,
       },
       {
+        path: 'identity/access',
+        element: (
+          <PermissionGate anyOf={['identity.*', 'Users.View', 'Users.Edit', 'groups.*', 'groups.read', 'roles.*', 'roles.read', 'permissions.read', 'admin.*']}>
+            <LazyPage><IamHubPage initialTab="users" /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'identity/users',
         element: (
           <PermissionGate anyOf={['identity.*', 'Users.View', 'Users.Edit', 'admin.*']}>
-            <LazyPage><IamUsersPage /></LazyPage>
+            <LazyPage><IamHubPage initialTab="users" /></LazyPage>
           </PermissionGate>
         ),
         errorElement: <PageErrorBoundary />,
@@ -825,7 +832,7 @@ export const routes: RouteObject[] = [
         path: 'identity/groups',
         element: (
           <PermissionGate anyOf={['identity.*', 'groups.*', 'groups.read', 'admin.*']}>
-            <LazyPage><IamGroupsPage /></LazyPage>
+            <LazyPage><IamHubPage initialTab="groups" /></LazyPage>
           </PermissionGate>
         ),
         errorElement: <PageErrorBoundary />,
@@ -834,7 +841,7 @@ export const routes: RouteObject[] = [
         path: 'identity/roles',
         element: (
           <PermissionGate anyOf={['identity.*', 'roles.*', 'roles.read', 'permissions.read', 'admin.*']}>
-            <LazyPage><IamRolesPage /></LazyPage>
+            <LazyPage><IamHubPage initialTab="roles" /></LazyPage>
           </PermissionGate>
         ),
         errorElement: <PageErrorBoundary />,

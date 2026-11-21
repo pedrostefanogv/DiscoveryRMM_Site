@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import toast from 'react-hot-toast';
 import { fullscreenApi } from '@/utils/fullscreen';
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
+import { RemoteWebRtcPeer } from '@/modules/remote-shared/webrtcPeer';
 import {
   decodeRemoteControlEnvelope,
   type RemoteSessionControlEnvelope,
@@ -30,6 +32,7 @@ interface RemoteScreenViewerProps {
   nkeySeed?: string;
   quality: string;
   codec: string;
+  webrtc?: RemoteSessionResponse['webrtc'];
   onError?: (msg: string) => void;
   onLatency?: (rttMs: number) => void;
   onMonitors?: (monitors: MonitorInfo[]) => void;
@@ -129,6 +132,7 @@ export default function RemoteScreenViewer({
   jwt,
   nkeySeed: _nkeySeed,
   codec,
+  webrtc,
   onError,
   onLatency,
   onMonitors,
@@ -146,6 +150,9 @@ export default function RemoteScreenViewer({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cursorModeRef = useRef(cursorMode);
   cursorModeRef.current = cursorMode;
+  const webRtcPeerRef = useRef<RemoteWebRtcPeer | null>(null);
+  const webrtcRef = useRef(webrtc);
+  webrtcRef.current = webrtc;
   // Bounding box do cursor desenhado (para restaurar a região ao mover/limpar).
   const cursorBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const infoOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -768,6 +775,8 @@ export default function RemoteScreenViewer({
             processMonitorsMessage(decoder.decode(payload));
           } else if (subject.endsWith('.clipboard')) {
             processClipboardMessage(decoder.decode(payload));
+          } else if (subject.endsWith('.webrtc.out')) {
+            void webRtcPeerRef.current?.handleSignal(decoder.decode(payload));
           } else {
             // .frame (binário)
             processScreenFrame(payload.buffer);
@@ -809,6 +818,31 @@ export default function RemoteScreenViewer({
             // KVM input lock: assina o .control (estado do agent) e consulta o
             // estado atual — cobre reload/reconexão sem depender de sorte.
             sendProtocol(`SUB ${natsSubject}.control 8`);
+            // WebRTC P2P: se autorizado pelo servidor para esta sessão, assina
+            // .webrtc.out e inicia a negociação via .webrtc.in; em caso de
+            // falha ou canal fechado, o streaming segue pelo NATS.
+            if (webrtcRef.current?.enabled) {
+              sendProtocol(`SUB ${natsSubject}.webrtc.out 9`);
+              webRtcPeerRef.current?.close();
+              const peer = new RemoteWebRtcPeer({
+                config: webrtcRef.current,
+                channels: ['media', 'control'],
+                sendSignal: (frame) => {
+                  const activeWs = wsRef.current;
+                  if (!activeWs || activeWs.readyState !== WebSocket.OPEN) return;
+                  const body = JSON.stringify(frame);
+                  activeWs.send(`PUB ${natsSubject}.webrtc.in ${new TextEncoder().encode(body).length}\r\n${body}\r\n`);
+                },
+                onMessage: (label, buf) => {
+                  if (label === 'media') {
+                    reconnectAttemptsRef.current = 0;
+                    processScreenFrame(buf);
+                  }
+                },
+              });
+              webRtcPeerRef.current = peer;
+              void peer.start();
+            }
             if (sessionId) {
               controlSeqRef.current += 1;
               sendControlEnvelope(buildInputLockQuery(sessionId, controlSeqRef.current));
@@ -913,6 +947,8 @@ export default function RemoteScreenViewer({
 
       socket.onclose = (event) => {
         if (cancelled || wsRef.current !== socket) return;
+        webRtcPeerRef.current?.close();
+        webRtcPeerRef.current = null;
 
         console.warn('[RemoteScreenViewer] NATS WebSocket closed', {
           code: event.code,
@@ -962,6 +998,8 @@ export default function RemoteScreenViewer({
         cursorImage.bitmap.close();
         cursorImage = null;
       }
+      webRtcPeerRef.current?.close();
+      webRtcPeerRef.current = null;
       if (ws) ws.close();
     };
   }, [natsSubject, sessionId, natsUrl, jwt, decodeFrame, renderFrame, sendControlEnvelope, reconnectKey]);
@@ -1011,7 +1049,7 @@ export default function RemoteScreenViewer({
     const THROTTLE_MS = 16; // ~60 fps
 
     const sendInput = (type: string, data: Record<string, unknown>, opts?: { requireCoords?: boolean }) => {
-      if (wsRef.current?.readyState !== WebSocket.OPEN || !natsSubject) return;
+      if (!natsSubject) return;
 
       const hasCoords = data.x !== undefined;
       const frameCoords = hasCoords ? getFrameCoords(data.x as number, data.y as number) : null;
@@ -1032,6 +1070,8 @@ export default function RemoteScreenViewer({
         frameHeight: canvas?.height ?? 1080,
         ts: Date.now(),
       });
+      if (webRtcPeerRef.current?.send('control', payload)) return;
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
       wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
     };
 

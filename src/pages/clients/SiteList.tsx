@@ -336,7 +336,7 @@ export default function SiteList() {
       </div>
 
       <Card>
-        <div className="grid gap-3 md:grid-cols-[1fr,260px]">
+        <div className="grid gap-3 md:grid-cols-[1fr_260px]">
           <Input
             label="Buscar"
             value={search}

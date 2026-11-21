@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading,
@@ -98,7 +98,7 @@ export default function BrandingSettings() {
     }
   };
 
-  const handleReset = () => {
+  const isDefault = form.applicationName === DEFAULTS.applicationName && form.logoUrl === DEFAULTS.logoUrl && form.primaryColor === DEFAULTS.primaryColor && form.secondaryColor === DEFAULTS.secondaryColor && form.companyName === DEFAULTS.companyName && form.companyWebsite === DEFAULTS.companyWebsite && form.supportEmail === DEFAULTS.supportEmail; const dirtyRef = useRef(dirty); const serverBrandingRef = useRef(serverBranding); dirtyRef.current = dirty; serverBrandingRef.current = serverBranding; useEffect(() => () => { if (!dirtyRef.current) return; const persisted = toForm(serverBrandingRef.current); updateBranding({ appName: persisted.applicationName, logoUrl: persisted.logoUrl || null, primaryColor: persisted.primaryColor, accentColor: persisted.secondaryColor }); }, [updateBranding]); const handleReset = () => {
     setForm(DEFAULTS);
     setDirty(true);
   };
@@ -124,7 +124,7 @@ export default function BrandingSettings() {
           >
             {dirty ? "Alterações não salvas" : "Sem alterações pendentes"}
           </span>
-          <Button size="sm" variant="ghost" onClick={handleReset} disabled={!dirty}>
+          <Button size="sm" variant="ghost" onClick={handleReset} disabled={isDefault}>
             <Icon name="restart_alt" className="h-3.5 w-3.5" />
             Restaurar padrão
           </Button>

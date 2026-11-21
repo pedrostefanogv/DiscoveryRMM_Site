@@ -297,7 +297,7 @@ export default function TicketAlertsPage() {
         <div className="flex flex-wrap gap-2">
           <Badge color="primary">Workflow</Badge>
           <Badge color="warning">PSADT</Badge>
-          <Badge color="accent">CRUD real</Badge>
+          {/* CRUD real badge removed */}
         </div>
       </div>
 
@@ -327,7 +327,7 @@ export default function TicketAlertsPage() {
           <Card>
             <CardHeader
               title={editingRuleId ? 'Editar regra' : 'Nova regra'}
-              subtitle="Preencha o conteudo do alerta e vincule a regra a um workflow state."
+              subtitle="Preencha o conteúdo do alerta e vincule a regra a um workflow state."
               action={
                 <Button variant="secondary" onClick={handleResetForm}>
                   <Icon name="add" className="h-4 w-4" />

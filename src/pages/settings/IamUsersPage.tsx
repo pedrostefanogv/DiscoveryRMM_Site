@@ -13,6 +13,7 @@ import { Icon,
   Modal,
   type Column,
 PageHeader,
+  ConfirmDialog,
 } from "@/components/ui";
 import {
   type UserMfaKeyDto,
@@ -54,7 +55,7 @@ function userMfaKeyTypeLabel(keyType: UserMfaKeyDto["keyType"]) {
   return keyType === "Fido2" ? "FIDO2" : "TOTP";
 }
 
-export default function IamUsersPage() {
+export default function IamUsersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const usersQuery = useIamUsers();
   const groupsQuery = useIamGroups();
   const clientsQuery = useClients();
@@ -68,6 +69,8 @@ export default function IamUsersPage() {
   const [editTarget, setEditTarget] = useState<UserDto | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<UserDto | null>(null);
   const [securityTarget, setSecurityTarget] = useState<UserDto | null>(null);
+  const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null);
 
   const canView = hasAnyPermission([
     "Users.View",
@@ -156,7 +159,7 @@ export default function IamUsersPage() {
                 size="sm"
                 onClick={(event) => {
                   event.stopPropagation();
-                  void handleDelete(item);
+                  setDeleteTarget(item);
                 }}
               >
                 <Icon name="delete" className="h-4 w-4" /> Desativar
@@ -169,19 +172,17 @@ export default function IamUsersPage() {
     [canChangePassword, canDelete, canEdit, canView],
   );
 
-  const handleDelete = async (user: UserDto) => {
-    const confirmed = window.confirm(`Desativar o usuário \"${user.fullName}\"?`);
-    if (!confirmed) return;
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteUser.mutateAsync(user.id);
+      await deleteUser.mutateAsync(deleteTarget.id);
       toast.success("Usuário desativado com sucesso.");
+      setDeleteTarget(null);
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível desativar o usuário."));
     }
   };
-
-  if (usersQuery.isLoading) {
+if (usersQuery.isLoading) {
     return <Loading message="Carregando usuários..." />;
   }
 
@@ -195,16 +196,27 @@ export default function IamUsersPage() {
   }
 
   const users = usersQuery.data ?? [];
+  const q = search.trim().toLowerCase();
+  const filteredUsers = q
+    ? users.filter(
+        (u) =>
+          u.fullName.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.login.toLowerCase().includes(q),
+      )
+    : users;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Usuários e Acesso" description="Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+      {!embedded && (
+        <PageHeader title="Usuários e Acesso" description="Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
+      )}
 
       <Card>
         <CardHeader
           title="Usuários"
-          subtitle={`${users.length} registro(s)`}
+          subtitle={`${filteredUsers.length} de ${users.length} registro(s)`}
           action={
               canEdit ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -213,9 +225,17 @@ export default function IamUsersPage() {
             ) : undefined
           }
         />
+        <div className="mb-4 max-w-sm">
+          <Input
+            placeholder="Buscar por nome, login ou e-mail..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-label="Buscar usuários"
+          />
+        </div>
         <DataTable
           columns={columns}
-          data={users}
+          data={filteredUsers}
           keyExtractor={(item) => item.id}
           emptyMessage="Nenhum usuário encontrado."
         />
@@ -275,6 +295,17 @@ export default function IamUsersPage() {
         />
       )}
 
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Desativar usuário"
+        message={deleteTarget ? `Desativar o usuário "${deleteTarget.fullName}"?` : ""}
+        confirmLabel="Desativar"
+        tone="danger"
+        isLoading={deleteUser.isPending}
+        onConfirm={() => void handleConfirmDelete()}
+        onClose={() => setDeleteTarget(null)}
+      />
+
       {securityTarget && (
         <UserSecurityModal
           user={securityTarget}
@@ -302,66 +333,86 @@ function UserSecurityModal({
   const unlockUser = useUnlockIamUser();
 
   const keys = userMfaKeys.data ?? [];
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    tone: "danger" | "primary";
+    run: () => Promise<void>;
+  } | null>(null);
 
-  const handleRemoveKey = async (key: UserMfaKeyDto) => {
+  const handleRemoveKey = (key: UserMfaKeyDto) => {
     if (!canEdit) return;
-    const confirmed = window.confirm(
-      `Remover a chave "${key.name}" do usuário "${user.fullName}"?`,
-    );
-    if (!confirmed) return;
-
-    try {
+    setPendingConfirm({
+      title: "Remover chave MFA",
+      message: `Remover a chave "${key.name}" do usuário "${user.fullName}"?`,
+      confirmLabel: "Remover",
+      tone: "danger",
+      run: async () => {try {
       await revokeMfaKey.mutateAsync(key.id);
       toast.success("Chave MFA removida com sucesso.");
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível remover a chave MFA."));
-    }
+        }
+      },
+    });
   };
 
-  const handleRevokeAllMfa = async () => {
+  const handleRevokeAllMfa = () => {
     if (!canEdit) return;
-    const confirmed = window.confirm(
-      `Revogar TODAS as chaves MFA de "${user.fullName}"?`,
-    );
-    if (!confirmed) return;
-
-    try {
+    setPendingConfirm({
+      title: "Revogar todas as chaves MFA",
+      message: `Revogar TODAS as chaves MFA de "${user.fullName}"?`,
+      confirmLabel: "Revogar MFA",
+      tone: "danger",
+      run: async () => {try {
       await revokeMfaAll.mutateAsync();
       toast.success(
         "MFA revogado. No próximo login, o usuário precisará recadastrar via mfaSetupToken.",
       );
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível revogar o MFA do usuário."));
-    }
+        }
+      },
+    });
   };
 
-  const handleUnlock = async () => {
+  const handleUnlock = () => {
     if (!canEdit) return;
-    if (!window.confirm(`Remover os bloqueios (senha e MFA) de "${user.fullName}"?`)) return;
+    setPendingConfirm({
+      title: "Desbloquear conta",
+      message: `Remover os bloqueios (senha e MFA) de "${user.fullName}"?`,
+      confirmLabel: "Desbloquear",
+      tone: "primary",
+      run: async () => {
 
     try {
       await unlockUser.mutateAsync(user.id);
       toast.success("Bloqueios removidos. O usuário pode autenticar novamente.");
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível desbloquear a conta."));
-    }
+        }
+      },
+    });
   };
 
-  const handleForcePasswordReset = async () => {
+  const handleForcePasswordReset = () => {
     if (!canEdit) return;
-    const confirmed = window.confirm(
-      `Forçar troca de senha para "${user.fullName}" no próximo login?`,
-    );
-    if (!confirmed) return;
-
-    try {
+    setPendingConfirm({
+      title: "Forçar troca de senha",
+      message: `Forçar troca de senha para "${user.fullName}" no próximo login?`,
+      confirmLabel: "Confirmar",
+      tone: "primary",
+      run: async () => {try {
       await forcePasswordReset.mutateAsync();
       toast.success("Troca de senha forçada com sucesso para o próximo login.");
     } catch (error) {
       toast.error(
         getErrorMessage(error, "Não foi possível forçar a troca de senha."),
-      );
-    }
+        );
+        }
+      },
+    });
   };
 
   const hasPendingMutation =
@@ -414,7 +465,7 @@ function UserSecurityModal({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => void handleRemoveKey(key)}
+                        onClick={() => handleRemoveKey(key)}
                         loading={revokeMfaKey.isPending}
                         disabled={hasPendingMutation}
                       >
@@ -442,7 +493,7 @@ function UserSecurityModal({
             <>
               <Button
                 variant="ghost"
-                onClick={() => void handleForcePasswordReset()}
+                onClick={() => handleForcePasswordReset()}
                 loading={forcePasswordReset.isPending}
                 disabled={hasPendingMutation}
               >
@@ -450,7 +501,7 @@ function UserSecurityModal({
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => void handleUnlock()}
+                onClick={() => handleUnlock()}
                 loading={unlockUser.isPending}
                 disabled={hasPendingMutation}
               >
@@ -458,7 +509,7 @@ function UserSecurityModal({
               </Button>
               <Button
                 variant="danger"
-                onClick={() => void handleRevokeAllMfa()}
+                onClick={() => handleRevokeAllMfa()}
                 loading={revokeMfaAll.isPending}
                 disabled={hasPendingMutation}
               >
@@ -468,6 +519,20 @@ function UserSecurityModal({
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingConfirm)}
+        title={pendingConfirm?.title ?? ""}
+        message={pendingConfirm?.message ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel ?? "Confirmar"}
+        tone={pendingConfirm?.tone ?? "danger"}
+        isLoading={hasPendingMutation}
+        onConfirm={async () => {
+          if (!pendingConfirm) return;
+          await pendingConfirm.run();
+          setPendingConfirm(null);
+        }}
+        onClose={() => setPendingConfirm(null)}
+      />
     </Modal>
   );
 }
