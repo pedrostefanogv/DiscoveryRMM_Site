@@ -84,12 +84,16 @@ export interface RemoteSessionResponse {
      */
     viewerCredentials?: SessionCredentials;
     /** Configuração WebRTC efetiva da sessão (iceServers com TURN efêmero). */
-    webrtc?: {
-        enabled: boolean;
-        iceServers: RTCIceServer[];
-        relayOnly: boolean;
-        fallbackToNats: boolean;
-    } | null;
+    webrtc?: RemoteSessionWebRtcConfig | null;
+    /** Alias camelCase emitido por ASP.NET System.Text.Json para `WebRtc`. */
+    webRtc?: RemoteSessionWebRtcConfig | null;
+}
+
+export interface RemoteSessionWebRtcConfig {
+    enabled: boolean;
+    iceServers: RTCIceServer[];
+    relayOnly: boolean;
+    fallbackToNats: boolean;
 }
 
 export interface RemoteSessionConsentStatus {
@@ -168,8 +172,11 @@ const BASE = '/api/v1/remote-sessions';
 
 export const remoteSessionsApi = {
     /** Inicia uma nova sessão de acesso remoto. */
-    startSession: (agentId: string, request: StartRemoteSessionRequest): Promise<RemoteSessionResponse> =>
-        api.post<RemoteSessionResponse>(`${BASE}/${agentId}`, request),
+    startSession: async (agentId: string, request: StartRemoteSessionRequest): Promise<RemoteSessionResponse> => {
+        const res = await api.post<RemoteSessionResponse>(`${BASE}/${agentId}`, request);
+        const webrtc = res.webrtc ?? res.webRtc ?? null;
+        return webrtc !== undefined ? { ...res, webrtc } : res;
+    },
 
     /** Encerra uma sessão remota ativa. */
     stopSession: (agentId: string, sessionId: string): Promise<void> =>

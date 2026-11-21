@@ -1223,6 +1223,7 @@ export default function RemoteSession() {
             kind: session.kind,
             qualityProfile: session.qualityProfile,
             codec: session.codec,
+            webrtc: session.webrtc ?? session.webRtc,
           };
           return { ...prev, processes: shared, services: shared };
         }
@@ -1239,7 +1240,7 @@ export default function RemoteSession() {
             kind: session.kind,
             qualityProfile: session.qualityProfile,
             codec: session.codec,
-            webrtc: session.webrtc,
+            webrtc: session.webrtc ?? session.webRtc,
           },
         };
       });
@@ -1441,7 +1442,7 @@ export default function RemoteSession() {
           kind: session.kind,
           qualityProfile: session.qualityProfile,
           codec: session.codec,
-          webrtc: session.webrtc,
+          webrtc: session.webrtc ?? session.webRtc,
         },
       }));
     };
@@ -1720,7 +1721,7 @@ export default function RemoteSession() {
           kind: session.kind,
           qualityProfile: session.qualityProfile,
           codec: session.codec,
-          webrtc: session.webrtc,
+          webrtc: session.webrtc ?? session.webRtc,
         },
       }));
     };
