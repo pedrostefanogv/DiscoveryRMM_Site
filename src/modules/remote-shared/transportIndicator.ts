@@ -125,9 +125,10 @@ function buildWebRtcTitle(info: TransportInfo): string {
  * lista VAZIA, isto é, nenhuma sessão pede WebRTC. O pedido é uma otimização; na
  * dúvida, o caminho NATS — que sempre funciona — é o escolhido.
  *
- * A política é um blob JSON (`remoteAccessWebRtcPolicyJson`) acompanhado do
- * kill switch booleano (`remoteAccessWebRtcEnabled`); os DOIS precisam estar
- * ligados, exatamente como o agente revalida.
+ * Aceita tanto o formato já resolvido (`ResolvedConfiguration`, onde a política
+ * vem como objeto em `remoteAccessWebRtc`) quanto o formato bruto das tabelas
+ * Server/Client/Site (`remoteAccessWebRtcPolicyJson` como string JSON),
+ * acompanhados do kill switch booleano (`remoteAccessWebRtcEnabled`).
  */
 export function resolveWebRtcKinds(effective: unknown): string[] {
   if (!effective || typeof effective !== "object") return [];
@@ -138,19 +139,20 @@ export function resolveWebRtcKinds(effective: unknown): string[] {
   // que o blob diga o contrário.
   if (config.remoteAccessWebRtcEnabled !== true) return [];
 
-  const raw = config.remoteAccessWebRtcPolicyJson;
-  if (typeof raw !== "string" || !raw.trim()) return [];
-
-  let policy: Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
-    policy = parsed as Record<string, unknown>;
-  } catch {
-    return [];
+  let policy: Record<string, unknown> | null = null;
+  if (config.remoteAccessWebRtc && typeof config.remoteAccessWebRtc === "object" && !Array.isArray(config.remoteAccessWebRtc)) {
+    policy = config.remoteAccessWebRtc as Record<string, unknown>;
+  } else if (typeof config.remoteAccessWebRtcPolicyJson === "string" && config.remoteAccessWebRtcPolicyJson.trim()) {
+    try {
+      const parsed = JSON.parse(config.remoteAccessWebRtcPolicyJson) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+      policy = parsed as Record<string, unknown>;
+    } catch {
+      return [];
+    }
   }
 
-  if (policy.enabled !== true) return [];
+  if (!policy || policy.enabled !== true) return [];
 
   const kinds = policy.kinds;
   if (!Array.isArray(kinds)) return [];

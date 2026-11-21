@@ -2146,6 +2146,10 @@ export interface ResolvedConfiguration {
   remoteProxy?: Record<string, unknown>;
   /** Habilita os destinos de proxy cadastrados no escopo GLOBAL. */
   remoteProxyGlobalEntriesEnabled?: boolean;
+  /** Política WebRTC já resolvida (servidor → cliente → site). */
+  remoteAccessWebRtc?: Record<string, unknown>;
+  /** Kill switch efetivo do WebRTC (herdável). */
+  remoteAccessWebRtcEnabled?: boolean;
   inheritance?: Record<string, number>;
   blockedFields?: string[];
   resolvedAt: string;

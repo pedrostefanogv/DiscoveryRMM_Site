@@ -596,4 +596,139 @@ describe("RemoteDebugConsole — detalhes da sessão", () => {
       expect(screen.queryByRole("dialog", { name: "Detalhes da sessão" })).toBeNull();
     });
   });
+
+  it("botão Copiar subject copia apenas o subject sem seq nem espaço", async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: writeTextMock },
+      configurable: true,
+    });
+
+    renderConsole();
+    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Detalhes da sessão" }));
+    fireEvent.click(screen.getByRole("button", { name: /Copiar subject/i }));
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith(SUBJECT_1);
+    });
+  });
+});
+
+describe("RemoteDebugConsole — UX e melhorias", () => {
+  beforeEach(() => {
+    useAuthMock.mockReturnValue({ session: { accessToken: "api-token" } });
+    natsConnectMock.mockReset().mockResolvedValue(true);
+    natsSubscribeMock.mockReset().mockResolvedValue(true);
+    natsUnsubscribeMock.mockReset();
+    natsDiagnosticsMock.mockReset().mockReturnValue({ lastErrorType: null, lastErrorMessage: null, lastErrorAtUtc: null });
+    natsStateMock.mockReset().mockImplementation((listener: (state: string) => void) => {
+      listener("connected");
+      return () => {};
+    });
+    setPreSuppliedCredentialsMock.mockReset();
+    getNatsServiceMock.mockReset().mockReturnValue({
+      connect: natsConnectMock,
+      subscribe: natsSubscribeMock,
+      unsubscribe: natsUnsubscribeMock,
+      onConnectionStateChange: natsStateMock,
+      getConnectionDiagnostics: natsDiagnosticsMock,
+      setPreSuppliedCredentials: setPreSuppliedCredentialsMock,
+      publish: natsPublishMock,
+      onAuthError: natsOnAuthErrorMock,
+      forceReconnect: natsForceReconnectMock,
+    });
+    agentGetMock.mockReset().mockResolvedValue({ id: AGENT_ID, clientId: CLIENT_ID, siteId: SITE_ID, hostname: "AORUSAXV2", displayName: null });
+    clientGetMock.mockReset().mockResolvedValue({ id: CLIENT_ID, name: "TNG Placas" });
+    siteGetMock.mockReset().mockResolvedValue({ id: SITE_ID, name: "Matriz", clientId: CLIENT_ID });
+    startRemoteDebugMock.mockReset();
+    stopRemoteDebugMock.mockReset().mockResolvedValue(undefined);
+    getCredentialsMock.mockReset().mockResolvedValue({ jwt: "jwt-2", nkeySeed: "seed-2", expiresAtUtc: new Date(Date.now() + 3600_000).toISOString() });
+    natsPublishMock.mockReset().mockResolvedValue(undefined);
+    natsOnAuthErrorMock.mockReset().mockReturnValue(() => {});
+    natsForceReconnectMock.mockReset().mockResolvedValue(true);
+    renewRemoteDebugMock.mockReset().mockResolvedValue({ sessionId: "sess-1", expiresAtUtc: new Date(Date.now() + 1200_000).toISOString(), maxExpiresAtUtc: new Date(Date.now() + 3600_000).toISOString(), sessionActive: true });
+    setRemoteDebugLevelMock.mockReset().mockResolvedValue({ sessionId: "sess-1", logLevel: "warn", appliedAtUtc: new Date().toISOString() });
+  });
+
+  afterEach(() => vi.clearAllMocks());
+
+  it("atualiza document.title com o nome do agente", async () => {
+    renderConsole();
+    expect(await screen.findByText("AORUSAXV2")).toBeTruthy();
+    await waitFor(() => {
+      expect(document.title).toContain("AORUSAXV2");
+    });
+  });
+
+  it("mostra estado vazio filtrável com botão Limpar filtros e contador visible / total", async () => {
+    renderConsole();
+    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+    const call = natsSubscribeMock.mock.calls.find((args) => args[0] === SUBJECT_1);
+    const listener = call![1] as (message: unknown) => void;
+    act(() => {
+      listener({
+        data: {
+          sessionId: "sess-1",
+          agentId: AGENT_ID,
+          level: "info",
+          message: "heartbeat ok",
+          timestampUtc: new Date().toISOString(),
+        },
+      });
+    });
+
+    await screen.findByText("heartbeat ok");
+
+    const searchInput = screen.getByLabelText("Filtrar mensagens do log");
+    fireEvent.change(searchInput, { target: { value: "inexistente-xyz" } });
+
+    expect(await screen.findByText("Nenhuma linha corresponde aos filtros ativos.")).toBeTruthy();
+    expect(screen.getByText(/0 \/ \d+ linhas/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+    expect(await screen.findByText("heartbeat ok")).toBeTruthy();
+  });
+
+  it("exibe Nova sessão quando expirado e atualiza sessionId na URL", async () => {
+    renewRemoteDebugMock.mockResolvedValue({
+      sessionId: "sess-1",
+      expiresAtUtc: new Date().toISOString(),
+      maxExpiresAtUtc: new Date().toISOString(),
+      sessionActive: false,
+      endReason: "max-duration",
+    });
+    startRemoteDebugMock.mockResolvedValue({
+      sessionId: "sess-2",
+      agentId: AGENT_ID,
+      natsTenantSubject: SUBJECT_1,
+      natsControlSubject: CONTROL_SUBJECT_1,
+      natsWssUrl: "wss://tngplacas.com.br/nats/",
+      expiresAtUtc: new Date(Date.now() + 20 * 60_000).toISOString(),
+      pingIntervalSeconds: 5,
+      missedPingsBeforeClose: 3,
+      initialGraceSeconds: 60,
+      keepAliveSeconds: 60,
+    });
+
+    renderConsole();
+    await waitFor(() => expect(screen.getByText("EXPIRADO")).toBeTruthy());
+
+    const reopenButtons = screen.getAllByRole("button", { name: "Nova sessão" });
+    fireEvent.click(reopenButtons[0]);
+
+    await waitFor(() => {
+      expect(startRemoteDebugMock).toHaveBeenCalledWith(
+        AGENT_ID,
+        expect.objectContaining({ preferredTransport: "nats" }),
+      );
+    });
+
+    await waitFor(() => {
+      const search = screen.getByTestId("location").textContent ?? "";
+      expect(new URLSearchParams(search).get("sessionId")).toBe("sess-2");
+    });
+  });
 });

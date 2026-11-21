@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   agentsApi,
@@ -17,6 +25,7 @@ import { realtimeConfig, resolveNatsWsUrl } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge, Button, ErrorDisplay, Icon } from "@/components/ui";
 import { ThemeToggle } from "@/components/auth/ThemeToggle";
+import { RemoteDebugLogRow, type FormattedDebugLogEvent } from "./RemoteDebugLogRow";
 
 const MAX_LOG_LINES = 2000;
 const WAITING_HINT_MS = 12_000;
@@ -97,13 +106,6 @@ function formatTimestamp(ts: string | undefined): string {
   });
 }
 
-function levelBadgeColor(level: RemoteDebugLogLevel): "slate" | "primary" | "warning" | "danger" {
-  if (level === "info") return "primary";
-  if (level === "warn") return "warning";
-  if (level === "error") return "danger";
-  return "slate";
-}
-
 function normalizeLevel(value: string | undefined): RemoteDebugLogLevel {
   const level = (value ?? "info").toLowerCase();
   if (level === "trace" || level === "debug" || level === "info" || level === "warn" || level === "error") {
@@ -120,6 +122,16 @@ function withSystemMessage(message: string): RemoteDebugLogEvent {
     message,
     timestampUtc: new Date().toISOString(),
     transport: "nats",
+  };
+}
+
+function toFormattedLog(entry: RemoteDebugLogEvent, seq: number): FormattedDebugLogEvent {
+  return {
+    entry,
+    normalizedLevel: normalizeLevel(entry.level),
+    formattedTime: formatTimestamp(entry.timestampUtc),
+    isSystem: entry.sessionId === "system",
+    rowKey: `${entry.sessionId}-${entry.sequence ?? "s"}-${seq}`,
   };
 }
 
@@ -157,7 +169,7 @@ function formatLogLine(entry: RemoteDebugLogEvent): string {
 }
 
 export default function RemoteDebugConsole() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { session } = useAuth();
 
   const sessionId = searchParams.get("sessionId") ?? "";
@@ -188,9 +200,10 @@ export default function RemoteDebugConsole() {
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "reconnecting" | "closed">("closed");
   const [debugState, setDebugState] = useState<"idle" | "running" | "stopped">("running");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [logs, setLogs] = useState<RemoteDebugLogEvent[]>([]);
+  const [logs, setLogs] = useState<FormattedDebugLogEvent[]>([]);
   const [lastSequence, setLastSequence] = useState<number | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
   const [currentLevel, setCurrentLevel] = useState<RemoteDebugLogLevel>("debug");
   // expiresAt deixa de ser só a query string: o keepalive renova e o valor
   // precisa refletir o prazo atual no console.
@@ -208,8 +221,10 @@ export default function RemoteDebugConsole() {
   // aparecem sob demanda (i, ícone de info).
   const [sessionInfoOpen, setSessionInfoOpen] = useState(false);
   const sessionInfoRef = useRef<HTMLDivElement | null>(null);
+  const [subjectCopied, setSubjectCopied] = useState(false);
 
   const [copyState, setCopyState] = useState<"idle" | "ok" | "error">("idle");
+  const [wrapLines, setWrapLines] = useState(true);
   const [levelFilters, setLevelFilters] = useState<Record<RemoteDebugLogLevel, boolean>>({
     trace: true,
     debug: true,
@@ -222,6 +237,7 @@ export default function RemoteDebugConsole() {
   const [targetLoading, setTargetLoading] = useState(false);
 
   const consoleRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   // Espelho de autoScroll: o handler de scroll lê o valor ATUAL sem depender do
   // closure do render (e sem precisar recriar o listener).
@@ -235,6 +251,70 @@ export default function RemoteDebugConsole() {
   const pinnedSeqRef = useRef(0);
   const [pendingLines, setPendingLines] = useState(0);
 
+  // Batching por requestAnimationFrame para evitar re-renders excessivos em
+  // bursts de TRACE/DEBUG.
+  const pendingLogsRef = useRef<FormattedDebugLogEvent[]>([]);
+  const pendingSeqRef = useRef<number | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushLogs = useCallback(() => {
+    rafIdRef.current = null;
+    const batch = pendingLogsRef.current;
+    const maxSeq = pendingSeqRef.current;
+    if (batch.length === 0 && maxSeq === null) return;
+    pendingLogsRef.current = [];
+    pendingSeqRef.current = null;
+
+    if (batch.length > 0) {
+      setLogs((previous) => {
+        const next = [...previous, ...batch];
+        if (next.length <= MAX_LOG_LINES) return next;
+        return next.slice(next.length - MAX_LOG_LINES);
+      });
+    }
+    if (maxSeq !== null) {
+      setLastSequence((current) =>
+        typeof current !== "number" ? maxSeq : Math.max(current, maxSeq),
+      );
+    }
+  }, []);
+
+  const enqueueLog = useCallback(
+    (entry: RemoteDebugLogEvent) => {
+      logSeqRef.current += 1;
+      pendingLogsRef.current.push(toFormattedLog(entry, logSeqRef.current));
+      if (typeof entry.sequence === "number") {
+        pendingSeqRef.current =
+          pendingSeqRef.current === null
+            ? entry.sequence
+            : Math.max(pendingSeqRef.current, entry.sequence);
+      }
+      if (rafIdRef.current === null) {
+        rafIdRef.current = window.requestAnimationFrame(flushLogs);
+      }
+    },
+    [flushLogs],
+  );
+
+  const appendImmediateLog = useCallback((entry: RemoteDebugLogEvent) => {
+    logSeqRef.current += 1;
+    const formatted = toFormattedLog(entry, logSeqRef.current);
+    setLogs((previous) => {
+      const next = [...previous, formatted];
+      if (next.length <= MAX_LOG_LINES) return next;
+      return next.slice(next.length - MAX_LOG_LINES);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
   const scrollToBottom = useCallback(() => {
     const element = consoleRef.current;
     if (!element) return;
@@ -244,6 +324,7 @@ export default function RemoteDebugConsole() {
   useEffect(() => {
     autoScrollRef.current = autoScroll;
   }, [autoScroll]);
+
   // Fecha o popover ao clicar fora ou com Escape.
   useEffect(() => {
     if (!sessionInfoOpen) return;
@@ -352,23 +433,35 @@ export default function RemoteDebugConsole() {
       warn: 0,
       error: 0,
     };
-    for (const entry of logs) {
-      counts[normalizeLevel(entry.level)] += 1;
+    for (const item of logs) {
+      counts[item.normalizedLevel] += 1;
     }
     return counts;
   }, [logs]);
 
+  const hasAgentLogs = useMemo(() => logs.some((item) => !item.isSystem), [logs]);
+
   const displayLogs = useMemo(
-    () => logs.filter((entry) => levelFilters[normalizeLevel(entry.level)]),
+    () => logs.filter((item) => levelFilters[item.normalizedLevel]),
     [levelFilters, logs],
   );
 
   const [messageFilter, setMessageFilter] = useState("");
+  const deferredMessageFilter = useDeferredValue(messageFilter);
+  const normalizedQuery = useMemo(
+    () => deferredMessageFilter.trim().toLowerCase(),
+    [deferredMessageFilter],
+  );
+
   const visibleLogs = useMemo(() => {
-    const query = messageFilter.trim().toLowerCase();
-    if (!query) return displayLogs;
-    return displayLogs.filter((entry) => entry.message.toLowerCase().includes(query));
-  }, [displayLogs, messageFilter]);
+    if (!normalizedQuery) return displayLogs;
+    return displayLogs.filter((item) =>
+      item.entry.message.toLowerCase().includes(normalizedQuery),
+    );
+  }, [displayLogs, normalizedQuery]);
+
+  const allLevelsActive = LEVELS.every((level) => levelFilters[level]);
+  const isFiltered = Boolean(normalizedQuery) || !allLevelsActive;
 
   // Segue o fim a cada linha nova enquanto o modo auto está ligado.
   // useLayoutEffect rola ANTES do paint (a linha nova nunca aparece cortada).
@@ -402,6 +495,63 @@ export default function RemoteDebugConsole() {
     }
     resumeAutoScroll();
   }, [autoScroll, resumeAutoScroll]);
+
+  const handleClearLogs = useCallback(() => {
+    if (rafIdRef.current !== null) {
+      window.cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    pendingLogsRef.current = [];
+    pendingSeqRef.current = null;
+    pinnedSeqRef.current = logSeqRef.current;
+    setPendingLines(0);
+    setAutoScroll(true);
+    setLogs([]);
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setMessageFilter("");
+    setLevelFilters({
+      trace: true,
+      debug: true,
+      info: true,
+      warn: true,
+      error: true,
+    });
+  }, []);
+
+  // Atalhos de teclado estilo terminal: Ctrl+F / '/' foca busca; Ctrl+K / Ctrl+L limpa console.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const targetEl = event.target as HTMLElement | null;
+      const inEditable =
+        targetEl?.tagName === "INPUT" ||
+        targetEl?.tagName === "TEXTAREA" ||
+        targetEl?.tagName === "SELECT" ||
+        targetEl?.isContentEditable;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      if (event.key === "/" && !inEditable) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "k" || event.key.toLowerCase() === "l")) {
+        event.preventDefault();
+        handleClearLogs();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleClearLogs]);
 
   const buildCredentials = useCallback((): NatsCredentialsResponse | null => {
     if (!jwtParam || !nkeySeedParam) return null;
@@ -490,16 +640,15 @@ export default function RemoteDebugConsole() {
     setDebugState("stopped");
     setConnectionState("closed");
     setErrorMessage(
-      "O agente não respondeu ao canal de controle. Sessão encerrada automaticamente — reabra o debug para reconectar.",
+      "O agente não respondeu ao canal de controle. Sessão encerrada automaticamente — clique em \"Nova sessão\" para reconectar.",
     );
-    setLogs((current) => [
-      ...current,
+    appendImmediateLog(
       withSystemMessage("SEM AGENTE: sessão encerrada automaticamente pelo ping-pong."),
-    ]);
+    );
     void agentsApi.stopRemoteDebugSession(agentId, sessionId).catch(() => {
       // best-effort: a sessão já está inutilizável
     });
-  }, [agentId, sessionId]);
+  }, [agentId, sessionId, appendImmediateLog]);
 
   const handleLivenessExpired = useCallback((reason: string) => {
     // Encerra a liveness para não ficar renovando uma sessão já finalizada.
@@ -512,14 +661,11 @@ export default function RemoteDebugConsole() {
     // restart/redeploy — o renew passa a responder 404).
     setErrorMessage(
       reason === "sessao-nao-encontrada"
-        ? "A sessão não existe mais no servidor (a API pode ter sido reiniciada ou a sessão foi limpa). Reabra o debug para criar uma nova sessão."
-        : `Sessão encerrada pelo servidor (${reason}). Reabra o debug para reconectar.`,
+        ? "A sessão não existe mais no servidor (a API pode ter sido reiniciada ou a sessão foi limpa). Clique em \"Nova sessão\" para reconectar."
+        : `Sessão encerrada pelo servidor (${reason}). Clique em "Nova sessão" para reconectar.`,
     );
-    setLogs((current) => [
-      ...current,
-      withSystemMessage("Sessão encerrada pelo servidor (" + reason + ")."),
-    ]);
-  }, []);
+    appendImmediateLog(withSystemMessage("Sessão encerrada pelo servidor (" + reason + ")."));
+  }, [appendImmediateLog]);
 
   const liveness = useSessionLiveness({
     enabled: debugState === "running",
@@ -612,21 +758,6 @@ export default function RemoteDebugConsole() {
       natsService.setPreSuppliedCredentials(creds);
     }
 
-    const appendLog = (event: RemoteDebugLogEvent) => {
-      logSeqRef.current += 1;
-      setLogs((previous) => {
-        const next = [...previous, event];
-        if (next.length <= MAX_LOG_LINES) return next;
-        return next.slice(next.length - MAX_LOG_LINES);
-      });
-      if (typeof event.sequence === "number") {
-        setLastSequence((current) => {
-          if (typeof current !== "number") return event.sequence ?? null;
-          return Math.max(current, event.sequence ?? 0);
-        });
-      }
-    };
-
     const unsubscribeConnectionState = natsService.onConnectionStateChange((state) => {
       if (disposed) return;
       if (state === "connected") {
@@ -652,7 +783,7 @@ export default function RemoteDebugConsole() {
         if (sessionGoneRef.current) {
           setConnectionState("closed");
           setErrorMessage(
-            "A sessão de debug não existe mais no servidor. Reabra o debug para criar uma nova sessão.",
+            "A sessão de debug não existe mais no servidor. Clique em \"Nova sessão\" para reconectar.",
           );
           return;
         }
@@ -669,7 +800,7 @@ export default function RemoteDebugConsole() {
           setConnectionState("closed");
           setErrorMessage(
             credsRefreshFailedRef.current || sessionGoneRef.current
-              ? "A sessão de debug não está mais disponível no servidor: não foi possível renovar as credenciais da sessão. Reabra o debug para criar uma nova sessão."
+              ? "A sessão de debug não está mais disponível no servidor: não foi possível renovar as credenciais da sessão. Clique em \"Nova sessão\" para reconectar."
               : "O servidor NATS recusou as credenciais da sessão após várias tentativas. " +
                   "Confirme nos logs da API \"Rejected pre-issued NATS JWT\" (validade/assinatura) " +
                   "e \"Authorization Violation\" no NATS.",
@@ -716,7 +847,7 @@ export default function RemoteDebugConsole() {
       const data = "data" in message && message.data ? message.data : message;
       const log = detectLogEvent(data as Record<string, unknown>);
       if (log) {
-        appendLog(log);
+        enqueueLog(log);
       }
     };
 
@@ -765,10 +896,9 @@ export default function RemoteDebugConsole() {
           typeof envelope.payload?.reason === "string"
             ? envelope.payload.reason
             : "encerrada";
-        setLogs((current) => [
-          ...current,
+        appendImmediateLog(
           withSystemMessage(`Sessão encerrada pelo agente (${reason}).`),
-        ]);
+        );
       }
     };
 
@@ -789,9 +919,9 @@ export default function RemoteDebugConsole() {
 
     setErrorMessage(null);
     setConnectionState("connected");
-    appendLog(withSystemMessage(`Escutando subject NATS: ${subject}`));
+    appendImmediateLog(withSystemMessage(`Escutando subject NATS: ${subject}`));
     if (controlSubject) {
-      appendLog(
+      appendImmediateLog(
         withSystemMessage(
           controlSubscribed
             ? `Canal de controle ativo: ${controlSubject}`
@@ -804,8 +934,10 @@ export default function RemoteDebugConsole() {
     return dispose;
   }, [
     agentId,
+    appendImmediateLog,
     buildCredentials,
     controlSubject,
+    enqueueLog,
     fetchScopedCredentials,
     liveness,
     natsUrl,
@@ -815,9 +947,7 @@ export default function RemoteDebugConsole() {
   ]);
 
   // Conecta sempre que o estado é "running" E reconecta quando a sessão muda
-  // (troca de nível gera novo sessionId/subject). Sem sessionId/subject nas
-  // dependências, "reiniciar com nível X" deixava a popup escutando o subject
-  // ANTIGO — já encerrado no agente — e o console parecia "não receber logs".
+  // (troca de nível ou nova sessão gera novo sessionId/subject).
   useEffect(() => {
     if (debugState !== "running") return;
 
@@ -852,10 +982,11 @@ export default function RemoteDebugConsole() {
 
     const markExpired = () => {
       setExpired(true);
-      setLogs((current) => [
-        ...current,
+      setDebugState("stopped");
+      setConnectionState("closed");
+      appendImmediateLog(
         withSystemMessage("Sessão expirada (TTL atingido). O agente já parou de publicar."),
-      ]);
+      );
     };
 
     const remainingMs = expiresAtTs - Date.now();
@@ -868,19 +999,19 @@ export default function RemoteDebugConsole() {
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [sessionExpiresAt]);
+  }, [sessionExpiresAt, appendImmediateLog]);
 
-  // Aviso de "conectado mas nada chegou": cobre o caso clássico em que o
-  // servidor criou a sessão e o agente a recusou (ver agent-service.log).
+  // Aviso de "conectado mas nada chegou": checa apenas logs reais do agente
+  // (ignora mensagens de sistema inseridas pelo próprio console).
   const [waitingLongEnough, setWaitingLongEnough] = useState(false);
   useEffect(() => {
-    if (debugState !== "running" || connectionState !== "connected" || logs.length > 0) {
+    if (debugState !== "running" || connectionState !== "connected" || hasAgentLogs) {
       setWaitingLongEnough(false);
       return;
     }
     const timerId = window.setTimeout(() => setWaitingLongEnough(true), WAITING_HINT_MS);
     return () => window.clearTimeout(timerId);
-  }, [debugState, connectionState, logs.length]);
+  }, [debugState, connectionState, hasAgentLogs]);
 
   const handleStartDebug = () => {
     setDebugState("running");
@@ -891,10 +1022,92 @@ export default function RemoteDebugConsole() {
     cleanupRef.current = null;
     setConnectionState("closed");
     setDebugState("stopped");
-    setLogs((current) => [
-      ...current,
-      withSystemMessage("Debug pausado pelo usuário."),
-    ]);
+    appendImmediateLog(withSystemMessage("Recebimento pausado localmente pelo usuário."));
+  };
+
+  const handleEndSession = () => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    sessionGoneRef.current = true;
+    setConnectionState("closed");
+    setDebugState("stopped");
+    setExpired(true);
+    appendImmediateLog(withSystemMessage("Sessão encerrada pelo usuário."));
+    if (resolvedAgentId && sessionId) {
+      void agentsApi.stopRemoteDebugSession(resolvedAgentId, sessionId).catch(() => {
+        // best-effort: o console já marcou a sessão como encerrada
+      });
+    }
+  };
+
+  const handleReopenSession = async () => {
+    if (!resolvedAgentId || isReopening) return;
+    setIsReopening(true);
+    setErrorMessage(null);
+    try {
+      const nextSession = await agentsApi.startRemoteDebugSession(resolvedAgentId, {
+        logLevel: currentLevel,
+        preferredTransport: "nats",
+        ttlMinutes: 20,
+      });
+
+      if (!nextSession.natsTenantSubject) {
+        throw new Error("Sessão criada sem subject NATS. Verifique a configuração do backend.");
+      }
+
+      sessionGoneRef.current = false;
+      authRecoveryAttemptsRef.current = 0;
+      authRecoveryExhaustedRef.current = false;
+      credsRefreshFailedRef.current = false;
+      credsExpiresAtRef.current = 0;
+
+      setExpired(false);
+      setMaxExpiresAt("");
+      setSessionExpiresAt(nextSession.expiresAtUtc);
+      setLastSequence(null);
+
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("sessionId", nextSession.sessionId);
+          next.set("agentId", nextSession.agentId);
+          next.set("subject", nextSession.natsTenantSubject!);
+          next.set("expiresAt", nextSession.expiresAtUtc);
+          if (nextSession.natsWssUrl) next.set("natsUrl", nextSession.natsWssUrl);
+          else next.delete("natsUrl");
+          if (nextSession.natsControlSubject) next.set("controlSubject", nextSession.natsControlSubject);
+          else next.delete("controlSubject");
+          if (typeof nextSession.pingIntervalSeconds === "number") {
+            next.set("pingInterval", String(nextSession.pingIntervalSeconds));
+          }
+          if (typeof nextSession.missedPingsBeforeClose === "number") {
+            next.set("misses", String(nextSession.missedPingsBeforeClose));
+          }
+          if (typeof nextSession.initialGraceSeconds === "number") {
+            next.set("grace", String(nextSession.initialGraceSeconds));
+          }
+          if (typeof nextSession.keepAliveSeconds === "number") {
+            next.set("keepAlive", String(nextSession.keepAliveSeconds));
+          }
+          next.delete("jwt");
+          next.delete("nkeySeed");
+          next.delete("credsExpiresAt");
+          return next;
+        },
+        { replace: true },
+      );
+
+      appendImmediateLog(
+        withSystemMessage(`Nova sessão iniciada (${shortId(nextSession.sessionId)}).`),
+      );
+      setDebugState("running");
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "Falha ao criar nova sessão de remote debug.";
+      setErrorMessage(msg);
+    } finally {
+      setIsReopening(false);
+    }
   };
 
   /**
@@ -910,24 +1123,23 @@ export default function RemoteDebugConsole() {
     try {
       const result = await agentsApi.setRemoteDebugLogLevel(agentId, sessionId, level);
       setCurrentLevel(result.logLevel);
-      setLogs((current) => [
-        ...current,
+      appendImmediateLog(
         withSystemMessage(
           `Nível alterado em tempo real para ${LEVEL_LABELS[result.logLevel]} (sem reiniciar a sessão).`,
         ),
-      ]);
+      );
     } catch (error) {
       const msg =
         error instanceof Error ? error.message : "Falha ao alterar o nível de log.";
       setErrorMessage(msg);
-      setLogs((current) => [...current, withSystemMessage(`Erro: ${msg}`)]);
+      appendImmediateLog(withSystemMessage(`Erro: ${msg}`));
     } finally {
       setIsRestarting(false);
     }
   };
 
   const handleCopyLogs = async () => {
-    const text = visibleLogs.map(formatLogLine).join("\n");
+    const text = visibleLogs.map((item) => formatLogLine(item.entry)).join("\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopyState("ok");
@@ -937,8 +1149,29 @@ export default function RemoteDebugConsole() {
     window.setTimeout(() => setCopyState("idle"), 2000);
   };
 
+  const handleCopyLine = useCallback(async (entry: RemoteDebugLogEvent) => {
+    try {
+      await navigator.clipboard.writeText(formatLogLine(entry));
+      setCopyState("ok");
+    } catch {
+      setCopyState("error");
+    }
+    window.setTimeout(() => setCopyState("idle"), 1500);
+  }, []);
+
+  const handleCopySubject = async () => {
+    if (!subject) return;
+    try {
+      await navigator.clipboard.writeText(subject);
+      setSubjectCopied(true);
+      window.setTimeout(() => setSubjectCopied(false), 2000);
+    } catch {
+      // clipboard indisponível
+    }
+  };
+
   const handleDownloadLogs = () => {
-    const text = visibleLogs.map(formatLogLine).join("\n");
+    const text = visibleLogs.map((item) => formatLogLine(item.entry)).join("\n");
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -963,20 +1196,8 @@ export default function RemoteDebugConsole() {
     }
   };
 
-  if (!sessionId || !agentId) {
-    return (
-      <div className="mx-auto max-w-3xl p-6">
-        <ErrorDisplay message="Parâmetros inválidos para a tela de remote debug." />
-      </div>
-    );
-  }
-
-  const totalLines = logs.length;
-  const expiresLabel = sessionExpiresAt
-    ? new Date(sessionExpiresAt).toLocaleTimeString("pt-BR", { hour12: false })
-    : "--:--";
-
   const peerLost = liveness.status === "peer-lost";
+  const isSessionDead = expired || peerLost;
 
   const statusLabel =
     expired
@@ -1010,6 +1231,26 @@ export default function RemoteDebugConsole() {
   const clientLabel = target?.clientName || (targetLoading && !subjectIds.clientId ? "…" : shortId(clientId));
   const siteLabel = target?.siteName || (targetLoading && !subjectIds.siteId ? "…" : shortId(siteId));
   const agentLabel = target?.agentName || shortId(resolvedAgentId);
+
+  // Título dinâmico da janela para identificar múltiplas popups abertas.
+  useEffect(() => {
+    if (!resolvedAgentId) return;
+    const prefix = isSessionDead || debugState === "stopped" ? `[${statusLabel}] ` : "";
+    document.title = `${prefix}Debug · ${agentLabel}`;
+  }, [agentLabel, debugState, isSessionDead, resolvedAgentId, statusLabel]);
+
+  if (!sessionId || !agentId) {
+    return (
+      <div className="mx-auto max-w-3xl p-6">
+        <ErrorDisplay message="Parâmetros inválidos para a tela de remote debug." />
+      </div>
+    );
+  }
+
+  const totalLines = logs.length;
+  const expiresLabel = sessionExpiresAt
+    ? new Date(sessionExpiresAt).toLocaleTimeString("pt-BR", { hour12: false })
+    : "--:--";
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -1050,7 +1291,9 @@ export default function RemoteDebugConsole() {
           </span>
 
           <span className="text-[11px] text-muted tabular-nums">
-            {totalLines} {totalLines === 1 ? "linha" : "linhas"}
+            {isFiltered
+              ? `${visibleLogs.length} / ${totalLines} linhas`
+              : `${totalLines} ${totalLines === 1 ? "linha" : "linhas"}`}
             <span className="mx-1.5 text-border-strong" aria-hidden="true">·</span>
             <span
               title={
@@ -1064,22 +1307,45 @@ export default function RemoteDebugConsole() {
 
           <div className="ml-auto flex items-center gap-1.5">
             <ThemeToggle />
-            {debugState === "running" ? (
+            {isSessionDead ? (
               <Button
                 size="sm"
-                variant="secondary"
-                onClick={handleStopDebug}
-                title="Encerra a sessão de debug remoto"
+                variant="primary"
+                onClick={() => void handleReopenSession()}
+                loading={isReopening}
+                title="Cria uma nova sessão de debug remoto para este agente"
               >
-                <Icon name="block" className="h-3.5 w-3.5" aria-hidden="true" />
-                parar
+                <Icon name="refresh" className="h-3.5 w-3.5" aria-hidden="true" />
+                Nova sessão
               </Button>
+            ) : debugState === "running" ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleStopDebug}
+                  title="Pausa o recebimento local de logs (a sessão continua ativa no agente)"
+                >
+                  <Icon name="block" className="h-3.5 w-3.5" aria-hidden="true" />
+                  Pausar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted hover:text-danger"
+                  onClick={handleEndSession}
+                  title="Encerra a sessão de debug remoto no servidor e no agente"
+                >
+                  <Icon name="power_settings_new" className="h-3.5 w-3.5" aria-hidden="true" />
+                  Encerrar
+                </Button>
+              </>
             ) : (
               <Button
                 size="sm"
                 variant="primary"
                 onClick={handleStartDebug}
-                title="Inicia o recebimento de logs do agente"
+                title="Retoma o recebimento de logs do agente"
               >
                 <Icon name="play_arrow" className="h-3.5 w-3.5" aria-hidden="true" />
                 iniciar debug
@@ -1121,22 +1387,21 @@ export default function RemoteDebugConsole() {
               <button
                 type="button"
                 onClick={() => {
-                  const allActive = LEVELS.every((level) => levelFilters[level]);
                   setLevelFilters({
-                    trace: !allActive,
-                    debug: !allActive,
-                    info: !allActive,
-                    warn: !allActive,
-                    error: !allActive,
+                    trace: !allLevelsActive,
+                    debug: !allLevelsActive,
+                    info: !allLevelsActive,
+                    warn: !allLevelsActive,
+                    error: !allLevelsActive,
                   });
                 }}
                 aria-label={
-                  LEVELS.every((level) => levelFilters[level])
+                  allLevelsActive
                     ? "Ocultar todos os níveis"
                     : "Mostrar todos os níveis"
                 }
                 title={
-                  LEVELS.every((level) => levelFilters[level])
+                  allLevelsActive
                     ? "Ocultar todos os níveis"
                     : "Mostrar todos os níveis"
                 }
@@ -1144,7 +1409,7 @@ export default function RemoteDebugConsole() {
               >
                 <Icon
                   name="filter_alt"
-                  className={`h-3.5 w-3.5 ${LEVELS.every((level) => levelFilters[level]) ? "" : "opacity-50"}`}
+                  className={`h-3.5 w-3.5 ${allLevelsActive ? "" : "opacity-50"}`}
                   aria-hidden="true"
                 />
               </button>
@@ -1159,7 +1424,7 @@ export default function RemoteDebugConsole() {
               <select
                 value={currentLevel}
                 onChange={(e) => handleSetLevel(e.target.value as RemoteDebugLogLevel)}
-                disabled={isRestarting}
+                disabled={isRestarting || isSessionDead}
                 title="Altera o nível de log em tempo real, sem reiniciar a sessão"
                 className="h-6 rounded border border-border bg-surface-light px-1.5 font-mono text-[10px] uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
               >
@@ -1181,9 +1446,16 @@ export default function RemoteDebugConsole() {
                 aria-hidden="true"
               />
               <input
+                ref={searchInputRef}
                 value={messageFilter}
                 onChange={(event) => setMessageFilter(event.target.value)}
-                placeholder="Filtrar mensagens…"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && messageFilter) {
+                    event.stopPropagation();
+                    setMessageFilter("");
+                  }
+                }}
+                placeholder="Filtrar mensagens… (Ctrl+F ou /)"
                 aria-label="Filtrar mensagens do log"
                 className="h-7 w-full rounded border border-border bg-background pl-7 pr-7 font-mono text-xs text-foreground outline-none focus:border-primary"
               />
@@ -1208,6 +1480,7 @@ export default function RemoteDebugConsole() {
                 onClick={toggleAutoScroll}
                 disabled={totalLines === 0}
                 aria-pressed={autoScroll}
+                className={autoScroll && totalLines > 0 ? "bg-primary/15 text-primary" : undefined}
                 aria-label={autoScroll ? "Rolagem automática ativada" : "Rolagem automática desativada"}
                 title={
                   autoScroll
@@ -1216,10 +1489,22 @@ export default function RemoteDebugConsole() {
                 }
               >
                 <Icon
-                  name={autoScroll ? "arrow_downward" : "speed"}
+                  name="arrow_downward"
                   className="h-4 w-4"
                   aria-hidden="true"
                 />
+              </Button>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setWrapLines((prev) => !prev)}
+                aria-pressed={wrapLines}
+                className={wrapLines ? "bg-surface-hover text-foreground" : "text-muted"}
+                aria-label={wrapLines ? "Quebra de linha ativada" : "Quebra de linha desativada"}
+                title={wrapLines ? "Quebrar linhas longas (ativo)" : "Sem quebra de linha (rolagem horizontal)"}
+              >
+                <Icon name="article" className="h-4 w-4" aria-hidden="true" />
               </Button>
 
               <Button
@@ -1257,10 +1542,10 @@ export default function RemoteDebugConsole() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setLogs([])}
+                onClick={handleClearLogs}
                 disabled={totalLines === 0}
                 aria-label="Limpar console"
-                title="Limpa as linhas recebidas"
+                title="Limpa as linhas recebidas (Ctrl+K)"
               >
                 <Icon name="delete" className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -1275,7 +1560,7 @@ export default function RemoteDebugConsole() {
                 aria-expanded={sessionInfoOpen}
                 aria-haspopup="dialog"
                 aria-label="Detalhes da sessão"
-                title="Detalhes da sessão (seq, subject)"
+                title="Detalhes da sessão (seq, subject, liveness)"
               >
                 <Icon name="info" className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -1283,29 +1568,52 @@ export default function RemoteDebugConsole() {
                 <div
                   role="dialog"
                   aria-label="Detalhes da sessão"
-                  className="absolute top-full right-0 z-30 mt-1 w-80 rounded-xl border border-border bg-surface p-3 text-[11px] shadow-xl"
+                  className="absolute top-full right-0 z-30 mt-1 w-96 max-w-[90vw] rounded-xl border border-border bg-surface p-3 text-[11px] shadow-xl"
                 >
-                  <p className="mb-1 font-medium text-foreground">Detalhes da sessão</p>
+                  <p className="mb-2 font-medium text-foreground">Detalhes da sessão</p>
                   <dl className="space-y-1 font-mono text-muted">
+                    <div className="flex gap-2">
+                      <dt className="shrink-0 text-muted-foreground">sessionId:</dt>
+                      <dd className="min-w-0 break-all">{sessionId}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="shrink-0 text-muted-foreground">agentId:</dt>
+                      <dd className="min-w-0 break-all">{resolvedAgentId}</dd>
+                    </div>
                     <div className="flex gap-2">
                       <dt className="shrink-0 text-muted-foreground">seq:</dt>
                       <dd className="min-w-0 break-all tabular-nums">{lastSequence ?? "--"}</dd>
                     </div>
                     <div className="flex gap-2">
+                      <dt className="shrink-0 text-muted-foreground">liveness:</dt>
+                      <dd className="min-w-0 break-all">{liveness.status}</dd>
+                    </div>
+                    <div className="flex gap-2">
                       <dt className="shrink-0 text-muted-foreground">subject:</dt>
                       <dd className="min-w-0 break-all">{subject || "—"}</dd>
                     </div>
+                    {controlSubject && (
+                      <div className="flex gap-2">
+                        <dt className="shrink-0 text-muted-foreground">control:</dt>
+                        <dd className="min-w-0 break-all">{controlSubject}</dd>
+                      </div>
+                    )}
+                    {maxExpiresAt && (
+                      <div className="flex gap-2">
+                        <dt className="shrink-0 text-muted-foreground">teto:</dt>
+                        <dd className="min-w-0 break-all">
+                          {new Date(maxExpiresAt).toLocaleTimeString("pt-BR", { hour12: false })}
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard
-                        .writeText(`${lastSequence ?? ""} ${subject ?? ""}`)
-                        .catch(() => undefined);
-                    }}
-                    className="mt-2 text-[10px] text-primary underline-offset-2 hover:underline"
+                    onClick={() => void handleCopySubject()}
+                    className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary underline-offset-2 hover:underline"
                   >
-                    copiar subject
+                    <Icon name={subjectCopied ? "check" : "content_copy"} className="h-3 w-3" aria-hidden="true" />
+                    {subjectCopied ? "Copiado!" : "Copiar subject"}
                   </button>
                 </div>
               )}
@@ -1327,51 +1635,55 @@ export default function RemoteDebugConsole() {
           ref={consoleRef}
           onScroll={handleScroll}
           data-testid="log-scroll"
-          className="h-full overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed"
+          className={`h-full overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed ${
+            wrapLines ? "overflow-x-hidden" : "overflow-x-auto"
+          }`}
         >
+          {waitingLongEnough && !hasAgentLogs && (
+            <p className="mx-auto mb-3 max-w-xl rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+              Conectado, mas nenhum log do agente chegou em {Math.round(WAITING_HINT_MS / 1000)}s. Isso
+              normalmente significa que o <strong>agente não aceitou a sessão</strong>:
+              confira o <code className="font-mono">agent-service.log</code> do agente
+              procurando por <code className="font-mono">[remote-debug]</code> e o
+              resultado do comando <code className="font-mono">remotedebug</code>{" "}
+              (exitCode=1 indica falha ao iniciar a sessão no agente).
+            </p>
+          )}
+
           {visibleLogs.length === 0 && (
             <div className="py-12 text-center text-sm text-muted">
-              <p>
-                {debugState === "idle"
-                  ? "Console pronto. Clique em \"iniciar debug\" para começar a receber logs."
-                  : debugState === "stopped"
-                    ? "Debug pausado. Clique em \"iniciar debug\" para retomar."
-                    : connectionState === "connected"
-                      ? "Aguardando entradas de log..."
-                      : "Nenhuma linha para exibir."}
-              </p>
-              {waitingLongEnough && (
-                <p className="mx-auto mt-3 max-w-xl rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                  Conectado, mas nenhum log chegou em {Math.round(WAITING_HINT_MS / 1000)}s. Isso
-                  normalmente significa que o <strong>agente não aceitou a sessão</strong>:
-                  confira o <code className="font-mono">agent-service.log</code> do agente
-                  procurando por <code className="font-mono">[remote-debug]</code> e o
-                  resultado do comando <code className="font-mono">remotedebug</code>{" "}
-                  (exitCode=1 indica falha ao iniciar a sessão no agente).
+              {totalLines > 0 && isFiltered ? (
+                <div className="space-y-3">
+                  <p>Nenhuma linha corresponde aos filtros ativos.</p>
+                  <Button size="sm" variant="secondary" onClick={handleClearFilters}>
+                    Limpar filtros
+                  </Button>
+                </div>
+              ) : (
+                <p>
+                  {debugState === "idle"
+                    ? "Console pronto. Clique em \"iniciar debug\" para começar a receber logs."
+                    : debugState === "stopped"
+                      ? isSessionDead
+                        ? "Sessão encerrada. Clique em \"Nova sessão\" para reconectar."
+                        : "Debug pausado. Clique em \"iniciar debug\" para retomar."
+                      : connectionState === "connected"
+                        ? "Aguardando entradas de log..."
+                        : "Nenhuma linha para exibir."}
                 </p>
               )}
             </div>
           )}
 
-          {visibleLogs.map((entry, index) => {
-            const level = normalizeLevel(entry.level);
-            return (
-              <div
-                key={`${entry.sessionId}-${entry.sequence ?? index}-${entry.timestampUtc}-${index}`}
-                className="flex items-start gap-2 rounded px-1 py-0.5 hover:bg-surface-light"
-              >
-                <span className="shrink-0 text-muted">
-                  {formatTimestamp(entry.timestampUtc)}
-                </span>
-                <span className="inline-block w-12 shrink-0">
-                  <Badge color={levelBadgeColor(level)}>{level.toUpperCase()}</Badge>
-                </span>
-                <span className="break-all text-foreground">
-                  {entry.message}
-                </span>
-              </div>
-            );
-          })}
+          {visibleLogs.map((item) => (
+            <RemoteDebugLogRow
+              key={item.rowKey}
+              item={item}
+              highlightQuery={normalizedQuery}
+              wrapLines={wrapLines}
+              onCopyLine={handleCopyLine}
+            />
+          ))}
         </div>
 
         {!autoScroll && pendingLines > 0 && (
@@ -1388,8 +1700,18 @@ export default function RemoteDebugConsole() {
       {/* Erro em faixa (não em overlay): mantém a barra de identidade, os
           filtros e o botão de copiar/baixar utilizáveis durante o diagnóstico. */}
       {errorMessage && (
-        <div className="flex items-start gap-2 border-b border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+        <div className="flex items-center gap-2 border-t border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
           <span className="flex-1 whitespace-pre-wrap break-words">{errorMessage}</span>
+          {isSessionDead && (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => void handleReopenSession()}
+              loading={isReopening}
+            >
+              Nova sessão
+            </Button>
+          )}
           <button
             type="button"
             onClick={() => setErrorMessage(null)}
