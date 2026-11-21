@@ -427,14 +427,16 @@ describe("filtros do painel", () => {
     expect(hasActiveFilters({ search: "kb50", severity: "", status: "" })).toBe(true);
     expect(hasActiveFilters({ search: "", severity: "Critical", status: "" })).toBe(true);
     expect(hasActiveFilters({ search: "", severity: "", status: "denied" })).toBe(true);
+    expect(hasActiveFilters({ search: "", severity: "", status: "", typeFilter: "feature" })).toBe(true);
   });
 
   it("descreve o vazio filtrado citando os filtros aplicados", () => {
-    const message = describeFilteredEmpty({ search: "kb50", severity: "Critical", status: "denied" });
+    const message = describeFilteredEmpty({ search: "kb50", severity: "Critical", status: "denied", typeFilter: "optional" });
     expect(message.title).toBe("Nenhuma atualização corresponde aos filtros");
     expect(message.description).toContain('busca "kb50"');
     expect(message.description).toContain("severidade Critical");
     expect(message.description).toContain("status denied");
+    expect(message.description).toContain("tipo opcionais");
   });
 });
 

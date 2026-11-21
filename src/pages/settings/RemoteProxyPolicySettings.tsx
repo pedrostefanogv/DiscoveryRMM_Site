@@ -56,7 +56,7 @@ type ScopeKind = "global" | "client" | "site";
  * O cadastro GLOBAL nasce inerte (flag remoteProxyGlobalEntriesEnabled=false):
  * fica salvo e visível, mas só passa a valer quando liberado aqui.
  */
-export default function RemoteProxyPolicySettings() {
+export default function RemoteProxyPolicySettings({ embedded = false }: { embedded?: boolean } = {}) {
   const clientsQuery = useClients();
   const sitesQuery = useAllSites();
 
@@ -273,10 +273,12 @@ export default function RemoteProxyPolicySettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Destinos Permitidos do Proxy"
-        description="Controla quais endereços o túnel TCP/HTTP do acesso remoto pode alcançar. Herança: Global → Cliente → Site."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Destinos Permitidos do Proxy"
+          description="Controla quais endereços o túnel TCP/HTTP do acesso remoto pode alcançar. Herança: Global → Cliente → Site."
+        />
+      )}
 
       <Card>
         <CardHeader

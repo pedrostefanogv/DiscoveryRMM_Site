@@ -83,6 +83,13 @@ export interface RemoteSessionResponse {
      * terminal. Ausente em APIs antigas — o front mantém o fallback.
      */
     viewerCredentials?: SessionCredentials;
+    /** Configuração WebRTC efetiva da sessão (iceServers com TURN efêmero). */
+    webrtc?: {
+        enabled: boolean;
+        iceServers: RTCIceServer[];
+        relayOnly: boolean;
+        fallbackToNats: boolean;
+    } | null;
 }
 
 export interface RemoteSessionConsentStatus {

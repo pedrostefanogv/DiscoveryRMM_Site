@@ -347,4 +347,90 @@ describe("AgentWindowsUpdatesPanel — aba Atualizações do agente", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(document.body.textContent).toContain("status: unknown");
   });
+
+  it("exibe badges de recursos e opcional e desabilita Instalar para item WaaS", () => {
+    state.snapshot = baseSnapshot({ pendingCount: 1 });
+    state.items = [
+      {
+        id: "u-waas",
+        updateKey: "guid:11111111-2222-3333-4444-555555555555:1",
+        groupKey: "guid:11111111-2222-3333-4444-555555555555:1",
+        kbId: null,
+        kbIds: [],
+        title: "Atualizacao de versao do Windows disponivel (versao atual 25H2)",
+        description: null,
+        classification: "Upgrades",
+        updateType: "feature",
+        severity: "Moderate",
+        isPending: true,
+        isInstalled: false,
+        isOptional: true,
+        isHidden: false,
+        requiresReboot: false,
+        maxDownloadSize: null,
+        minDownloadSize: null,
+        supportUrl: null,
+        publishedAt: null,
+        installedAt: null,
+        reportedAt: new Date().toISOString(),
+        approvalState: "Unknown" as const,
+        approvalSource: null,
+        status: "Pending" as const,
+        installResultCode: null,
+        installError: null,
+        source: "waas",
+      },
+    ];
+    renderPanel();
+
+    expect(screen.getByText("recursos")).toBeTruthy();
+    expect(screen.getByText("opcional")).toBeTruthy();
+    const installButton = screen.getByRole("button", {
+      name: /Instalar Atualizacao de versao do Windows disponivel/,
+    }) as HTMLButtonElement;
+    expect(installButton.disabled).toBe(true);
+  });
+
+  it("abre modal de detalhes com descrição e links ao clicar no título da atualização", async () => {
+    state.snapshot = baseSnapshot({ pendingCount: 1 });
+    state.items = [
+      {
+        id: "u-info",
+        updateKey: "guid:22222222-2222-3333-4444-555555555555:1",
+        groupKey: "kb:KB5044284",
+        kbId: "KB5044284",
+        kbIds: ["KB5044284"],
+        title: "2026-11 Cumulative Update (KB5044284)",
+        description: "Corrige vulnerabilidades de segurança e melhora a estabilidade do sistema.",
+        classification: "Security Updates",
+        updateType: "software",
+        severity: "Important",
+        isPending: true,
+        isInstalled: false,
+        isOptional: false,
+        isHidden: false,
+        requiresReboot: true,
+        maxDownloadSize: 1024 * 1024 * 250,
+        minDownloadSize: null,
+        supportUrl: "https://support.microsoft.com/help/5044284",
+        publishedAt: new Date(Date.now() - HOUR).toISOString(),
+        installedAt: null,
+        reportedAt: new Date().toISOString(),
+        approvalState: "Unknown" as const,
+        approvalSource: null,
+        status: "Pending" as const,
+        installResultCode: null,
+        installError: null,
+        source: "wua",
+      },
+    ];
+    renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "2026-11 Cumulative Update (KB5044284)" }));
+
+    expect(await screen.findByText("Sobre esta atualização")).toBeTruthy();
+    expect(screen.getAllByText("Corrige vulnerabilidades de segurança e melhora a estabilidade do sistema.").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("link", { name: /Página de suporte/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Catálogo Microsoft Update/ })).toBeTruthy();
+  });
 });

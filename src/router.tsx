@@ -39,8 +39,7 @@ const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'
 const SoftwareStore = lazy(() => import('@/pages/software/SoftwareStore'));
 const CustomPackageEditorPage = lazy(() => import('@/pages/software/CustomPackageEditorPage'));
 const PatchesOverview = lazy(() => import('@/pages/patches/PatchesOverview'));
-const PatchesInventory = lazy(() => import('@/pages/patches/PatchesInventory'));
-const PatchesPending = lazy(() => import('@/pages/patches/PatchesPending'));
+const PatchesUpdatesPage = lazy(() => import('@/pages/patches/PatchesUpdatesPage'));
 const PatchesApprovals = lazy(() => import('@/pages/patches/PatchesApprovals'));
 const PatchesPolicy = lazy(() => import('@/pages/patches/PatchesPolicy'));
 const SensorsFleetPage = lazy(() => import('@/pages/sensors/SensorsFleetPage'));
@@ -63,12 +62,11 @@ const DepartmentDetailPage = lazy(() => import('@/pages/settings/DepartmentDetai
 const WorkflowProfileSettings = lazy(() => import('@/pages/settings/WorkflowProfileSettings'));
 const ConfigurationSettings = lazy(() => import('@/pages/settings/ConfigurationSettings'));
 const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfigurationPage'));
+const ScopeConfigurationPage = lazy(() => import('@/pages/settings/ScopeConfigurationPage'));
 const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const EffectiveConfigurationPage = lazy(() => import('@/pages/settings/EffectiveConfigurationPage'));
-const RemoteConsentSettings = lazy(() => import('@/pages/settings/RemoteConsentSettings'));
-const RemoteProxyPolicySettings = lazy(() => import('@/pages/settings/RemoteProxyPolicySettings'));
-const RemoteAccessWebRtcSettings = lazy(() => import('@/pages/settings/RemoteAccessWebRtcSettings'));
+const RemoteAccessSettingsPage = lazy(() => import('@/pages/settings/RemoteAccessSettingsPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
@@ -489,10 +487,18 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: 'patches/updates',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesUpdatesPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'patches/inventory',
         element: (
           <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
-            <LazyPage><PatchesInventory /></LazyPage>
+            <LazyPage><PatchesUpdatesPage initialTab="inventory" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -500,7 +506,7 @@ export const routes: RouteObject[] = [
         path: 'patches/pending',
         element: (
           <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
-            <LazyPage><PatchesPending /></LazyPage>
+            <LazyPage><PatchesUpdatesPage initialTab="pending" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -637,6 +643,14 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: 'settings/scope',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><ScopeConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'settings/client',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
@@ -661,10 +675,18 @@ export const routes: RouteObject[] = [
         ),
       },
       {
+        path: 'settings/remote-access',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*', 'identity.*']}>
+            <LazyPage><RemoteAccessSettingsPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'settings/remote-consent',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*', 'identity.*']}>
-            <LazyPage><RemoteConsentSettings /></LazyPage>
+            <LazyPage><RemoteAccessSettingsPage initialTab="consent" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -672,7 +694,7 @@ export const routes: RouteObject[] = [
         path: 'settings/proxy-policy',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
-            <LazyPage><RemoteProxyPolicySettings /></LazyPage>
+            <LazyPage><RemoteAccessSettingsPage initialTab="proxy" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -680,7 +702,7 @@ export const routes: RouteObject[] = [
         path: 'settings/remote-webrtc',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
-            <LazyPage><RemoteAccessWebRtcSettings /></LazyPage>
+            <LazyPage><RemoteAccessSettingsPage initialTab="webrtc" /></LazyPage>
           </PermissionGate>
         ),
       },

@@ -250,19 +250,36 @@ export default function RemoteSession() {
   // (herdada). Vazio = WebRTC desligado, e toda sessão sobe em NATS.
   const [webRtcKinds, setWebRtcKinds] = useState<string[]>([]);
 
-  // Kind da sessão pedida, derivado do parâmetro `kind` da URL (mesmo contrato
-  // que a API aceita). Default "all": a tela de acesso remoto abre com todas as
-  // capacidades, e "all" cobre a política que autorizou tela.
-  const sessionKindForTransport = searchParams.get('kind') ?? 'all';
-
-  // Transporte pedido: o parâmetro da URL manda (permite forçar NATS para
-  // diagnóstico); na ausência dele, pedimos WebRTC quando a política autoriza
-  // ESTE kind. O agente é quem decide de fato — o pedido aqui só evita abrir
-  // mão do P2P quando ele está configurado.
+  // Transporte FORÇADO pela URL (diagnóstico: ?transport=nats ignora a política).
+  // Continua existindo porque é útil para isolar um problema de rede sem mexer
+  // na configuração do site.
   const requestedTransport = searchParams.get('transport');
-  const transport =
-    requestedTransport ??
-    (webRtcKinds.includes(sessionKindForTransport) ? 'webrtc' : 'nats');
+
+  /**
+   * Transporte para uma sessão de UM kind específico.
+   *
+   * O kind é o da ABA que está sendo conectada — não um kind global. Cada aba
+   * abre a sua própria sessão (a de tela pede 'screen', a de arquivos pede
+   * 'files', ...), então a política do operador é avaliada por aba: ligar WebRTC
+   * só para "Tela remota" faz a aba de tela usar P2P e as demais seguirem em NATS,
+   * que é exatamente o que a tela de configuração promete.
+   *
+   * BUG CORRIGIDO (2026-11-21): antes o kind vinha de `?kind=` da URL — que o
+   * launcher NUNCA escreve (ele só passa `agentId`). O valor caía no default
+   * 'all', e como o default da política é ["screen","rdp"], o console mandava
+   * `transport: "nats"` e o WebRTC nunca era solicitado. O indicador mostrava
+   * NATS corretamente, mas por um motivo diferente do que o operador esperava.
+   */
+  const transportForKind = useCallback(
+    (kind: string): 'nats' | 'http' | 'webrtc' => {
+      if (requestedTransport === 'nats' || requestedTransport === 'http') return requestedTransport;
+      if (requestedTransport === 'webrtc') return 'webrtc';
+      // Sem override na URL: pede WebRTC quando a política herdável autoriza
+      // ESTE kind. O agente revalida e decide de fato.
+      return webRtcKinds.includes(kind) ? 'webrtc' : 'nats';
+    },
+    [requestedTransport, webRtcKinds],
+  );
   const quality = searchParams.get('quality') ?? 'unlimited';
   const codec = searchParams.get('codec') ?? 'webp';
   // O token NÃO vem mais da query string (vazava em histórico/Referer/logs).
@@ -1090,7 +1107,8 @@ export default function RemoteSession() {
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: kind as StartRemoteSessionRequest['kind'],
-        transport: transport as StartRemoteSessionRequest['transport'],
+        // Transporte derivado do KIND DESTA ABA (não de um kind global).
+        transport: transportForKind(kind) as StartRemoteSessionRequest['transport'],
         quality: startQuality as StartRemoteSessionRequest['quality'],
         codec: startCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
@@ -1221,7 +1239,7 @@ export default function RemoteSession() {
       setConnectingTab(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, connectingTab, transport, monitorIndex, sessions, applyQualityModeToSession, applyBandwidthToSession]);
+  }, [agentId, connectingTab, transportForKind, monitorIndex, sessions, applyQualityModeToSession, applyBandwidthToSession]);
 
   // Inicia a sessão da aba com força (vinda do aviso de conflito de sessão).
   const confirmForce = useCallback(async (tab: Tab) => {
@@ -1347,7 +1365,9 @@ export default function RemoteSession() {
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'terminal',
-        transport: transport as StartRemoteSessionRequest['transport'],
+        // terminal NÃO está em AllowedKinds, então isto resolve para 'nats' —
+        // mas passa pela mesma função para não haver dois caminhos de decisão.
+        transport: transportForKind('terminal') as StartRemoteSessionRequest['transport'],
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
@@ -1418,7 +1438,7 @@ export default function RemoteSession() {
     } finally {
       setShellSwitching(false);
     }
-  }, [agentId, shell, shellSwitching, sessions.terminal, transport, liveQuality, liveCodec]);
+  }, [agentId, shell, shellSwitching, sessions.terminal, transportForKind, liveQuality, liveCodec]);
 
   // ── Controles de qualidade (screen) ──
   const handleImageQualityChange = useCallback(async (newImageQ: number) => {
@@ -1619,7 +1639,7 @@ export default function RemoteSession() {
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'screen',
-        transport: transport as StartRemoteSessionRequest['transport'],
+        transport: transportForKind('screen') as StartRemoteSessionRequest['transport'],
         quality: (qs.mode === 'hd' ? 'ultra' : qs.quality) as StartRemoteSessionRequest['quality'],
         codec: (qs.mode === 'hd' ? 'webp' : qs.codec) as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
@@ -1694,7 +1714,7 @@ export default function RemoteSession() {
     } finally {
       setMonitorChanging(false);
     }
-  }, [monitorChanging, agentId, screenSession, transport, applyQualityModeToSession, applyBandwidthToSession]);
+  }, [monitorChanging, agentId, screenSession, transportForKind, applyQualityModeToSession, applyBandwidthToSession]);
 
   // Timer de expiração removido — a sessão gerencia a própria expiração e o
   // backend encerra quando necessário (viewer recebe onSessionEnded).

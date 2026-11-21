@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { AutoTicketScopeSelector } from '@/components/settings/AutoTicketPolicyEditor';
 
 import {
   Icon,
@@ -57,7 +58,47 @@ const EMPTY_FORM: FormState = {
   isEnabled: true,
 };
 
-export default function AutoTicketRulesPage() {
+type AutoTicketTab = 'rules' | 'policy';
+
+const AUTO_TICKET_TABS: { id: AutoTicketTab; label: string; icon: 'checklist' | 'layers' }[] = [
+  { id: 'rules', label: 'Regras', icon: 'checklist' },
+  { id: 'policy', label: 'Política por Escopo', icon: 'layers' },
+];
+
+export default function AutoTicketRulesPage({
+  initialTab = 'rules',
+}: {
+  initialTab?: AutoTicketTab;
+} = {}) {
+  const [activeTab, setActiveTab] = useState<AutoTicketTab>(initialTab);
+  const tabRefs = useRef<Record<AutoTicketTab, HTMLButtonElement | null>>({
+    rules: null,
+    policy: null,
+  });
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  const selectTab = (tab: AutoTicketTab) => {
+    setActiveTab(tab);
+    tabRefs.current[tab]?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % AUTO_TICKET_TABS.length;
+    else if (event.key === 'ArrowLeft')
+      nextIndex = (index - 1 + AUTO_TICKET_TABS.length) % AUTO_TICKET_TABS.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = AUTO_TICKET_TABS.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const target = AUTO_TICKET_TABS[nextIndex];
+    selectTab(target.id);
+    tabRefs.current[target.id]?.focus();
+  };
+
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -194,14 +235,56 @@ export default function AutoTicketRulesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Regras de Criação Automática de Tickets"
-        description="Configure quando o sistema abre um chamado automaticamente a partir de eventos de monitoramento. O escopo efetivo (cliente/site) e a ativação são definidos pela Política de Auto-Ticket."
+        title="Auto-Ticket"
+        description="Configure regras de abertura automática a partir de alertas e defina em quais escopos (Global → Cliente → Site) o recurso opera."
       >
-        <Button onClick={() => setShowCreate(true)} disabled={showCreate || !!editingId}>
-          <Icon name="add" className="w-4 h-4 mr-2" />
-          Nova Regra
-        </Button>
+        {activeTab === 'rules' && (
+          <Button onClick={() => setShowCreate(true)} disabled={showCreate || !!editingId}>
+            <Icon name="add" className="w-4 h-4 mr-2" />
+            Nova Regra
+          </Button>
+        )}
       </PageHeader>
+
+      <div
+        role="tablist"
+        aria-label="Configurações de Auto-Ticket"
+        className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-border"
+      >
+        {AUTO_TICKET_TABS.map((tab, index) => {
+          const isSelected = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              ref={(el) => {
+                tabRefs.current[tab.id] = el;
+              }}
+              id={`auto-ticket-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => selectTab(tab.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+              className={`relative flex-none inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+                isSelected
+                  ? 'text-foreground after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <Icon name={tab.icon} className="h-4 w-4" aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'policy' ? (
+        <div role="tabpanel" aria-labelledby="auto-ticket-tab-policy" tabIndex={0}>
+          <AutoTicketScopeSelector />
+        </div>
+      ) : (
+        <div role="tabpanel" aria-labelledby="auto-ticket-tab-rules" tabIndex={0} className="space-y-6">
 
       {(showCreate || editingId) && (
         <Card>
@@ -496,6 +579,8 @@ export default function AutoTicketRulesPage() {
         onClose={() => setDeleteTarget(null)}
         isLoading={deleteMutation.isPending}
       />
+        </div>
+      )}
     </div>
   );
 }

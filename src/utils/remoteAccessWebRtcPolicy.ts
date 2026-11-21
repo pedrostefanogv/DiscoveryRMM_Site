@@ -43,6 +43,8 @@ export interface WebRtcIceOptions {
   turnUrls: string[];
   turnUsername: string;
   turnCredential: string;
+  /** Sinalizador emitido apenas pelo GET quando há credencial salva (redigida). */
+  turnCredentialConfigured?: boolean;
   turnCredentialTtlMinutes: number;
   relayOnly: boolean;
   disconnectedTimeoutSeconds: number;
@@ -167,6 +169,7 @@ export function parsePolicy(json: string | null | undefined): RemoteAccessWebRtc
       turnUrls,
       turnUsername: typeof rawIce.turnUsername === "string" ? rawIce.turnUsername.trim() : "",
       turnCredential: typeof rawIce.turnCredential === "string" ? rawIce.turnCredential : "",
+      turnCredentialConfigured: rawIce.turnCredentialConfigured === true,
       turnCredentialTtlMinutes: clamp(ttl, 1, 1440, EMPTY_POLICY.ice.turnCredentialTtlMinutes),
       relayOnly: rawIce.relayOnly === true,
       disconnectedTimeoutSeconds: clamp(

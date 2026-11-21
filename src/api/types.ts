@@ -4686,6 +4686,8 @@ export interface AgentWindowsUpdate {
   isDownloaded?: boolean;
   /** Marcação de obrigatória vinda da busca WUA (campo opcional do agente). */
   isMandatory?: boolean;
+  /** Marcação de opcional/prévia vinda da busca WUA/WaaS (campo opcional do agente). */
+  isOptional?: boolean;
   /** Proveniência da severidade: vendor (MSRC) | derived (inferida) | unknown. */
   severitySource?: string | null;
   /** feature | driver | software — derivado no agente. */
@@ -4813,8 +4815,14 @@ export interface PatchInventoryGroup {
   groupKey: string;
   kbIds: string[];
   title: string;
+  description?: string | null;
   classification: string | null;
   severity: string | null;
+  supportUrl?: string | null;
+  updateType?: string | null;
+  isOptional?: boolean;
+  requiresReboot?: boolean;
+  source?: string | null;
   publishedAt: string | null;
   pendingAgents: number;
   installedAgents: number;

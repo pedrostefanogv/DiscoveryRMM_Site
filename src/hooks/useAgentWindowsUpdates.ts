@@ -20,6 +20,10 @@ export function useAgentWindowsUpdates(
     order?: "asc" | "desc";
     /** "windows" esconde apps de terceiros; "third-party" mostra só eles. */
     source?: string;
+    /** "feature" | "driver" | "software". */
+    updateType?: string;
+    /** Filtra atualizações opcionais/prévias. */
+    isOptional?: boolean;
   },
 ) {
   return useQuery({

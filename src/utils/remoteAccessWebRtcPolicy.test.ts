@@ -276,4 +276,22 @@ describe("validações de URL e kind", () => {
     expect(isValidKind("processes")).toBe(false);
     expect(isValidKind("registry")).toBe(false);
   });
+
+  it("lê turnCredentialConfigured do GET e o omite na serialização", () => {
+    const parsed = parsePolicy(
+      JSON.stringify({
+        enabled: true,
+        ice: {
+          turnUrls: ["turn:t.exemplo.com:3478"],
+          turnUsername: "u",
+          turnCredential: "",
+          turnCredentialConfigured: true,
+        },
+      }),
+    );
+
+    expect(parsed.ice.turnCredentialConfigured).toBe(true);
+    const serialized = JSON.parse(serializePolicy(parsed)) as { ice: Record<string, unknown> };
+    expect("turnCredentialConfigured" in serialized.ice).toBe(false);
+  });
 });

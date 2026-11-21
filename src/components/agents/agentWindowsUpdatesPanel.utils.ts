@@ -575,11 +575,19 @@ export interface PanelFilterState {
   status: string;
   /** Origem: "windows" / "third-party" (apps de terceiros) ou "" (todas). */
   source?: string;
+  /** Tipo/categoria: "software" | "feature" | "optional" | "". */
+  typeFilter?: string;
 }
 
 export function hasActiveFilters(filters: PanelFilterState): boolean {
-  return Boolean(filters.search.trim() || filters.severity || filters.status || filters.source);
+  return Boolean(filters.search.trim() || filters.severity || filters.status || filters.source || filters.typeFilter);
 }
+
+const TYPE_FILTER_LABELS: Record<string, string> = {
+  feature: "recursos",
+  optional: "opcionais",
+  software: "software",
+};
 
 /** Texto do vazio quando há filtro aplicado (diferente do vazio "de verdade"). */
 export function describeFilteredEmpty(filters: PanelFilterState): { title: string; description: string } {
@@ -588,6 +596,7 @@ export function describeFilteredEmpty(filters: PanelFilterState): { title: strin
   if (filters.severity) parts.push(`severidade ${filters.severity}`);
   if (filters.status) parts.push(`status ${filters.status}`);
   if (filters.source) parts.push(`origem ${filters.source}`);
+  if (filters.typeFilter) parts.push(`tipo ${TYPE_FILTER_LABELS[filters.typeFilter] ?? filters.typeFilter}`);
   return {
     title: "Nenhuma atualização corresponde aos filtros",
     description: parts.length > 0

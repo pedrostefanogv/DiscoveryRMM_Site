@@ -8,6 +8,7 @@ import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { useCreatePatchApproval, useInstallPatchScope, usePatchInventory, usePatchInventoryAgents, useScanPatchScope } from "@/hooks/usePatches";
 import { useSetAgentWindowsUpdateApproval } from "@/hooks/useAgentWindowsUpdates";
 import { useAuthorization } from "@/auth/authorization";
+import { UpdateDetailsSection } from "@/components/patches/UpdateInfoModal";
 import type { PatchInventoryAgent, PatchInventoryGroup, PatchScope } from "@/api/types";
 import {
   approvalColor,
@@ -22,7 +23,7 @@ import {
   statusLabel,
 } from "./patchesUtils";
 
-export default function PatchesInventory() {
+export default function PatchesInventory({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [scope, setScope] = useState<PatchScope>("global");
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -149,9 +150,32 @@ export default function PatchesInventory() {
       key: "update",
       header: "Atualização",
       render: (item) => (
-        <div>
-          <p className="font-medium text-foreground">{item.title}</p>
-          <p className="text-xs text-muted">{formatKbList(item.kbIds)} · {item.classification ?? "Sem classificação"}</p>
+        <div className="min-w-0 max-w-md space-y-0.5">
+          <button
+            type="button"
+            className="block max-w-full truncate text-left font-medium text-foreground hover:text-primary hover:underline"
+            title={item.title}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedGroup(item);
+              agentsPag.reset();
+            }}
+          >
+            {item.title}
+          </button>
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
+            <span className="font-mono text-[11px] text-foreground/80">{formatKbList(item.kbIds)}</span>
+            <span aria-hidden>·</span>
+            <span>{item.classification ?? "Sem classificação"}</span>
+            {item.updateType === "feature" ? <Badge color="accent">recursos</Badge> : null}
+            {item.isOptional ? <Badge color="slate">opcional</Badge> : null}
+            {item.requiresReboot ? <Badge color="warning">reinício</Badge> : null}
+          </p>
+          {item.description ? (
+            <p className="line-clamp-1 text-xs text-muted/90" title={item.description}>
+              {item.description}
+            </p>
+          ) : null}
         </div>
       ),
     },
@@ -290,19 +314,32 @@ export default function PatchesInventory() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Inventário de atualizações"
-        description="Visão por atualização (KB) com contagem de agentes pendentes/instalados e drill-down."
-      >
-        <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
-          <Icon name="refresh" className="h-4 w-4" />
-          Atualizar
-        </Button>
-        <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
-          <Icon name="download" className="h-4 w-4" />
-          {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
-        </Button>
-      </PageHeader>
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
+            <Icon name="refresh" className="h-4 w-4" />
+            Atualizar
+          </Button>
+          <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
+            <Icon name="download" className="h-4 w-4" />
+            {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
+          </Button>
+        </div>
+      ) : (
+        <PageHeader
+          title="Inventário de atualizações"
+          description="Visão por atualização (KB) com contagem de agentes pendentes/instalados e drill-down."
+        >
+          <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
+            <Icon name="refresh" className="h-4 w-4" />
+            Atualizar
+          </Button>
+          <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
+            <Icon name="download" className="h-4 w-4" />
+            {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
+          </Button>
+        </PageHeader>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <Select
@@ -403,13 +440,33 @@ export default function PatchesInventory() {
       <Modal
         open={selectedGroup !== null}
         onClose={() => setSelectedGroup(null)}
-        title={selectedGroup ? `Agentes — ${selectedGroup.title}` : "Agentes"}
+        title={selectedGroup ? selectedGroup.title : "Detalhes da atualização"}
         maxWidth="max-w-4xl"
       >
-        <div className="space-y-3">
-          <p className="text-sm text-muted">
-            {formatKbList(selectedGroup?.kbIds)} · {selectedGroup?.classification ?? "Sem classificação"} · {selectedGroup?.pendingAgents ?? 0} pendente(s)
-          </p>
+        <div className="space-y-4">
+          {selectedGroup ? (
+            <UpdateDetailsSection
+              item={{
+                title: selectedGroup.title,
+                description: selectedGroup.description,
+                kbIds: selectedGroup.kbIds,
+                groupKey: selectedGroup.groupKey,
+                classification: selectedGroup.classification,
+                severity: selectedGroup.severity,
+                updateType: selectedGroup.updateType,
+                isOptional: selectedGroup.isOptional,
+                requiresReboot: selectedGroup.requiresReboot,
+                source: selectedGroup.source,
+                supportUrl: selectedGroup.supportUrl,
+                publishedAt: selectedGroup.publishedAt,
+              }}
+            />
+          ) : null}
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-foreground">
+              Agentes neste escopo ({selectedGroup?.pendingAgents ?? 0} pendente(s) · {selectedGroup?.installedAgents ?? 0} instalada(s))
+            </h4>
+          </div>
           {agents.isLoading ? (
             <Loading />
           ) : agents.isError ? (

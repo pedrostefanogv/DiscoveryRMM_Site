@@ -7,7 +7,7 @@ import { useAuthorization } from '@/auth/authorization';
 
 const mainLinks: { to: string; icon: MaterialSymbolName; label: string }[] = [
   { to: '/', icon: "dashboard", label: 'Dashboard' },
-  { to: '/service-board', icon: "dashboard", label: 'Service Board' },
+  { to: '/service-board', icon: "checklist", label: 'Service Board' },
   { to: '/agents', icon: "desktop_windows", label: 'Agentes' },
   // Visão de frota do monitoramento (a aba "Sensores" continua no detalhe).
   { to: '/sensors', icon: "sensors", label: 'Sensores' },
@@ -30,8 +30,7 @@ const softwareLinks = [
 const patchesLinks = [
   { to: '/patches', label: 'Visão geral' },
   { to: '/patches/compliance', label: 'Conformidade' },
-  { to: '/patches/inventory', label: 'Inventário por atualização' },
-  { to: '/patches/pending', label: 'Pendências por agente' },
+  { to: '/patches/updates', label: 'Atualizações e pendências' },
   { to: '/patches/approvals', label: 'Aprovações e auditoria' },
   { to: '/patches/policy', label: 'Política' },
 ];
@@ -61,8 +60,7 @@ const ticketsLinks = [
   { to: '/tickets/alerts', label: 'Alertas' },
   { to: '/tickets/sla', label: 'SLA, Calendários e Perfis' },
   { to: '/tickets/departments', label: 'Departamentos' },
-  { to: '/tickets/auto-rules', label: 'Auto-Ticket (Regras)' },
-  { to: '/tickets/auto-policy', label: 'Auto-Ticket (Política)' },
+  { to: '/tickets/auto-rules', label: 'Auto-Ticket' },
   { to: '/settings/workflow-profiles', label: 'Workflow Profiles' },
 ];
 
@@ -70,13 +68,9 @@ const settingsLinks = [
   { to: '/settings', label: 'Geral' },
   { to: '/settings/ai-cost', label: 'Cockpit de custo IA' },
   { to: '/settings/server', label: 'Servidor' },
-  { to: '/settings/client', label: 'Cliente' },
-  { to: '/settings/site', label: 'Site' },
-  { to: '/settings/effective', label: 'Config. Efetiva' },
-  // Acesso remoto: consentimento e a allowlist de destinos do túnel do proxy.
-  { to: '/settings/remote-consent', label: 'Autorização Remota' },
-  { to: '/settings/proxy-policy', label: 'Destinos do Proxy' },
-  { to: '/settings/remote-webrtc', label: 'WebRTC' },
+  { to: '/settings/scope', label: 'Escopo (Cliente / Site)' },
+  // Acesso remoto unificado (consentimento, destinos do proxy e WebRTC).
+  { to: '/settings/remote-access', label: 'Acesso Remoto' },
   // Este menu é uma lista PRÓPRIA, paralela às rotas — registrar a página em
   // router.tsx não a faz aparecer aqui.
 
@@ -86,6 +80,7 @@ const settingsLinks = [
   { to: '/settings/mcp-tools', label: 'Ferramentas de IA (MCP)' },
   { to: '/settings/agent-updates', label: 'Agent Updates' },
   { to: '/settings/audit', label: 'Auditoria Config' },
+  { to: '/settings/database-maintenance', label: 'Manutenção do Banco' },
   { to: '/settings/branding', label: 'Branding' },
 ];
 
@@ -164,9 +159,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const patchesIsActive = location.pathname.startsWith('/patches');
   const automationIsActive = location.pathname.startsWith('/automation');
   const reportsIsActive = location.pathname.startsWith('/reports');
+  const isWorkflowProfiles = location.pathname.startsWith('/settings/workflow-profiles');
   const ticketsIsActive =
-    location.pathname.startsWith('/tickets') || location.pathname.startsWith('/knowledge');
-  const settingsIsActive = location.pathname.startsWith('/settings');
+    location.pathname.startsWith('/tickets') ||
+    location.pathname.startsWith('/knowledge') ||
+    isWorkflowProfiles;
+  const settingsIsActive = location.pathname.startsWith('/settings') && !isWorkflowProfiles;
   const identityIsActive = location.pathname.startsWith('/identity');
 
   // BUG-12: resolveActiveSection memoizado para evitar recriação a cada render
@@ -209,9 +207,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
   visibleTicketsLinks = canManageAutoTicketRules
     ? visibleTicketsLinks
-    : visibleTicketsLinks.filter(
-        ({ to }) => to !== '/tickets/auto-rules' && to !== '/tickets/auto-policy',
-      );
+    : visibleTicketsLinks.filter(({ to }) => to !== '/tickets/auto-rules');
   // A rota /automation/agent-labels repete a permissão do AgentLabelsController
   // (Agents.View), e NÃO a família automation.*: os dados rotulados são de agentes.
   // O menu espelha a MESMA regra, para não exibir um link que levaria a 403.

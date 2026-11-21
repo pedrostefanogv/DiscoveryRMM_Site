@@ -61,7 +61,7 @@ export function isPendingAgentOnline(agent: PatchPendingAgent, now: number): boo
   );
 }
 
-export default function PatchesPending() {
+export default function PatchesPending({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const [scope, setScope] = useState<PatchScope>("global");
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -258,19 +258,32 @@ export default function PatchesPending() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Pendências de atualizações"
-        description="Agentes com patches pendentes. Use a aba do agente para aprovar/recusar cada KB."
-      >
-        <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
-          <Icon name="refresh" className="h-4 w-4" />
-          Atualizar
-        </Button>
-        <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
-          <Icon name="download" className="h-4 w-4" />
-          {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
-        </Button>
-      </PageHeader>
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
+            <Icon name="refresh" className="h-4 w-4" />
+            Atualizar
+          </Button>
+          <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
+            <Icon name="download" className="h-4 w-4" />
+            {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
+          </Button>
+        </div>
+      ) : (
+        <PageHeader
+          title="Pendências de atualizações"
+          description="Agentes com patches pendentes. Use a aba do agente para aprovar/recusar cada KB."
+        >
+          <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
+            <Icon name="refresh" className="h-4 w-4" />
+            Atualizar
+          </Button>
+          <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
+            <Icon name="download" className="h-4 w-4" />
+            {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
+          </Button>
+        </PageHeader>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <Select

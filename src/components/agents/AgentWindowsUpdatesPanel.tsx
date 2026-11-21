@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import toast from "react-hot-toast";
 import { Icon, Badge, Button, ConfirmDialog, ContextMenu, DataTable, ErrorDisplay, Input, Loading, Modal, Pagination, Select, Tooltip, type Column, type ContextMenuItem } from "@/components/ui";
+import { UpdateInfoModal } from "@/components/patches/UpdateInfoModal";
 import { useAuthorization } from "@/auth/authorization";
 import { usePatchesRealtime } from "@/hooks/usePatchesRealtime";
 import {
@@ -78,6 +79,15 @@ const SOURCE_FILTER_OPTIONS = [
   { value: "third-party", label: "Só de terceiros" },
 ];
 
+type TypeFilter = "" | "software" | "feature" | "optional";
+
+const TYPE_FILTER_OPTIONS = [
+  { value: "", label: "Todos os tipos" },
+  { value: "software", label: "Atualizações padrão" },
+  { value: "feature", label: "Recursos / Versão" },
+  { value: "optional", label: "Opcionais / Prévias" },
+];
+
 const APPROVAL_FILTER_OPTIONS = [
   { value: "", label: "Todas as aprovações" },
   { value: "approved", label: "Aprovadas" },
@@ -103,6 +113,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [severity, setSeverity] = useState("");
   /** Filtro de origem: "windows" esconde apps de terceiros (já listados em Programas). */
   const [sourceFilter, setSourceFilter] = useState<"" | "windows" | "third-party">("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>("");
   const [approvalModal, setApprovalModal] = useState<ApprovalModalState | null>(null);
   const [approvalScope, setApprovalScope] = useState<PatchApprovalScopeType>("Agent");
@@ -112,6 +123,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [installPostAction, setInstallPostAction] = useState<"none" | "restart" | "shutdown">("none");
   const [confirmInstallApproved, setConfirmInstallApproved] = useState(false);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  const [detailsUpdate, setDetailsUpdate] = useState<AgentWindowsUpdate | null>(null);
   /** Menu "⋯" da linha: aprovar/recusar/forçar/suporte sem poluir a tabela. */
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number; update: AgentWindowsUpdate } | null>(null);
   /** Momento em que a última varredura foi solicitada por este painel. */
@@ -139,6 +151,8 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     status: effectiveStatus,
     severity: severity || undefined,
     source: sourceFilter || undefined,
+    updateType: typeFilter === "feature" || typeFilter === "software" ? typeFilter : undefined,
+    isOptional: typeFilter === "optional" ? true : undefined,
     order: "desc",
   });
   const scan = useScanAgentWindowsUpdates();
@@ -229,9 +243,9 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     scanGaveUp && !health.neverScanned && !scanAnswered && scanRequestedAtMs !== null;
 
   const summary = useMemo(() => describeSnapshotSummary(data), [data]);
-  const filters = { search: searchApplied, severity, status: approvalFilter, source: sourceFilter };
+  const filters = { search: searchApplied, severity, status: approvalFilter, source: sourceFilter, typeFilter };
   const filtersActive = hasActiveFilters(filters);
-  const filteredEmpty = useMemo(() => describeFilteredEmpty(filters), [searchApplied, severity, approvalFilter, sourceFilter]);
+  const filteredEmpty = useMemo(() => describeFilteredEmpty(filters), [searchApplied, severity, approvalFilter, sourceFilter, typeFilter]);
 
   const emptyMessage = useMemo(
     () =>
@@ -247,6 +261,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     setSearchApplied("");
     setSeverity("");
     setSourceFilter("");
+    setTypeFilter("");
     setApprovalFilter("");
     setPage(1);
   };
@@ -355,20 +370,30 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const rowMenuItems = useMemo<ContextMenuItem[]>(() => {
     const update = rowMenu?.update;
     if (!update) return [];
+    const isWaaS = update.source?.toLowerCase() === "waas";
     const items: ContextMenuItem[] = [
+      {
+        key: "details",
+        label: "Detalhes da atualização",
+        icon: <Icon name="info" className="h-4 w-4" />,
+        onClick: () => setDetailsUpdate(update),
+      },
       {
         key: "approve",
         label: "Aprovar…",
         icon: <Icon name="verified_user" className="h-4 w-4" />,
-        disabled: !canApprove,
+        separatorBefore: true,
+        disabled: !canApprove || isWaaS,
+        hint: isWaaS ? "Informativa (WaaS) — instale pelo Windows Update do host" : undefined,
         onClick: () => openApproval(update, "approve"),
       },
       {
         key: "deny",
         label: "Recusar…",
         icon: <Icon name="gpp_bad" className="h-4 w-4" />,
-        disabled: !canApprove,
+        disabled: !canApprove || isWaaS,
         danger: true,
+        hint: isWaaS ? "Informativa (WaaS) — não gerenciada pelo RMM" : undefined,
         onClick: () => openApproval(update, "deny"),
       },
     ];
@@ -406,7 +431,14 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         const sizeLabel = formatDownloadSizeLabel(update.minDownloadSize, update.maxDownloadSize);
         return (
         <div className="min-w-0">
-          <p className="truncate font-medium text-foreground" title={update.title}>{update.title}</p>
+          <button
+            type="button"
+            className="block max-w-full truncate text-left font-medium text-foreground hover:text-primary hover:underline"
+            title={update.title}
+            onClick={() => setDetailsUpdate(update)}
+          >
+            {update.title}
+          </button>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
             <span className="font-mono text-[11px] text-foreground/80">{formatKbList(update.kbIds)}</span>
             <span aria-hidden>·</span>
@@ -424,9 +456,24 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
                 </span>
               </>
             ) : null}
+            {update.updateType === "feature" ? (
+              <span title="Atualização de recursos / upgrade de versão do Windows">
+                <Badge color="accent">recursos</Badge>
+              </span>
+            ) : null}
+            {update.isOptional ? (
+              <span title="Atualização opcional ou prévia (não obrigatória)">
+                <Badge color="slate">opcional</Badge>
+              </span>
+            ) : null}
             {update.isMandatory ? <Badge color="warning">obrigatória</Badge> : null}
             {update.isDownloaded && update.isPending ? <Badge color="primary">baixada</Badge> : null}
           </p>
+          {update.description ? (
+            <p className="mt-0.5 truncate text-xs text-muted/90" title={update.description}>
+              {update.description}
+            </p>
+          ) : null}
         </div>
         );
       },
@@ -516,12 +563,18 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
       render: (update) => {
         if (update.isInstalled) return null;
         const busy = install.isPending || approve.isPending;
+        const isWaaS = update.source?.toLowerCase() === "waas";
         return (
           <div className="flex items-center justify-end gap-1">
             <Button
               size="sm"
               onClick={() => openInstall(update, false)}
-              disabled={busy || !canExecute}
+              disabled={busy || !canExecute || isWaaS}
+              title={
+                isWaaS
+                  ? "Atualização de versão detectada via WaaS — instale pelo Windows Update do host"
+                  : undefined
+              }
               aria-label={`Instalar ${update.title}`}
             >
               Instalar
@@ -848,6 +901,13 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
             onChange={(event) => { setSourceFilter(event.target.value as "" | "windows" | "third-party"); setPage(1); }}
             options={SOURCE_FILTER_OPTIONS}
           />
+          <Select
+            label="Tipo"
+            fullWidth={false}
+            value={typeFilter}
+            onChange={(event) => { setTypeFilter(event.target.value as TypeFilter); setPage(1); }}
+            options={TYPE_FILTER_OPTIONS}
+          />
           {view === "pending" && (
             <Select
               label="Aprovação"
@@ -1011,6 +1071,8 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           onClose={() => setRowMenu(null)}
         />
       )}
+
+      <UpdateInfoModal update={detailsUpdate} onClose={() => setDetailsUpdate(null)} />
 
       <Modal open={approvalModal !== null} onClose={() => setApprovalModal(null)} title={approvalModal?.action === "deny" ? "Recusar atualização" : "Aprovar atualização"}>
         <div className="space-y-3">

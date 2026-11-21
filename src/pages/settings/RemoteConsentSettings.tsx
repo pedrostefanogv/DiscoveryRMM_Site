@@ -76,7 +76,7 @@ function toRequest(form: FormState): RemoteConsentOverrideRequest {
   };
 }
 
-export default function RemoteConsentSettings() {
+export default function RemoteConsentSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const usersQuery = useIamUsers();
   const groupsQuery = useIamGroups();
   const clientsQuery = useClients();
@@ -195,8 +195,13 @@ export default function RemoteConsentSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Autorização de Acesso Remoto" description="Política efetiva: Servidor → Cliente → Site → Grupos → Usuário. Aplica-se somente a sessões de área de trabalho."   breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
-      />
+      {!embedded && (
+        <PageHeader
+          title="Autorização de Acesso Remoto"
+          description="Política efetiva: Servidor → Cliente → Site → Grupos → Usuário. Aplica-se somente a sessões de área de trabalho."
+          breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+        />
+      )}
 
       <Card>
         <CardHeader

@@ -59,7 +59,7 @@ type ScopeKind = "global" | "client" | "site";
  * servidores públicos gratuitos (Google e Cloudflare) para o operador não
  * precisar digitá-los ao ligar a feature.
  */
-export default function RemoteAccessWebRtcSettings() {
+export default function RemoteAccessWebRtcSettings({ embedded = false }: { embedded?: boolean } = {}) {
   const clientsQuery = useClients();
   const sitesQuery = useAllSites();
 
@@ -302,10 +302,12 @@ export default function RemoteAccessWebRtcSettings() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="WebRTC do Acesso Remoto"
-        description="Transporte direto (peer-to-peer) para tela, túnel RDP/TCP e arquivos. Herança: Global → Cliente → Site. Desligado, todo o tráfego continua pelo NATS."
-      />
+      {!embedded && (
+        <PageHeader
+          title="WebRTC do Acesso Remoto"
+          description="Transporte direto (peer-to-peer) para tela, túnel RDP/TCP e arquivos. Herança: Global → Cliente → Site. Desligado, todo o tráfego continua pelo NATS."
+        />
+      )}
 
       {error && <ErrorDisplay message={error} onRetry={() => void loadPolicy()} />}
 
@@ -545,8 +547,17 @@ export default function RemoteAccessWebRtcSettings() {
                     label="Credencial do TURN"
                     type="password"
                     value={policy.ice.turnCredential}
+                    placeholder={
+                      policy.ice.turnCredentialConfigured
+                        ? "Credencial salva (deixe em branco para manter)"
+                        : undefined
+                    }
                     onChange={(e) => updateIce({ turnCredential: e.target.value })}
-                    hint="Armazenada de forma protegida e nunca devolvida em claro."
+                    hint={
+                      policy.ice.turnCredentialConfigured && !policy.ice.turnCredential
+                        ? "Credencial já configurada no servidor. Deixe em branco para preservá-la ao salvar."
+                        : "Armazenada de forma protegida e nunca devolvida em claro."
+                    }
                   />
                 </div>
               )}

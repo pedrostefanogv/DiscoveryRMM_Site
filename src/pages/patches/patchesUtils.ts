@@ -175,3 +175,110 @@ export function formatDownloadSizeLabel(
   if (min > 0 && min < max) return "a partir de " + formatBytes(min);
   return "≈ " + formatBytes(max);
 }
+
+const KB_PATTERN = /\b(KB\d{4,10})\b/i;
+
+export function extractPrimaryKb(
+  kbIds?: string[] | null,
+  groupKey?: string | null,
+  title?: string | null,
+): string | null {
+  if (kbIds) {
+    for (const raw of kbIds) {
+      const match = raw?.trim().match(KB_PATTERN);
+      if (match) return match[1].toUpperCase();
+    }
+  }
+  if (groupKey) {
+    const match = groupKey.trim().match(KB_PATTERN);
+    if (match) return match[1].toUpperCase();
+  }
+  if (title) {
+    const match = title.match(KB_PATTERN);
+    if (match) return match[1].toUpperCase();
+  }
+  return null;
+}
+
+export interface UpdateInfoLink {
+  label: string;
+  url: string;
+  kind: "support" | "catalog";
+}
+
+function isSafeHttpUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed);
+}
+
+export function buildUpdateInfoLinks(input: {
+  supportUrl?: string | null;
+  kbIds?: string[] | null;
+  groupKey?: string | null;
+  title?: string | null;
+}): UpdateInfoLink[] {
+  const links: UpdateInfoLink[] = [];
+  const hasSupportUrl = isSafeHttpUrl(input.supportUrl);
+  if (hasSupportUrl) {
+    links.push({
+      label: "Página de suporte",
+      url: input.supportUrl!.trim(),
+      kind: "support",
+    });
+  }
+
+  const kb = extractPrimaryKb(input.kbIds, input.groupKey, input.title);
+  if (kb) {
+    if (!hasSupportUrl) {
+      links.push({
+        label: `Artigo Microsoft (${kb})`,
+        url: `https://support.microsoft.com/help/${kb.slice(2)}`,
+        kind: "support",
+      });
+    }
+    links.push({
+      label: "Catálogo Microsoft Update",
+      url: `https://www.catalog.update.microsoft.com/Search.aspx?q=${encodeURIComponent(kb)}`,
+      kind: "catalog",
+    });
+  } else if (!hasSupportUrl && input.title?.trim()) {
+    links.push({
+      label: "Buscar no Catálogo Microsoft Update",
+      url: `https://www.catalog.update.microsoft.com/Search.aspx?q=${encodeURIComponent(input.title.trim())}`,
+      kind: "catalog",
+    });
+  }
+
+  return links;
+}
+
+export function updateSourceLabel(source?: string | null): string {
+  switch ((source ?? "").trim().toLowerCase()) {
+    case "wua":
+      return "Windows Update (WUA)";
+    case "qfe":
+      return "Instalada (QFE)";
+    case "waas":
+      return "WaaS (Upgrade de versão)";
+    case "choco":
+      return "Chocolatey";
+    case "winget":
+      return "Winget";
+    default:
+      return source?.trim() || "—";
+  }
+}
+
+export function updateTypeLabel(updateType?: string | null): string {
+  switch ((updateType ?? "").trim().toLowerCase()) {
+    case "feature":
+      return "Recursos / Versão";
+    case "driver":
+      return "Driver";
+    case "software":
+      return "Software / Qualidade";
+    default:
+      return "Software / Qualidade";
+  }
+}

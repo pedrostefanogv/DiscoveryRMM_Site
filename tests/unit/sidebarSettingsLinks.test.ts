@@ -45,12 +45,13 @@ function extractLinkTargets(source: string, arrayName: string): string[] {
 }
 
 describe('menu lateral de Configurações', () => {
-  it('expõe Consentimento remoto e Destinos do Proxy', () => {
+  it('expõe Acesso Remoto unificado (Consentimento, Proxy e WebRTC)', () => {
     const targets = extractLinkTargets(SIDEBAR_SRC, 'settingsLinks');
 
-    // Ambos existiam como rota e como card, mas ficavam fora do menu.
-    expect(targets).toContain('/settings/remote-consent');
-    expect(targets).toContain('/settings/proxy-policy');
+    expect(targets).toContain('/settings/remote-access');
+    expect(ROUTER_SRC).toContain("path: 'settings/remote-consent'");
+    expect(ROUTER_SRC).toContain("path: 'settings/proxy-policy'");
+    expect(ROUTER_SRC).toContain("path: 'settings/remote-webrtc'");
   });
 
   it('todo destino de settingsLinks tem rota registrada', () => {

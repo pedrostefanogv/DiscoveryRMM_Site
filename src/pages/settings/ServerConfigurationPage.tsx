@@ -104,6 +104,19 @@ type SectionKey =
   | "attachments"
   | "advanced";
 
+const SERVER_SECTION_ENTRIES: { key: SectionKey; label: string; keywords: string }[] = [
+  { key: "features", label: "Funcionalidades", keywords: "modulos sensores descoberta p2p cloud chat ia suporte zero touch" },
+  { key: "policy", label: "Loja de apps", keywords: "app store politica aplicativos" },
+  { key: "maintenance", label: "Manutenção", keywords: "janela patches reboot horario fuso" },
+  { key: "mcp", label: "Tools MCP", keywords: "ia ferramentas mcp chat allowlist" },
+  { key: "remoteAccess", label: "Acesso remoto", keywords: "autorizacao consentimento banner desktop timeout" },
+  { key: "agent", label: "Agente", keywords: "heartbeat inventario offline aba inicial" },
+  { key: "storage", label: "Object storage", keywords: "s3 minio rustfs bucket endpoint cors credenciais" },
+  { key: "nats", label: "NATS", keywords: "realtime wss jwt broker host" },
+  { key: "attachments", label: "Anexos", keywords: "upload mime tamanho mb gb ttl" },
+  { key: "advanced", label: "Avançado", keywords: "ia background processing locks bloqueados auto update" },
+];
+
 const featureIcons: Record<string, React.ReactNode> = {
   recoveryEnabled: <Icon name="storage" className="h-4 w-4" />,
   discoveryEnabled: <Icon name="wifi" className="h-4 w-4" />,
@@ -144,6 +157,9 @@ export default function ServerConfigurationPage() {
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
   const [savingNats, setSavingNats] = useState(false);
   const [savingStorage, setSavingStorage] = useState(false);
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [onlyPendingSections, setOnlyPendingSections] = useState(false);
+  const [activeSection, setActiveSection] = useState<SectionKey>("features");
   const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>({
     features: false,
     policy: false,
@@ -549,24 +565,55 @@ export default function ServerConfigurationPage() {
     return counts;
   }, [pendingKeys, sectionFieldKeys]);
 
-  const sectionEntries: { key: SectionKey; label: string }[] = [
-    { key: "features", label: "Funcionalidades" },
-    { key: "policy", label: "Loja de apps" },
-    { key: "maintenance", label: "Manutenção" },
-    { key: "mcp", label: "Tools MCP" },
-    { key: "remoteAccess", label: "Acesso remoto" },
-    { key: "agent", label: "Agente" },
-    { key: "storage", label: "Object storage" },
-    { key: "nats", label: "NATS" },
-    { key: "attachments", label: "Anexos" },
-    { key: "advanced", label: "Avançado" },
-  ];
+  const normalizedSectionTerm = sectionFilter.trim().toLowerCase();
+  const effectiveOnlyPending = onlyPendingSections && pendingKeys.size > 0;
+
+  const visibleSectionEntries = useMemo(
+    () =>
+      SERVER_SECTION_ENTRIES.filter((entry) => {
+        if (effectiveOnlyPending && pendingCountBySection[entry.key] === 0) return false;
+        if (!normalizedSectionTerm) return true;
+        return (
+          entry.label.toLowerCase().includes(normalizedSectionTerm) ||
+          entry.keywords.includes(normalizedSectionTerm)
+        );
+      }),
+    [effectiveOnlyPending, normalizedSectionTerm, pendingCountBySection],
+  );
+
+  const isSectionVisible = (section: SectionKey) =>
+    visibleSectionEntries.some((entry) => entry.key === section);
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const elements = visibleSectionEntries
+      .map((entry) => document.getElementById(`server-config-${entry.key}`))
+      .filter((el): el is HTMLElement => Boolean(el));
+    if (elements.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          const id = visible[0].target.id.replace("server-config-", "") as SectionKey;
+          setActiveSection(id);
+        }
+      },
+      { rootMargin: "-140px 0px -60% 0px", threshold: 0.05 },
+    );
+
+    for (const el of elements) observer.observe(el);
+    return () => observer.disconnect();
+  }, [visibleSectionEntries]);
 
   const scrollToSection = (section: SectionKey) => {
+    setActiveSection(section);
     if (collapsedSections[section]) toggleSection(section);
     document
       .getElementById(`server-config-${section}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
 
   const allCollapsed = Object.values(collapsedSections).every(Boolean);
@@ -1096,69 +1143,185 @@ export default function ServerConfigurationPage() {
           </div>
         </PageHeader>
 
-        {/* Índice das seções: evita rolar 2 mil linhas para achar um bloco */}
-        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-background/90 px-2 py-1.5 backdrop-blur">
-          {sectionEntries.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => scrollToSection(entry.key)}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-light hover:text-foreground"
-            >
-              {entry.label}
-              {pendingCountBySection[entry.key] > 0 && (
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+        {/* Índice sticky das seções: navegação em linha única + filtro rápido */}
+        <div className="sticky top-16 z-10 space-y-2 rounded-2xl border border-border bg-background/95 p-2.5 shadow-sm backdrop-blur">
+          <div className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-border/70 pb-1">
+            {SERVER_SECTION_ENTRIES.map((entry) => {
+              const isCurrent = activeSection === entry.key;
+              const isMatched = isSectionVisible(entry.key);
+              const pending = pendingCountBySection[entry.key];
+              return (
+                <button
+                  key={entry.key}
+                  type="button"
+                  onClick={() => scrollToSection(entry.key)}
+                  aria-current={isCurrent ? "location" : undefined}
+                  className={`relative flex-none inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                    isCurrent
+                      ? "text-foreground after:absolute after:inset-x-1.5 after:-bottom-1 after:border-b-2 after:border-primary"
+                      : isMatched
+                        ? "text-muted hover:bg-surface-light hover:text-foreground"
+                        : "text-muted/40 hover:bg-surface-light hover:text-muted"
+                  }`}
+                >
+                  <span>{entry.label}</span>
+                  {pending > 0 && (
+                    <span
+                      className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[10px] font-semibold tabular-nums text-amber-600 dark:text-amber-300"
+                      aria-hidden="true"
+                    >
+                      {pending}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
+              <Icon
+                name="search"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+              />
+              <input
+                type="text"
+                value={sectionFilter}
+                onChange={(event) => setSectionFilter(event.target.value)}
+                aria-label="Filtrar seções do servidor"
+                placeholder="Filtrar seção (ex.: NATS, S3, IA, Anexos)…"
+                className="w-full rounded-lg border border-border bg-surface-light py-1.5 pl-8 pr-7 text-xs text-foreground placeholder-muted outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+              />
+              {sectionFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSectionFilter("")}
+                  aria-label="Limpar filtro de seção"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </button>
               )}
+            </div>
+
+            {pendingKeys.size > 0 && (
+              <button
+                type="button"
+                aria-pressed={effectiveOnlyPending}
+                onClick={() => setOnlyPendingSections((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  effectiveOnlyPending
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    : "border-border bg-surface-light text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon name="filter_alt" className="h-3.5 w-3.5" />
+                Só pendências ({pendingKeys.size})
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={toggleAllSections}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+            >
+              <Icon name={allCollapsed ? "expand_more" : "expand_less"} className="h-3.5 w-3.5" />
+              {allCollapsed ? "Expandir tudo" : "Recolher tudo"}
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={toggleAllSections}
-            className="ml-auto rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-light hover:text-foreground"
-          >
-            {allCollapsed ? "Expandir tudo" : "Recolher tudo"}
-          </button>
+          </div>
         </div>
 
-        {/* Resumo do servidor — mesmo visual dos demais cards (o gradiente
-            ciano antigo destoava do fundo padrão do tema). */}
+        {/* Resumo interativo do servidor: clicar salta para a respectiva seção */}
         <Card>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-border bg-surface-light p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Módulos ativos</p>
-              <p className="mt-1 text-lg font-semibold text-foreground">
+            <button
+              type="button"
+              onClick={() => scrollToSection("features")}
+              className="glass-card glass-card-interactive group rounded-xl border border-border bg-surface-light p-3.5 text-left transition-colors hover:border-primary/40"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-wide text-muted">Módulos ativos</p>
+                <Icon name="arrow_forward" className="h-3.5 w-3.5 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
+              <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
                 {enabledFeatureCount}/{featureToggleFields.length}
               </p>
               <p className="text-xs text-muted">Funcionalidades globais habilitadas</p>
-            </div>
-            <div className="rounded-xl border border-border bg-surface-light p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">NATS</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => scrollToSection("nats")}
+              className="glass-card glass-card-interactive group rounded-xl border border-border bg-surface-light p-3.5 text-left transition-colors hover:border-primary/40"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-wide text-muted">NATS</p>
+                <Icon name="arrow_forward" className="h-3.5 w-3.5 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
               <p className={`mt-1 text-lg font-semibold ${natsEnabled ? statusText.success : statusText.warning}`}>
                 {natsEnabled ? "Habilitado" : "Desabilitado"}
               </p>
               <p className="text-xs text-muted">Canal de realtime e comunicação</p>
-            </div>
-            <div className="rounded-xl border border-border bg-surface-light p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Object Storage</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => scrollToSection("storage")}
+              className="glass-card glass-card-interactive group rounded-xl border border-border bg-surface-light p-3.5 text-left transition-colors hover:border-primary/40"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-wide text-muted">Object Storage</p>
+                <Icon name="arrow_forward" className="h-3.5 w-3.5 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
               <p className={`mt-1 text-lg font-semibold ${storageConfigured ? statusText.success : statusText.warning}`}>
                 {storageConfigured ? "Configurado" : "Pendente"}
               </p>
               <p className="text-xs text-muted">Endpoint + bucket para anexos</p>
-            </div>
-            <div className="rounded-xl border border-border bg-surface-light p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Versão da configuração</p>
-              <p className="mt-1 text-lg font-semibold text-foreground">
+            </button>
+
+            <Link
+              to="/settings/scope"
+              className="glass-card glass-card-interactive group rounded-xl border border-border bg-surface-light p-3.5 text-left transition-colors hover:border-primary/40"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-wide text-muted">Versão da configuração</p>
+                <Icon name="layers" className="h-3.5 w-3.5 text-muted group-hover:text-primary" />
+              </div>
+              <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
                 {serverQuery.data?.version ?? "-"}
               </p>
-              <p className="text-xs text-muted">Marca e cores ficam em Branding</p>
-            </div>
+              <p className="text-xs text-muted">Ver sobrescritas Cliente / Site →</p>
+            </Link>
           </div>
         </Card>
+
+        {visibleSectionEntries.length === 0 && (
+          <Card>
+            <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
+              <p className="text-sm font-semibold text-foreground">
+                Nenhuma seção corresponde ao filtro atual
+              </p>
+              <p className="text-xs text-muted">
+                Limpe o termo de busca ou o filtro de pendências para exibir todas as seções.
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setSectionFilter("");
+                  setOnlyPendingSections(false);
+                }}
+              >
+                Limpar filtros
+              </Button>
+            </div>
+          </Card>
+        )}
 
         <ConfigHealthCard config={serverQuery.data} />
 
         {/* Funcionalidades */}
-        <Card id="server-config-features" className="scroll-mt-32">
+        <Card id="server-config-features" className={`scroll-mt-36 ${isSectionVisible("features") ? "" : "hidden"}`}>
           <CardHeader
             title="Funcionalidades do Sistema"
             subtitle="Ative ou desative módulos globalmente. Clique no card para alternar."
@@ -1203,7 +1366,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Política de loja */}
-        <Card id="server-config-policy" className="scroll-mt-32">
+        <Card id="server-config-policy" className={`scroll-mt-36 ${isSectionVisible("policy") ? "" : "hidden"}`}>
           <CardHeader
             title="Política da Loja de Aplicativos"
             subtitle="Define quais aplicativos podem ser instalados pelos agentes."
@@ -1222,7 +1385,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Janela de manutenção (reboot/patches) */}
-        <Card id="server-config-maintenance" className="scroll-mt-32">
+        <Card id="server-config-maintenance" className={`scroll-mt-36 ${isSectionVisible("maintenance") ? "" : "hidden"}`}>
           <CardHeader
             title="Janela de Manutenção (Reboot/Patches)"
             subtitle={
@@ -1264,7 +1427,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Tools MCP do chat do agent: apenas atalho para a governança */}
-        <Card id="server-config-mcp" className="scroll-mt-32">
+        <Card id="server-config-mcp" className={`scroll-mt-36 ${isSectionVisible("mcp") ? "" : "hidden"}`}>
           <CardHeader
             title="Tools MCP (Ferramentas de IA)"
             subtitle="A política das ferramentas de IA (MCP) é gerenciada em uma única tela: habilitar/desabilitar por tool e por escopo (Global → Cliente → Site → Agente), com rate limit, timeout e bloqueio de herança."
@@ -1292,7 +1455,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Autorização de acesso remoto (desktop) */}
-        <Card id="server-config-remoteAccess" className="scroll-mt-32">
+        <Card id="server-config-remoteAccess" className={`scroll-mt-36 ${isSectionVisible("remoteAccess") ? "" : "hidden"}`}>
           <CardHeader
             title="Autorização de Acesso Remoto"
             subtitle="Somente sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização."
@@ -1329,7 +1492,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Agente */}
-        <Card id="server-config-agent" className="scroll-mt-32">
+        <Card id="server-config-agent" className={`scroll-mt-36 ${isSectionVisible("agent") ? "" : "hidden"}`}>
           <CardHeader
             title="Intervalos e Comportamento do Agente"
             subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário."
@@ -1350,7 +1513,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Object Storage */}
-        <Card id="server-config-storage" className="scroll-mt-32">
+        <Card id="server-config-storage" className={`scroll-mt-36 ${isSectionVisible("storage") ? "" : "hidden"}`}>
           <CardHeader
             title="Armazenamento de Objetos (S3 / MinIO)"
             subtitle="Configuração do backend S3-compatível usado para arquivos de tickets e outros uploads."
@@ -1497,7 +1660,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* NATS */}
-        <Card id="server-config-nats" className="scroll-mt-32">
+        <Card id="server-config-nats" className={`scroll-mt-36 ${isSectionVisible("nats") ? "" : "hidden"}`}>
           <CardHeader
             title="Servidor NATS"
             subtitle="Configuração exclusiva do servidor. Informe apenas host/IP; porta 4222 é fixa."
@@ -1572,7 +1735,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Anexos de Tickets */}
-        <div id="server-config-attachments" className="scroll-mt-32">
+        <div id="server-config-attachments" className={`scroll-mt-36 ${isSectionVisible("attachments") ? "" : "hidden"}`}>
         <TicketAttachmentSettingsCard
           collapsed={collapsedSections.attachments}
           onToggleCollapse={() => toggleSection("attachments")}
@@ -1580,7 +1743,7 @@ export default function ServerConfigurationPage() {
         </div>
 
         {/* Configurações avançadas */}
-        <Card id="server-config-advanced" className="scroll-mt-32">
+        <Card id="server-config-advanced" className={`scroll-mt-36 ${isSectionVisible("advanced") ? "" : "hidden"}`}>
           <CardHeader
             title="Configurações Avançadas"
             subtitle="IA, auto-update e governança de herança. Branding permanece em /settings/branding."

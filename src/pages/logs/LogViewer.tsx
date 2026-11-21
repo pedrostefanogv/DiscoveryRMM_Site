@@ -1,11 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import toast from 'react-hot-toast';
 
 import { LogLevel, LogSource, LogType } from '@/api';
-import { getLogLevelMeta } from '@/utils/labels';
 import type { LogEntry, LogsQuery } from '@/api';
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  ErrorDisplay,
+  Icon,
+  Input,
+  Loading,
+  PageHeader,
+  Select,
+  StatCard,
+} from '@/components/ui';
 import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
+import { getLogLevelMeta } from '@/utils/labels';
 import { readDataField } from './logDataUtils';
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
 
 const initialFilters: LogsQuery = {
   limit: 50,
@@ -32,13 +46,13 @@ const typeLabels: Record<number, string> = {
   [LogType.CustomField]: 'Campo customizado',
 };
 
-const periodOptions = [
-  { value: '', label: 'Período manual' },
-  { value: '15m', label: 'Últimos 15 min' },
-  { value: '1h', label: 'Última 1h' },
-  { value: '24h', label: 'Últimas 24h' },
-  { value: '7d', label: 'Últimos 7 dias' },
-  { value: '30d', label: 'Últimos 30 dias' },
+const periodQuickOptions: Array<{ value: string; label: string }> = [
+  { value: '15m', label: '15m' },
+  { value: '1h', label: '1h' },
+  { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: '', label: 'Manual' },
 ];
 
 const periodLabels: Record<string, string> = {
@@ -62,7 +76,12 @@ const advancedFilterKeys = new Set<keyof LogsQuery>([
   'limit',
 ]);
 
-const filterPresets: Array<{ id: string; label: string; filters: LogsQuery; tone: 'slate' | 'primary' | 'warning' | 'danger' }> = [
+const filterPresets: Array<{
+  id: string;
+  label: string;
+  filters: LogsQuery;
+  tone: 'slate' | 'primary' | 'warning' | 'danger';
+}> = [
   {
     id: 'recent-errors',
     label: 'Erros 1h',
@@ -124,8 +143,8 @@ function normalizeFilters(filters: LogsQuery): LogsQuery {
     requestPath: filters.requestPath?.trim() || undefined,
     statusCode: Number.isFinite(filters.statusCode) ? filters.statusCode : undefined,
     period: filters.period || undefined,
-    from: toUtcIso(filters.from),
-    to: toUtcIso(filters.to),
+    from: filters.period ? undefined : toUtcIso(filters.from),
+    to: filters.period ? undefined : toUtcIso(filters.to),
     limit: filters.limit && filters.limit > 0 ? Math.min(filters.limit, 200) : 50,
   };
 }
@@ -156,6 +175,13 @@ function getNumberValue(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function statusBadgeTone(statusCode: number): string {
+  if (statusCode >= 500) return 'border-danger/40 bg-danger/10 text-danger';
+  if (statusCode >= 400) return 'border-warning/40 bg-warning/10 text-warning';
+  if (statusCode >= 200 && statusCode < 300) return 'border-success/30 bg-success/10 text-success';
+  return 'border-border bg-surface-light text-muted-foreground';
+}
+
 export default function LogViewer() {
   const [draftFilters, setDraftFilters] = useState<LogsQuery>(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState<LogsQuery>(initialFilters);
@@ -183,11 +209,12 @@ export default function LogViewer() {
   );
   const visibleSiteIds = useMemo(() => new Set(visibleSites.map(site => site.id)), [visibleSites]);
   const visibleAgents = useMemo(
-    () => agents.filter(agent => {
-      if (draftFilters.siteId) return agent.siteId === draftFilters.siteId;
-      if (draftFilters.clientId) return visibleSiteIds.has(agent.siteId);
-      return true;
-    }),
+    () =>
+      agents.filter(agent => {
+        if (draftFilters.siteId) return agent.siteId === draftFilters.siteId;
+        if (draftFilters.clientId) return visibleSiteIds.has(agent.siteId);
+        return true;
+      }),
     [agents, draftFilters.siteId, draftFilters.clientId, visibleSiteIds],
   );
 
@@ -202,7 +229,10 @@ export default function LogViewer() {
   const sourceOptions = useMemo(
     () => [
       { value: '', label: 'Todas as fontes' },
-      ...(options?.logSources ?? []).map(option => ({ value: String(option.id), label: sourceLabels[option.id] ?? option.value })),
+      ...(options?.logSources ?? []).map(option => ({
+        value: String(option.id),
+        label: sourceLabels[option.id] ?? option.value,
+      })),
     ],
     [options?.logSources],
   );
@@ -210,7 +240,10 @@ export default function LogViewer() {
   const typeOptions = useMemo(
     () => [
       { value: '', label: 'Todos os tipos' },
-      ...(options?.logTypes ?? []).map(option => ({ value: String(option.id), label: typeLabels[option.id] ?? option.value })),
+      ...(options?.logTypes ?? []).map(option => ({
+        value: String(option.id),
+        label: typeLabels[option.id] ?? option.value,
+      })),
     ],
     [options?.logTypes],
   );
@@ -282,6 +315,32 @@ export default function LogViewer() {
     setAppliedFilters(normalizeFilters(draftFilters));
   }
 
+  function handleFilterSubmit(event: FormEvent) {
+    event.preventDefault();
+    applyFilters();
+  }
+
+  function applyPatchAndRun(patch: Partial<LogsQuery>) {
+    const nextDraft = { ...draftFilters, ...patch };
+    const normalized = normalizeFilters(nextDraft);
+    setDraftFilters(nextDraft);
+    setAppliedFilters(normalized);
+  }
+
+  function selectQuickPeriod(periodValue: string) {
+    if (periodValue === '') {
+      setDraftFilters(current => ({ ...current, period: undefined }));
+      setShowAdvancedFilters(true);
+      return;
+    }
+    applyPatchAndRun({ period: periodValue, from: undefined, to: undefined });
+  }
+
+  function toggleLevelStatFilter(level: LogLevel) {
+    const nextLevel = appliedFilters.level === level ? undefined : level;
+    applyPatchAndRun({ level: nextLevel });
+  }
+
   function clearAppliedFilter(key: keyof LogsQuery) {
     const nextValue = key === 'limit' ? 50 : undefined;
     setDraftFilters(current => ({ ...current, [key]: nextValue } as LogsQuery));
@@ -306,6 +365,18 @@ export default function LogViewer() {
     const next = normalizeFilters({ ...initialFilters, ...preset });
     setDraftFilters(next);
     setAppliedFilters(next);
+  }
+
+  function exportLoadedLogs() {
+    if (allLogs.length === 0) return;
+    const blob = new Blob([JSON.stringify(allLogs, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `logs-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${allLogs.length} evento(s) exportado(s) em JSON.`);
   }
 
   function handleClientChange(value: string) {
@@ -338,280 +409,389 @@ export default function LogViewer() {
     }));
   }
 
+  const isSyncing = logs.isFetching || summary.isFetching;
+  const totalCount = summary.data ? summary.data.total : allLogs.length;
+  const leaderSource = summary.data?.sources[0];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Logs"
-        description="Monitoramento operacional com foco em triagem rápida e investigação progressiva"
+        description="Console de observabilidade para triagem rápida, correlação de traces e investigação progressiva."
       >
-        <Button variant="ghost" onClick={refreshData} loading={logs.isFetching || summary.isFetching}>
+        <Badge color={isSyncing ? 'warning' : 'success'} className="gap-1.5 py-1">
+          <span
+            className={`h-2 w-2 rounded-full ${isSyncing ? 'animate-pulse bg-warning' : 'bg-success'}`}
+            aria-hidden="true"
+          />
+          {isSyncing ? 'Atualizando…' : 'Dados sincronizados'}
+        </Badge>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={exportLoadedLogs}
+          disabled={allLogs.length === 0}
+          title="Exporta os eventos atualmente carregados"
+        >
+          <Icon name="download" className="h-4 w-4" />
+          Exportar JSON
+        </Button>
+
+        <Button variant="secondary" size="sm" onClick={refreshData} loading={isSyncing}>
           <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
       </PageHeader>
 
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary/90">Visão atual</p>
-            <p className="mt-2 text-3xl font-semibold text-foreground">{summary.data ? summary.data.total : allLogs.length}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {summary.data ? 'eventos no filtro aplicado' : 'eventos carregados no momento'}
-            </p>
-          </div>
-          <div className="flex flex-col items-start gap-2 text-xs text-muted sm:items-end">
-            <Badge color={logs.isFetching || summary.isFetching ? 'warning' : 'accent'}>
-              {logs.isFetching || summary.isFetching ? 'Atualizando dados...' : 'Dados sincronizados'}
-            </Badge>
-            <span>{firstPage ? `Lote ${allLogs.length}${firstPage.hasMore ? '+' : ''}` : 'Sem paginação ativa'}</span>
-          </div>
-        </div>
-      </Card>
-
-      {summary.data ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            title="Erros críticos"
-            value={String(quickStats.criticalErrors)}
-            hint="Ocorrências Error + Fatal"
-          />
-          <StatCard
-            title="Alertas Warn"
-            value={String(quickStats.warn)}
-            hint="Eventos que pedem atenção"
-          />
-          <StatCard
-            title="Fontes ativas"
-            value={String(summary.data.sources.length)}
-            hint={summary.data.sources[0]
-              ? 'Líder: ' + summary.data.sources[0].key + ' (' + summary.data.sources[0].count + ' · ' + formatShare(summary.data.sources[0].count, summary.data.total) + ')'
-              : 'Sem fonte predominante'}
-          />
-          <StatCard
-            title="Tipos ativos"
-            value={String(summary.data.types.length)}
-            hint={summary.data.types[0]
-              ? 'Líder: ' + summary.data.types[0].key + ' (' + summary.data.types[0].count + ' · ' + formatShare(summary.data.types[0].count, summary.data.total) + ')'
-              : 'Sem tipo predominante'}
-          />
-        </div>
-      ) : null}
-
-      <Card>
-        <CardHeader
-          title="Filtros"
-          subtitle="Filtros rápidos para o dia a dia e painel avançado para investigações profundas."
-          action={
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={resetFilters}>Limpar</Button>
-              <Button onClick={applyFilters}>Aplicar filtros</Button>
-            </div>
+      {/* Faixa de KPIs interativa — clicar em Erros/Warn alterna o filtro */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          icon="article"
+          label="Total no filtro"
+          value={totalCount}
+          tone="primary"
+          trend={
+            firstPage ? (
+              <span className="text-xs tabular-nums text-muted">
+                {allLogs.length}
+                {firstPage.hasMore ? '+' : ''} carregados
+              </span>
+            ) : null
           }
         />
+        <StatCard
+          icon="error"
+          label="Erros críticos"
+          value={summary.data ? quickStats.criticalErrors : '—'}
+          tone="warning"
+          active={appliedFilters.level === LogLevel.Error}
+          onClick={() => toggleLevelStatFilter(LogLevel.Error)}
+          trend={
+            <span className="text-[11px] text-muted">
+              {appliedFilters.level === LogLevel.Error ? 'Filtrado' : 'Error + Fatal'}
+            </span>
+          }
+        />
+        <StatCard
+          icon="warning"
+          label="Alertas Warn"
+          value={summary.data ? quickStats.warn : '—'}
+          tone="accent"
+          active={appliedFilters.level === LogLevel.Warn}
+          onClick={() => toggleLevelStatFilter(LogLevel.Warn)}
+          trend={
+            <span className="text-[11px] text-muted">
+              {appliedFilters.level === LogLevel.Warn ? 'Filtrado' : 'Atenção'}
+            </span>
+          }
+        />
+        <StatCard
+          icon="dns"
+          label="Fonte principal"
+          value={leaderSource ? leaderSource.key : '—'}
+          tone="success"
+          trend={
+            leaderSource && summary.data ? (
+              <span className="text-xs tabular-nums text-muted">
+                {formatShare(leaderSource.count, summary.data.total)}
+              </span>
+            ) : null
+          }
+        />
+      </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <Select
-            label="Período"
-            options={periodOptions}
-            value={draftFilters.period ?? ''}
-            onChange={e => setTextFilter('period', e.target.value)}
-          />
-          <Select
-            label="Nível"
-            options={levelOptions}
-            value={draftFilters.level !== undefined ? String(draftFilters.level) : ''}
-            onChange={e => setDraftFilters(f => ({ ...f, level: e.target.value ? Number(e.target.value) as LogLevel : undefined }))}
-          />
-          <Select
-            label="Fonte"
-            options={sourceOptions}
-            value={draftFilters.source !== undefined ? String(draftFilters.source) : ''}
-            onChange={e => setDraftFilters(f => ({ ...f, source: e.target.value ? Number(e.target.value) as LogSource : undefined }))}
-          />
-          <Input
-            label="Busca textual"
-            placeholder="Mensagem ou conteúdo do DataJson"
-            value={draftFilters.search ?? ''}
-            onChange={e => setTextFilter('search', e.target.value)}
-            className="xl:col-span-2"
-          />
-          <Input
-            label="Status Code"
-            type="number"
-            placeholder="500"
-            value={draftFilters.statusCode ?? ''}
-            onChange={e => setDraftFilters(f => ({ ...f, statusCode: e.target.value ? Number(e.target.value) : undefined }))}
-          />
-        </div>
+      {/* Painel compacto de filtros + atalhos + filtros ativos */}
+      <Card padding={false} className="p-4">
+        <form onSubmit={handleFilterSubmit} className="space-y-3.5">
+          {/* Linha superior: períodos rápidos + atalhos operacionais */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 pb-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs font-medium text-muted">Período:</span>
+              {periodQuickOptions.map(option => {
+                const active = (draftFilters.period ?? '') === option.value;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => selectQuickPeriod(option.value)}
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? 'border-primary/50 bg-primary/15 text-primary'
+                        : 'border-border bg-surface-light text-muted-foreground hover:border-border-strong hover:text-foreground'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
 
-        <div className="mt-4 rounded-xl border border-border bg-surface-light p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs uppercase tracking-wide text-muted">Atalhos operacionais</div>
-            <Button variant="ghost" size="sm" onClick={() => applyPreset(initialFilters)}>
-              Visão padrão
-            </Button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {filterPresets.map(preset => (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-xs font-medium text-muted">Atalhos:</span>
+              {filterPresets.map(preset => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset.filters)}
+                  className="rounded-full transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                  <Badge color={preset.tone}>{preset.label}</Badge>
+                </button>
+              ))}
               <button
-                key={preset.id}
                 type="button"
-                onClick={() => applyPreset(preset.filters)}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-light/80"
+                onClick={() => applyPreset(initialFilters)}
+                className="rounded-full border border-border bg-surface-light px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
               >
-                <Badge color={preset.tone}>{preset.label}</Badge>
-                <span>Aplicar</span>
+                Padrão
               </button>
-            ))}
+            </div>
           </div>
-        </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            onClick={() => setShowAdvancedFilters(current => !current)}
-            aria-expanded={showAdvancedFilters ? 'true' : 'false'}
-          >
-            {showAdvancedFilters ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
-            <span>{showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'}</span>
-          </button>
-          <span className="text-xs text-muted">
-            {advancedActiveCount > 0 ? `${advancedActiveCount} filtros avançados ativos` : 'Nenhum filtro avançado ativo'}
-          </span>
-        </div>
+          {/* Linha principal de filtros */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-12 lg:items-end">
+            <div className="relative lg:col-span-5">
+              <Input
+                label="Busca textual"
+                placeholder="Mensagem, erro ou conteúdo do DataJson (Enter para buscar)"
+                value={draftFilters.search ?? ''}
+                onChange={e => setTextFilter('search', e.target.value)}
+                className="pl-9"
+              />
+              <Icon
+                name="search"
+                className="pointer-events-none absolute left-3 bottom-2.5 h-4 w-4 text-muted"
+              />
+            </div>
 
-        {showAdvancedFilters ? (
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Select
-              label="Cliente"
-              options={[{ value: '', label: 'Todos os clientes' }, ...(options?.clients ?? []).map(client => ({ value: client.id, label: client.name }))]}
-              value={draftFilters.clientId ?? ''}
-              onChange={e => handleClientChange(e.target.value)}
-              disabled={scopeOptions.isLoading}
-            />
-            <Select
-              label="Site"
-              options={[{ value: '', label: 'Todos os sites' }, ...visibleSites.map(site => ({ value: site.id, label: site.name }))]}
-              value={draftFilters.siteId ?? ''}
-              onChange={e => handleSiteChange(e.target.value)}
-              disabled={scopeOptions.isLoading}
-            />
-            <Select
-              label="Agente"
-              options={[{ value: '', label: 'Todos os agentes' }, ...visibleAgents.map(agent => ({ value: agent.id, label: agent.label }))]}
-              value={draftFilters.agentId ?? ''}
-              onChange={e => handleAgentChange(e.target.value)}
-              disabled={scopeOptions.isLoading}
-            />
-            <Select
-              label="Tipo"
-              options={typeOptions}
-              value={draftFilters.type !== undefined ? String(draftFilters.type) : ''}
-              onChange={e => setDraftFilters(f => ({ ...f, type: e.target.value ? Number(e.target.value) as LogType : undefined }))}
-            />
-            <Input
-              label="Limite"
-              type="number"
-              min={1}
-              max={200}
-              value={draftFilters.limit ?? 50}
-              onChange={e => setDraftFilters(f => ({ ...f, limit: Number(e.target.value) || 50 }))}
-            />
-            <Input
-              label="Trace ID"
-              placeholder="trace-123"
-              value={draftFilters.traceId ?? ''}
-              onChange={e => setTextFilter('traceId', e.target.value)}
-            />
-            <Input
-              label="Correlation ID"
-              placeholder="corr-55"
-              value={draftFilters.correlationId ?? ''}
-              onChange={e => setTextFilter('correlationId', e.target.value)}
-            />
-            <Input
-              label="Request Path"
-              placeholder="/api/v1/auth/refresh"
-              value={draftFilters.requestPath ?? ''}
-              onChange={e => setTextFilter('requestPath', e.target.value)}
-            />
-            {draftFilters.period ? null : (
-              <>
-                <Input
-                  label="De"
-                  type="datetime-local"
-                  value={draftFilters.from ?? ''}
-                  onChange={e => setTextFilter('from', e.target.value)}
+            <div className="lg:col-span-2">
+              <Select
+                label="Nível"
+                options={levelOptions}
+                value={draftFilters.level !== undefined ? String(draftFilters.level) : ''}
+                onChange={e =>
+                  setDraftFilters(f => ({
+                    ...f,
+                    level: e.target.value ? (Number(e.target.value) as LogLevel) : undefined,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="lg:col-span-2">
+              <Select
+                label="Fonte"
+                options={sourceOptions}
+                value={draftFilters.source !== undefined ? String(draftFilters.source) : ''}
+                onChange={e =>
+                  setDraftFilters(f => ({
+                    ...f,
+                    source: e.target.value ? (Number(e.target.value) as LogSource) : undefined,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="lg:col-span-1">
+              <Input
+                label="HTTP"
+                type="number"
+                placeholder="500"
+                value={draftFilters.statusCode ?? ''}
+                onChange={e =>
+                  setDraftFilters(f => ({
+                    ...f,
+                    statusCode: e.target.value ? Number(e.target.value) : undefined,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 lg:col-span-2">
+              <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
+                Limpar
+              </Button>
+              <Button type="submit" size="sm">
+                Aplicar
+              </Button>
+            </div>
+          </div>
+
+          {/* Toggles de painéis extras */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setShowAdvancedFilters(current => !current)}
+                aria-expanded={showAdvancedFilters ? 'true' : 'false'}
+              >
+                <Icon
+                  name={showAdvancedFilters ? 'expand_less' : 'expand_more'}
+                  className="h-4 w-4"
                 />
-                <Input
-                  label="Até"
-                  type="datetime-local"
-                  value={draftFilters.to ?? ''}
-                  onChange={e => setTextFilter('to', e.target.value)}
-                />
-              </>
+                <span>
+                  {showAdvancedFilters ? 'Ocultar filtros avançados' : 'Filtros avançados'}
+                </span>
+                {advancedActiveCount > 0 && (
+                  <Badge color="primary">{advancedActiveCount}</Badge>
+                )}
+              </button>
+
+              {summary.data && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => setShowDetailedAnalytics(current => !current)}
+                  aria-expanded={showDetailedAnalytics ? 'true' : 'false'}
+                >
+                  <Icon name="insert_chart" className="h-4 w-4 text-primary" />
+                  <span>
+                    {showDetailedAnalytics ? 'Ocultar distribuição' : 'Ver distribuição e top entidades'}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {activeFilterChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeFilterChips.map(chip => (
+                  <button
+                    key={`${chip.key}-${chip.label}`}
+                    type="button"
+                    onClick={() => clearAppliedFilter(chip.key)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-light px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:bg-surface-hover hover:text-foreground"
+                    title="Clique para remover filtro"
+                  >
+                    <span>{chip.label}</span>
+                    <Icon name="close" className="h-3 w-3 text-muted" />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-        ) : null}
-      </Card>
 
-      {activeFilterChips.length > 0 ? (
-        <Card>
-          <div className="mb-3 text-xs uppercase tracking-wide text-muted">Filtros ativos</div>
-          <div className="flex flex-wrap gap-2">
-            {activeFilterChips.map(chip => (
-              <button
-                key={`${chip.key}-${chip.label}`}
-                type="button"
-                onClick={() => clearAppliedFilter(chip.key)}
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-muted-foreground hover:bg-surface-hover"
-              >
-                <span>{chip.label}</span>
-                <span className="text-muted">x</span>
-              </button>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
-      {summary.data ? (
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-foreground">Análise detalhada</h3>
-              <p className="text-sm text-muted">Distribuições por nível, fonte, tipo e escopo operacional.</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDetailedAnalytics(current => !current)}
-            >
-              {showDetailedAnalytics ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
-              {showDetailedAnalytics ? 'Ocultar detalhes' : 'Exibir detalhes'}
-            </Button>
-          </div>
-          {showDetailedAnalytics ? (
-            <div className="mt-4 space-y-4">
-              <div className="grid gap-4 xl:grid-cols-3">
-                <FacetCard title="Níveis" items={summary.data.levels} />
-                <FacetCard title="Fontes" items={summary.data.sources} />
-                <FacetCard title="Tipos" items={summary.data.types} />
-              </div>
-              <div className="grid gap-4 xl:grid-cols-3">
-                <FacetCard title="Clientes (top 10)" items={summary.data.clients.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-                <FacetCard title="Sites (top 10)" items={summary.data.sites.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-                <FacetCard title="Agentes (top 10)" items={summary.data.agents.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-              </div>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted">
-              Abra os detalhes somente quando precisar analisar distribuição e concentração de eventos.
+          {showAdvancedFilters && (
+            <div className="grid gap-3 border-t border-border/70 pt-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Select
+                label="Cliente"
+                options={[
+                  { value: '', label: 'Todos os clientes' },
+                  ...(options?.clients ?? []).map(client => ({ value: client.id, label: client.name })),
+                ]}
+                value={draftFilters.clientId ?? ''}
+                onChange={e => handleClientChange(e.target.value)}
+                disabled={scopeOptions.isLoading}
+              />
+              <Select
+                label="Site"
+                options={[
+                  { value: '', label: 'Todos os sites' },
+                  ...visibleSites.map(site => ({ value: site.id, label: site.name })),
+                ]}
+                value={draftFilters.siteId ?? ''}
+                onChange={e => handleSiteChange(e.target.value)}
+                disabled={scopeOptions.isLoading}
+              />
+              <Select
+                label="Agente"
+                options={[
+                  { value: '', label: 'Todos os agentes' },
+                  ...visibleAgents.map(agent => ({ value: agent.id, label: agent.label })),
+                ]}
+                value={draftFilters.agentId ?? ''}
+                onChange={e => handleAgentChange(e.target.value)}
+                disabled={scopeOptions.isLoading}
+              />
+              <Select
+                label="Tipo"
+                options={typeOptions}
+                value={draftFilters.type !== undefined ? String(draftFilters.type) : ''}
+                onChange={e =>
+                  setDraftFilters(f => ({
+                    ...f,
+                    type: e.target.value ? (Number(e.target.value) as LogType) : undefined,
+                  }))
+                }
+              />
+              <Input
+                label="Limite por lote"
+                type="number"
+                min={1}
+                max={200}
+                value={draftFilters.limit ?? 50}
+                onChange={e => setDraftFilters(f => ({ ...f, limit: Number(e.target.value) || 50 }))}
+              />
+              <Input
+                label="Trace ID"
+                placeholder="trace-123"
+                value={draftFilters.traceId ?? ''}
+                onChange={e => setTextFilter('traceId', e.target.value)}
+              />
+              <Input
+                label="Correlation ID"
+                placeholder="corr-55"
+                value={draftFilters.correlationId ?? ''}
+                onChange={e => setTextFilter('correlationId', e.target.value)}
+              />
+              <Input
+                label="Request Path"
+                placeholder="/api/v1/auth/refresh"
+                value={draftFilters.requestPath ?? ''}
+                onChange={e => setTextFilter('requestPath', e.target.value)}
+              />
+              {!draftFilters.period && (
+                <>
+                  <Input
+                    label="De"
+                    type="datetime-local"
+                    value={draftFilters.from ?? ''}
+                    onChange={e => setTextFilter('from', e.target.value)}
+                  />
+                  <Input
+                    label="Até"
+                    type="datetime-local"
+                    value={draftFilters.to ?? ''}
+                    onChange={e => setTextFilter('to', e.target.value)}
+                  />
+                </>
+              )}
             </div>
           )}
-        </Card>
-      ) : null}
+        </form>
+      </Card>
 
+      {/* Painel de distribuição detalhada (colapsável) */}
+      {summary.data && showDetailedAnalytics && (
+        <div className="space-y-4">
+          <div className="grid gap-4 xl:grid-cols-3">
+            <FacetCard title="Níveis" items={summary.data.levels} total={summary.data.total} />
+            <FacetCard title="Fontes" items={summary.data.sources} total={summary.data.total} />
+            <FacetCard title="Tipos" items={summary.data.types} total={summary.data.total} />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <FacetCard
+              title="Clientes (top 10)"
+              items={summary.data.clients.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))}
+              total={summary.data.total}
+            />
+            <FacetCard
+              title="Sites (top 10)"
+              items={summary.data.sites.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))}
+              total={summary.data.total}
+            />
+            <FacetCard
+              title="Agentes (top 10)"
+              items={summary.data.agents.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))}
+              total={summary.data.total}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Stream de logs */}
       {scopeOptions.isLoading && !options ? (
         <Loading />
       ) : scopeOptions.isError ? (
@@ -624,28 +804,61 @@ export default function LogViewer() {
         <Card padding={false}>
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge color="slate">{summary.data ? `${summary.data.total} no filtro` : `${allLogs.length} carregados`}</Badge>
+              <Badge color="slate">
+                {summary.data
+                  ? `Mostrando ${allLogs.length} de ${summary.data.total}`
+                  : `${allLogs.length} carregados`}
+              </Badge>
               <span className="text-xs text-muted">
-                {firstPage?.nextCursor ? 'Cursor disponível para próxima página' : 'Fim da paginação'}
+                {logs.isFetchingNextPage
+                  ? 'Carregando próxima página…'
+                  : firstPage?.nextCursor
+                    ? 'Cursor ativo para carregar mais'
+                    : 'Fim da paginação'}
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">
-                {logs.isFetchingNextPage ? 'Carregando próxima página...' : 'Lista pronta para análise'}
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => setCompactMode(current => !current)}>
-                {compactMode ? 'Modo confortável' : 'Modo compacto'}
-              </Button>
+
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-lg border border-border bg-surface-light p-0.5">
+                <button
+                  type="button"
+                  aria-pressed={!compactMode}
+                  onClick={() => setCompactMode(false)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    !compactMode
+                      ? 'bg-surface text-foreground shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                >
+                  Confortável
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={compactMode}
+                  onClick={() => setCompactMode(true)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    compactMode
+                      ? 'bg-surface text-foreground shadow-sm'
+                      : 'text-muted hover:text-foreground'
+                  }`}
+                >
+                  Compacto
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="max-h-[70vh] overflow-y-auto">
             {allLogs.length === 0 ? (
-              <div className="flex h-40 items-center justify-center text-sm text-muted">
-                Nenhum log encontrado
+              <div className="p-6">
+                <EmptyState
+                  icon="article"
+                  title="Nenhum log encontrado"
+                  description="Tente ampliar o período ou limpar alguns filtros ativos."
+                />
               </div>
             ) : (
-              <div className="divide-y divide-black/10 dark:divide-white/5">
+              <div className="divide-y divide-border/60">
                 {allLogs.map(log => (
                   <LogRow
                     key={log.id}
@@ -654,18 +867,21 @@ export default function LogViewer() {
                     clientName={log.clientId ? clientMap.get(log.clientId)?.name : undefined}
                     siteName={log.siteId ? siteMap.get(log.siteId)?.name : undefined}
                     agentName={log.agentId ? agentMap.get(log.agentId)?.label : undefined}
+                    onQuickFilter={patch => applyPatchAndRun(patch)}
                   />
                 ))}
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <div className="text-sm text-muted">
-              {firstPage?.nextCursor ? 'Cursor disponível para próxima página' : 'Fim da paginação'}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
+            <div className="text-xs text-muted tabular-nums">
+              {allLogs.length} evento(s) exibido(s)
+              {summary.data ? ` de ${summary.data.total} no filtro` : ''}
             </div>
             <Button
               variant="secondary"
+              size="sm"
               onClick={() => logs.fetchNextPage()}
               disabled={!logs.hasNextPage || logs.isFetchingNextPage}
               loading={logs.isFetchingNextPage}
@@ -685,12 +901,14 @@ function LogRow({
   clientName,
   siteName,
   agentName,
+  onQuickFilter,
 }: {
   log: LogEntry;
   compact?: boolean;
   clientName?: string;
   siteName?: string;
   agentName?: string;
+  onQuickFilter: (patch: Partial<LogsQuery>) => void;
 }) {
   const [showData, setShowData] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -706,127 +924,249 @@ function LogRow({
     getStringValue(readDataField(data, 'path')) ?? getStringValue(readDataField(data, 'requestPath'));
   const queryString = getStringValue(readDataField(data, 'queryString'));
   const statusCode = getNumberValue(readDataField(data, 'statusCode'));
+
   const toneClass =
     log.level === LogLevel.Error || log.level === LogLevel.Fatal
-      ? 'border-l-danger/60'
+      ? 'border-l-danger'
       : log.level === LogLevel.Warn
-        ? 'border-l-warning/60'
+        ? 'border-l-warning'
         : 'border-l-primary/40';
+
   const scopeLabel = [
     clientName ? `Cliente: ${clientName}` : null,
     siteName ? `Site: ${siteName}` : null,
     agentName ? `Agente: ${agentName}` : null,
-  ].filter(Boolean).join(' • ');
+  ]
+    .filter(Boolean)
+    .join(' • ');
 
   async function copyField(label: string, value: string) {
     try {
       await navigator.clipboard.writeText(value);
       setCopiedField(label);
-      window.setTimeout(() => setCopiedField(current => (current === label ? null : current)), 1200);
+      window.setTimeout(() => setCopiedField(current => (current === label ? null : current)), 1400);
     } catch {
       setCopiedField(null);
     }
   }
 
   return (
-    <div className={`group flex items-start gap-3 border-l-2 ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-colors hover:bg-surface-light ${toneClass}`}>
+    <div
+      className={`group flex items-start gap-3 border-l-4 ${
+        compact ? 'px-3 py-2' : 'px-4 py-3'
+      } transition-colors hover:bg-surface-light/80 ${toneClass}`}
+    >
       <LogIcon level={log.level} />
+
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge color={lvl.color}>{lvl.label}</Badge>
-          <Badge color="slate">{sourceLabels[log.source] ?? 'N/A'}</Badge>
-          <Badge color="slate">{typeLabels[log.type] ?? 'N/A'}</Badge>
-          <span className="text-xs text-muted">{formatDateTime(log.createdAt)}</span>
-        </div>
-        <p className={`${compact ? 'mt-0.5' : 'mt-1'} text-sm font-medium text-foreground`}>{log.message}</p>
-        {scopeLabel && !compact ? <p className="mt-1 text-xs text-muted">{scopeLabel}</p> : null}
-
-        {(traceId || correlationId || requestPath || statusCode !== null || queryString) ? (
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
-            {statusCode !== null ? <span className="rounded-full border border-border px-2 py-1">HTTP {statusCode}</span> : null}
-            {requestPath ? <span className="rounded-full border border-border px-2 py-1">{requestPath}</span> : null}
-            {traceId ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge color={lvl.color}>{lvl.label}</Badge>
+            <Badge color="slate">{sourceLabels[log.source] ?? 'N/A'}</Badge>
+            <Badge color="slate">{typeLabels[log.type] ?? 'N/A'}</Badge>
+            {statusCode !== null && (
               <button
                 type="button"
-                onClick={() => copyField('traceId', traceId)}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 transition-colors hover:bg-surface-hover"
+                onClick={() => onQuickFilter({ statusCode })}
+                className={`rounded-full border px-2 py-0.5 font-mono text-[11px] font-medium transition-opacity hover:opacity-80 ${statusBadgeTone(statusCode)}`}
+                title="Filtrar por este HTTP status"
               >
-                <span>Trace: {traceId}</span>
-                {copiedField === 'traceId' ? <Icon name="check" className="h-3.5 w-3.5 text-success" /> : <Icon name="content_paste" className="h-3.5 w-3.5" />}
+                HTTP {statusCode}
               </button>
-            ) : null}
-            {correlationId ? (
-              <button
-                type="button"
-                onClick={() => copyField('correlationId', correlationId)}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 transition-colors hover:bg-surface-hover"
-              >
-                <span>Corr: {correlationId}</span>
-                {copiedField === 'correlationId' ? <Icon name="check" className="h-3.5 w-3.5 text-success" /> : <Icon name="content_paste" className="h-3.5 w-3.5" />}
-              </button>
-            ) : null}
-            {queryString ? <span className="rounded-full border border-border px-2 py-1">Query: {queryString}</span> : null}
+            )}
           </div>
-        ) : null}
 
-        {formattedData ? (
+          <span className="font-mono text-xs tabular-nums text-muted">
+            {formatDateTime(log.createdAt)}
+          </span>
+        </div>
+
+        <p
+          className={`${compact ? 'mt-1 truncate text-xs' : 'mt-1.5 text-sm'} font-medium text-foreground`}
+          title={compact ? log.message : undefined}
+        >
+          {log.message}
+        </p>
+
+        {scopeLabel && !compact && (
+          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+            <Icon name="apartment" className="h-3.5 w-3.5 shrink-0" />
+            <span>{scopeLabel}</span>
+          </p>
+        )}
+
+        {(traceId || correlationId || requestPath || queryString) && !compact && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+            {requestPath && (
+              <button
+                type="button"
+                onClick={() => onQuickFilter({ requestPath })}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-light px-2.5 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                title="Filtrar por este Request Path"
+              >
+                <Icon name="filter_alt" className="h-3 w-3 text-primary" />
+                <span>{requestPath}</span>
+              </button>
+            )}
+
+            {traceId && (
+              <span className="inline-flex items-center rounded-full border border-border bg-surface-light text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => onQuickFilter({ traceId })}
+                  className="inline-flex items-center gap-1 rounded-l-full px-2.5 py-0.5 font-mono text-muted-foreground transition-colors hover:text-primary"
+                  title="Filtrar por este Trace ID"
+                >
+                  <Icon name="filter_alt" className="h-3 w-3" />
+                  <span>Trace: {traceId}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyField('traceId', traceId)}
+                  aria-label="Copiar Trace ID"
+                  className="rounded-r-full border-l border-border px-2 py-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon
+                    name={copiedField === 'traceId' ? 'check' : 'content_copy'}
+                    className={`h-3 w-3 ${copiedField === 'traceId' ? 'text-success' : ''}`}
+                  />
+                </button>
+              </span>
+            )}
+
+            {correlationId && (
+              <span className="inline-flex items-center rounded-full border border-border bg-surface-light text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => onQuickFilter({ correlationId })}
+                  className="inline-flex items-center gap-1 rounded-l-full px-2.5 py-0.5 font-mono text-muted-foreground transition-colors hover:text-primary"
+                  title="Filtrar por este Correlation ID"
+                >
+                  <Icon name="filter_alt" className="h-3 w-3" />
+                  <span>Corr: {correlationId}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyField('correlationId', correlationId)}
+                  aria-label="Copiar Correlation ID"
+                  className="rounded-r-full border-l border-border px-2 py-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon
+                    name={copiedField === 'correlationId' ? 'check' : 'content_copy'}
+                    className={`h-3 w-3 ${copiedField === 'correlationId' ? 'text-success' : ''}`}
+                  />
+                </button>
+              </span>
+            )}
+
+            {queryString && (
+              <span className="rounded-full border border-border bg-surface-light px-2.5 py-0.5 font-mono text-[11px]">
+                Query: {queryString}
+              </span>
+            )}
+          </div>
+        )}
+
+        {formattedData && (
           <div className="mt-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
+              className="inline-flex items-center gap-1 text-xs font-medium text-muted transition-colors hover:text-foreground"
               onClick={() => setShowData(current => !current)}
             >
-              {showData ? <Icon name="expand_less" className="h-3.5 w-3.5" /> : <Icon name="expand_more" className="h-3.5 w-3.5" />}
+              <Icon
+                name={showData ? 'expand_less' : 'expand_more'}
+                className="h-3.5 w-3.5"
+              />
               <span>{showData ? 'Ocultar contexto JSON' : 'Mostrar contexto JSON'}</span>
             </button>
-            {showData ? (
-              <pre className="mt-2 max-h-52 overflow-auto rounded-xl border border-border bg-background/60 p-3 text-xs text-muted-foreground">
-                {formattedData}
-              </pre>
-            ) : null}
+
+            {showData && (
+              <div className="mt-2 overflow-hidden rounded-xl border border-border bg-surface-light/80">
+                <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-[11px] text-muted">
+                  <span className="font-mono">DataJson</span>
+                  <button
+                    type="button"
+                    onClick={() => copyField('json', formattedData)}
+                    className="inline-flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <Icon
+                      name={copiedField === 'json' ? 'check' : 'content_copy'}
+                      className={`h-3.5 w-3.5 ${copiedField === 'json' ? 'text-success' : ''}`}
+                    />
+                    {copiedField === 'json' ? 'Copiado' : 'Copiar JSON'}
+                  </button>
+                </div>
+                <pre className="max-h-56 overflow-auto p-3 font-mono text-xs text-muted-foreground">
+                  {formattedData}
+                </pre>
+              </div>
+            )}
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );
 }
 
 function LogIcon({ level }: { level: LogLevel }) {
-  const cls = 'h-4 w-4 shrink-0 mt-0.5';
+  const cls = 'h-4 w-4 shrink-0 mt-1';
   switch (level) {
-    case LogLevel.Fatal: return <Icon name="shield" className={`${cls} text-danger`} />;
-    case LogLevel.Error: return <Icon name="error" className={`${cls} text-danger`} />;
-    case LogLevel.Warn: return <Icon name="warning" className={`${cls} text-warning`} />;
-    case LogLevel.Trace: return <Icon name="refresh" className={`${cls} text-muted`} />;
-    case LogLevel.Debug: return <Icon name="bug_report" className={`${cls} text-muted`} />;
-    default: return <Icon name="info" className={`${cls} text-primary`} />;
+    case LogLevel.Fatal:
+      return <Icon name="shield" className={`${cls} text-danger`} />;
+    case LogLevel.Error:
+      return <Icon name="error" className={`${cls} text-danger`} />;
+    case LogLevel.Warn:
+      return <Icon name="warning" className={`${cls} text-warning`} />;
+    case LogLevel.Trace:
+      return <Icon name="refresh" className={`${cls} text-muted`} />;
+    case LogLevel.Debug:
+      return <Icon name="bug_report" className={`${cls} text-muted`} />;
+    default:
+      return <Icon name="info" className={`${cls} text-primary`} />;
   }
 }
 
-function FacetCard({ title, items }: { title: string; items: Array<{ key: string; count: number }> }) {
+function FacetCard({
+  title,
+  items,
+  total,
+}: {
+  title: string;
+  items: Array<{ key: string; count: number }>;
+  total: number;
+}) {
   return (
     <Card>
       <CardHeader title={title} subtitle="Distribuição no filtro atual" />
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {items.length === 0 ? (
           <div className="text-sm text-muted">Sem dados</div>
-        ) : items.map(item => (
-          <div key={item.key} className="flex items-center justify-between rounded-xl border border-border bg-surface-light px-3 py-2 text-sm">
-            <span className="text-foreground">{item.key}</span>
-            <Badge color="slate">{item.count}</Badge>
-          </div>
-        ))}
+        ) : (
+          items.map(item => {
+            const pct = total > 0 ? Math.min(100, Math.round((item.count / total) * 100)) : 0;
+            return (
+              <div
+                key={item.key}
+                className="space-y-1.5 rounded-xl border border-border bg-surface-light px-3 py-2 text-xs"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium text-foreground">{item.key}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {item.count} ({pct}%)
+                  </span>
+                </div>
+                <progress
+                  max={100}
+                  value={pct}
+                  aria-label={`Proporção de ${item.key}`}
+                  className="status-bar status-bar-primary"
+                />
+              </div>
+            );
+          })
+        )}
       </div>
-    </Card>
-  );
-}
-
-function StatCard({ title, value, hint }: { title: string; value: string; hint: string }) {
-  return (
-    <Card>
-      <div className="text-sm text-muted">{title}</div>
-      <div className="mt-2 text-3xl font-semibold text-foreground">{value}</div>
-      <div className="mt-2 text-xs text-muted">{hint}</div>
     </Card>
   );
 }
