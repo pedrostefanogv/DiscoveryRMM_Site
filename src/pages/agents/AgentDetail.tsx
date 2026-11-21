@@ -1,8 +1,9 @@
 import { formatDateTime } from '@/utils/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, usePowerAction, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, usePowerAction, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import {
   AGENT_DETAIL_DEFAULT_TAB,
   agentAutostartViewFromSlug,
@@ -14,7 +15,6 @@ import {
   agentNetworkViewSlug,
   formatBytes,
   formatDate,
-  formatSocketFamily,
   awaitAgentCommandById,
   notifyAgentCommandOutcome,
   type AgentAutostartView,
@@ -23,18 +23,18 @@ import {
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, Pagination, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column,
-PageHeader,
-} from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, StatCard, Tooltip, PageHeader } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
-import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
-import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
+import { LiveAgentHeartbeatCard } from '@/components/agents/LiveAgentHeartbeatCard';
+import { AgentLabelsHistoryTab } from '@/components/agents/AgentLabelsHistoryTab';
+import { AgentAutostartTab } from '@/components/agents/AgentAutostartTab';
+import { AgentNetworkTab } from '@/components/agents/AgentNetworkTab';
+import { AgentSoftwareTab } from '@/components/agents/AgentSoftwareTab';
 import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import AgentSensorsPanel from '@/components/agents/AgentSensorsPanel';
 import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
-import { AgentAppInstallModal } from '@/components/agents/AgentAppInstallModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
@@ -42,21 +42,15 @@ import { AgentCustomFieldsCard } from '@/components/custom-fields/AgentCustomFie
 import { AgentPinnedCustomFields } from '@/components/custom-fields/AgentPinnedCustomFields';
 import { useAgentCustomFieldSchema } from '@/hooks/useCustomFields';
 import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
-import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, SensorUpsertRequest, StartupItemInfo } from '@/api';
+import type { LogEntry, ScheduledTaskInfo, SensorUpsertRequest, StartupItemInfo } from '@/api';
 import { ApiError, agentUpdatesApi, agentsApi, describeSensorsError } from '@/api';
 import { getLogLevelMeta, getTicketPriorityMeta } from '@/utils/labels';
-import {
-  LISTENING_PORTS_BACKEND_LIMIT,
-  LISTENING_PORTS_MAX_PAGE_SIZE,
-  OPEN_SOCKETS_BACKEND_LIMIT,
-  OPEN_SOCKETS_MAX_PAGE_SIZE,
-} from '@/api/backendLimits';
 import { isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
-import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
+import { useAgentHeartbeatSummary } from '@/stores/heartbeatStore';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
-import type { AgentLabelChangeLog } from '@/modules/agent-labels/types';
-import { AgentLabelApplyMode, AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
+import { useAgentLabelHistory, useAgentLabelsForAgent, useManualLabelOptions } from '@/hooks/useAgentLabels';
+import { AgentLabelSourceType } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
@@ -118,29 +112,6 @@ function buildAgentDetailTabs(): DetailTab<AgentDetailDataTab>[] {
   ];
 }
 
-/**
- * Sub-abas da aba "Autoruns": itens de inicialização (registro,
- * pastas Startup e serviços automáticos) e tarefas agendadas do Windows.
- */
-function buildAgentAutostartTabs(): DetailTab<AgentAutostartView>[] {
-  return [
-    { id: 'startupItems', label: 'Inicialização', icon: "power_settings_new" },
-    { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: "schedule" },
-  ];
-}
-
-/**
- * Sub-abas da aba "Rede": adaptadores, portas em escuta e conexões abertas.
- * Reaproveita o mesmo segmented control da barra principal.
- */
-function buildAgentNetworkTabs(): DetailTab<AgentNetworkView>[] {
-  return [
-    { id: 'adapters', label: 'Adaptadores', icon: "settings_ethernet" },
-    { id: 'listeningPorts', label: 'Portas em Escuta', icon: "podcasts" },
-    { id: 'openSockets', label: 'Conexões Abertas', icon: "cable" },
-  ];
-}
-
 function printerStatusColor(status: string | null): 'success' | 'warning' | 'danger' | 'slate' {
   if (!status) return 'slate';
   const normalized = status.toLowerCase();
@@ -160,64 +131,12 @@ function agentCommitHash(commitHash: string | null | undefined): string | null {
   return trimmed;
 }
 
-// Espelha o clamp de pageSize do backend (GetAgentSoftwarePageQueryHandler).
-// A opção "Todos" usa este tamanho em uma única requisição.
-const SOFTWARE_MAX_PAGE_SIZE = 2000;
-
-const PAGE_SIZE_OPTIONS = [
-  { value: '10', label: '10 por página' },
-  { value: '30', label: '30 por página' },
-  { value: '50', label: '50 por página' },
-  { value: '100', label: '100 por página' },
-  { value: 'max', label: 'Todos' },
-];
-
-const SOCKET_STATE_OPTIONS = [
-  { value: 'all', label: 'Todos os estados' },
-  { value: 'open', label: 'Somente abertas (sem TIME_WAIT)' },
-  { value: 'ESTABLISHED', label: 'ESTABLISHED' },
-  { value: 'TIME_WAIT', label: 'TIME_WAIT' },
-  { value: 'CLOSE_WAIT', label: 'CLOSE_WAIT' },
-];
-
-const SOFTWARE_ORDER_OPTIONS = [
-  { value: 'desc', label: 'Mais recente primeiro' },
-  { value: 'asc', label: 'Mais antigo primeiro' },
-];
-
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [softwareLimitSelected, setSoftwareLimitSelected] = useState('10');
-  const [softwareOrder, setSoftwareOrder] = useState<'asc' | 'desc'>('desc');
-  const [softwareSearchInput, setSoftwareSearchInput] = useState('');
-  const [softwareSearchApplied, setSoftwareSearchApplied] = useState('');
-  const [softwarePage, setSoftwarePage] = useState(1);
-  // ── Portas em Escuta / Conexões Abertas: paginação por cursor (ponteiro) ──
-  // A pilha guarda o cursor de cada página (página 1 = cursor indefinido);
-  // "Avançar" empurra o nextCursor do backend e "Voltar" desempilha.
-  const [portsCursors, setPortsCursors] = useState<(string | undefined)[]>([undefined]);
-  const [listeningPortsLimit, setListeningPortsLimit] = useState('10');
-  const [listeningPortsSearchInput, setListeningPortsSearchInput] = useState('');
-  const [listeningPortsSearchApplied, setListeningPortsSearchApplied] = useState('');
-  const [socketsCursors, setSocketsCursors] = useState<(string | undefined)[]>([undefined]);
-  const [openSocketsLimit, setOpenSocketsLimit] = useState('10');
-  const [openSocketsSearchInput, setOpenSocketsSearchInput] = useState('');
-  const [openSocketsSearchApplied, setOpenSocketsSearchApplied] = useState('');
-  // Filtro de estado TCP (server-side): 'all' | 'open' | estado exato.
-  const [openSocketsStateFilter, setOpenSocketsStateFilter] = useState('all');
-  const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
-  const [isLoadingLabels, setIsLoadingLabels] = useState(true);
-  const [labelsError, setLabelsError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [isAddingManualLabel, setIsAddingManualLabel] = useState(false);
-  // Opcoes do seletor de vinculacao MANUAL: labels de regras em modo Manual (definicao
-  // curada) + labels que ja existem como manuais em algum agente. Automaticas ficam fora.
-  const [manualLabelOptions, setManualLabelOptions] = useState<string[]>([]);
-  // Histórico de aplicação/remoção gravado pelo motor (auditoria).
-  const [labelHistory, setLabelHistory] = useState<AgentLabelChangeLog[]>([]);
-  // Incrementar dispara a recarga de labels + histórico (botão "Atualizar").
-  const [labelsReloadToken, setLabelsReloadToken] = useState(0);
-  const [showLabelPicker, setShowLabelPicker] = useState(false);
+    const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [labelPickerQuery, setLabelPickerQuery] = useState('');
   const labelPickerRef = useRef<HTMLDivElement>(null);
   const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
@@ -225,37 +144,7 @@ export default function AgentDetail() {
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
   const [zeroTouchConfirmOpen, setZeroTouchConfirmOpen] = useState(false);
-  const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
-  const [isRefreshingConnections, setIsRefreshingConnections] = useState(false);
-  const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
-  // InventoryId do app cuja atualização está sendo disparada (spinner por linha).
-  const [updatingSoftwareId, setUpdatingSoftwareId] = useState<string | null>(null);
-  // App bloqueado pela loja aguardando confirmação do operador.
-  const [pendingUnapprovedUpdate, setPendingUnapprovedUpdate] = useState<AgentSoftwareInventoryItem | null>(null);
-  // App aguardando confirmação de desinstalação.
-  const [pendingUninstall, setPendingUninstall] = useState<AgentSoftwareInventoryItem | null>(null);
-  // Modal de instalação de app da loja (winget/choco/custom) ainda não presente no agente.
-  const [installModalOpen, setInstallModalOpen] = useState(false);
-  // Menu de contexto (botão direito) da lista de aplicativos.
-  const [softwareMenu, setSoftwareMenu] = useState<{ x: number; y: number; item: AgentSoftwareInventoryItem } | null>(null);
-  // App aberto no modal de detalhes (a lista ficou enxuta: o detalhe traz
-  // fabricante, origem, datas e identificadores do pacote).
-  const [softwareDetails, setSoftwareDetails] = useState<AgentSoftwareInventoryItem | null>(null);
-  // Filtro rápido "somente com atualização pendente" na aba de aplicativos.
-  const [softwareOnlyUpdates, setSoftwareOnlyUpdates] = useState(false);
-  // Texto digitado para liberar a desinstalação (a ação é irreversível no host:
-  // além do comando, o desinstalador pode remover dados do aplicativo).
-  const [uninstallConfirmText, setUninstallConfirmText] = useState('');
-  // Timers de refetch agendado após update/uninstall (o agent reenvia o
-  // inventário ~2 min depois da alteração).
-  const softwareRefetchTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  useEffect(() => () => {
-    softwareRefetchTimers.current.forEach(clearTimeout);
-    softwareRefetchTimers.current = [];
-  }, []);
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
-  const [isRefreshingStartup, setIsRefreshingStartup] = useState(false);
-  const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   // A aba ativa é lida da querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
   // A troca de aba usa `replace` para NÃO empilhar entradas no histórico: a URL
@@ -402,7 +291,7 @@ export default function AgentDetail() {
   const wakeOnLan = useWakeOnLan();
   const sendAgentNotification = useSendAgentNotification();
   const agent = useAgent(id!);
-  const liveHeartbeat = useAgentHeartbeat(id!);
+  const heartbeatSummaryJson = useAgentHeartbeatSummary(id!);
   const hw = useAgentHardware(id!);
   // Campos customizados visíveis no portal (webRead): alimenta o resumo do card
   // "Informações" (somente os destacados) e o contador da aba "Informações
@@ -629,32 +518,6 @@ export default function AgentDetail() {
     enabled: dataTabNeedsComponents,
     includeNetwork: false,
   });
-  // Paginação por cursor (ponteiro) das abas de rede: busca apenas a página
-  // visível com total filtrado e o próximo ponteiro — substitui o fetch-all de
-  // portas/sockets que vinha do /hardware/components.
-  const portsPageQuery = useAgentListeningPortsPage(id!, {
-    cursor: portsCursors[portsCursors.length - 1],
-    limit: listeningPortsLimit === 'max' ? LISTENING_PORTS_MAX_PAGE_SIZE : Number(listeningPortsLimit),
-    search: listeningPortsSearchApplied,
-  });
-  const socketsPageQuery = useAgentOpenSocketsPage(id!, {
-    cursor: socketsCursors[socketsCursors.length - 1],
-    limit: openSocketsLimit === 'max' ? OPEN_SOCKETS_MAX_PAGE_SIZE : Number(openSocketsLimit),
-    search: openSocketsSearchApplied,
-    state: openSocketsStateFilter,
-  });
-  // Paginação server-side por offset (P1.1): busca apenas a página visível com
-  // total FILTRADO. Substitui o fetch-all por cursor (limit=500 + auto-fetch),
-  // que com o cursor quebrado do backend causava o loop contínuo de requests.
-  const softwarePageSize =
-    softwareLimitSelected === 'max' ? SOFTWARE_MAX_PAGE_SIZE : Number(softwareLimitSelected);
-  const software = useAgentSoftwarePage(id!, {
-    page: softwarePage,
-    pageSize: softwarePageSize,
-    search: softwareSearchApplied,
-    order: softwareOrder,
-    onlyUpdates: softwareOnlyUpdates,
-  });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
   const agentLogs = useLogs({ agentId: id, limit: 10 }, { enabled: activeDataTab === 'logs' });
   const agentTickets = useTickets({ agentId: id, limit: 5 }, { enabled: activeDataTab === 'tickets' });
@@ -666,63 +529,16 @@ export default function AgentDetail() {
   // Normaliza logs como array plano (defesa contra API retornar objeto paginado)
   const logsArray = useMemo(() => ensureArray<LogEntry>(agentLogs.data), [agentLogs.data]);
 
-  useEffect(() => {
-    let isCancelled = false;
+  const agentLabelsQuery = useAgentLabelsForAgent(id);
+  const labelHistoryQuery = useAgentLabelHistory(id, activeDataTab === 'labelHistory');
+  const manualLabelOptionsQuery = useManualLabelOptions(showLabelPicker || activeDataTab === 'info');
+  const allLabels = agentLabelsQuery.data ?? [];
+  const labelHistory = labelHistoryQuery.data ?? [];
+  const manualLabelOptions = manualLabelOptionsQuery.data ?? [];
+  const isLoadingLabels = agentLabelsQuery.isLoading;
+  const labelsError = agentLabelsQuery.isError ? 'Falha ao carregar labels.' : null;
 
-    async function loadAgentLabels() {
-      if (!id) {
-        setAllLabels([]);
-        setIsLoadingLabels(false);
-        return;
-      }
-
-      setIsLoadingLabels(true);
-      setLabelsError(null);
-
-      try {
-        const [data, rules, manualDistinct, history] = await Promise.all([
-          agentLabelsApi.getAgentLabels(id),
-          // Regras definem as labels manuais "oficiais" (modo Manual).
-          agentLabelsApi.getRules(true).catch(() => []),
-          // Labels que JÁ existem como manuais em algum agente (dado legado/sem regra).
-          agentLabelsApi.getDistinctLabels(500, 'Manual').catch(() => []),
-          // Histórico de aplicação/remoção (auditoria do motor). 50 é o
-          // limite padrão aceito pelo endpoint.
-          agentLabelsApi.getHistory(id, 50).catch(() => []),
-        ]);
-        if (isCancelled) return;
-
-        const sorted = data.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-        setAllLabels(sorted);
-
-        const manualFromRules = rules
-          .filter(rule => rule.applyMode === AgentLabelApplyMode.Manual)
-          .filter(rule => rule.isEnabled)
-          .map(rule => rule.label);
-        setManualLabelOptions(
-          [...new Set([...manualFromRules, ...manualDistinct])]
-            .filter(Boolean)
-            .sort((a, b) => a.localeCompare(b, 'pt-BR')),
-        );
-        setLabelHistory(history);
-      } catch {
-        if (isCancelled) return;
-        setLabelsError('Falha ao carregar labels.');
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingLabels(false);
-        }
-      }
-    }
-
-    void loadAgentLabels();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [id, labelsReloadToken]);
-
-  // Close label picker on outside click
+    // Close label picker on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (labelPickerRef.current && !labelPickerRef.current.contains(event.target as Node)) {
@@ -743,10 +559,12 @@ export default function AgentDetail() {
 
     setIsAddingManualLabel(true);
     try {
-      const created = await agentLabelsApi.addManualLabel(id, label);
-      setAllLabels(prev =>
-        [...prev, created].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
-      );
+      await agentLabelsApi.addManualLabel(id, label);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['agentLabels', 'agent', id] }),
+        queryClient.invalidateQueries({ queryKey: ['agentLabels', 'history', id] }),
+        queryClient.invalidateQueries({ queryKey: ['agentLabels', 'manualOptions'] }),
+      ]);
       toast.success(`Label "${label}" adicionada.`);
     } catch (err) {
       if (err && typeof err === 'object' && 'status' in err) {
@@ -769,7 +587,10 @@ export default function AgentDetail() {
   async function handleRemoveManualLabel(labelId: string) {
     try {
       await agentLabelsApi.removeManualLabel(labelId);
-      setAllLabels(prev => prev.filter(item => item.id !== labelId));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['agentLabels', 'agent', id] }),
+        queryClient.invalidateQueries({ queryKey: ['agentLabels', 'history', id] }),
+      ]);
       toast.success('Label removida.');
     } catch (err) {
       if (err && typeof err === 'object' && 'status' in err) {
@@ -787,218 +608,34 @@ export default function AgentDetail() {
   const a = agent.data;
   const aWithHeartbeat = useMemo(() => {
     if (!a) return null;
-    const hasFreshLiveHeartbeat =
-      liveHeartbeat &&
-      isHeartbeatTimestampFresh(
-        liveHeartbeat.timestampUtc,
-        now,
-        undefined,
-        liveHeartbeat.receivedAtUtc,
-      );
-
-    const freshFallbackMetrics =
-      a.heartbeatMetrics &&
-      isHeartbeatTimestampFresh(
-        a.heartbeatMetrics.timestampUtc,
-        now,
-        undefined,
-        a.heartbeatMetrics.receivedAtUtc,
-      )
-        ? a.heartbeatMetrics
-        : undefined;
-
-    if (!hasFreshLiveHeartbeat) {
-      if (freshFallbackMetrics === a.heartbeatMetrics) {
-        return a;
-      }
-
+    if (!heartbeatSummaryJson) return a;
+    try {
+      const [status, loggedUser, loggedUserSince, ipAddress, , agentVersion] = JSON.parse(
+        heartbeatSummaryJson,
+      ) as [
+        'Online' | 'Offline',
+        string | null,
+        string | null,
+        string | null,
+        string | null,
+        string | null,
+      ];
       return {
         ...a,
-        heartbeatMetrics: freshFallbackMetrics,
+        status: status ?? a.status,
+        isOnline: status === 'Online' ? true : a.isOnline,
+        loggedUser: loggedUser !== null ? loggedUser : a.loggedUser,
+        loggedUserSince: loggedUserSince !== null ? loggedUserSince : a.loggedUserSince,
+        lastIpAddress: ipAddress ?? a.lastIpAddress,
+        agentVersion: agentVersion ?? a.agentVersion,
       };
+    } catch {
+      return a;
     }
+  }, [a, heartbeatSummaryJson]);
 
-    return {
-      ...a,
-      // Usuário logado ao vivo. "" = sem sessão (mostra "—"); undefined = agent
-      // antigo (mantém o último conhecido vindo do REST).
-      loggedUser:
-        liveHeartbeat.loggedUser !== undefined ? liveHeartbeat.loggedUser : a.loggedUser,
-      loggedUserSince:
-        liveHeartbeat.loggedUserSince !== undefined
-          ? liveHeartbeat.loggedUserSince
-          : a.loggedUserSince,
-      heartbeatMetrics: {
-        cpuPercent: liveHeartbeat.cpuPercent,
-        memoryPercent: liveHeartbeat.memoryPercent,
-        diskPercent: liveHeartbeat.diskPercent,
-        memoryTotalGb: liveHeartbeat.memoryTotalGb,
-        memoryUsedGb: liveHeartbeat.memoryUsedGb,
-        diskTotalGb: liveHeartbeat.diskTotalGb,
-        diskUsedGb: liveHeartbeat.diskUsedGb,
-        diskReadPercent: liveHeartbeat.diskReadPercent,
-        diskWritePercent: liveHeartbeat.diskWritePercent,
-        diskResponseMs: liveHeartbeat.diskResponseMs,
-        p2pPeers: liveHeartbeat.p2pPeers,
-        uptimeSeconds: liveHeartbeat.uptimeSeconds,
-        processCount: liveHeartbeat.processCount,
-        cpuTemperatureCelsius: liveHeartbeat.cpuTemperatureCelsius,
-        ipAddress: liveHeartbeat.ipAddress,
-        hostname: liveHeartbeat.hostname,
-        agentVersion: liveHeartbeat.agentVersion,
-        timestampUtc: liveHeartbeat.timestampUtc,
-      },
-    };
-  }, [a, liveHeartbeat, now]);
-
-  // ── Software: paginação server-side — itens e totais vêm do endpoint (P1.1) ──
-  // O totalCount do endpoint reflete o filtro de busca ativo (P1.3): o número
-  // de páginas fica correto sob pesquisa. Enquanto a página não chega, usa o
-  // total do snapshot como fallback (não filtrado).
-  const softwareTotalCount =
-    software.data?.totalCount ?? softwareSnapshot.data?.totalInstalled ?? 0;
-  const softwareTotalPages =
-    software.data?.totalPages ?? Math.max(1, Math.ceil(softwareTotalCount / softwarePageSize));
-  const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
-  const softwareItemsAll = software.data?.items ?? [];
-  // O filtro "somente com atualização" é aplicado no servidor (onlyUpdates no
-  // endpoint): totalCount/totalPages já refletem o subconjunto. Este filtro
-  // local fica só como defesa em profundidade.
-  const softwareItems = softwareOnlyUpdates
-    ? softwareItemsAll.filter((item) => item.updateAvailable)
-    : softwareItemsAll;
-  const softwareUpdatesCount = softwareItemsAll.filter((item) => item.updateAvailable).length;
-  // Total do agente (não só a página) vem do snapshot; fallback para a página.
-  const softwareUpdatesTotal = softwareSnapshot.data?.updateAvailableCount ?? softwareUpdatesCount;
-
-  // Corrige estado da página para o range válido quando o total diminui (ex.: busca/filtro)
-  useEffect(() => {
-    if (softwarePage !== safeSoftwarePage) {
-      setSoftwarePage(safeSoftwarePage);
-    }
-  }, [softwarePage, safeSoftwarePage]);
-
-  // ── Listening Ports / Open Sockets — página atual por cursor (antes dos early returns) ──
-  const portsPageItems: ListeningPortInfo[] = portsPageQuery.data?.items ?? [];
-  const portsTotalCount = portsPageQuery.data?.totalCount ?? 0;
-  const socketsPageItems: OpenSocketInfo[] = socketsPageQuery.data?.items ?? [];
-  const socketsTotalCount = socketsPageQuery.data?.totalCount ?? 0;
   const startupItems: StartupItemInfo[] = hwComponents.data?.startupItems ?? [];
   const scheduledTasks: ScheduledTaskInfo[] = hwComponents.data?.scheduledTasks ?? [];
-
-  // ── Listening Ports pagination (cursor server-side) ──
-  const portsLimitNum = listeningPortsLimit === 'max' ? LISTENING_PORTS_MAX_PAGE_SIZE : Number(listeningPortsLimit);
-  const portsPageIndex = portsCursors.length;
-  const portsTotalPages = Math.max(1, Math.ceil(portsTotalCount / portsLimitNum));
-  const resetPortsPagination = () => setPortsCursors([undefined]);
-  const goToNextPortsPage = () => {
-    const next = portsPageQuery.data?.nextCursor;
-    if (next) setPortsCursors((prev) => [...prev, next]);
-  };
-  const goToPreviousPortsPage = () => setPortsCursors((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-
-  const handleApplyPortsSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setListeningPortsSearchApplied(listeningPortsSearchInput.trim());
-    resetPortsPagination();
-  };
-  const handleClearPortsSearch = () => {
-    setListeningPortsSearchInput('');
-    setListeningPortsSearchApplied('');
-    resetPortsPagination();
-  };
-  const handlePortsLimitChange = (value: string) => {
-    setListeningPortsLimit(value);
-    resetPortsPagination();
-  };
-
-  // ── Open Sockets pagination (cursor server-side) ──
-  const socketsLimitNum = openSocketsLimit === 'max' ? OPEN_SOCKETS_MAX_PAGE_SIZE : Number(openSocketsLimit);
-  const socketsPageIndex = socketsCursors.length;
-  const socketsTotalPages = Math.max(1, Math.ceil(socketsTotalCount / socketsLimitNum));
-  const resetSocketsPagination = () => setSocketsCursors([undefined]);
-  const goToNextSocketsPage = () => {
-    const next = socketsPageQuery.data?.nextCursor;
-    if (next) setSocketsCursors((prev) => [...prev, next]);
-  };
-  const goToPreviousSocketsPage = () => setSocketsCursors((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-
-  const handleApplySocketsSearch = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setOpenSocketsSearchApplied(openSocketsSearchInput.trim());
-    resetSocketsPagination();
-  };
-  const handleClearSocketsSearch = () => {
-    setOpenSocketsSearchInput('');
-    setOpenSocketsSearchApplied('');
-    resetSocketsPagination();
-  };
-  const handleSocketsLimitChange = (value: string) => {
-    setOpenSocketsLimit(value);
-    resetSocketsPagination();
-  };
-  const handleSocketsStateChange = (value: string) => {
-    setOpenSocketsStateFilter(value);
-    resetSocketsPagination();
-  };
-
-  const softwareColumns = useMemo<Column<AgentSoftwareInventoryItem>[]>(
-    () => [
-      {
-        key: 'name',
-        header: 'Aplicativo',
-        sortable: false,
-        render: (item) => (
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate font-medium text-foreground" title={item.name}>
-              {item.name}
-            </span>
-            {updatingSoftwareId === item.inventoryId && (
-              <Icon name="refresh" className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
-            )}
-          </div>
-        ),
-      },
-      {
-        key: 'version',
-        header: 'Versão',
-        className: 'font-mono whitespace-nowrap',
-        sortable: false,
-        render: (item) => (
-          <div className="flex flex-wrap items-center gap-2">
-            <span>{item.version ?? '\u2014'}</span>
-            {item.updateAvailable && item.availableVersion && (
-              <Badge color="warning">&rarr; {item.availableVersion}</Badge>
-            )}
-          </div>
-        ),
-      },
-      {
-        key: 'actions',
-        header: '',
-        className: 'text-right w-12',
-        sortable: false,
-        render: (item) => (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="px-2"
-            aria-label={`Ações para ${item.name}`}
-            title="Mais ações"
-            onClick={(event) => {
-              event.stopPropagation();
-              const rect = event.currentTarget.getBoundingClientRect();
-              setSoftwareMenu({ x: rect.right - 200, y: rect.bottom + 4, item });
-            }}
-          >
-            <Icon name="more_vert" className="h-4 w-4" />
-          </Button>
-        ),
-      },
-    ],
-    [updatingSoftwareId],
-  );
-
 
   if (agent.isLoading) return <Loading />;
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
@@ -1097,154 +734,13 @@ export default function AgentDetail() {
   const processorValue = hw.data?.hardware?.processor
     ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T`
     : '\u2014';
-  const softwareTotalInstalled = softwareSnapshot.isLoading ? '\u2014' : (softwareSnapshot.data?.totalInstalled ?? softwareTotalCount);
+  const softwareTotalInstalled = softwareSnapshot.isLoading ? '\u2014' : (softwareSnapshot.data?.totalInstalled ?? 0);
   const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
   const softwareLastCollectedLabel = softwareLastCollectedAt
     ? formatDateTime(softwareLastCollectedAt)
     : 'Sem coleta registrada';
   const manualLabelsCount = allLabels.filter((item) => item.sourceType === AgentLabelSourceType.Manual).length;
   const automaticLabelsCount = Math.max(0, allLabels.length - manualLabelsCount);
-
-  const listeningPortColumns: Column<ListeningPortInfo>[] = [
-    {
-      key: 'protocol',
-      header: 'Protocolo',
-      className: 'w-24',
-      sortable: false,
-      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '\u2014'}</span>,
-    },
-    {
-      key: 'address',
-      header: 'Endereço',
-      sortable: false,
-      render: item => (
-        <span className="font-mono text-muted-foreground">
-          {item.address ?? '\u2014'}:{item.port}
-        </span>
-      ),
-    },
-    {
-      key: 'process',
-      header: 'Processo',
-      sortable: false,
-      render: item => (
-        <div>
-          <p className="text-sm text-foreground">{item.processName ?? '\u2014'}</p>
-          <p className="text-xs text-muted">PID {item.processId}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'collectedAt',
-      header: 'Última coleta',
-      sortable: false,
-      render: item => formatDate(item.collectedAt),
-    },
-  ];
-
-  const openSocketColumns: Column<OpenSocketInfo>[] = [
-    {
-      key: 'protocol',
-      header: 'Protocolo',
-      className: 'w-24',
-      sortable: false,
-      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '\u2014'}</span>,
-    },
-    {
-      key: 'family',
-      header: 'Família',
-      className: 'w-20',
-      sortable: false,
-      render: item => <Badge color="slate">{formatSocketFamily(item.family)}</Badge>,
-    },
-    {
-      key: 'state',
-      header: 'Estado',
-      className: 'w-32',
-      sortable: false,
-      render: item => {
-        // Estado TCP no momento da coleta (MIB_TCP_STATE). TIME_WAIT/CLOSE_WAIT
-        // significam conexão já encerrada — explicam listas grandes de
-        // "conexões" do próprio agente.
-        const state = (item.state ?? '').toUpperCase();
-        const tone =
-          state === 'ESTABLISHED' ? 'success'
-          : state === 'TIME_WAIT' || state === 'CLOSE_WAIT' || state === 'FIN_WAIT1' || state === 'FIN_WAIT2' || state === 'CLOSING' || state === 'LAST_ACK' ? 'warning'
-          : 'slate';
-        return <Badge color={tone}>{item.state || '—'}</Badge>;
-      },
-    },
-    {
-      key: 'local',
-      header: 'Origem',
-      sortable: false,
-      render: item => (
-        <span className="font-mono text-muted-foreground">
-          {item.localAddress ?? '\u2014'}:{item.localPort}
-        </span>
-      ),
-    },
-    {
-      key: 'remote',
-      header: 'Destino',
-      sortable: false,
-      render: item => (
-        <span className="font-mono text-muted-foreground">
-          {item.remoteAddress ?? '\u2014'}:{item.remotePort}
-        </span>
-      ),
-    },
-    {
-      key: 'process',
-      header: 'Processo',
-      sortable: false,
-      render: item => (
-        <div>
-          <p className="text-sm text-foreground">{item.processName ?? '\u2014'}</p>
-          <p className="text-xs text-muted">PID {item.processId}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'collectedAt',
-      header: 'Última coleta',
-      sortable: false,
-      render: item => formatDate(item.collectedAt),
-    },
-  ];
-
-  const resetSoftwarePagination = () => {
-    setSoftwarePage(1);
-  };
-
-  const handleApplySoftwareFilters = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSoftwareSearchApplied(softwareSearchInput.trim());
-    resetSoftwarePagination();
-  };
-
-  const handleClearSoftwareSearch = () => {
-    setSoftwareSearchInput('');
-    setSoftwareSearchApplied('');
-    resetSoftwarePagination();
-  };
-
-  // Filtro "somente com atualização": aplicado no servidor (o endpoint devolve
-  // total/páginas só dos apps com update pendente) e reinicia a paginação.
-  const handleToggleSoftwareOnlyUpdates = () => {
-    setSoftwareOnlyUpdates((prev) => !prev);
-    resetSoftwarePagination();
-  };
-
-  const handleSoftwareLimitChange = (value: string) => {
-    setSoftwareLimitSelected(value);
-    resetSoftwarePagination();
-  };
-
-  const handleSoftwareOrderChange = (value: 'asc' | 'desc') => {
-    setSoftwareOrder(value);
-    resetSoftwarePagination();
-  };
 
   const handleOpenRemoteDebug = async () => {
     if (!id || isOpeningRemoteDebug) return;
@@ -1441,141 +937,7 @@ export default function AgentDetail() {
 
   // -- On-demand data refresh handlers ----------------------------------
 
-  const handleRefreshPorts = async () => {
-    if (!id || isRefreshingPorts) return;
-    setIsRefreshingPorts(true);
-    try {
-      await agentsApi.refreshData(id, { listeningPorts: true });
-      toast.success('Solicitação de coleta de portas enviada ao agente.');
-      await new Promise(r => setTimeout(r, 2000));
-      // Nova coleta pode mudar o snapshot: o cursor antigo pode apontar para o
-      // índice errado, então volta para a 1ª página.
-      resetPortsPagination();
-      await portsPageQuery.refetch();
-    } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de portas.';
-      toast.error(msg);
-    } finally {
-      setIsRefreshingPorts(false);
-    }
-  };
-
-  const handleRefreshConnections = async () => {
-    if (!id || isRefreshingConnections) return;
-    setIsRefreshingConnections(true);
-    try {
-      await agentsApi.refreshData(id, { openConnections: true });
-      toast.success('Solicitação de coleta de conexões enviada ao agente.');
-      await new Promise(r => setTimeout(r, 2000));
-      // Nova coleta pode mudar o snapshot: volta para a 1ª página.
-      resetSocketsPagination();
-      await socketsPageQuery.refetch();
-    } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexões.';
-      toast.error(msg);
-    } finally {
-      setIsRefreshingConnections(false);
-    }
-  };
-
-  const handleRefreshSoftware = async () => {
-    if (!id || isRefreshingSoftware) return;
-    setIsRefreshingSoftware(true);
-    try {
-      await agentsApi.refreshData(id, { software: true });
-      toast.success('Solicitação de coleta de software enviada ao agente.');
-
-      // Polling do snapshot até que updatedAt mude (máx 10 tentativas, 2s cada)
-      const previousUpdatedAt = softwareSnapshot.data?.updatedAt;
-      let attempts = 0;
-      const maxAttempts = 10;
-      while (attempts < maxAttempts) {
-        await new Promise(r => setTimeout(r, 2000));
-        const refreshed = await softwareSnapshot.refetch();
-        if (refreshed.data?.updatedAt && refreshed.data.updatedAt !== previousUpdatedAt) break;
-        attempts++;
-      }
-
-      await software.refetch();
-    } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de software.';
-      toast.error(msg);
-    } finally {
-      setIsRefreshingSoftware(false);
-    }
-  };
-
-  const scheduleSoftwareRefetch = () => {
-    softwareRefetchTimers.current.forEach(clearTimeout);
-    softwareRefetchTimers.current = [];
-    [45_000, 110_000, 170_000].forEach((delay) => {
-      const timer = setTimeout(() => {
-        void software.refetch();
-        void softwareSnapshot.refetch();
-      }, delay);
-      softwareRefetchTimers.current.push(timer);
-    });
-  };
-
-  const handleUpdateSoftware = async (item: AgentSoftwareInventoryItem, confirmUnapproved = false) => {
-    if (!id || updatingSoftwareId) return;
-    setUpdatingSoftwareId(item.inventoryId);
-    try {
-      await agentsApi.updateSoftware(id, item.inventoryId, confirmUnapproved);
-      setPendingUnapprovedUpdate(null);
-      toast.success(`Atualização de "${item.name}" enviada ao agente.`);
-      scheduleSoftwareRefetch();
-    } catch (error) {
-      // 409 = app não aprovado na loja: pede confirmação explícita e reenvia.
-      if (!confirmUnapproved && error instanceof ApiError && error.status === 409) {
-        setPendingUnapprovedUpdate(item);
-        return;
-      }
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar atualização do aplicativo.';
-      toast.error(msg);
-    } finally {
-      setUpdatingSoftwareId(null);
-    }
-  };
-
-  // Nome exato que o operador deve digitar para liberar a desinstalação.
-  const uninstallConfirmTarget = (pendingUninstall?.name ?? '').trim();
-  const canConfirmUninstall =
-    uninstallConfirmTarget !== '' && uninstallConfirmText.trim() === uninstallConfirmTarget;
-
-  // Abre o modal de desinstalação SEMPRE com o campo de confirmação limpo. Os
-  // dois pontos de entrada (menu de contexto e modal de detalhes) passam por
-  // aqui, para nunca liberar o botão com um texto digitado numa abertura anterior.
-  const openUninstallModal = (item: AgentSoftwareInventoryItem) => {
-    setUninstallConfirmText('');
-    setPendingUninstall(item);
-  };
-
-  // Fecha o modal e descarta o texto digitado (mesmo motivo acima).
-  const closeUninstallModal = () => {
-    setPendingUninstall(null);
-    setUninstallConfirmText('');
-  };
-
-  const handleUninstallSoftware = async (item: AgentSoftwareInventoryItem) => {
-    if (!id || updatingSoftwareId) return;
-    setUpdatingSoftwareId(item.inventoryId);
-    try {
-      await agentsApi.uninstallSoftware(id, item.inventoryId);
-      // closeUninstallModal também limpa o texto de confirmação — manter o valor
-      // permitiria reenviar o comando sem redigitar.
-      closeUninstallModal();
-      toast.success('Desinstalação de "' + item.name + '" enviada ao agente.');
-      scheduleSoftwareRefetch();
-    } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar desinstalação do aplicativo.';
-      toast.error(msg);
-    } finally {
-      setUpdatingSoftwareId(null);
-    }
-  };
-
-  const handleRefreshPrinters = async () => {
+    const handleRefreshPrinters = async () => {
     if (!id || isRefreshingPrinters) return;
     setIsRefreshingPrinters(true);
     try {
@@ -1590,116 +952,6 @@ export default function AgentDetail() {
       setIsRefreshingPrinters(false);
     }
   };
-
-  const handleRefreshStartup = async () => {
-    if (!id || isRefreshingStartup) return;
-    setIsRefreshingStartup(true);
-    try {
-      await agentsApi.refreshData(id, { startupItems: true });
-      toast.success('Solicitação de coleta de inicialização enviada ao agente.');
-      await new Promise(r => setTimeout(r, 2000));
-      await hwComponents.refetch();
-    } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de inicialização.';
-      toast.error(msg);
-    } finally {
-      setIsRefreshingStartup(false);
-    }
-  };
-
-  const handleRefreshScheduledTasks = async () => {
-    if (!id || isRefreshingScheduledTasks) return;
-    setIsRefreshingScheduledTasks(true);
-    try {
-      await agentsApi.refreshData(id, { scheduledTasks: true });
-      toast.success('Solicitação de coleta de tarefas agendadas enviada ao agente.');
-      await new Promise(r => setTimeout(r, 2500));
-      await hwComponents.refetch();
-    } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de tarefas agendadas.';
-      toast.error(msg);
-    } finally {
-      setIsRefreshingScheduledTasks(false);
-    }
-  };
-
-
-  // Lista enxuta de propósito: só Aplicativo e Versão. As colunas Fonte, Ações e
-  // Última coleta saíram — a origem e as datas ficam no detalhe, e as ações
-  // passaram para o menu de contexto (botão direito), deixando a varredura da
-  // lista muito mais limpa.
-
-  // Ações no botão direito. "Ver detalhes" vem primeiro por ser a ação
-  // inofensiva e mais usada; atualizar/desinstalar só aparecem quando aplicáveis,
-  // para o menu não oferecer uma ação que o servidor recusaria.
-  const softwareMenuItems: ContextMenuItem[] = softwareMenu
-    ? [
-        {
-          key: 'details',
-          label: 'Ver detalhes',
-          icon: <Icon name="info" className="h-4 w-4" />,
-          onClick: () => {
-            const item = softwareMenu.item;
-            setSoftwareMenu(null);
-            setSoftwareDetails(item);
-          },
-        },
-        {
-          key: 'copy',
-          label: 'Copiar nome',
-          icon: <Icon name="content_copy" className="h-4 w-4" />,
-          onClick: () => {
-            const item = softwareMenu.item;
-            setSoftwareMenu(null);
-            void navigator.clipboard?.writeText(item.name);
-            toast.success('Nome copiado.');
-          },
-        },
-        ...(softwareMenu.item.updateAvailable
-          ? [
-              {
-                key: 'update',
-                label: 'Atualizar aplicativo',
-                icon: <Icon name="arrow_circle_up" className="h-4 w-4" />,
-                separatorBefore: true,
-                disabled: !canExecuteAgent || updatingSoftwareId !== null,
-                hint: !canExecuteAgent
-                  ? 'sem permissão'
-                  : !isOnlineNow
-                    ? offlineQueueHint
-                    : undefined,
-                onClick: () => {
-                  const item = softwareMenu.item;
-                  setSoftwareMenu(null);
-                  void handleUpdateSoftware(item);
-                },
-              } satisfies ContextMenuItem,
-            ]
-          : []),
-        ...(softwareMenu.item.uninstallAvailable
-          ? [
-              {
-                key: 'uninstall',
-                label: 'Desinstalar aplicativo',
-                icon: <Icon name="delete" className="h-4 w-4" />,
-                danger: true,
-                disabled: !canExecuteAgent || updatingSoftwareId !== null,
-                hint: !canExecuteAgent
-                  ? 'sem permissão'
-                  : !isOnlineNow
-                    ? offlineQueueHint
-                    : undefined,
-                onClick: () => {
-                  const item = softwareMenu.item;
-                  setSoftwareMenu(null);
-                  openUninstallModal(item);
-                },
-              } satisfies ContextMenuItem,
-            ]
-          : []),
-      ]
-    : [];
-
 
   return (
     <div className="space-y-6">
@@ -1922,7 +1174,7 @@ export default function AgentDetail() {
       </PageHeader>
 
       {/* Live Heartbeat Metrics */}
-      <AgentHeartbeatCard metrics={aWithHeartbeat.heartbeatMetrics} showEmpty />
+      <LiveAgentHeartbeatCard agentId={a.id} fallbackMetrics={a.heartbeatMetrics} />
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -2439,49 +1691,14 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'labelHistory' && (
-          <Card>
-            <CardHeader
-              title="Histórico de labels"
-              subtitle={
-                labelHistory.length > 0
-                  ? `Últimos ${labelHistory.length} registros de aplicação e remoção`
-                  : 'Auditoria de aplicação e remoção de labels'
-              }
-              action={
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setLabelsReloadToken((token) => token + 1)}
-                  disabled={isLoadingLabels}
-                  aria-label="Atualizar histórico de labels"
-                  title="Atualizar histórico de labels"
-                >
-                  <Icon name="refresh" className={`h-4 w-4 ${isLoadingLabels ? 'animate-spin' : ''}`} /> Atualizar
-                </Button>
-              }
-            />
-            {labelHistory.length > 0 ? (
-              <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
-                {labelHistory.map(item => (
-                  <div key={item.id} className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
-                    <span className={item.action === 'Removed' ? 'text-warning' : 'text-success'}>
-                      {item.action === 'Removed' ? 'Removida' : 'Aplicada'}
-                    </span>
-                    <span className="font-mono text-foreground">{item.label}</span>
-                    <span>• {formatDate(item.occurredAt)}</span>
-                    {item.ruleName ? <span>• regra {item.ruleName}</span> : null}
-                    {item.actor ? <span>• {item.actor}</span> : null}
-                    {item.reason ? <span className="text-muted-foreground">• {item.reason}</span> : null}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted">Sem histórico registrado.</p>
-            )}
-          </Card>
+          <AgentLabelsHistoryTab
+            history={labelHistory}
+            isLoading={labelHistoryQuery.isFetching}
+            onRefresh={() => void labelHistoryQuery.refetch()}
+          />
         )}
 
-        {/* Wrapper das abas "de dados" (tabelas/painéis). As abas com painel próprio
+                {/* Wrapper das abas "de dados" (tabelas/painéis). As abas com painel próprio
             ficam fora dele — inclusive "customFields", cujo card já traz o seu. */}
         {activeDataTab !== 'info' && activeDataTab !== 'customFields' && activeDataTab !== 'notes' && activeDataTab !== 'labelHistory' && (
           <Card className="surface-card">
@@ -2492,158 +1709,13 @@ export default function AgentDetail() {
             )}
 
             {activeDataTab === 'software' && (
-              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                <>
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
-                    <p className="text-sm text-muted">
-                      {softwareOnlyUpdates
-                        ? `${softwareTotalCount} aplicativo(s) com atualização pendente`
-                        : `${softwareTotalCount} aplicativo(s) no inventário`}
-                      {softwareUpdatesTotal > 0 && !softwareOnlyUpdates && (
-                        <span className="ml-2 font-medium text-warning">· {softwareUpdatesTotal} com atualização disponível</span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                  {/* Instala um app da loja que ainda não existe no inventário. */}
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => setInstallModalOpen(true)}
-                    title="Buscar aplicativo na loja para instalar no agente"
-                  >
-                    <Icon name="download" className="h-4 w-4" />
-                    Instalar aplicativo
-                  </Button>
-                  {/* Filtro rápido: mostra só os apps com atualização pendente. */}
-                  {softwareUpdatesTotal > 0 && (
-                    <Button
-                      size="sm"
-                      variant={softwareOnlyUpdates ? 'primary' : 'secondary'}
-                      onClick={handleToggleSoftwareOnlyUpdates}
-                      aria-pressed={softwareOnlyUpdates}
-                      title={
-                        softwareOnlyUpdates
-                          ? 'Mostrando apenas aplicativos com atualização pendente'
-                          : 'Mostrar apenas aplicativos com atualização pendente'
-                      }
-                    >
-                      <Icon name="arrow_circle_up" className="h-4 w-4" />
-                      Com atualização
-                      <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">{softwareUpdatesTotal}</span>
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleRefreshSoftware}
-                    loading={isRefreshingSoftware}
-                    title={
-                      !isOnlineNow
-                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                        : 'Solicitar nova coleta de software ao agente'
-                    }
-                  >
-                    <Icon name="refresh" className="h-4 w-4" />
-                    Atualizar
-                  </Button>
-                  </div>
-                </div>
-                {software.isLoading ? (
-                  <Loading message="Carregando inventário de aplicativos..." />
-                ) : software.isError ? (
-                  <ErrorDisplay onRetry={() => software.refetch()} />
-                ) : (
-                  <>
-                    {softwareSnapshot.data?.updatedAt && (
-                      <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
-                        <Icon name="schedule" className="h-3.5 w-3.5" />
-                        <span>Última coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
-                      </div>
-                    )}
-
-                    <div className="mb-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-lg bg-surface-light px-3 py-2">
-                        <p className="text-xs text-muted">Total instalado</p>
-                        <p className="text-sm font-medium text-foreground">{softwareTotalCount}</p>
-                      </div>
-                      <div className="rounded-lg bg-surface-light px-3 py-2">
-                        <p className="text-xs text-muted">Última coleta</p>
-                        <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
-                      </div>
-                    </div>
-
-                    <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_200px_160px_auto_auto]" onSubmit={handleApplySoftwareFilters}>
-                      <div className="relative">
-                        <Input
-                          value={softwareSearchInput}
-                          onChange={(e) => setSoftwareSearchInput(e.target.value)}
-                          placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
-                        />
-                        {softwareSearchInput && (
-                          <button
-                            type="button"
-                            onClick={handleClearSoftwareSearch}
-                            aria-label="Limpar busca de aplicativos"
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
-                          >
-                            <Icon name="close" className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <Select
-                        value={softwareOrder}
-                        options={SOFTWARE_ORDER_OPTIONS}
-                        onChange={(e) => handleSoftwareOrderChange(e.target.value as 'asc' | 'desc')}
-                      />
-                      <Select
-                        value={softwareLimitSelected}
-                        options={PAGE_SIZE_OPTIONS}
-                        onChange={(e) => handleSoftwareLimitChange(e.target.value)}
-                      />
-                      <Button type="submit" variant="secondary" size="sm">
-                        <Icon name="search" className="h-4 w-4" />
-                        Buscar
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={handleClearSoftwareSearch}>
-                        Limpar
-                      </Button>
-                    </form>
-
-                    <div style={{ minHeight: '400px' }} className="relative">
-                      <DataTable
-                        columns={softwareColumns}
-                        data={softwareItems}
-                        keyExtractor={item => item.inventoryId}
-                        onRowContextMenu={(event, item) => {
-                          event.preventDefault();
-                          setSoftwareMenu({ x: event.clientX, y: event.clientY, item });
-                        }}
-                        emptyMessage={
-                          softwareOnlyUpdates
-                            ? 'Nenhum aplicativo com atualização pendente'
-                            : 'Nenhum aplicativo encontrado para este agente'
-                        }
-                        showPagination={false}
-                        maxHeight="min(640px, 55vh)"
-                      />
-                    </div>
-                    {softwareItems.length > 0 && (
-                      <Pagination
-                        className="mt-4"
-                        page={safeSoftwarePage}
-                        totalPages={softwareTotalPages}
-                        onPageChange={setSoftwarePage}
-                        totalItems={softwareTotalCount}
-                        pageSize={softwarePageSize}
-                      />
-                    )}
-                  </>
-                )}
-                </>
-              </div>
+              <AgentSoftwareTab
+                agentId={id!}
+                agentName={a.displayName ?? a.hostname}
+                isOnline={isOnlineNow}
+                canExecute={canExecuteAgent}
+                softwareSnapshot={softwareSnapshot}
+              />
             )}
 
             {activeDataTab === 'tickets' && (
@@ -2762,311 +1834,30 @@ export default function AgentDetail() {
             )}
 
             {activeDataTab === 'network' && (
-              <div className="space-y-4">
-                <DetailTabs
-                  tabs={buildAgentNetworkTabs()}
-                  active={activeNetworkView}
-                  onChange={handleSelectNetworkView}
-                  ariaLabel="Seções de rede do agente"
-                  panelIdPrefix="agent-network-tabs"
-                />
-
-                <div
-                  id="agent-network-tabs-panel"
-                  role="tabpanel"
-                  aria-labelledby={`agent-network-tabs-tab-${activeNetworkView}`}
-                >
-                  {activeNetworkView === 'adapters' && (
-                    <>
-                      {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 ? (
-                        <Card>
-                          <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
-                          <div className="space-y-2">
-                            {hw.data.networkAdapters.map(n => (
-                              <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
-                                    {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
-                                  </div>
-                                  <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
-                                </div>
-                                {(n.ipAddress || n.ipv6Address || n.gateway) && (
-                                  <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-                                    {n.ipAddress && (
-                                      <div>
-                                        <span className="text-muted">IP: </span>
-                                        <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
-                                        {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
-                                      </div>
-                                    )}
-                                    {n.ipv6Address && (
-                                      <div className="col-span-full">
-                                        <span className="text-muted">IPv6: </span>
-                                        <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
-                                      </div>
-                                    )}
-                                    {n.gateway && (
-                                      <div>
-                                        <span className="text-muted">Gateway: </span>
-                                        <span className="font-mono text-muted-foreground">{n.gateway}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </Card>
-                      ) : (
-                        <Card>
-                          <CardHeader title="Adaptadores de Rede" />
-                          <p className="text-sm text-muted">Nenhum adaptador de rede coletado para este agente.</p>
-                        </Card>
-                      )}
-                    </>
-                  )}
-
-                  {activeNetworkView === 'listeningPorts' && (
-                    <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                      <>
-                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
-                          <p className="text-sm text-muted">{portsTotalCount} porta(s) ativa(s)</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handleRefreshPorts}
-                          loading={isRefreshingPorts}
-                          title={
-                            !isOnlineNow
-                              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                              : 'Solicitar nova coleta de portas ao agente'
-                          }
-                        >
-                          <Icon name="refresh" className="h-4 w-4" />
-                          Atualizar
-                        </Button>
-                      </div>
-                      {portsTotalCount >= LISTENING_PORTS_BACKEND_LIMIT && (
-                        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                          <Icon name="warning" className="h-3.5 w-3.5 shrink-0" />
-                          Lista truncada pelo backend no limite de {LISTENING_PORTS_BACKEND_LIMIT} itens. Podem existir mais portas em escuta.
-                        </div>
-                      )}
-                      <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplyPortsSearch}>
-                        <div className="relative">
-                          <Input
-                            value={listeningPortsSearchInput}
-                            onChange={(e) => setListeningPortsSearchInput(e.target.value)}
-                            placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
-                          />
-                          {listeningPortsSearchInput && (
-                            <button
-                              type="button"
-                              onClick={handleClearPortsSearch}
-                              aria-label="Limpar busca de portas"
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
-                            >
-                              <Icon name="close" className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <Select
-                          value={listeningPortsLimit}
-                          options={PAGE_SIZE_OPTIONS}
-                          onChange={(e) => handlePortsLimitChange(e.target.value)}
-                        />
-                        <Button type="submit" variant="secondary" size="sm">
-                          <Icon name="search" className="h-4 w-4" />
-                          Buscar
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={handleClearPortsSearch}>
-                          Limpar
-                        </Button>
-                      </form>
-                      <div style={{ minHeight: '400px' }} className="relative">
-                        <DataTable
-                          columns={listeningPortColumns}
-                          data={portsPageItems}
-                          keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
-                          emptyMessage="Nenhuma porta em escuta encontrada"
-                          showPagination={false}
-                          maxHeight="min(640px, 55vh)"
-                        />
-                      </div>
-                      {portsPageItems.length > 0 && (
-                        <Pagination
-                          className="mt-4"
-                          page={portsPageIndex}
-                          totalPages={portsTotalPages}
-                          onPageChange={(target) => {
-                            if (target < portsPageIndex) goToPreviousPortsPage();
-                            else if (target > portsPageIndex) goToNextPortsPage();
-                          }}
-                          totalItems={portsTotalCount}
-                          pageSize={Number(listeningPortsLimit)}
-                          itemLabel={`${portsTotalCount} no total`}
-                          showFirstLast={false}
-                        />
-                      )}
-                      </>
-                    </div>
-                  )}
-
-                  {activeNetworkView === 'openSockets' && (
-                    <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                      <>
-                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
-                          <p className="text-sm text-muted">{socketsTotalCount} conexão(ões) ativa(s)</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={handleRefreshConnections}
-                          loading={isRefreshingConnections}
-                          title={
-                            !isOnlineNow
-                              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                              : 'Solicitar nova coleta de conexões ao agente'
-                          }
-                        >
-                          <Icon name="refresh" className="h-4 w-4" />
-                          Atualizar
-                        </Button>
-                      </div>
-                      {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
-                        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                          <Icon name="warning" className="h-3.5 w-3.5 shrink-0" />
-                          Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
-                        </div>
-                      )}
-                      <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
-                        <div className="relative">
-                          <Input
-                            value={openSocketsSearchInput}
-                            onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
-                            placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
-                          />
-                          {openSocketsSearchInput && (
-                            <button
-                              type="button"
-                              onClick={handleClearSocketsSearch}
-                              aria-label="Limpar busca de conexões"
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
-                            >
-                              <Icon name="close" className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        <Select
-                          value={openSocketsStateFilter}
-                          options={SOCKET_STATE_OPTIONS}
-                          onChange={(e) => handleSocketsStateChange(e.target.value)}
-                        />
-                        <Select
-                          value={openSocketsLimit}
-                          options={PAGE_SIZE_OPTIONS}
-                          onChange={(e) => handleSocketsLimitChange(e.target.value)}
-                        />
-                        <Button type="submit" variant="secondary" size="sm">
-                          <Icon name="search" className="h-4 w-4" />
-                          Buscar
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={handleClearSocketsSearch}>
-                          Limpar
-                        </Button>
-                      </form>
-                      <div style={{ minHeight: '400px' }} className="relative">
-                        <DataTable
-                          columns={openSocketColumns}
-                          data={socketsPageItems}
-                          keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
-                          emptyMessage="Nenhuma conexão aberta encontrada"
-                          showPagination={false}
-                          maxHeight="min(640px, 55vh)"
-                        />
-                      </div>
-                      {socketsPageItems.length > 0 && (
-                        <Pagination
-                          className="mt-4"
-                          page={socketsPageIndex}
-                          totalPages={socketsTotalPages}
-                          onPageChange={(target) => {
-                            if (target < socketsPageIndex) goToPreviousSocketsPage();
-                            else if (target > socketsPageIndex) goToNextSocketsPage();
-                          }}
-                          totalItems={socketsTotalCount}
-                          pageSize={Number(openSocketsLimit)}
-                          itemLabel={`${socketsTotalCount} no total`}
-                          showFirstLast={false}
-                        />
-                      )}
-                      </>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <AgentNetworkTab
+                agentId={id!}
+                activeView={activeNetworkView}
+                onSelectView={handleSelectNetworkView}
+                networkAdapters={hw.data?.networkAdapters}
+                isOnline={isOnlineNow}
+              />
             )}
 
             {activeDataTab === 'autostart' && (
-              <div className="space-y-4">
-                <DetailTabs
-                  tabs={buildAgentAutostartTabs()}
-                  active={activeAutostartView}
-                  onChange={handleSelectAutostartView}
-                  ariaLabel="Seções de execução automática do agente"
-                  panelIdPrefix="agent-autostart-tabs"
-                />
-
-                <div
-                  id="agent-autostart-tabs-panel"
-                  role="tabpanel"
-                  aria-labelledby={`agent-autostart-tabs-tab-${activeAutostartView}`}
-                >
-                  {activeAutostartView === 'startupItems' && (
-                    // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
-                    // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
-                    <div className='w-full min-w-0 max-w-full'>
-                      <AgentStartupItemsPanel
-                        agentId={id!}
-                        items={startupItems}
-                        canManage={canManageAgent}
-                        isOnline={isOnlineNow}
-                        isLoading={hwComponents.isLoading}
-                        isError={Boolean(hwComponents.isError)}
-                        onRetry={() => void hwComponents.refetch()}
-                        isRefreshing={isRefreshingStartup || hwComponents.isFetching}
-                        onRefresh={handleRefreshStartup}
-                        onDataRefetch={() => void hwComponents.refetch()}
-                      />
-                    </div>
-                  )}
-
-                  {activeAutostartView === 'scheduledTasks' && (
-                    // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
-                    // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
-                    <div className='w-full min-w-0 max-w-full'>
-                      <AgentScheduledTasksPanel
-                        agentId={id!}
-                        tasks={scheduledTasks}
-                        canManage={canManageAgent}
-                        isOnline={isOnlineNow}
-                        isLoading={hwComponents.isLoading}
-                        isError={Boolean(hwComponents.isError)}
-                        onRetry={() => void hwComponents.refetch()}
-                        isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
-                        onRefresh={handleRefreshScheduledTasks}
-                        onDataRefetch={() => void hwComponents.refetch()}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
+              <AgentAutostartTab
+                agentId={id!}
+                activeView={activeAutostartView}
+                onSelectView={handleSelectAutostartView}
+                startupItems={startupItems}
+                scheduledTasks={scheduledTasks}
+                canManage={canManageAgent}
+                isOnline={isOnlineNow}
+                isLoading={hwComponents.isLoading}
+                isError={Boolean(hwComponents.isError)}
+                isFetching={hwComponents.isFetching}
+                onRetry={() => void hwComponents.refetch()}
+                onRefetch={() => void hwComponents.refetch()}
+              />
             )}
 
             {activeDataTab === 'sensors' && (
@@ -3220,216 +2011,6 @@ export default function AgentDetail() {
           onClose={() => setNotificationModalOpen(false)}
           onConfirm={handleNotificationConfirm}
           isLoading={sendAgentNotification.isPending}
-        />
-      )}
-
-      <Modal
-        open={!!pendingUnapprovedUpdate}
-        onClose={() => setPendingUnapprovedUpdate(null)}
-        title="Atualização não aprovada na loja"
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
-            <p>
-              O aplicativo{' '}
-              <span className="font-semibold text-foreground">{pendingUnapprovedUpdate?.name}</span>{' '}
-              não está aprovado na política da loja para este agente.
-            </p>
-            <p className="mt-1 text-muted">
-              Deseja executar a atualização mesmo assim? A ação será registrada no histórico de comandos do agente.
-            </p>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setPendingUnapprovedUpdate(null)}
-              disabled={updatingSoftwareId !== null}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                if (pendingUnapprovedUpdate) {
-                  void handleUpdateSoftware(pendingUnapprovedUpdate, true);
-                }
-              }}
-              loading={updatingSoftwareId !== null && updatingSoftwareId === pendingUnapprovedUpdate?.inventoryId}
-            >
-              <Icon name="arrow_circle_up" className="h-4 w-4" />
-              Atualizar mesmo assim
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {installModalOpen && id && (
-        <AgentAppInstallModal
-          agentId={id}
-          open={installModalOpen}
-          onClose={() => setInstallModalOpen(false)}
-          onInstalled={scheduleSoftwareRefetch}
-        />
-      )}
-
-      <Modal
-        open={!!pendingUninstall}
-        onClose={closeUninstallModal}
-        title="Desinstalar aplicativo"
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-            <p>
-              Você está prestes a desinstalar{' '}
-              <span className="font-semibold text-foreground">{pendingUninstall?.name}</span>
-              {pendingUninstall?.version ? ' (v' + pendingUninstall.version + ')' : ''} do agente{' '}
-              <span className="font-semibold text-foreground">{a.displayName ?? a.hostname}</span>.
-            </p>
-            <p className="mt-1 text-muted">
-              O agent tentará pelo gerenciador de pacotes (winget/choco), pelo MSI (ProductCode) ou pelo
-              desinstalador do registro. A ação não pode ser desfeita no host.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="uninstall-confirm-name" className="text-sm font-medium text-foreground">
-              Digite <span className="font-semibold text-danger">{uninstallConfirmTarget}</span> para confirmar:
-            </label>
-            <Input
-              id="uninstall-confirm-name"
-              value={uninstallConfirmText}
-              onChange={(e) => setUninstallConfirmText(e.target.value)}
-              placeholder={uninstallConfirmTarget}
-              disabled={updatingSoftwareId !== null}
-              autoFocus
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={closeUninstallModal}
-              disabled={updatingSoftwareId !== null}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (pendingUninstall) {
-                  void handleUninstallSoftware(pendingUninstall);
-                }
-              }}
-              loading={updatingSoftwareId !== null && updatingSoftwareId === pendingUninstall?.inventoryId}
-              disabled={!canConfirmUninstall || updatingSoftwareId !== null}
-              title={
-                canConfirmUninstall
-                  ? 'Desinstalar ' + uninstallConfirmTarget
-                  : 'Digite o nome do aplicativo para liberar a desinstalação'
-              }
-            >
-              <Icon name="delete" className="h-4 w-4" />
-              Desinstalar
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Detalhes do aplicativo — absorve o que as colunas removidas mostravam
-          (fabricante, origem, datas e identificadores do pacote). */}
-      <Modal
-        open={!!softwareDetails}
-        onClose={() => setSoftwareDetails(null)}
-        title="Detalhes do aplicativo"
-        maxWidth="max-w-lg"
-      >
-        {softwareDetails && (
-          <div className="space-y-4">
-            <div>
-              <p className="font-medium text-foreground">{softwareDetails.name}</p>
-              <p className="text-sm text-muted">{softwareDetails.publisher ?? 'Sem fabricante'}</p>
-            </div>
-
-            <dl className="grid gap-2 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-xs text-muted">Versão instalada</dt>
-                <dd className="font-mono text-foreground">{softwareDetails.version ?? '\u2014'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Versão disponível</dt>
-                <dd className="font-mono text-foreground">
-                  {softwareDetails.updateAvailable && softwareDetails.availableVersion ? (
-                    <span className="text-warning">&rarr; {softwareDetails.availableVersion}</span>
-                  ) : (
-                    '\u2014'
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Fonte</dt>
-                <dd className="text-foreground">{softwareDetails.source ?? '\u2014'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Gerenciador</dt>
-                <dd className="text-foreground">{softwareDetails.updateSource ?? '\u2014'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-muted">Última coleta</dt>
-                <dd className="text-foreground">{formatDate(softwareDetails.collectedAt)}</dd>
-              </div>
-              {softwareDetails.installSource && (
-                <div className="sm:col-span-2">
-                  <dt className="text-xs text-muted">Origem da instalação</dt>
-                  <dd className="break-all font-mono text-xs text-muted-foreground">{softwareDetails.installSource}</dd>
-                </div>
-              )}
-            </dl>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setSoftwareDetails(null)}>
-                Fechar
-              </Button>
-              {softwareDetails.updateAvailable && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    const item = softwareDetails;
-                    setSoftwareDetails(null);
-                    void handleUpdateSoftware(item);
-                  }}
-                  disabled={!canExecuteAgent || updatingSoftwareId !== null}
-                >
-                  <Icon name="arrow_circle_up" className="h-4 w-4" />
-                  Atualizar
-                </Button>
-              )}
-              {softwareDetails.uninstallAvailable && (
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    const item = softwareDetails;
-                    setSoftwareDetails(null);
-                    openUninstallModal(item);
-                  }}
-                  disabled={!canExecuteAgent || updatingSoftwareId !== null}
-                >
-                  <Icon name="delete" className="h-4 w-4" />
-                  Desinstalar
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {softwareMenu && (
-        <ContextMenu
-          position={{ x: softwareMenu.x, y: softwareMenu.y }}
-          items={softwareMenuItems}
-          onClose={() => setSoftwareMenu(null)}
         />
       )}
 

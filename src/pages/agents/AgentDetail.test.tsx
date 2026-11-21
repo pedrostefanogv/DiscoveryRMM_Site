@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 /**
  * AgentDetail: a página do agente ganhou a mesma barra de abas de
@@ -205,6 +206,7 @@ vi.mock('@/auth/authorization', () => ({
 }));
 vi.mock('@/stores/heartbeatStore', () => ({
   useAgentHeartbeat: () => null,
+  useAgentHeartbeatSummary: () => '',
   isHeartbeatTimestampFresh: () => false,
 }));
 vi.mock('@/modules/agent-labels/api', () => ({
@@ -256,20 +258,23 @@ function LocationProbe() {
 }
 
 async function renderPage(search = '') {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const result = render(
-    <MemoryRouter initialEntries={[`/agents/a1${search}`]}>
-      <Routes>
-        <Route
-          path="/agents/:id"
-          element={
-            <>
-              <AgentDetail />
-              <LocationProbe />
-            </>
-          }
-        />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[`/agents/a1${search}`]}>
+        <Routes>
+          <Route
+            path="/agents/:id"
+            element={
+              <>
+                <AgentDetail />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
   // Drena o carregamento assíncrono das labels para evitar updates fora de act().
   await act(async () => {});

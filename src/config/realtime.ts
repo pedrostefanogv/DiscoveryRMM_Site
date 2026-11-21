@@ -7,13 +7,23 @@ export type NatsAuthMode = "auth_token" | "jwt_credentials";
 
 const NATS_URL = import.meta.env.VITE_NATS_URL ?? "";
 const NATS_ENABLED = import.meta.env.VITE_NATS_ENABLED !== "false";
+/**
+ * Modo de autenticacao do WebSocket do NATS.
+ *
+ * Default `jwt_credentials` (e nao `auth_token`): este produto autentica o
+ * navegador via auth_callout do nats-server, que exige um JWT. O modo
+ * `auth_token` legado so funciona com um token unico configurado no broker —
+ * nao e o caso deste servidor. Com o default errado o nats-server nao
+ * reconhece a credencial como JWT, NAO roteia para o callout e a conexao
+ * expira no `timeout: 30` do bloco authorization, deixando o dashboard em
+ * "Falha de rede NATS"/"Offline" (bug observado em tupa.pstefano.com.br, onde
+ * o instalador nao definia VITE_NATS_AUTH_MODE e o build caia neste default).
+ */
 const RAW_NATS_AUTH_MODE =
-  (import.meta.env.VITE_NATS_AUTH_MODE ?? "auth_token").toLowerCase();
+  (import.meta.env.VITE_NATS_AUTH_MODE ?? "jwt_credentials").toLowerCase();
 
 const NATS_AUTH_MODE: NatsAuthMode =
-  RAW_NATS_AUTH_MODE === "jwt_credentials"
-    ? "jwt_credentials"
-    : "auth_token";
+  RAW_NATS_AUTH_MODE === "auth_token" ? "auth_token" : "jwt_credentials";
 
 export const realtimeConfig = {
   provider: "nats" as const,
