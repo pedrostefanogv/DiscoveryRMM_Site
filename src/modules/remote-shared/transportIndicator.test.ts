@@ -234,4 +234,42 @@ describe("resolveWebRtcKinds", () => {
 
     expect(kinds).toEqual([]);
   });
+
+  it("aceita o formato resolvido (objeto remoteAccessWebRtc) retornado por /effective", () => {
+    const kinds = resolveWebRtcKinds({
+      remoteAccessWebRtcEnabled: true,
+      remoteAccessWebRtc: {
+        enabled: true,
+        kinds: ["screen", "rdp", "files", "proxy"],
+      },
+    });
+
+    expect(kinds).toEqual(["screen", "rdp", "files", "proxy"]);
+  });
+
+  it("respeita o kill switch desligado mesmo com objeto remoteAccessWebRtc ativo", () => {
+    const kinds = resolveWebRtcKinds({
+      remoteAccessWebRtcEnabled: false,
+      remoteAccessWebRtc: {
+        enabled: true,
+        kinds: ["screen"],
+      },
+    });
+
+    expect(kinds).toEqual([]);
+  });
+
+  it("devolve vazio quando remoteAccessWebRtc.enabled é false ou formato é inválido", () => {
+    expect(resolveWebRtcKinds({
+      remoteAccessWebRtcEnabled: true,
+      remoteAccessWebRtc: { enabled: false, kinds: ["screen"] },
+    })).toEqual([]);
+
+    for (const bad of [null, [], "screen", { enabled: true }, { enabled: true, kinds: "screen" }]) {
+      expect(resolveWebRtcKinds({
+        remoteAccessWebRtcEnabled: true,
+        remoteAccessWebRtc: bad,
+      })).toEqual([]);
+    }
+  });
 });
