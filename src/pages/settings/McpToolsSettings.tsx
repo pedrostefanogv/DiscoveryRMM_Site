@@ -13,7 +13,7 @@ import { Icon,
   PageHeader,
   Select,
 } from "@/components/ui";
-import { mcpToolsApi, type McpToolCatalogItem, type McpToolScopeRef } from "@/api/mcp-tools";
+import { mcpToolsApi, type McpToolAuditResponse, type McpToolCatalogItem, type McpToolScopeRef } from "@/api/mcp-tools";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
@@ -308,6 +308,23 @@ export default function McpToolsSettings() {
       ? false
       : callsValue === null || (editing.timeoutApplies && timeoutValue === null);
 
+  const [activeTab, setActiveTab] = useState<"policies" | "audit">("policies");
+  const [auditToolFilter, setAuditToolFilter] = useState("");
+  const [auditStatusFilter, setAuditStatusFilter] = useState("");
+  const [auditPage, setAuditPage] = useState(1);
+
+  const auditQuery = useQuery<McpToolAuditResponse>({
+    queryKey: ["mcp-tools-audit", auditToolFilter, auditStatusFilter, auditPage],
+    queryFn: () =>
+      mcpToolsApi.audit({
+        toolName: auditToolFilter.trim() || undefined,
+        status: auditStatusFilter || undefined,
+        page: auditPage,
+        pageSize: 25,
+      }),
+    enabled: activeTab === "audit",
+  });
+
   const scopeOptions = [
     { value: "global", label: "Global (todos)" },
     { value: "client", label: "Cliente" },
@@ -322,6 +339,138 @@ export default function McpToolsSettings() {
         description="Habilite ou desabilite as ferramentas que o modelo pode executar no servidor e na máquina do cliente. Sem sobrescrita local, o escopo herda a política do nível acima. Esta tela é a única fonte de verdade: a allowlist enviada ao agent é derivada daqui."
         breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       />
+
+      <div className="flex gap-2 border-b border-border pb-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={activeTab === "policies" ? "primary" : "ghost"}
+          onClick={() => setActiveTab("policies")}
+        >
+          Políticas
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={activeTab === "audit" ? "primary" : "ghost"}
+          onClick={() => setActiveTab("audit")}
+        >
+          Auditoria de execuções
+        </Button>
+      </div>
+
+      {activeTab === "audit" ? (
+        <Card className="space-y-4">
+          <CardHeader
+            title="Auditoria de execuções MCP"
+            subtitle="Histórico de chamadas de ferramentas executadas no servidor e no agente."
+          />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Input
+              label="Ferramenta"
+              placeholder="Ex.: registry_read, request_human_support"
+              value={auditToolFilter}
+              onChange={(e) => { setAuditToolFilter(e.target.value); setAuditPage(1); }}
+            />
+            <Select
+              label="Status"
+              value={auditStatusFilter}
+              onChange={(e) => { setAuditStatusFilter(e.target.value); setAuditPage(1); }}
+              options={[
+                { value: "", label: "Todos" },
+                { value: "success", label: "Sucesso" },
+                { value: "error", label: "Erro" },
+                { value: "denied", label: "Negado" },
+                { value: "rate_limited", label: "Rate limit" },
+                { value: "timeout", label: "Timeout" },
+              ]}
+            />
+            <div className="flex items-end">
+              <Button type="button" size="sm" variant="secondary" onClick={() => void auditQuery.refetch()}>
+                Atualizar
+              </Button>
+            </div>
+          </div>
+          {auditQuery.isLoading ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">Carregando registros de auditoria...</p>
+          ) : auditQuery.isError ? (
+            <div className="flex items-center justify-between rounded-md border border-red-500/30 p-3 text-xs text-red-500">
+              <span>Falha ao carregar auditoria de execuções MCP.</span>
+              <Button type="button" size="sm" variant="secondary" onClick={() => void auditQuery.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground">
+                      <th className="py-2 pr-3">Data/Hora</th>
+                      <th className="py-2 pr-3">Ferramenta</th>
+                      <th className="py-2 pr-3">Origem</th>
+                      <th className="py-2 pr-3">Status</th>
+                      <th className="py-2 pr-3 text-right">Duração</th>
+                      <th className="py-2">Detalhes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(auditQuery.data?.items ?? []).map((row) => (
+                      <tr key={row.id} className="border-b border-border/50">
+                        <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
+                          {new Date(row.createdAt).toLocaleString("pt-BR")}
+                        </td>
+                        <td className="py-2 pr-3 font-mono font-medium">{row.toolName}</td>
+                        <td className="py-2 pr-3">{row.origin}</td>
+                        <td className="py-2 pr-3">
+                          <Badge color={row.status === "success" ? "success" : row.status === "denied" || row.status === "rate_limited" ? "warning" : "danger"}>
+                            {row.status}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{row.durationMs} ms</td>
+                        <td className="py-2 max-w-xs truncate text-muted-foreground" title={row.errorMessage ?? ""}>
+                          {row.errorMessage || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                    {(auditQuery.data?.items.length ?? 0) === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                          Nenhuma execução MCP registrada ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Total: {auditQuery.data?.totalCount ?? 0} registros</span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={auditPage <= 1}
+                    onClick={() => setAuditPage((p) => Math.max(1, p - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={(auditPage * 25) >= (auditQuery.data?.totalCount ?? 0)}
+                    onClick={() => setAuditPage((p) => p + 1)}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+      ) : (
+        <>
 
       <Card>
         <CardHeader title="Escopo" subtitle="A política é resolvida de cima para baixo: Global → Cliente → Site → Agente." />
@@ -859,6 +1008,8 @@ export default function McpToolsSettings() {
           ) : null
         }
       />
+        </>
+      )}
     </div>
   );
 }

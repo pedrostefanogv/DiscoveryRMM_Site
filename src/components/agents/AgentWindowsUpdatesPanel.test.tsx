@@ -116,9 +116,9 @@ describe("AgentWindowsUpdatesPanel — aba Atualizações do agente", () => {
     expect(alert.textContent).toContain("Varredura desatualizada");
     expect(alert.textContent).toMatch(/6h/);
 
-    // Botão do banner + toolbar + estado vazio: qualquer um pede a varredura.
+    // Botão único de varredura no cabeçalho (sem duplicação em banner/empty state).
     const scanButtons = screen.getAllByRole("button", { name: /Verificar atualizações/ });
-    expect(scanButtons.length).toBeGreaterThanOrEqual(2);
+    expect(scanButtons.length).toBe(1);
     fireEvent.click(scanButtons[0]);
     await waitFor(() => expect(state.scanMock).toHaveBeenCalledTimes(1));
     expect(state.scanMock).toHaveBeenCalledWith({
@@ -297,6 +297,7 @@ describe("AgentWindowsUpdatesPanel — aba Atualizações do agente", () => {
     state.snapshot = baseSnapshot();
     renderPanel();
 
+    fireEvent.click(screen.getByRole("button", { name: /Filtros/ }));
     fireEvent.change(screen.getByLabelText("Severidade"), { target: { value: "Critical" } });
 
     // Há dois botões "Limpar filtros": na barra de abas e no vazio filtrado.
@@ -432,5 +433,36 @@ describe("AgentWindowsUpdatesPanel — aba Atualizações do agente", () => {
     expect(screen.getAllByText("Corrige vulnerabilidades de segurança e melhora a estabilidade do sistema.").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("link", { name: /Página de suporte/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Catálogo Microsoft Update/ })).toBeTruthy();
+  });
+
+  it("oculta a coluna Aprovação na aba Instaladas para liberar espaço", () => {
+    state.items = [
+      {
+        id: "u-inst",
+        agentId: "a1",
+        updateKey: "kb:KB5044284",
+        groupKey: "kb:KB5044284",
+        kbIds: ["KB5044284"],
+        title: "2026-11 Cumulative Update",
+        classification: "Security Updates",
+        severity: "Critical",
+        isPending: false,
+        isInstalled: true,
+        isHidden: false,
+        isDownloaded: true,
+        isMandatory: false,
+        requiresReboot: false,
+        approvalState: "Approved",
+        status: "Installed",
+        reportedAt: "2026-11-21T10:00:00Z",
+        installedAt: "2026-11-21T09:00:00Z",
+      },
+    ];
+    state.snapshot = baseSnapshot({ pendingCount: 0, installedCount: 1 });
+    renderPanel();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Instaladas/ }));
+    expect(screen.queryByRole("columnheader", { name: "Aprovação" })).toBeNull();
+    expect(screen.getByRole("columnheader", { name: "Instalada em" })).toBeTruthy();
   });
 });

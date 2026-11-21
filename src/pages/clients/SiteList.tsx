@@ -1,6 +1,6 @@
 import { formatDate } from '@/utils/format';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useClients } from '@/hooks/useClients';
 import { useAllSites, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
@@ -26,14 +26,17 @@ type SiteWithClient = Site & {
   agentOnlineCount?: number;
 };
 
-export default function SiteList() {
+type SiteStatusFilter = 'active' | 'all' | 'inactive';
+
+export default function SiteList({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasAnyPermission } = useAuthorization();
   // Sites têm recurso/permissões próprios (SitesController existe na API).
   const canCreate = hasAnyPermission(['Sites.Create', 'sites.*', 'admin.*']);
-  const [showInactive, setShowInactive] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>('active');
   const [search, setSearch] = useState('');
-  const [filterClient, setFilterClient] = useState('');
+  const [filterClient, setFilterClient] = useState(() => searchParams.get('client') ?? '');
   const [modalOpen, setModalOpen] = useState(false);
   const [contextMenuSite, setContextMenuSite] = useState<SiteWithClient | null>(null);
   const [contextPosition, setContextPosition] = useState<{ x: number; y: number } | null>(null);
@@ -46,10 +49,24 @@ export default function SiteList() {
   const [deleteSiteModal, setDeleteSiteModal] = useState<SiteWithClient | null>(null);
   const [editSite, setEditSite] = useState<SiteWithClient | null>(null);
 
-  // Clientes sempre completos (nome/ativo + opções de filtro/criação); os sites
-  // vêm de uma única requisição global (sem N+1 por cliente).
+  useEffect(() => {
+    setFilterClient(searchParams.get('client') ?? '');
+  }, [searchParams]);
+
+  const handleClientFilterChange = (nextClientId: string) => {
+    setFilterClient(nextClientId);
+    const next = new URLSearchParams(searchParams);
+    if (nextClientId) next.set('client', nextClientId);
+    else next.delete('client');
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  };
+
+  // Clientes e sites sempre completos para compartilhar o mesmo cache de ClientList
+  // e manter o contador de inativos exato nos cards.
   const clients = useClients(true);
-  const allSitesQuery = useAllSites(showInactive);
+  const allSitesQuery = useAllSites(true);
 
   const clientsById = useMemo(
     () => new Map((clients.data ?? []).map((client) => [client.id, client])),
@@ -72,15 +89,21 @@ export default function SiteList() {
 
   const filteredSites = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return sites.filter((site) => {
-      if (!term) return true;
-      return (
-        site.name.toLowerCase().includes(term) ||
-        site.clientName.toLowerCase().includes(term) ||
-        (site.notes ?? '').toLowerCase().includes(term)
-      );
-    });
-  }, [search, sites]);
+    return sites
+      .filter((site) => {
+        if (statusFilter === 'active') return site.isActive;
+        if (statusFilter === 'inactive') return !site.isActive;
+        return true;
+      })
+      .filter((site) => {
+        if (!term) return true;
+        return (
+          site.name.toLowerCase().includes(term) ||
+          site.clientName.toLowerCase().includes(term) ||
+          (site.notes ?? '').toLowerCase().includes(term)
+        );
+      });
+  }, [search, sites, statusFilter]);
 
   // Agents of the currently selected power/transfer/delete site, for counts & agentIds.
   const activeSite = transferSite ?? powerSite ?? wakeSite ?? deleteSiteModal ?? null;
@@ -159,6 +182,28 @@ export default function SiteList() {
         <span className="text-muted">
           {formatDate(site.updatedAt)}
         </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      className: 'text-right w-12',
+      render: (site) => (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="px-2"
+          aria-label={`Ações do site ${site.name}`}
+          title="Mais ações"
+          onClick={(event) => {
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            setContextMenuSite(site);
+            setContextPosition({ x: rect.right - 200, y: rect.bottom + 4 });
+          }}
+        >
+          <Icon name="more_vert" className="h-4 w-4" />
+        </Button>
       ),
     },
   ];
@@ -296,32 +341,62 @@ export default function SiteList() {
     );
   };
 
+  const isRefreshing = clients.isFetching || allSitesQuery.isFetching;
+  const handleRefresh = () => {
+    void clients.refetch();
+    void allSitesQuery.refetch();
+  };
+
+  const actionButtons = (
+    <>
+      <Button variant="secondary" onClick={handleRefresh} disabled={isRefreshing}>
+        <Icon name="refresh" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        Atualizar
+      </Button>
+      {canCreate && (
+        <Button variant="primary" onClick={() => setModalOpen(true)}>
+          <Icon name="add" className="h-4 w-4" /> Novo Site
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Sites"
-        description={filteredSites.length + ' de ' + sites.length + ' site(s) · visão global por cliente'}
-      >
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(event) => setShowInactive(event.target.checked)}
-            className="rounded border-border bg-surface-light"
-          />
-          Mostrar inativos
-        </label>
-        {canCreate && (
-          <Button onClick={() => setModalOpen(true)}>
-            <Icon name="add" className="h-4 w-4" /> Novo Site
-          </Button>
-        )}
-      </PageHeader>
+      {!embedded && (
+        <PageHeader
+          title="Sites"
+          description={filteredSites.length + ' de ' + sites.length + ' site(s) · visão global por cliente'}
+        >
+          {actionButtons}
+        </PageHeader>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon="apartment" label="Total de sites" value={sites.length} tone="accent" />
-        <StatCard icon="apartment" label="Sites ativos" value={activeSites} tone="success" />
-        <StatCard icon="apartment" label="Sites inativos" value={inactiveSites} tone="warning" />
+        <StatCard
+          icon="apartment"
+          label="Total de sites"
+          value={sites.length}
+          tone="accent"
+          onClick={() => setStatusFilter('all')}
+          active={statusFilter === 'all'}
+        />
+        <StatCard
+          icon="check_circle"
+          label="Sites ativos"
+          value={activeSites}
+          tone="success"
+          onClick={() => setStatusFilter('active')}
+          active={statusFilter === 'active'}
+        />
+        <StatCard
+          icon="block"
+          label="Sites inativos"
+          value={inactiveSites}
+          tone="warning"
+          onClick={() => setStatusFilter('inactive')}
+          active={statusFilter === 'inactive'}
+        />
         <StatCard
           icon="desktop_windows"
           label="Agentes nos sites"
@@ -335,22 +410,38 @@ export default function SiteList() {
         />
       </div>
 
-      <Card>
-        <div className="grid gap-3 md:grid-cols-[1fr_260px]">
-          <Input
-            label="Buscar"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Nome do site, cliente ou observação"
-          />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-3 flex-1 min-w-[260px]">
+          <div className="relative w-full sm:max-w-sm">
+            <Input
+              label="Buscar"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Nome do site, cliente ou observação"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Limpar busca"
+                className="absolute right-2 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <Icon name="close" className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           <Select
             label="Cliente"
+            fullWidth={false}
             value={filterClient}
-            onChange={(event) => setFilterClient(event.target.value)}
+            onChange={(event) => handleClientFilterChange(event.target.value)}
             options={clientOptions}
           />
         </div>
-      </Card>
+        {embedded && (
+          <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
+        )}
+      </div>
 
       <Card padding={false}>
         {isLoading ? (

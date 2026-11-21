@@ -1786,7 +1786,10 @@ export interface AIIntegrationSettings {
   maxToolCallIterations?: number;
   rateLimitPerMinute?: number;
   tokenBudgetDaily?: number;
+  budgetUsdMonthly?: number | null;
   costControlEnabled?: boolean;
+  sendScreenshotImages?: boolean;
+  outputGuardrailsEnabled?: boolean;
   minSimilarityScore?: number;
   maxKbChunks?: number;
   // ── Fase 3: Sampling Parameters ──
@@ -1832,6 +1835,7 @@ export interface AIIntegrationSettingsOverride {
   maxKbContextTokens?: number;
   maxKbChunks?: number;
   minSimilarityScore?: number;
+  budgetUsdMonthly?: number | null;
 }
 
 export interface ReportingSettings {

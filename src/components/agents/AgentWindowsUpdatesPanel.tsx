@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import toast from "react-hot-toast";
 import { Icon, Badge, Button, ConfirmDialog, ContextMenu, DataTable, ErrorDisplay, Input, Loading, Modal, Pagination, Select, Tooltip, type Column, type ContextMenuItem } from "@/components/ui";
@@ -106,6 +106,11 @@ interface InstallModalState {
 
 export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [view, setView] = useState<UpdateView>("pending");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const viewTabRefs = useRef<Record<UpdateView, HTMLButtonElement | null>>({
+    pending: null,
+    installed: null,
+  });
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [searchInput, setSearchInput] = useState("");
@@ -270,6 +275,26 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     setView(next);
     setApprovalFilter("");
     setPage(1);
+    viewTabRefs.current[next]?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  };
+
+  const handleViewTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, current: UpdateView) => {
+    const order: UpdateView[] = ["pending", "installed"];
+    const index = order.indexOf(current);
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % order.length;
+    else if (event.key === "ArrowLeft") nextIndex = (index - 1 + order.length) % order.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = order.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextView = order[nextIndex];
+    selectView(nextView);
+    viewTabRefs.current[nextView]?.focus();
   };
 
   const handleScan = async (source: "toolbar" | "banner" = "toolbar") => {
@@ -602,14 +627,27 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   if (pageQuery.isLoading && !pageQuery.data) return <Loading />;
   if (pageQuery.isError) return <ErrorDisplay onRetry={() => pageQuery.refetch()} />;
 
+  const visibleColumns =
+    view === "installed"
+      ? columns
+          .filter((col) => col.key !== "approval" && col.key !== "actions")
+          .map((col) => (col.key === "update" ? { ...col, width: "56%" } : col))
+      : columns;
+
   const scanStatusRaw = data?.scanStatus ?? "unknown";
   const probeDetailsHidden = probeFlags.length === 0 && !data?.probe && data?.wuaAvailable == null;
+  const approvedCount = data?.approvedCount ?? 0;
+  const showFiltersBar = items.length > 0 || filtersActive || filtersExpanded;
+  const healthAlertTone: ScanHealth["tone"] =
+    health.failed || health.neverScanned ? "danger" : "warning";
+  const healthSectionClass = health.alert
+    ? `rounded-xl border px-3.5 py-2.5 ${HEALTH_TONE_CLASSES[healthAlertTone]}`
+    : "rounded-xl border border-border bg-surface-light/40 px-3.5 py-2.5";
 
   return (
     <div className="space-y-4">
-      {/* Cabeçalho: identidade da aba + ações primárias (as ações de política do
-          SO saem da linha principal — são raras e não devem competir com
-          "Verificar" e "Instalar"). */}
+      {/* Cabeçalho: identidade da aba + ações primárias (um único botão Verificar
+          e Instalar aprovadas como primário apenas quando há aprovações). */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1">
           <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground sm:text-xl">
@@ -628,10 +666,6 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
                   <Icon name="download" className="mr-1 h-3 w-3" />
                 )}
                 <span>{activity.label}</span>
-                {/* A porcentagem vem da sonda (probe.downloadPercent) desde a
-                    correção do agente. Só aparece no estado de DOWNLOAD: no badge
-                    de "Reinício pendente" o percentual é do download anterior e
-                    seria lido como progresso do reboot. */}
                 {activity.key === "downloading" &&
                   typeof data?.probe?.downloadPercent === "number" && (
                     <span className="ml-1 tabular-nums">{Math.round(data.probe.downloadPercent)}%</span>
@@ -639,37 +673,42 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
               </Badge>
             </span>
           )}
-          <Button variant="secondary" onClick={() => void handleScan("toolbar")} disabled={scanning || !canExecute}>
+          <Button variant="ghost" onClick={() => setPolicyModalOpen(true)} title="Aplicar ou reverter a política do Windows Update no sistema operacional">
+            <Icon name="shield" className="h-4 w-4" />
+            Política do SO
+          </Button>
+          <Button
+            variant={health.alert && approvedCount === 0 ? "primary" : "secondary"}
+            onClick={() => void handleScan("toolbar")}
+            disabled={scanning || !canExecute}
+          >
             <Icon name="refresh" className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
             {scanButtonLabel}
           </Button>
           <Button
+            variant={approvedCount > 0 ? "primary" : "secondary"}
             onClick={() => setConfirmInstallApproved(true)}
-            disabled={installApproved.isPending || !canExecute || data?.approvedCount === 0}
+            disabled={installApproved.isPending || !canExecute || approvedCount === 0}
             title={
-              data?.approvedCount === 0
+              approvedCount === 0
                 ? "Nenhuma atualização aprovada aguardando instalação"
                 : "Instalar todas as atualizações aprovadas deste agente"
             }
           >
             <Icon name="download" className="h-4 w-4" />
             Instalar aprovadas
-            {typeof data?.approvedCount === "number" && data.approvedCount > 0 ? (
-              <span className="rounded-full bg-black/15 px-1.5 text-xs tabular-nums">{data.approvedCount}</span>
+            {approvedCount > 0 ? (
+              <span className="rounded-full bg-black/15 px-1.5 text-xs tabular-nums">{approvedCount}</span>
             ) : null}
-          </Button>
-          <Button variant="ghost" onClick={() => setPolicyModalOpen(true)} title="Aplicar ou reverter a política do Windows Update no sistema operacional">
-            <Icon name="shield" className="h-4 w-4" />
-            Política do SO
           </Button>
         </div>
       </div>
 
-      {/* Faixa de saúde da varredura: um único lugar para "quando", "quão bom"
-          e "o que a sonda viu" — o diagnóstico detalhado fica recolhido. */}
+      {/* Faixa única de saúde da varredura + diagnóstico recolhido (sem banner duplicado). */}
       <section
         aria-label="Saúde da varredura do Windows Update"
-        className="rounded-xl border border-border bg-surface-light/50 px-3 py-2.5"
+        role={health.alert ? "alert" : undefined}
+        className={healthSectionClass}
       >
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className="inline-flex items-center gap-1.5">
@@ -684,6 +723,12 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           <span className={health.failed ? "text-danger" : health.stale ? "text-warning" : "text-success"}>
             status: {scanStatusRaw}
           </span>
+          {data?.scanErrorCode ? (
+            <>
+              <span className="text-muted" aria-hidden>·</span>
+              <span className="text-muted">código: {data.scanErrorCode}</span>
+            </>
+          ) : null}
           {data?.skippedCount ? (
             <>
               <span className="text-muted" aria-hidden>·</span>
@@ -701,11 +746,18 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           ) : null}
         </div>
 
+        {health.alert && (
+          <p className="mt-1 text-xs">
+            <span className="font-semibold">{health.title}:</span>{" "}
+            <span className="opacity-90">{health.reason}</span>
+          </p>
+        )}
+
         {data?.scanError && (
-          <p className="mt-1.5 text-xs text-danger">Falha da última varredura: {data.scanError}</p>
+          <p className="mt-1 text-xs text-danger">Falha da última varredura: {data.scanError}</p>
         )}
         {followUpTimedOut && (
-          <p className="mt-1.5 text-xs text-warning">
+          <p className="mt-1 text-xs text-warning">
             A varredura solicitada há {formatElapsed(nowMs - (scanRequestedAtMs ?? nowMs))} ainda não retornou.
             O agente pode estar offline ou sem permissão; o inventário exibido continua sendo o anterior.
           </p>
@@ -751,40 +803,6 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         </div>
       )}
 
-      {/* Alerta de varredura desatualizada / falha / nunca coletada. */}
-      {health.alert && (
-        <div
-          role="alert"
-          className={`flex flex-wrap items-start gap-2 rounded-xl border p-3 text-sm ${HEALTH_TONE_CLASSES[health.tone]}`}
-        >
-          {health.tone === "danger" ? (
-            <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
-          ) : (
-            <Icon name="schedule" className="mt-0.5 h-4 w-4 shrink-0" />
-          )}
-          <div className="min-w-0 flex-1">
-            <p className="font-medium">{health.title}</p>
-            <p className="text-xs opacity-90">{health.reason}</p>
-            {data?.scanStatus && !health.neverScanned && (
-              <p className="mt-1 text-[11px] opacity-75">
-                status: {data.scanStatus}
-                {data.scanDurationMs != null ? ` · ${formatScanDuration(data.scanDurationMs)}` : ""}
-                {data.scanErrorCode ? ` · código: ${data.scanErrorCode}` : ""}
-              </p>
-            )}
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => void handleScan("banner")}
-            disabled={scanning || !canExecute}
-          >
-            <Icon name="refresh" className="h-3.5 w-3.5" />
-            {scanning ? "Verificando..." : "Verificar atualizações"}
-          </Button>
-        </div>
-      )}
-
       {data?.pendingReboot && (
         <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
           <Icon name="restart_alt" className="mt-0.5 h-4 w-4 shrink-0" />
@@ -807,40 +825,63 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         </div>
       )}
 
-      {/* Abas + filtros numa única barra: aba à esquerda, refinamentos à direita. */}
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Abas WAI-ARIA + ações contextuais da lista */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border">
           <div
             role="tablist"
             aria-label="Lista de atualizações"
-            className="inline-flex items-center gap-1 rounded-xl border border-border bg-surface-light/60 p-1"
+            className="flex flex-nowrap overflow-x-auto gap-1"
           >
-            <Button
-              size="sm"
-              role="tab"
-              aria-selected={view === "pending"}
-              variant={view === "pending" ? "primary" : "ghost"}
-              onClick={() => selectView("pending")}
-            >
-              Pendentes ({data?.pendingCount ?? 0})
-            </Button>
-            <Button
-              size="sm"
-              role="tab"
-              aria-selected={view === "installed"}
-              variant={view === "installed" ? "primary" : "ghost"}
-              onClick={() => selectView("installed")}
-            >
-              Instaladas ({data?.installedCount ?? 0})
-            </Button>
+            {(
+              [
+                { id: "pending" as const, label: `Pendentes (${data?.pendingCount ?? 0})` },
+                { id: "installed" as const, label: `Instaladas (${data?.installedCount ?? 0})` },
+              ]
+            ).map((tab) => {
+              const isSelected = view === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  ref={(el) => {
+                    viewTabRefs.current[tab.id] = el;
+                  }}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  tabIndex={isSelected ? 0 : -1}
+                  onClick={() => selectView(tab.id)}
+                  onKeyDown={(event) => handleViewTabKeyDown(event, tab.id)}
+                  className={[
+                    "relative flex-none whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    isSelected
+                      ? "text-primary after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary"
+                      : "text-text-secondary hover:text-text-primary",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-            <span>
+          <div className="flex flex-wrap items-center gap-2 pb-1 text-xs text-muted">
+            <span className="tabular-nums">
               {totalCount === 0
                 ? "Nenhum resultado"
                 : `${totalCount} atualizaç${totalCount === 1 ? "ão" : "ões"} · página ${page} de ${totalPages}`}
             </span>
+            {items.length === 0 && !filtersActive && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setFiltersExpanded((prev) => !prev)}
+                aria-expanded={filtersExpanded}
+              >
+                <Icon name="filter_alt" className="h-3.5 w-3.5" />
+                Filtros
+              </Button>
+            )}
             {filtersActive && (
               <Button size="sm" variant="ghost" onClick={clearFilters}>
                 <Icon name="close" className="h-3.5 w-3.5" />
@@ -862,73 +903,70 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface-light/40 p-2.5">
-          <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
-            <Input
-              label="Buscar"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  setSearchApplied(searchInput.trim());
-                  setPage(1);
-                }
-              }}
-              placeholder="KB, título ou classificação"
+        {showFiltersBar && (
+          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-surface-light/40 p-2.5">
+            <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+              <Input
+                label="Buscar"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    setSearchApplied(searchInput.trim());
+                    setPage(1);
+                  }
+                }}
+                placeholder="KB, título ou classificação"
+              />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchInput(""); setSearchApplied(""); setPage(1); }}
+                  aria-label="Limpar busca"
+                  className="absolute right-2 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Select
+              label="Severidade"
+              fullWidth={false}
+              value={severity}
+              onChange={(event) => { setSeverity(event.target.value); setPage(1); }}
+              options={PATCH_SEVERITY_OPTIONS}
             />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => { setSearchInput(""); setSearchApplied(""); setPage(1); }}
-                aria-label="Limpar busca"
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <Icon name="close" className="h-3.5 w-3.5" />
-              </button>
+            <Select
+              label="Origem"
+              fullWidth={false}
+              value={sourceFilter}
+              onChange={(event) => { setSourceFilter(event.target.value as "" | "windows" | "third-party"); setPage(1); }}
+              options={SOURCE_FILTER_OPTIONS}
+            />
+            <Select
+              label="Tipo"
+              fullWidth={false}
+              value={typeFilter}
+              onChange={(event) => { setTypeFilter(event.target.value as TypeFilter); setPage(1); }}
+              options={TYPE_FILTER_OPTIONS}
+            />
+            {view === "pending" && (
+              <Select
+                label="Aprovação"
+                fullWidth={false}
+                value={approvalFilter}
+                onChange={(event) => { setApprovalFilter(event.target.value as ApprovalFilter); setPage(1); }}
+                options={APPROVAL_FILTER_OPTIONS}
+              />
             )}
           </div>
-          <Select
-            label="Severidade"
-            fullWidth={false}
-            value={severity}
-            onChange={(event) => { setSeverity(event.target.value); setPage(1); }}
-            options={PATCH_SEVERITY_OPTIONS}
-          />
-          <Select
-            label="Origem"
-            fullWidth={false}
-            value={sourceFilter}
-            onChange={(event) => { setSourceFilter(event.target.value as "" | "windows" | "third-party"); setPage(1); }}
-            options={SOURCE_FILTER_OPTIONS}
-          />
-          <Select
-            label="Tipo"
-            fullWidth={false}
-            value={typeFilter}
-            onChange={(event) => { setTypeFilter(event.target.value as TypeFilter); setPage(1); }}
-            options={TYPE_FILTER_OPTIONS}
-          />
-          {view === "pending" && (
-            <Select
-              label="Aprovação"
-              fullWidth={false}
-              value={approvalFilter}
-              onChange={(event) => { setApprovalFilter(event.target.value as ApprovalFilter); setPage(1); }}
-              options={APPROVAL_FILTER_OPTIONS}
-            />
-          )}
-          {/* Dica discreta: fecha a barra e explica que a busca é incremental. */}
-          <p className="ml-auto hidden self-center text-xs text-muted lg:block">
-            A busca filtra enquanto você digita · os filtros valem só para a aba aberta
-          </p>
-        </div>
+        )}
       </div>
 
-      {/* Estado vazio: curto na frente, explicação longa recolhida (antes o
-          texto inteiro ficava aberto e repetia a mesma ideia três vezes). */}
+      {/* Estado vazio enxuto e sem botões duplicados */}
       {items.length === 0 ? (
         filtersActive ? (
-          <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface-light/60 p-4 text-sm">
+          <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface-light/40 p-4 text-sm">
             <p className="font-medium text-foreground">{filteredEmpty.title}</p>
             <p className="text-xs text-muted">{filteredEmpty.description}</p>
             <Button size="sm" variant="secondary" onClick={clearFilters}>
@@ -938,49 +976,40 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         ) : view === "pending" ? (
           <div
             className={
-              emptyMessage.suspicious
-                ? "rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm"
-                : "rounded-xl border border-border bg-surface-light/60 p-4 text-sm"
+              data?.pendingReboot
+                ? "rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm"
+                : "rounded-xl border border-border bg-surface-light/40 p-4 text-sm"
             }
           >
-            <div className="flex items-start gap-2">
-              <Icon
-                name={emptyMessage.suspicious ? "warning" : "verified"}
-                className={`mt-0.5 h-4 w-4 shrink-0 ${emptyMessage.suspicious ? "text-warning" : "text-success"}`}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground">{emptyMessage.title}</p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {emptyMessage.suspicious
-                    ? "Vazio aqui não significa máquina em dia: veja a explicação abaixo antes de concluir."
-                    : "Nada a fazer nesta máquina pela busca padrão do Windows Update."}
-                </p>
-                <details className="group mt-2 text-xs text-muted">
-                  <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
-                    <Icon name="expand_more" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                    Por que esta lista pode aparecer vazia?
-                  </summary>
-                  <p className="mt-1.5 pl-4">{emptyMessage.description}</p>
-                </details>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                <Icon
+                  name={emptyMessage.suspicious ? "warning" : "verified"}
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${emptyMessage.suspicious ? "text-warning" : "text-success"}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground">{emptyMessage.title}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {emptyMessage.suspicious
+                      ? "Vazio aqui não significa máquina em dia: veja os detalhes abaixo."
+                      : "Nada a fazer nesta máquina pela busca padrão do Windows Update."}
+                  </p>
+                  <details className="group mt-2 text-xs text-muted">
+                    <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
+                      <Icon name="expand_more" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                      Por que esta lista pode aparecer vazia?
+                    </summary>
+                    <p className="mt-1.5 pl-4">{emptyMessage.description}</p>
+                  </details>
+                </div>
               </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2 pl-6">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => void handleScan("banner")}
-                disabled={scanning || !canExecute}
-              >
-                <Icon name="refresh" className="h-3.5 w-3.5" />
-                {scanning ? "Verificando..." : "Verificar atualizações"}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => selectView("installed")}>
+              <Button size="sm" variant="secondary" onClick={() => selectView("installed")}>
                 Ver instaladas ({data?.installedCount ?? 0})
               </Button>
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-border bg-surface-light/60 p-4 text-sm">
+          <div className="rounded-xl border border-border bg-surface-light/40 p-4 text-sm">
             <p className="font-medium text-foreground">Nenhuma atualização instalada reportada</p>
             <details className="group mt-2 text-xs text-muted">
               <summary className="flex cursor-pointer list-none items-center gap-1 font-medium text-muted-foreground hover:text-foreground">
@@ -997,7 +1026,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         )
       ) : (
         <DataTable
-          columns={columns}
+          columns={visibleColumns}
           data={items}
           keyExtractor={(update) => update.id}
           showPagination={false}

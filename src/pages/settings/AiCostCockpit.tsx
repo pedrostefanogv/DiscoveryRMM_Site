@@ -66,10 +66,20 @@ function BudgetBar({ row }: { row: AiCostByClientDto }) {
 
 export default function AiCostCockpit() {
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [periodDays, setPeriodDays] = useState("30");
+
+  const { from, to } = useMemo(() => {
+    const days = Number(periodDays) || 30;
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 86_400_000);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }, [periodDays]);
 
   const clients = useClients();
   const cockpit = useAiCostCockpit({
     clientId: selectedClientId || undefined,
+    from,
+    to,
   });
 
   const clientOptions = useMemo(
@@ -124,12 +134,6 @@ export default function AiCostCockpit() {
       className: "text-right tabular-nums",
       render: (item) => formatNumber(item.calls),
     },
-    {
-      key: "costUsd",
-      header: "Custo",
-      className: "text-right tabular-nums",
-      render: (item) => formatUsd(item.costUsd),
-    },
   ];
 
   const totals = cockpit.data?.totals;
@@ -141,7 +145,7 @@ export default function AiCostCockpit() {
     <div className="space-y-6">
       <PageHeader
         title="Cockpit de custo IA"
-        description="Consumo de tokens e custo por cliente e por ferramenta (MCP)."
+        description="Consumo de tokens, orçamento mensal e uso de ferramentas (MCP). Valores em USD são estimativas por token."
         breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
       >
         <Button
@@ -161,6 +165,17 @@ export default function AiCostCockpit() {
           value={selectedClientId}
           onChange={(event) => setSelectedClientId(event.target.value)}
           options={clientOptions}
+        />
+        <Select
+          label="Período"
+          fullWidth={false}
+          value={periodDays}
+          onChange={(event) => setPeriodDays(event.target.value)}
+          options={[
+            { value: "7", label: "Últimos 7 dias" },
+            { value: "30", label: "Últimos 30 dias" },
+            { value: "90", label: "Últimos 90 dias" },
+          ]}
         />
       </div>
 
@@ -223,7 +238,7 @@ export default function AiCostCockpit() {
           </Card>
 
           <Card>
-            <CardHeader title="Top ferramentas" subtitle="Ferramentas (tools) com maior custo no período" />
+            <CardHeader title="Top ferramentas" subtitle="Ferramentas MCP mais acionadas no período" />
             {/* Idem: agregação curta, sem paginação. */}
             <DataTable
               columns={toolColumns}

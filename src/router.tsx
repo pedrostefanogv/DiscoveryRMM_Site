@@ -10,9 +10,9 @@ import { PermissionGate, PublicOnlyAuth, RequireAuth } from '@/auth/AuthGuards';
 
 // Lazy load all pages for code splitting
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
-const ClientList = lazy(() => import('@/pages/clients/ClientList'));
+const ClientsHubPage = lazy(() => import('@/pages/clients/ClientsHubPage'));
 const ClientDetail = lazy(() => import('@/pages/clients/ClientDetail'));
-const SiteList = lazy(() => import('@/pages/clients/SiteList'));
+
 const SiteDetail = lazy(() => import('@/pages/clients/SiteDetail'));
 const AgentList = lazy(() => import('@/pages/agents/AgentList'));
 const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
@@ -224,7 +224,7 @@ export const routes: RouteObject[] = [
         path: 'clients',
         element: (
           <PermissionGate anyOf={['Clients.View', 'clients.*', 'admin.*']}>
-            <LazyPage><ClientList /></LazyPage>
+            <LazyPage><ClientsHubPage initialTab="clients" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -232,7 +232,7 @@ export const routes: RouteObject[] = [
         path: 'sites',
         element: (
           <PermissionGate anyOf={['Sites.View', 'sites.*', 'admin.*']}>
-            <LazyPage><SiteList /></LazyPage>
+            <LazyPage><ClientsHubPage initialTab="sites" /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -536,7 +536,7 @@ export const routes: RouteObject[] = [
       {
         path: 'settings/ai-cost',
         element: (
-          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+          <PermissionGate anyOf={['ai_chat.*', 'ai_chat.view', 'settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><AiCostCockpit /></LazyPage>
           </PermissionGate>
         ),

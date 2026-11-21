@@ -98,7 +98,6 @@ interface SidebarProps {
 }
 
 type SidebarAccordionSection =
-  | 'clients'
   | 'tickets'
   | 'software'
   | 'patches'
@@ -167,7 +166,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
   // BUG-12: resolveActiveSection memoizado para evitar recriação a cada render
   const activeSection = useMemo((): SidebarAccordionSection | null => {
-    if (clientsIsActive) return 'clients';
+
     if (ticketsIsActive) return 'tickets';
     if (softwareIsActive) return 'software';
     if (patchesIsActive) return 'patches';
@@ -176,13 +175,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     if (identityIsActive) return 'identity';
     if (settingsIsActive) return 'settings';
     return null;
-  }, [clientsIsActive, ticketsIsActive, softwareIsActive, patchesIsActive, automationIsActive, reportsIsActive, identityIsActive, settingsIsActive]);
+  }, [ticketsIsActive, softwareIsActive, patchesIsActive, automationIsActive, reportsIsActive, identityIsActive, settingsIsActive]);
 
   const [openSection, setOpenSection] = useState<SidebarAccordionSection | null>(() =>
     activeSection,
   );
 
-  const clientsOpen = openSection === 'clients';
   const ticketsOpen = openSection === 'tickets';
   const softwareOpen = openSection === 'software';
   const patchesOpen = openSection === 'patches';
@@ -301,58 +299,19 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         </NavLink>
 
         {visibleClientLinks.length > 0 && (
-          <>
-        <button
-          type="button"
-          onClick={() => {
-            if (effectiveCollapsed) {
-              navigate(visibleClientLinks[0]?.to ?? '/clients');
-              return;
+          <NavLink
+            to={visibleClientLinks[0]?.to ?? '/clients'}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                isActive || clientsIsActive
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
+              }`
             }
-            setOpenSection((prev) => (prev === 'clients' ? null : 'clients'));
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            clientsIsActive
-              ? 'bg-surface-hover text-foreground'
-              : 'text-muted hover:bg-surface-light hover:text-foreground'
-          }`}
-          aria-label="Abrir submenu de clientes"
-          aria-expanded={clientsOpen}
-        >
-          <Icon name="group" className="h-5 w-5 shrink-0" />
-          {!effectiveCollapsed && (
-            <>
-              <span className="truncate">Clientes</span>
-              <span className="ml-auto">
-                <Icon name="expand_more" className={chevronAnimationClass(clientsOpen)} />
-              </span>
-            </>
-          )}
-        </button>
-
-        {!effectiveCollapsed && (
-          <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen} inert={!clientsOpen}>
-            <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-              {visibleClientLinks.map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={to === '/clients'}
-                  className={({ isActive }) =>
-                    `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                      isActive
-                        ? 'bg-surface-hover text-foreground'
-                        : 'text-muted hover:bg-surface-light hover:text-foreground'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        )}
-          </>
+          >
+            <Icon name="group" className="h-5 w-5 shrink-0" />
+            {!effectiveCollapsed && <span className="truncate">Clientes e Sites</span>}
+          </NavLink>
         )}
 
         {visibleMainLinks.map(({ to, icon, label }) => (

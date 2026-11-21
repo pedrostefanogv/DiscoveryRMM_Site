@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useDeferredValue, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
@@ -45,6 +45,18 @@ type ProvisioningFilter = 'all' | 'pendingApproval' | 'approved' | 'deleted';
 type AgentSortField = 'name' | 'site' | 'client' | 'lastSeen' | 'status';
 type SortDirection = 'asc' | 'desc';
 const DELETED_PAGE_SIZE = 200;
+const VIEW_MODE_STORAGE_KEY = 'rmm:agents:viewMode';
+
+function readStoredViewMode(): 'card' | 'list' {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'list') {
+      return 'list';
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return 'card';
+}
 
 function normalizeIp(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
@@ -108,7 +120,7 @@ function compareAgentsBySort(
   if (sortBy === 'name') {
     baseComparison = compareText(getAgentDisplayName(a), getAgentDisplayName(b));
   } else if (sortBy === 'site') {
-    baseComparison = compareText(a.siteId, b.siteId);
+    baseComparison = compareText(a.siteName ?? a.siteId, b.siteName ?? b.siteId);
   } else if (sortBy === 'client') {
     baseComparison = compareText(a.clientName, b.clientName);
   } else if (sortBy === 'status') {
@@ -141,6 +153,7 @@ function compareAgentsBySort(
 
 export default function AgentList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const now = useNowTick(5_000);
   const clients = useClients();
   const deleteAgent = useDeleteAgent();
@@ -166,23 +179,41 @@ export default function AgentList() {
   const canApprovePatches = hasAnyPermission(['Patches.Edit', 'patches.*', 'admin.*']);
   const canExecutePatches = hasAnyPermission(['Patches.Execute', 'patches.*', 'admin.*']);
 
-  const [search, setSearch] = useState('');
-  const [filterClient, setFilterClient] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
-  const [filterProvisioning, setFilterProvisioning] = useState<ProvisioningFilter>('all');
-  const [filterLabel, setFilterLabel] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '');
+  const deferredSearch = useDeferredValue(search);
+  const [filterClient, setFilterClient] = useState(() => searchParams.get('client') ?? '');
+  const [filterSite, setFilterSite] = useState(() => searchParams.get('site') ?? '');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>(() => {
+    const raw = searchParams.get('status');
+    return raw === 'online' || raw === 'offline' ? raw : 'all';
+  });
+  const [filterProvisioning, setFilterProvisioning] = useState<ProvisioningFilter>(() => {
+    const raw = searchParams.get('prov');
+    return raw === 'pendingApproval' || raw === 'approved' || raw === 'deleted' ? raw : 'all';
+  });
+  const [filterLabel, setFilterLabel] = useState(() => searchParams.get('label') ?? '');
   // Filtro/coluna por campo customizado do agente (campos visíveis no portal).
-  const [filterCustomField, setFilterCustomField] = useState('');
-  const [filterCustomFieldValue, setFilterCustomFieldValue] = useState('');
-  const [sortBy, setSortBy] = useState<AgentSortField>('client');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [filterCustomField, setFilterCustomField] = useState(() => searchParams.get('cf') ?? '');
+  const [filterCustomFieldValue, setFilterCustomFieldValue] = useState(() => searchParams.get('cfv') ?? '');
+  const [sortBy, setSortBy] = useState<AgentSortField>(() => {
+    const raw = searchParams.get('sort');
+    return raw === 'name' || raw === 'site' || raw === 'client' || raw === 'lastSeen' || raw === 'status' ? raw : 'client';
+  });
+  const [sortDirection, setSortDirection] = useState<SortDirection>(() =>
+    searchParams.get('dir') === 'desc' ? 'desc' : 'asc',
+  );
   // Filtros avançados (campo customizado + ordenação) ficam recolhidos por
   // padrão: a barra principal mostra só busca e filtros de uso frequente.
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>(readStoredViewMode);
+  const viewTabRefs = useRef<{ active: HTMLButtonElement | null; deleted: HTMLButtonElement | null }>({
+    active: null,
+    deleted: null,
+  });
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
+  const [zeroTouchConfirmAgent, setZeroTouchConfirmAgent] = useState<AgentWithClient | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   // "Excluídos" agora é uma opção do próprio filtro de autorização.
   const showDeleted = filterProvisioning === 'deleted';
@@ -551,19 +582,21 @@ export default function AgentList() {
     }
   };
 
-  const handleApproveZeroTouch = async (agent: AgentWithClient) => {
+  const handleApproveZeroTouch = (agent: AgentWithClient) => {
     setContextMenu(null);
     if (!agent.zeroTouchPending || !canManageAgent || approvingAgentId) return;
+    setZeroTouchConfirmAgent(agent);
+  };
 
-    const confirmed = window.confirm(
-      `Aprovar o provisionamento Zero-Touch do agente "${agent.displayName ?? agent.hostname}"?`,
-    );
-    if (!confirmed) return;
+  const handleConfirmApproveZeroTouch = async () => {
+    const agent = zeroTouchConfirmAgent;
+    if (!agent || approvingAgentId) return;
 
     setApprovingAgentId(agent.id);
     try {
       await approveZeroTouch.mutateAsync(agent.id);
       toast.success(`Agente ${agent.displayName ?? agent.hostname} aprovado para comunicação com a API.`);
+      setZeroTouchConfirmAgent(null);
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
@@ -709,9 +742,23 @@ export default function AgentList() {
     })),
   });
 
+  const agentQueriesRef = useRef(agentQueries);
+  agentQueriesRef.current = agentQueries;
+  const agentQueriesKey = agentQueries
+    .map((q) => `${q.dataUpdatedAt}:${q.data?.length ?? -1}`)
+    .join('|');
+
   // Uma única requisição global de sites (antes era 1 por cliente) para o
   // nome do site exibido em cada agente.
   const allSitesQuery = useAllSites(true);
+
+  const clientNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of clients.data ?? []) {
+      map.set(c.id, c.name);
+    }
+    return map;
+  }, [clients.data]);
 
   const siteNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -722,9 +769,9 @@ export default function AgentList() {
   }, [allSitesQuery.data]);
 
   const allAgents = useMemo<AgentWithClient[]>(() => {
-    if (!queriedClients.length) return [];
+    if (!queriedClients.length || !agentQueriesKey) return [];
     return queriedClients.flatMap((c, i) => {
-      const q = agentQueries[i];
+      const q = agentQueriesRef.current[i];
       if (!q?.data) return [];
       return q.data.map(a => ({
         ...a,
@@ -733,7 +780,7 @@ export default function AgentList() {
         siteName: siteNameMap.get(a.siteId),
       }));
     });
-  }, [queriedClients, agentQueries, siteNameMap]);
+  }, [queriedClients, siteNameMap, agentQueriesKey]);
 
   // Merge live heartbeat metrics from the reactive store \u2014 survives REST polling overwrites
   const allHeartbeats = useAllAgentHeartbeats();
@@ -830,7 +877,11 @@ export default function AgentList() {
   }, [agentsWithHeartbeat]);
 
   // Labels de todos os agentes listados: 1 query em vez de N (evita N+1 na UI).
-  const labelsByAgentId = useAgentLabelsByAgentIds(agentsWithStableIp.map(agent => agent.id));
+  const agentIds = useMemo(
+    () => agentsWithStableIp.map((agent) => agent.id),
+    [agentsWithStableIp],
+  );
+  const labelsByAgentId = useAgentLabelsByAgentIds(agentIds);
 
   // Filtro por label resolvido no SERVIDOR (paginado por cursor): antes a UI dependia
   // das labels já carregadas, o que quebrava em frotas maiores que o limite de 500.
@@ -874,15 +925,26 @@ export default function AgentList() {
     [agentsWithFilterLabel.data],
   );
 
-  const totalOnline = agentsWithStableIp.filter(a => isAgentOnlineNow(a, now)).length;
-  const totalOffline = agentsWithStableIp.length - totalOnline;
-  const totalPendingApproval = agentsWithStableIp.filter(a => a.zeroTouchPending === true).length;
+  const { totalOnline, totalOffline, totalPendingApproval } = useMemo(() => {
+    let online = 0;
+    let pendingApproval = 0;
+    for (const agent of agentsWithStableIp) {
+      if (isAgentOnlineNow(agent, now)) online += 1;
+      if (agent.zeroTouchPending === true) pendingApproval += 1;
+    }
+    return {
+      totalOnline: online,
+      totalOffline: agentsWithStableIp.length - online,
+      totalPendingApproval: pendingApproval,
+    };
+  }, [agentsWithStableIp, now]);
 
   const baseFiltered = useMemo(() => agentsWithStableIp.filter(a => {
     const online = isAgentOnlineNow(a, now);
     if (filterStatus === 'online' && !online) return false;
     if (filterStatus === 'offline' && online) return false;
     if (filterClient && a.clientId !== filterClient) return false;
+    if (filterSite && a.siteId !== filterSite) return false;
     // "Todos" lista o catálogo ativo (nunca inclui excluídos, que têm visão própria).
     if (filterProvisioning === 'deleted') return false;
     if (filterProvisioning === 'pendingApproval' && !a.zeroTouchPending) return false;
@@ -895,8 +957,8 @@ export default function AgentList() {
     ) {
       return false;
     }
-    if (search) {
-      const q = search.toLowerCase();
+    if (deferredSearch) {
+      const q = deferredSearch.toLowerCase();
       const agentLabels = (labelsByAgentId.get(a.id) ?? []).join(' ').toLowerCase();
       return (
         (a.displayName ?? a.hostname).toLowerCase().includes(q) ||
@@ -914,7 +976,7 @@ export default function AgentList() {
       );
     }
     return true;
-  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, filterLabel, labelFilterIds, labelsByAgentId, filterCustomField, filterCustomFieldValue, customFieldIndex, now]);
+  }), [agentsWithStableIp, filterStatus, filterClient, filterSite, filterProvisioning, deferredSearch, filterLabel, labelFilterIds, labelsByAgentId, filterCustomField, filterCustomFieldValue, customFieldIndex, now]);
 
   const filtered = useMemo(
     () => [...baseFiltered].sort((a, b) => compareAgentsBySort(a, b, sortBy, sortDirection, now)),
@@ -938,12 +1000,140 @@ export default function AgentList() {
     setDeletedPage(1);
   }, [filterClient, search]);
 
+  // Persiste modo de visualização (card/lista) no navegador.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [viewMode]);
+
+  // Sincroniza filtros ativos na URL para preservar recorte ao voltar de um agente.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (search) next.set('q', search);
+    if (filterClient) next.set('client', filterClient);
+    if (filterSite) next.set('site', filterSite);
+    if (filterStatus !== 'all') next.set('status', filterStatus);
+    if (filterProvisioning !== 'all') next.set('prov', filterProvisioning);
+    if (filterLabel) next.set('label', filterLabel);
+    if (filterCustomField) next.set('cf', filterCustomField);
+    if (filterCustomFieldValue) next.set('cfv', filterCustomFieldValue);
+    if (sortBy !== 'client') next.set('sort', sortBy);
+    if (sortDirection !== 'asc') next.set('dir', sortDirection);
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [
+    search,
+    filterClient,
+    filterSite,
+    filterStatus,
+    filterProvisioning,
+    filterLabel,
+    filterCustomField,
+    filterCustomFieldValue,
+    sortBy,
+    sortDirection,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  const siteOptions = useMemo(() => {
+    const sitesForClient = filterClient
+      ? (allSitesQuery.data ?? []).filter(s => s.clientId === filterClient)
+      : [];
+    return [
+      { value: '', label: 'Todos os sites' },
+      ...sitesForClient.map(s => ({ value: s.id, label: s.name })),
+    ];
+  }, [allSitesQuery.data, filterClient]);
+
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
 
   const clientOptions = [
     { value: '', label: 'Todos os clientes' },
     ...(clients.data ?? []).map(c => ({ value: c.id, label: c.name })),
   ];
+
+  const hasAnyActiveFilter = Boolean(
+    search ||
+    filterClient ||
+    filterSite ||
+    filterStatus !== 'all' ||
+    filterProvisioning !== 'all' ||
+    filterLabel ||
+    filterCustomField,
+  );
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setFilterClient('');
+    setFilterSite('');
+    setFilterStatus('all');
+    setFilterProvisioning('all');
+    setFilterLabel('');
+    setFilterCustomField('');
+    setFilterCustomFieldValue('');
+  };
+
+  const isRefreshing =
+    clients.isFetching ||
+    allSitesQuery.isFetching ||
+    agentQueries.some(q => q.isFetching) ||
+    (showDeleted && deletedAgents.isFetching);
+
+  const handleRefreshAll = () => {
+    void clients.refetch();
+    void allSitesQuery.refetch();
+    for (const q of agentQueries) {
+      void q.refetch();
+    }
+    if (showDeleted) {
+      void deletedAgents.refetch();
+    }
+  };
+
+  const selectViewTab = (target: 'active' | 'deleted') => {
+    if (target === 'deleted') {
+      setFilterProvisioning('deleted');
+      setDeletedPage(1);
+    } else if (showDeleted) {
+      setFilterProvisioning('all');
+    }
+    setContextMenu(null);
+    viewTabRefs.current[target]?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'center',
+    });
+  };
+
+  const handleViewTabKeyDown = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    current: 'active' | 'deleted',
+  ) => {
+    if (
+      event.key !== 'ArrowRight' &&
+      event.key !== 'ArrowLeft' &&
+      event.key !== 'Home' &&
+      event.key !== 'End'
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const next: 'active' | 'deleted' =
+      event.key === 'Home'
+        ? 'active'
+        : event.key === 'End'
+          ? 'deleted'
+          : current === 'active'
+            ? 'deleted'
+            : 'active';
+    selectViewTab(next);
+    viewTabRefs.current[next]?.focus();
+  };
 
   const statusOptions = [
     { value: 'all', label: 'Todos os status' },
@@ -976,7 +1166,20 @@ export default function AgentList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader title="Agentes" description="Gerenciamento de dispositivos monitorados" />
+      <PageHeader title="Agentes" description="Gerenciamento de dispositivos monitorados">
+        <Button
+          variant="secondary"
+          onClick={handleRefreshAll}
+          disabled={isRefreshing}
+        >
+          <Icon name="refresh" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
+        <Button variant="primary" onClick={() => navigate('/deploy/tokens')}>
+          <Icon name="add" className="h-4 w-4" />
+          Instalar agente
+        </Button>
+      </PageHeader>
 
       {/* StatCards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1046,22 +1249,83 @@ export default function AgentList() {
         />
       </div>
 
+      {/* Abas Ativos / Lixeira */}
+      <div
+        role="tablist"
+        aria-label="Visão de agentes"
+        className="flex flex-nowrap overflow-x-auto border-b border-border gap-1"
+      >
+        {(
+          [
+            { id: 'active' as const, label: `Ativos (${agentsWithStableIp.length})`, icon: 'desktop_windows' as const },
+            { id: 'deleted' as const, label: 'Lixeira', icon: 'delete' as const },
+          ]
+        ).map((tab) => {
+          const isSelected = tab.id === 'deleted' ? showDeleted : !showDeleted;
+          return (
+            <button
+              key={tab.id}
+              ref={(el) => {
+                viewTabRefs.current[tab.id] = el;
+              }}
+              type="button"
+              role="tab"
+              aria-selected={isSelected}
+              tabIndex={isSelected ? 0 : -1}
+              onClick={() => selectViewTab(tab.id)}
+              onKeyDown={(e) => handleViewTabKeyDown(e, tab.id)}
+              className={[
+                'relative flex-none whitespace-nowrap inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                isSelected
+                  ? 'text-primary after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary'
+                  : 'text-text-secondary hover:text-text-primary',
+              ].join(' ')}
+            >
+              <Icon name={tab.icon} className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Filtros + toggle de visualização */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
-          <div className="min-w-[240px] flex-1">
+          <div className="relative min-w-[240px] flex-1">
             <Input
               placeholder="Buscar por nome, hostname, OS, IP, cliente ou usuário logado..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                aria-label="Limpar busca"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <Icon name="close" className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           <Select
             fullWidth={false}
             options={clientOptions}
             value={filterClient}
-            onChange={e => setFilterClient(e.target.value)}
+            onChange={e => {
+              setFilterClient(e.target.value);
+              setFilterSite('');
+            }}
           />
+          {!showDeleted && Boolean(filterClient) && (
+            <Select
+              fullWidth={false}
+              aria-label="Filtrar por site"
+              options={siteOptions}
+              value={filterSite}
+              onChange={e => setFilterSite(e.target.value)}
+            />
+          )}
           <Select
             fullWidth={false}
             options={statusOptions}
@@ -1109,10 +1373,18 @@ export default function AgentList() {
         </div>
         {/* Lixeira + toggle card / lista */}
         <div className="flex shrink-0 items-center gap-2">
+          {hasAnyActiveFilter && (
+            <Button size="sm" variant="ghost" onClick={clearAllFilters}>
+              <Icon name="close" className="h-3.5 w-3.5" />
+              Limpar filtros
+            </Button>
+          )}
           {/* O toggle card/lista não se aplica à lixeira (sempre tabela). */}
           {!showDeleted && (
           <div className="flex overflow-hidden rounded-lg border border-border">
             <button
+              type="button"
+              aria-pressed={viewMode === 'card'}
               onClick={() => setViewMode('card')}
               className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
               title="Visualização em cards"
@@ -1120,6 +1392,8 @@ export default function AgentList() {
               <Icon name="grid_view" className="h-4 w-4" />
             </button>
             <button
+              type="button"
+              aria-pressed={viewMode === 'list'}
               onClick={() => setViewMode('list')}
               className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
               title="Visualização em lista"
@@ -1262,7 +1536,7 @@ export default function AgentList() {
                 <tbody className="divide-y divide-black/10 dark:divide-white/5">
                   {deletedItems.map(agent => {
                     const displayName = agent.displayName ?? agent.hostname;
-                    const clientName = clients.data?.find(c => c.id === agent.clientId)?.name ?? '—';
+                    const clientName = clientNameMap.get(agent.clientId ?? '') ?? '—';
                     const siteName = siteNameMap.get(agent.siteId);
                     const deletedLabel = agent.deletedAt ? formatDateBrazil(agent.deletedAt) : '—';
                     const trashAgent: AgentWithClient = {
@@ -1342,17 +1616,9 @@ export default function AgentList() {
           icon="desktop_windows"
           title={agentsWithStableIp.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
           description={agentsWithStableIp.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
-          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all' || filterLabel || filterCustomField) ? {
+          action={hasAnyActiveFilter ? {
             label: 'Limpar filtros',
-            onClick: () => {
-              setSearch('');
-              setFilterClient('');
-              setFilterStatus('all');
-              setFilterProvisioning('all');
-              setFilterLabel('');
-              setFilterCustomField('');
-              setFilterCustomFieldValue('');
-            },
+            onClick: clearAllFilters,
           } : undefined}
         />
       ) : (
@@ -1854,6 +2120,20 @@ export default function AgentList() {
           isLoading={sendAgentNotification.isPending}
         />
       )}
+      <ConfirmDialog
+        open={Boolean(zeroTouchConfirmAgent)}
+        title="Aprovar provisionamento Zero-Touch"
+        message={
+          zeroTouchConfirmAgent
+            ? `Aprovar o provisionamento Zero-Touch do agente "${zeroTouchConfirmAgent.displayName ?? zeroTouchConfirmAgent.hostname}"?`
+            : ''
+        }
+        confirmLabel="Aprovar"
+        tone="primary"
+        isLoading={approveZeroTouch.isPending}
+        onClose={() => { if (!approveZeroTouch.isPending) setZeroTouchConfirmAgent(null); }}
+        onConfirm={() => { void handleConfirmApproveZeroTouch(); }}
+      />
     </div>
   );
 }

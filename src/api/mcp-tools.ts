@@ -68,6 +68,27 @@ function scopeQuery(scope: McpToolScopeRef, extra: Record<string, string> = {}):
   return query ? `?${query}` : "";
 }
 
+export interface McpToolAuditItem {
+  id: string;
+  toolName: string;
+  origin: "server" | "agent" | string;
+  clientId?: string | null;
+  siteId?: string | null;
+  agentId?: string | null;
+  sessionId?: string | null;
+  status: "success" | "error" | "denied" | "rate_limited" | "timeout" | string;
+  durationMs: number;
+  errorMessage?: string | null;
+  createdAt: string;
+}
+
+export interface McpToolAuditResponse {
+  items: McpToolAuditItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export const mcpToolsApi = {
   catalog: (scope: McpToolScopeRef) =>
     api.get<McpToolCatalog>(`${BASE}${scopeQuery(scope)}`),
@@ -82,4 +103,19 @@ export const mcpToolsApi = {
     api.get<{ lowerScopeOverrides: number }>(
       `${BASE}/${encodeURIComponent(toolName)}/impact${scopeQuery(scope)}`,
     ),
+
+  audit: (params: {
+    toolName?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params.toolName) qs.set("toolName", params.toolName);
+    if (params.status) qs.set("status", params.status);
+    if (params.page) qs.set("page", String(params.page));
+    if (params.pageSize) qs.set("pageSize", String(params.pageSize));
+    const q = qs.toString();
+    return api.get<McpToolAuditResponse>(`${BASE}/audit${q ? `?${q}` : ""}`);
+  },
 };

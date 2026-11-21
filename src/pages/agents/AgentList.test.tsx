@@ -680,3 +680,38 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     expect(screen.getByText('Verificar atualizações')).toBeTruthy();
   });
 });
+
+describe('AgentList — abas Ativos/Lixeira e melhorias de filtros', () => {
+  it('alterna entre as abas Ativos e Lixeira', async () => {
+    renderPage();
+
+    const activeTab = screen.getByRole('tab', { name: /Ativos/ });
+    const trashTab = screen.getByRole('tab', { name: 'Lixeira' });
+    expect(activeTab.getAttribute('aria-selected')).toBe('true');
+
+    fireEvent.click(trashTab);
+    expect(trashTab.getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByText('EXCLUIDO-01')).toBeTruthy();
+
+    fireEvent.click(activeTab);
+    expect(activeTab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+  });
+
+  it('exibe o filtro de Site ao selecionar um cliente e limpa busca pelo botão ×', () => {
+    renderPage();
+
+    expect(screen.queryByLabelText('Filtrar por site')).toBeNull();
+    fireEvent.change(screen.getByDisplayValue('Todos os clientes'), { target: { value: 'c1' } });
+    expect(screen.getByLabelText('Filtrar por site')).toBeTruthy();
+
+    const searchInput = screen.getByPlaceholderText(/Buscar por nome/) as HTMLInputElement;
+    fireEvent.change(searchInput, { target: { value: 'ATIVO-02' } });
+    expect(screen.queryByText('ATIVO-01')).toBeNull();
+    expect(screen.getByText('ATIVO-02')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar busca' }));
+    expect(searchInput.value).toBe('');
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+  });
+});

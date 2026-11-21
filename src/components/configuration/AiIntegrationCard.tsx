@@ -164,6 +164,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
   const [enabled, setEnabled] = useState(aiSettings?.enabled ?? false);
   const [provider, setProvider] = useState(aiSettings?.provider ?? "openrouter");
+  const [baseUrl, setBaseUrl] = useState(aiSettings?.baseUrl ?? "");
   const [apiKey, setApiKey] = useState("");
   const [chatModel, setChatModel] = useState(aiSettings?.chatModel ?? "");
   const [embeddingModel, setEmbeddingModel] = useState(aiSettings?.embeddingModel ?? "");
@@ -186,6 +187,42 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [maxToolIterations, setMaxToolIterations] = useState(
     aiSettings?.maxToolCallIterations ?? ROUNDS_DEFAULT,
   );
+  const [costControlEnabled, setCostControlEnabled] = useState(aiSettings?.costControlEnabled ?? false);
+  const [budgetUsdMonthly, setBudgetUsdMonthly] = useState<string>(
+    aiSettings?.budgetUsdMonthly != null ? String(aiSettings.budgetUsdMonthly) : "",
+  );
+  const [tokenBudgetDaily, setTokenBudgetDaily] = useState(aiSettings?.tokenBudgetDaily ?? 500000);
+  const [rateLimitPerMinute, setRateLimitPerMinute] = useState(aiSettings?.rateLimitPerMinute ?? 30);
+  const [timeoutMs, setTimeoutMs] = useState(aiSettings?.timeoutMs ?? 120000);
+  const [reasoningEffort, setReasoningEffort] = useState(aiSettings?.reasoningEffort ?? "high");
+  const [sendScreenshotImages, setSendScreenshotImages] = useState(aiSettings?.sendScreenshotImages ?? true);
+  const [outputGuardrailsEnabled, setOutputGuardrailsEnabled] = useState(aiSettings?.outputGuardrailsEnabled ?? true);
+
+  useEffect(() => {
+    if (!aiSettings) return;
+    setEnabled(aiSettings.enabled ?? false);
+    setProvider(aiSettings.provider ?? "openrouter");
+    setBaseUrl(aiSettings.baseUrl ?? "");
+    setChatModel(aiSettings.chatModel ?? "");
+    setEmbeddingModel(aiSettings.embeddingModel ?? "");
+    setEmbeddingDimensions(aiSettings.embeddingDimensions ?? 1536);
+    setEmbeddingArticlesEnabled(aiSettings.embeddingArticlesEnabled ?? true);
+    setEmbeddingTicketAnswersEnabled(aiSettings.embeddingTicketAnswersEnabled ?? false);
+    setTemperature(aiSettings.temperature ?? 0.7);
+    setTopP(aiSettings.topP ?? 1.0);
+    setFreqPen(aiSettings.frequencyPenalty ?? 0);
+    setPresPen(aiSettings.presencePenalty ?? 0);
+    setMaxTokens(aiSettings.maxTokensPerRequest ?? TOKENS_AUTO);
+    setMaxToolIterations(aiSettings.maxToolCallIterations ?? ROUNDS_DEFAULT);
+    setCostControlEnabled(aiSettings.costControlEnabled ?? false);
+    setBudgetUsdMonthly(aiSettings.budgetUsdMonthly != null ? String(aiSettings.budgetUsdMonthly) : "");
+    setTokenBudgetDaily(aiSettings.tokenBudgetDaily ?? 500000);
+    setRateLimitPerMinute(aiSettings.rateLimitPerMinute ?? 30);
+    setTimeoutMs(aiSettings.timeoutMs ?? 120000);
+    setReasoningEffort(aiSettings.reasoningEffort ?? "high");
+    setSendScreenshotImages(aiSettings.sendScreenshotImages ?? true);
+    setOutputGuardrailsEnabled(aiSettings.outputGuardrailsEnabled ?? true);
+  }, [aiSettings]);
   const roundsOutOfRange =
     !Number.isFinite(maxToolIterations) ||
     maxToolIterations < ROUNDS_MIN ||
@@ -273,7 +310,8 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   function getBaseUrl(): string {
     if (provider === "openrouter") return "https://openrouter.ai/api/v1/";
     if (provider === "openai") return "https://api.openai.com/v1/";
-    return "";
+    if (provider === "ollama") return baseUrl.trim() || "http://localhost:11434/v1/";
+    return baseUrl.trim();
   }
 
   async function handleValidateKey() {
@@ -292,11 +330,13 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   }
 
   async function handleSave() {
+    const parsedMonthlyBudget = budgetUsdMonthly.trim() ? Number(budgetUsdMonthly) : null;
     const s: Record<string, unknown> = {
       ...aiSettings,
       enabled,
-      chatAIEnabled: enabled,
+      chatAIEnabled: enabled ? (aiSettings?.chatAIEnabled ?? true) : false,
       provider,
+      baseUrl: getBaseUrl() || undefined,
       chatModel: chatModel || undefined,
       embeddingModel: embeddingModel || undefined,
       // Onde zero não faz sentido (top-p, tokens, dimensões) um campo vazio cai no
@@ -316,6 +356,14 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
       // automático em vez de gravar um número que o admin não escolheu.
       maxTokensPerRequest: resolveTokensForSave(maxTokens),
       maxToolCallIterations: clampRounds(maxToolIterations),
+      costControlEnabled,
+      budgetUsdMonthly: parsedMonthlyBudget != null && Number.isFinite(parsedMonthlyBudget) && parsedMonthlyBudget > 0 ? parsedMonthlyBudget : null,
+      tokenBudgetDaily: safeNum(tokenBudgetDaily, 500000, 1000, 100_000_000),
+      rateLimitPerMinute: safeNum(rateLimitPerMinute, 30, 1, 1000),
+      timeoutMs: safeNum(timeoutMs, 120000, 5000, 600000),
+      reasoningEffort: reasoningEffort || "high",
+      sendScreenshotImages,
+      outputGuardrailsEnabled,
     };
     if (apiKey.trim()) s.apiKey = apiKey.trim();
     await onSave(JSON.stringify(s));
@@ -358,9 +406,20 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 options={[
                   { value: "openrouter", label: "OpenRouter (recomendado)" },
                   { value: "openai", label: "OpenAI" },
-                  { value: "openai-compatible", label: "Personalizado" },
+                  { value: "openai-compatible", label: "Personalizado (OpenAI-compatible)" },
+                  { value: "ollama", label: "Ollama (local)" },
                 ]}
               />
+              {(provider === "openai-compatible" || provider === "ollama") && (
+                <div className="mt-2 space-y-1">
+                  <label className="block text-xs font-medium text-muted-foreground">Base URL</label>
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder={provider === "ollama" ? "http://localhost:11434/v1/" : "https://seu-gateway/v1/"}
+                  />
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <label className="block text-sm font-medium text-muted-foreground">
@@ -451,6 +510,15 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                     </button>
                   ))}
                   {filteredChat.length === 0 && <p className="px-2 py-1 text-xs text-muted">Nenhum modelo encontrado.</p>}
+                  {chatSearch.trim() && !allChat.some((m) => m.id.toLowerCase() === chatSearch.trim().toLowerCase()) && (
+                    <button
+                      type="button"
+                      onClick={() => { setChatModel(chatSearch.trim()); setExpandedChat(false); setChatSearch(""); }}
+                      className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-foreground hover:bg-surface-light"
+                    >
+                      Usar modelo customizado: <span className="font-mono font-semibold">{chatSearch.trim()}</span>
+                    </button>
+                  )}
                 </div>
                 {filteredChat.length > 50 && (
                   <p className="px-2 text-xs text-muted">Mostrando 50 de {filteredChat.length}. Refine a busca.</p>
@@ -518,6 +586,15 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                     </button>
                   ))}
                   {filteredEmbed.length === 0 && <p className="px-2 py-1 text-xs text-muted">Nenhum modelo encontrado.</p>}
+                  {embedSearch.trim() && !allEmbed.some((m) => m.id.toLowerCase() === embedSearch.trim().toLowerCase()) && (
+                    <button
+                      type="button"
+                      onClick={() => { setEmbeddingModel(embedSearch.trim()); setExpandedEmbed(false); setEmbedSearch(""); }}
+                      className="w-full rounded-md border border-dashed border-border px-2 py-1.5 text-left text-xs text-foreground hover:bg-surface-light"
+                    >
+                      Usar modelo de embedding customizado: <span className="font-mono font-semibold">{embedSearch.trim()}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -718,6 +795,79 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                     Incentiva trazer assuntos novos. 0 = neutro (padrão); positivo empurra para tópicos ainda não ditos,
                     negativo mantém o foco no que já foi falado. Valores altos fazem a IA fugir do assunto pedido.
                   </HelpText>
+                </div>
+              </div>
+
+              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="block text-xs text-muted">Orçamento mensal (USD)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="Sem limite"
+                    value={budgetUsdMonthly}
+                    onChange={(e) => setBudgetUsdMonthly(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs text-muted">Budget diário (tokens)</label>
+                  <Input
+                    type="number"
+                    min={1000}
+                    step={10000}
+                    value={String(tokenBudgetDaily)}
+                    onChange={(e) => setTokenBudgetDaily(Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs text-muted">Rate limit (req/min)</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={String(rateLimitPerMinute)}
+                    onChange={(e) => setRateLimitPerMinute(Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs text-muted">Timeout (ms)</label>
+                  <Input
+                    type="number"
+                    min={5000}
+                    max={600000}
+                    step={5000}
+                    value={String(timeoutMs)}
+                    onChange={(e) => setTimeoutMs(Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs text-muted">Esforço de raciocínio</label>
+                  <Select
+                    value={reasoningEffort}
+                    onChange={(e) => setReasoningEffort(e.target.value)}
+                    options={[
+                      { value: "high", label: "Alto (high)" },
+                      { value: "medium", label: "Médio (medium)" },
+                      { value: "low", label: "Baixo (low)" },
+                      { value: "none", label: "Nenhum (none)" },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2 border-t border-border pt-3 sm:grid-cols-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Controle de custo / rate limit</span>
+                  <Toggle checked={costControlEnabled} onToggle={() => setCostControlEnabled(!costControlEnabled)} label="Controle de custo" />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Enviar prints (visão)</span>
+                  <Toggle checked={sendScreenshotImages} onToggle={() => setSendScreenshotImages(!sendScreenshotImages)} label="Enviar prints" />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Guardrails DLP de saída</span>
+                  <Toggle checked={outputGuardrailsEnabled} onToggle={() => setOutputGuardrailsEnabled(!outputGuardrailsEnabled)} label="Guardrails DLP" />
                 </div>
               </div>
             </div>
