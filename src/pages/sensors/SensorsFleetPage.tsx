@@ -225,9 +225,7 @@ export default function SensorsFleetPage({ embedded = false }: { embedded?: bool
 
   return (
     <div className="space-y-6">
-      {embedded ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
-      ) : (
+      {!embedded && (
         <PageHeader
           title="Sensores"
           description="Visão agregada do monitoramento por dispositivo: o que está OK, o que precisa de atenção e quais agentes concentram falhas."
@@ -236,34 +234,39 @@ export default function SensorsFleetPage({ embedded = false }: { embedded?: bool
         </PageHeader>
       )}
 
-      <div className="flex flex-wrap items-end gap-3">
-        <Select
-          label="Cliente"
-          fullWidth={false}
-          value={selectedClientId}
-          onChange={(event) => {
-            // Site pertence a um cliente: trocar o cliente invalida a seleção.
-            applyFilters(event.target.value, "");
-          }}
-          options={clientOptions}
-        />
-        <Select
-          label="Site"
-          fullWidth={false}
-          value={selectedSiteId}
-          disabled={!selectedClientId}
-          onChange={(event) => applyFilters(selectedClientId, event.target.value)}
-          options={siteOptions}
-        />
-        {hasFilters ? (
-          <Button
-            variant="ghost"
-            onClick={() => applyFilters("", "")}
-          >
-            <Icon name="refresh" className="h-4 w-4" />
-            Limpar filtros
-          </Button>
-        ) : null}
+      <div className={embedded ? "flex flex-wrap items-end justify-between gap-3" : "flex flex-wrap items-end gap-3"}>
+        <div className="flex flex-wrap items-end gap-3">
+          <Select
+            label="Cliente"
+            fullWidth={false}
+            value={selectedClientId}
+            onChange={(event) => {
+              // Site pertence a um cliente: trocar o cliente invalida a seleção.
+              applyFilters(event.target.value, "");
+            }}
+            options={clientOptions}
+          />
+          <Select
+            label="Site"
+            fullWidth={false}
+            value={selectedSiteId}
+            disabled={!selectedClientId}
+            onChange={(event) => applyFilters(selectedClientId, event.target.value)}
+            options={siteOptions}
+          />
+          {hasFilters ? (
+            <Button
+              variant="ghost"
+              onClick={() => applyFilters("", "")}
+            >
+              <Icon name="refresh" className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+          ) : null}
+        </div>
+        {embedded && (
+          <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
+        )}
       </div>
 
       {summary.isLoading ? (

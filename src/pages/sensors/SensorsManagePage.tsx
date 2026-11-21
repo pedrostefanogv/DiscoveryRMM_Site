@@ -480,10 +480,6 @@ export default function SensorsManagePage({ embedded = false }: { embedded?: boo
 
   const actionButtons = (
     <>
-      <Button onClick={() => setCreating(true)}>
-        <Icon name="add" className="h-4 w-4" />
-        Novo sensor
-      </Button>
       <Button
         variant="secondary"
         onClick={() => void definitions.refetch()}
@@ -492,14 +488,16 @@ export default function SensorsManagePage({ embedded = false }: { embedded?: boo
         <Icon name="refresh" className="h-4 w-4" />
         Atualizar
       </Button>
+      <Button variant="primary" onClick={() => setCreating(true)}>
+        <Icon name="add" className="h-4 w-4" />
+        Novo sensor
+      </Button>
     </>
   );
 
   return (
     <div className="space-y-6">
-      {embedded ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">{actionButtons}</div>
-      ) : (
+      {!embedded && (
         <PageHeader
           title="Gerenciar sensores"
           description="Todas as definições de sensor (global, cliente, site e agente): edite limiares, alvos e ative ou desative o monitoramento."
@@ -510,59 +508,64 @@ export default function SensorsManagePage({ embedded = false }: { embedded?: boo
         </PageHeader>
       )}
 
-      <div className="flex flex-wrap items-end gap-3">
-        <Select
-          label="Cliente"
-          fullWidth={false}
-          value={selectedClientId}
-          onChange={(event) => {
-            // Site pertence a um cliente: trocar o cliente limpa o site.
-            applyFilters({ clientId: event.target.value, siteId: "" });
-          }}
-          options={clientOptions}
-        />
-        <Select
-          label="Site"
-          fullWidth={false}
-          value={selectedSiteId}
-          disabled={!selectedClientId}
-          onChange={(event) => applyFilters({ siteId: event.target.value })}
-          options={siteOptions}
-        />
-        <Select
-          label="Tipo"
-          fullWidth={false}
-          value={selectedType}
-          onChange={(event) => applyFilters({ sensorType: event.target.value })}
-          options={typeOptions}
-        />
-        <Select
-          label="Status"
-          fullWidth={false}
-          value={selectedStatus}
-          onChange={(event) => applyFilters({ status: event.target.value })}
-          options={STATUS_OPTIONS}
-        />
-        <div className="w-full sm:w-64">
-          <Input
-            label="Buscar"
-            placeholder="Nome, chave ou alvo"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-          />
-        </div>
-        {hasFilters ? (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setSearchText("");
-              applyFilters({ clientId: "", siteId: "", sensorType: "", status: "", q: "" });
+      <div className={embedded ? "flex flex-wrap items-end justify-between gap-3" : "flex flex-wrap items-end gap-3"}>
+        <div className="flex flex-wrap items-end gap-3">
+          <Select
+            label="Cliente"
+            fullWidth={false}
+            value={selectedClientId}
+            onChange={(event) => {
+              // Site pertence a um cliente: trocar o cliente limpa o site.
+              applyFilters({ clientId: event.target.value, siteId: "" });
             }}
-          >
-            <Icon name="refresh" className="h-4 w-4" />
-            Limpar filtros
-          </Button>
-        ) : null}
+            options={clientOptions}
+          />
+          <Select
+            label="Site"
+            fullWidth={false}
+            value={selectedSiteId}
+            disabled={!selectedClientId}
+            onChange={(event) => applyFilters({ siteId: event.target.value })}
+            options={siteOptions}
+          />
+          <Select
+            label="Tipo"
+            fullWidth={false}
+            value={selectedType}
+            onChange={(event) => applyFilters({ sensorType: event.target.value })}
+            options={typeOptions}
+          />
+          <Select
+            label="Status"
+            fullWidth={false}
+            value={selectedStatus}
+            onChange={(event) => applyFilters({ status: event.target.value })}
+            options={STATUS_OPTIONS}
+          />
+          <div className="w-full sm:w-64">
+            <Input
+              label="Buscar"
+              placeholder="Nome, chave ou alvo"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+            />
+          </div>
+          {hasFilters ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSearchText("");
+                applyFilters({ clientId: "", siteId: "", sensorType: "", status: "", q: "" });
+              }}
+            >
+              <Icon name="refresh" className="h-4 w-4" />
+              Limpar filtros
+            </Button>
+          ) : null}
+        </div>
+        {embedded && (
+          <div className="flex flex-wrap items-center gap-2">{actionButtons}</div>
+        )}
       </div>
 
       {actionError ? (

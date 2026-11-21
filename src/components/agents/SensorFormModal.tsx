@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Icon, Input, Loading, Modal, Select, TextArea } from "@/components/ui";
+import { Badge, Button, Icon, Input, Loading, Modal, Select, TextArea } from "@/components/ui";
 import { AppApprovalScopeType } from "@/api/types";
 import { describeSensorsError } from "@/api/sensors";
 import type {
@@ -100,7 +100,50 @@ type FormErrors = Partial<
   Record<keyof FormValues | "scope" | "general" | "channels", string>
 >;
 
+type SensorModalTab = "general" | "thresholds" | "alerts" | "script";
+
+const TAB_ERROR_FIELDS: Record<SensorModalTab, Array<keyof FormErrors>> = {
+  general: ["name", "key", "description", "scope", "sensorType", "target"],
+  thresholds: [
+    "warningThreshold",
+    "criticalThreshold",
+    "intervalSeconds",
+    "timeoutSeconds",
+    "failsBeforeAlert",
+    "sustainSamples",
+  ],
+  alerts: [
+    "minSeverityToAlert",
+    "severityWhenFailing",
+    "autoTicketPolicy",
+    "autoTicketImpact",
+    "autoTicketMinDurationSeconds",
+  ],
+  script: ["scriptId", "channels", "extractorsJson", "exitCodeMapJson"],
+};
+
+function tabHasError(tab: SensorModalTab, errors: FormErrors): boolean {
+  return TAB_ERROR_FIELDS[tab].some((field) => Boolean(errors[field]));
+}
+
+function tabForErrors(errors: FormErrors): SensorModalTab | null {
+  const order: SensorModalTab[] = ["general", "thresholds", "alerts", "script"];
+  return order.find((tab) => tabHasError(tab, errors)) ?? null;
+}
+
+function defaultScopeType(
+  agentId: string,
+  clientId: string | null,
+  siteId: string | null,
+): AppApprovalScopeType {
+  if (agentId) return AppApprovalScopeType.Agent;
+  if (siteId) return AppApprovalScopeType.Site;
+  if (clientId) return AppApprovalScopeType.Client;
+  return AppApprovalScopeType.Global;
+}
+
 function emptyValues(
+  agentId: string,
   clientId: string | null,
   siteId: string | null,
 ): FormValues {
@@ -109,7 +152,7 @@ function emptyValues(
     key: "",
     description: "",
     sensorType: "DiskSpace",
-    scopeType: AppApprovalScopeType.Agent,
+    scopeType: defaultScopeType(agentId, clientId, siteId),
     clientId: clientId ?? "",
     siteId: siteId ?? "",
     target: "",
@@ -453,7 +496,14 @@ export default function SensorFormModal({
   onSave,
 }: SensorFormModalProps) {
   const navigate = useNavigate();
-  const [values, setValues] = useState<FormValues>(() => emptyValues(clientId, siteId));
+  const [values, setValues] = useState<FormValues>(() => emptyValues(agentId, clientId, siteId));
+  const [activeTab, setActiveTab] = useState<SensorModalTab>("general");
+  const tabRefs = useRef<Record<SensorModalTab, HTMLButtonElement | null>>({
+    general: null,
+    thresholds: null,
+    alerts: null,
+    script: null,
+  });
   // O editor de canais trabalha com LINHAS (key/label/unit/isPrimary) e converte
   // para o contrato da API só no submit — ver sensorChannelsFromRows.
   const [channelRows, setChannelRows] = useState<SensorChannelRow[]>([]);
@@ -478,8 +528,9 @@ export default function SensorFormModal({
   useEffect(() => {
     if (!open) return;
     setErrors({});
+    setActiveTab("general");
     if (!sensor) {
-      setValues(emptyValues(clientId, siteId));
+      setValues(emptyValues(agentId, clientId, siteId));
       setChannelRows([]);
       return;
     }
@@ -493,7 +544,7 @@ export default function SensorFormModal({
     // Sem a definição na listagem, usa o item da aba (evita formulário vazio).
     setValues(valuesFromItem(sensor, clientId, siteId));
     setChannelRows(sensorChannelRowsFromChannels(sensor.channels));
-  }, [open, sensor, definition, definitions.isLoading, clientId, siteId]);
+  }, [open, sensor, definition, definitions.isLoading, agentId, clientId, siteId]);
 
   /**
    * Leva o estado atual do formulário para /sensors/script: o editor dedicado
@@ -515,6 +566,9 @@ export default function SensorFormModal({
 
   /** Trocar o tipo reajusta unidade/direção para as do tipo (evita combinação inválida). */
   const handleTypeChange = (sensorType: SensorType) => {
+    if (sensorType !== "Script" && activeTab === "script") {
+      setActiveTab("general");
+    }
     setValues((current) => ({
       ...current,
       sensorType,
@@ -590,11 +644,55 @@ export default function SensorFormModal({
     );
   };
 
+  const modalTabs = useMemo<
+    Array<{ id: SensorModalTab; label: string; icon: "tune" | "speed" | "notifications" | "code" }>
+  >(() => {
+    const base: Array<{
+      id: SensorModalTab;
+      label: string;
+      icon: "tune" | "speed" | "notifications" | "code";
+    }> = [
+      { id: "general", label: "Geral", icon: "tune" },
+      { id: "thresholds", label: "Limiares & Coleta", icon: "speed" },
+      { id: "alerts", label: "Alertas & Auto-ticket", icon: "notifications" },
+    ];
+    if (isScript) {
+      base.push({ id: "script", label: "Script", icon: "code" });
+    }
+    return base;
+  }, [isScript]);
+
+  const selectModalTab = (tab: SensorModalTab) => {
+    setActiveTab(tab);
+    tabRefs.current[tab]?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % modalTabs.length;
+    else if (event.key === "ArrowLeft") nextIndex = (index - 1 + modalTabs.length) % modalTabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = modalTabs.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = modalTabs[nextIndex];
+    selectModalTab(nextTab.id);
+    tabRefs.current[nextTab.id]?.focus();
+  };
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors = validate(values, channelRows);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      const firstErrorTab = tabForErrors(nextErrors);
+      if (firstErrorTab) selectModalTab(firstErrorTab);
+      return;
+    }
     try {
       await onSave(
         buildRequest(values, agentId, channels, sensor?.optionsJson ?? null),
@@ -623,486 +721,553 @@ export default function SensorFormModal({
             </p>
           ) : null}
 
-          <FormSection title="Identificação">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                label="Nome"
-                value={values.name}
-                onChange={(event) => setField("name", event.target.value)}
-                error={errors.name}
-                autoFocus
-              />
-              <Input
-                label="Chave (opcional)"
-                value={values.key}
-                onChange={(event) => setField("key", event.target.value)}
-                error={errors.key}
-                hint="Gerada do nome quando vazia. Minúsculas, números, - e _."
-              />
-            </div>
-            <TextArea
-              label="Descrição (opcional)"
-              value={values.description}
-              rows={2}
-              onChange={(event) => setField("description", event.target.value)}
-            />
-          </FormSection>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-light/40 px-3 py-2 text-xs">
+            <Badge color="accent">{SENSOR_TYPE_LABELS[values.sensorType]}</Badge>
+            <Badge color="slate">Escopo: {sensorScopeLabel(values.scopeType)}</Badge>
+            <Badge color={values.isActive ? "success" : "warning"}>
+              {values.isActive ? "Ativo" : "Inativo"}
+            </Badge>
+          </div>
 
-          <FormSection title="Escopo">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                label="Escopo"
-                value={String(values.scopeType)}
-                options={scopeOptions}
-                onChange={(event) =>
-                  setField("scopeType", Number(event.target.value) as AppApprovalScopeType)
-                }
-                error={errors.scope}
-              />
-              {scopeNeedsClient ? (
-                <Select
-                  label="Cliente"
-                  value={values.clientId}
-                  options={clientOptions}
-                  onChange={(event) => {
-                    setField("clientId", event.target.value);
-                    setField("siteId", "");
+          <div
+            role="tablist"
+            aria-label="Seções do formulário de sensor"
+            className="flex flex-nowrap overflow-x-auto border-b border-border gap-1"
+          >
+            {modalTabs.map((tab, index) => {
+              const isSelected = activeTab === tab.id;
+              const hasError = tabHasError(tab.id, errors);
+              return (
+                <button
+                  key={tab.id}
+                  ref={(el) => {
+                    tabRefs.current[tab.id] = el;
                   }}
-                  error={errors.scope}
-                />
-              ) : null}
-              {values.scopeType === AppApprovalScopeType.Site ? (
-                <Select
-                  label="Site"
-                  value={values.siteId}
-                  options={siteOptions}
-                  onChange={(event) => setField("siteId", event.target.value)}
-                />
-              ) : null}
-            </div>
-            {values.scopeType === AppApprovalScopeType.Agent ? (
-              <p className="text-xs text-muted">
-                O sensor vale apenas para este agente — herança de cliente/site/global é
-                resolvida pelo servidor.
-              </p>
-            ) : null}
-          </FormSection>
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  tabIndex={isSelected ? 0 : -1}
+                  onClick={() => selectModalTab(tab.id)}
+                  onKeyDown={(e) => handleTabKeyDown(e, index)}
+                  className={[
+                    "relative flex-none whitespace-nowrap inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    isSelected
+                      ? "text-primary after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary"
+                      : "text-text-secondary hover:text-text-primary",
+                  ].join(" ")}
+                >
+                  <Icon name={tab.icon} className="h-4 w-4" />
+                  {tab.label}
+                  {hasError ? (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-danger"
+                      aria-label="Contém erros"
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
 
-          <FormSection title="Coleta">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                label="Tipo"
-                value={values.sensorType}
-                options={SENSOR_TYPE_OPTIONS}
-                onChange={(event) => handleTypeChange(event.target.value as SensorType)}
-                error={errors.sensorType}
-                hint={
-                  SENSOR_PRIMARY_CHANNEL[values.sensorType]
-                    ? `Canal primário: ${SENSOR_PRIMARY_CHANNEL[values.sensorType]}`
-                    : "Canais declarados pelo script definem o valor primário."
-                }
-              />
-              <Input
-                label="Alvo"
-                value={values.target}
-                onChange={(event) => setField("target", event.target.value)}
-                hint={guide.targetHint}
-              />
-              <div
-                className="space-y-3 rounded-lg border border-border bg-surface-light/60 p-3 sm:col-span-2"
-                data-testid="sensor-type-guide"
-              >
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Alvo esperado
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{guide.targetHint}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Campos relacionados
-                  </p>
-                  <ul className="mt-1 flex flex-wrap gap-1.5">
-                    {guide.relatedFields.map((field) => (
-                      <li
-                        key={field}
-                        className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground"
-                      >
-                        {field}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-[11px] text-muted">{thresholdHint}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Exemplos — clique para preencher o alvo
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {guideExamples.map((example) => (
-                      <button
-                        key={example || "__padrao__"}
-                        type="button"
-                        onClick={() => setField("target", example)}
-                        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                        aria-label={`Usar exemplo de alvo ${example || "padrão"}`}
-                      >
-                        {example || "(vazio = padrão)"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {guide.optionsExample ? (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Opções (optionsJson)
-                    </p>
-                    <code className="mt-1 block overflow-x-auto rounded border border-border bg-surface px-2 py-1 text-[11px] text-muted-foreground">
-                      {guide.optionsExample}
-                    </code>
-                  </div>
-                ) : null}
-              </div>
-              <Input
-                label="Intervalo (segundos)"
-                type="number"
-                min={0}
-                value={values.intervalSeconds}
-                onChange={(event) => setField("intervalSeconds", event.target.value)}
-                error={errors.intervalSeconds}
-                hint="0 = herdar o intervalo padrão do agente."
-              />
-              <Input
-                label="Timeout (segundos)"
-                type="number"
-                min={MIN_TIMEOUT_SECONDS}
-                max={MAX_TIMEOUT_SECONDS}
-                value={values.timeoutSeconds}
-                onChange={(event) => setField("timeoutSeconds", event.target.value)}
-                error={errors.timeoutSeconds}
-              />
-              <Input
-                label="Falhas antes de alertar"
-                type="number"
-                min={MIN_FAILS_BEFORE_ALERT}
-                max={MAX_FAILS_BEFORE_ALERT}
-                value={values.failsBeforeAlert}
-                onChange={(event) => setField("failsBeforeAlert", event.target.value)}
-                error={errors.failsBeforeAlert}
-                hint="Amostras consecutivas falhando antes de abrir alerta."
-              />
-              <Input
-                label="Amostras para agravar (histerese)"
-                type="number"
-                min={MIN_SUSTAIN_SAMPLES}
-                max={MAX_SUSTAIN_SAMPLES}
-                value={values.sustainSamples}
-                onChange={(event) => setField("sustainSamples", event.target.value)}
-                error={errors.sustainSamples}
-                hint={describeSustainSamples(
-                  Number(values.sustainSamples.trim() || DEFAULT_SUSTAIN_SAMPLES),
-                )}
-              />
-            </div>
-          </FormSection>
-
-          {/* Vínculo do sensor com o auto-ticket. É a resposta à pergunta
-              "quais sensores podem abrir chamado?" no nível do próprio sensor. */}
-          <FormSection title="Auto-ticket">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Select
-                label="Este sensor pode abrir chamado?"
-                value={values.autoTicketPolicy}
-                options={[
-                  { value: "Never", label: "Nunca" },
-                  { value: "OnEscalation", label: "Só na abertura/escala" },
-                  { value: "Always", label: "Sempre que alertar" },
-                ]}
-                onChange={(event) =>
-                  setField("autoTicketPolicy", event.target.value as SensorAutoTicketPolicy)
-                }
-                hint="“Nunca” vence as listas da política, mesmo que o sensor esteja nelas."
-              />
-              <Select
-                label="Impacto"
-                value={values.autoTicketImpact}
-                options={[
-                  { value: "Low", label: "Baixo" },
-                  { value: "Medium", label: "Médio" },
-                  { value: "High", label: "Alto" },
-                  { value: "Critical", label: "Crítico" },
-                ]}
-                onChange={(event) =>
-                  setField("autoTicketImpact", event.target.value as AutoTicketImpact)
-                }
-                hint="Funciona como piso da prioridade sugerida pela IA."
-              />
-              <Input
-                label="Duração mínima em falha (s)"
-                type="number"
-                min={0}
-                value={values.autoTicketMinDurationSeconds}
-                onChange={(event) =>
-                  setField("autoTicketMinDurationSeconds", event.target.value)
-                }
-                hint="Vazio ou 0 = herda a política hierárquica."
-              />
-            </div>
-            <p className="text-xs text-muted">
-              O chamado só é aberto se a política do escopo (Global/Cliente/Site) também
-              permitir. Estas opções restringem <strong>este</strong> sensor dentro dela.
-            </p>
-          </FormSection>
-
-          <FormSection title="Limiares">
-            {SENSOR_NO_THRESHOLD_TYPES.has(values.sensorType) ? (
-              <p className="text-xs text-muted">
-                Sensores de serviço/processo usam o estado coletado (em execução ou não) e
-                não limiares numéricos.
-              </p>
-            ) : (
+          <div role="tabpanel" className="space-y-4">
+            {activeTab === "general" ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Select
-                    label="Direção"
-                    value={values.comparison}
-                    options={SENSOR_COMPARISON_OPTIONS}
-                    onChange={(event) =>
-                      setField("comparison", event.target.value as SensorComparison)
-                    }
-                  />
-                  <Input
-                    label="Atenção"
-                    type="number"
-                    step="any"
-                    value={values.warningThreshold}
-                    onChange={(event) => setField("warningThreshold", event.target.value)}
-                    error={errors.warningThreshold}
-                  />
-                  <Input
-                    label="Crítico"
-                    type="number"
-                    step="any"
-                    value={values.criticalThreshold}
-                    onChange={(event) => setField("criticalThreshold", event.target.value)}
-                    error={errors.criticalThreshold}
-                  />
-                </div>
-                <Select
-                  label="Unidade dos limiares"
-                  value={values.thresholdUnit}
-                  options={SENSOR_UNIT_OPTIONS}
-                  onChange={(event) =>
-                    setField("thresholdUnit", event.target.value as SensorChannelUnit)
-                  }
-                />
-                <p className="text-xs text-muted">
-                  {values.comparison === "LowerIsWorse"
-                    ? "Quanto menor, pior: atenção deve ser MAIOR que o crítico (espaço livre, uptime)."
-                    : "Quanto maior, pior: atenção deve ser MENOR que o crítico (CPU, latência)."}
-                </p>
-              </>
-            )}
-          </FormSection>
-
-          <FormSection title="Alertas">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                label="Severidade mínima para alertar"
-                value={values.minSeverityToAlert}
-                options={SENSOR_SEVERITY_OPTIONS}
-                onChange={(event) =>
-                  setField("minSeverityToAlert", event.target.value as SensorSeverity)
-                }
-              />
-              <Select
-                label="Severidade quando falha"
-                value={values.severityWhenFailing}
-                options={SENSOR_SEVERITY_OPTIONS}
-                onChange={(event) =>
-                  setField("severityWhenFailing", event.target.value as SensorSeverity)
-                }
-              />
-            </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={values.isActive}
-                onChange={(event) => setField("isActive", event.target.checked)}
-                className="h-4 w-4 rounded border-border accent-primary"
-              />
-              Sensor ativo (entra na policy enviada ao agente)
-            </label>
-            {values.sensorType === "Service" ? (
-              <div className="space-y-1">
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={values.restartIfStopped}
-                    onChange={(event) => setField("restartIfStopped", event.target.checked)}
-                    className="h-4 w-4 rounded border-border accent-primary"
-                  />
-                  Reiniciar se parado
-                </label>
-                <p className="pl-6 text-[11px] text-muted">
-                  Tenta reiniciar o serviço automaticamente quando ele estiver parado.
-                  O resultado volta no próprio sensor (tentativa e sucesso do reinício).
-                </p>
-              </div>
-            ) : null}
-          </FormSection>
-
-          {isScript ? (
-            <FormSection title="Script">
-              <Select
-                label="Script do catálogo"
-                value={values.scriptId}
-                options={scriptOptions}
-                onChange={(event) => setField("scriptId", event.target.value)}
-                error={errors.scriptId}
-                hint="O script deve emitir as métricas no protocolo MDZ_METRIC."
-              />
-              <div className="space-y-2 rounded-lg border border-border bg-surface-light/60 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Canais de métrica
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      Cada canal vira uma série no gráfico. A chave é obrigatória e única;
-                      um deles deve ser o primário (valor exibido na tabela).
-                    </p>
+                <FormSection title="Identificação">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Nome"
+                      value={values.name}
+                      onChange={(event) => setField("name", event.target.value)}
+                      error={errors.name}
+                      autoFocus
+                    />
+                    <Input
+                      label="Chave (opcional)"
+                      value={values.key}
+                      onChange={(event) => setField("key", event.target.value)}
+                      error={errors.key}
+                      hint="Gerada do nome quando vazia. Minúsculas, números, - e _."
+                    />
                   </div>
+                  <TextArea
+                    label="Descrição (opcional)"
+                    value={values.description}
+                    rows={2}
+                    onChange={(event) => setField("description", event.target.value)}
+                  />
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={values.isActive}
+                      onChange={(event) => setField("isActive", event.target.checked)}
+                      className="h-4 w-4 rounded border-border accent-primary"
+                    />
+                    Sensor ativo (entra na policy enviada ao agente)
+                  </label>
+                </FormSection>
+
+                <FormSection title="Escopo">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Select
+                      label="Escopo"
+                      value={String(values.scopeType)}
+                      options={scopeOptions}
+                      onChange={(event) =>
+                        setField("scopeType", Number(event.target.value) as AppApprovalScopeType)
+                      }
+                      error={errors.scope}
+                    />
+                    {scopeNeedsClient ? (
+                      <Select
+                        label="Cliente"
+                        value={values.clientId}
+                        options={clientOptions}
+                        onChange={(event) => {
+                          setField("clientId", event.target.value);
+                          setField("siteId", "");
+                        }}
+                        error={errors.scope}
+                      />
+                    ) : null}
+                    {values.scopeType === AppApprovalScopeType.Site ? (
+                      <Select
+                        label="Site"
+                        value={values.siteId}
+                        options={siteOptions}
+                        onChange={(event) => setField("siteId", event.target.value)}
+                      />
+                    ) : null}
+                  </div>
+                  {values.scopeType === AppApprovalScopeType.Agent ? (
+                    <p className="text-xs text-muted">
+                      O sensor vale apenas para este agente — herança de cliente/site/global é
+                      resolvida pelo servidor.
+                    </p>
+                  ) : null}
+                </FormSection>
+
+                <FormSection title="Tipo e Alvo">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Select
+                      label="Tipo"
+                      value={values.sensorType}
+                      options={SENSOR_TYPE_OPTIONS}
+                      onChange={(event) => handleTypeChange(event.target.value as SensorType)}
+                      error={errors.sensorType}
+                      hint={
+                        SENSOR_PRIMARY_CHANNEL[values.sensorType]
+                          ? `Canal primário: ${SENSOR_PRIMARY_CHANNEL[values.sensorType]}`
+                          : "Canais declarados pelo script definem o valor primário."
+                      }
+                    />
+                    <Input
+                      label="Alvo"
+                      value={values.target}
+                      onChange={(event) => setField("target", event.target.value)}
+                      hint={guide.targetHint}
+                    />
+                    <div
+                      className="space-y-3 rounded-lg border border-border bg-surface-light/60 p-3 sm:col-span-2"
+                      data-testid="sensor-type-guide"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                          Alvo esperado
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">{guide.targetHint}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                          Campos relacionados
+                        </p>
+                        <ul className="mt-1 flex flex-wrap gap-1.5">
+                          {guide.relatedFields.map((field) => (
+                            <li
+                              key={field}
+                              className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground"
+                            >
+                              {field}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 text-[11px] text-muted">{thresholdHint}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                          Exemplos — clique para preencher o alvo
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {guideExamples.map((example) => (
+                            <button
+                              key={example || "__padrao__"}
+                              type="button"
+                              onClick={() => setField("target", example)}
+                              className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                              aria-label={`Usar exemplo de alvo ${example || "padrão"}`}
+                            >
+                              {example || "(vazio = padrão)"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {guide.optionsExample ? (
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                            Opções (optionsJson)
+                          </p>
+                          <code className="mt-1 block overflow-x-auto rounded border border-border bg-surface px-2 py-1 text-[11px] text-muted-foreground">
+                            {guide.optionsExample}
+                          </code>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </FormSection>
+              </>
+            ) : null}
+
+            {activeTab === "thresholds" ? (
+              <>
+                <FormSection title="Limiares">
+                  {SENSOR_NO_THRESHOLD_TYPES.has(values.sensorType) ? (
+                    <p className="text-xs text-muted">
+                      Sensores de serviço/processo usam o estado coletado (em execução ou não) e
+                      não limiares numéricos.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <Select
+                          label="Direção"
+                          value={values.comparison}
+                          options={SENSOR_COMPARISON_OPTIONS}
+                          onChange={(event) =>
+                            setField("comparison", event.target.value as SensorComparison)
+                          }
+                        />
+                        <Input
+                          label="Atenção"
+                          type="number"
+                          step="any"
+                          value={values.warningThreshold}
+                          onChange={(event) => setField("warningThreshold", event.target.value)}
+                          error={errors.warningThreshold}
+                        />
+                        <Input
+                          label="Crítico"
+                          type="number"
+                          step="any"
+                          value={values.criticalThreshold}
+                          onChange={(event) => setField("criticalThreshold", event.target.value)}
+                          error={errors.criticalThreshold}
+                        />
+                      </div>
+                      <Select
+                        label="Unidade dos limiares"
+                        value={values.thresholdUnit}
+                        options={SENSOR_UNIT_OPTIONS}
+                        onChange={(event) =>
+                          setField("thresholdUnit", event.target.value as SensorChannelUnit)
+                        }
+                      />
+                      <p className="text-xs text-muted">
+                        {values.comparison === "LowerIsWorse"
+                          ? "Quanto menor, pior: atenção deve ser MAIOR que o crítico (espaço livre, uptime)."
+                          : "Quanto maior, pior: atenção deve ser MENOR que o crítico (CPU, latência)."}
+                      </p>
+                    </>
+                  )}
+                </FormSection>
+
+                <FormSection title="Coleta e Estabilidade">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      label="Intervalo (segundos)"
+                      type="number"
+                      min={0}
+                      value={values.intervalSeconds}
+                      onChange={(event) => setField("intervalSeconds", event.target.value)}
+                      error={errors.intervalSeconds}
+                      hint="0 = herdar o intervalo padrão do agente."
+                    />
+                    <Input
+                      label="Timeout (segundos)"
+                      type="number"
+                      min={MIN_TIMEOUT_SECONDS}
+                      max={MAX_TIMEOUT_SECONDS}
+                      value={values.timeoutSeconds}
+                      onChange={(event) => setField("timeoutSeconds", event.target.value)}
+                      error={errors.timeoutSeconds}
+                    />
+                    <Input
+                      label="Falhas antes de alertar"
+                      type="number"
+                      min={MIN_FAILS_BEFORE_ALERT}
+                      max={MAX_FAILS_BEFORE_ALERT}
+                      value={values.failsBeforeAlert}
+                      onChange={(event) => setField("failsBeforeAlert", event.target.value)}
+                      error={errors.failsBeforeAlert}
+                      hint="Amostras consecutivas falhando antes de abrir alerta."
+                    />
+                    <Input
+                      label="Amostras para agravar (histerese)"
+                      type="number"
+                      min={MIN_SUSTAIN_SAMPLES}
+                      max={MAX_SUSTAIN_SAMPLES}
+                      value={values.sustainSamples}
+                      onChange={(event) => setField("sustainSamples", event.target.value)}
+                      error={errors.sustainSamples}
+                      hint={describeSustainSamples(
+                        Number(values.sustainSamples.trim() || DEFAULT_SUSTAIN_SAMPLES),
+                      )}
+                    />
+                  </div>
+                  {values.sensorType === "Service" ? (
+                    <div className="space-y-1 pt-1">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={values.restartIfStopped}
+                          onChange={(event) => setField("restartIfStopped", event.target.checked)}
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                        Reiniciar se parado
+                      </label>
+                      <p className="pl-6 text-[11px] text-muted">
+                        Tenta reiniciar o serviço automaticamente quando ele estiver parado.
+                        O resultado volta no próprio sensor (tentativa e sucesso do reinício).
+                      </p>
+                    </div>
+                  ) : null}
+                </FormSection>
+              </>
+            ) : null}
+
+            {activeTab === "alerts" ? (
+              <>
+                <FormSection title="Alertas">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Select
+                      label="Severidade mínima para alertar"
+                      value={values.minSeverityToAlert}
+                      options={SENSOR_SEVERITY_OPTIONS}
+                      onChange={(event) =>
+                        setField("minSeverityToAlert", event.target.value as SensorSeverity)
+                      }
+                    />
+                    <Select
+                      label="Severidade quando falha"
+                      value={values.severityWhenFailing}
+                      options={SENSOR_SEVERITY_OPTIONS}
+                      onChange={(event) =>
+                        setField("severityWhenFailing", event.target.value as SensorSeverity)
+                      }
+                    />
+                  </div>
+                </FormSection>
+
+                {/* Vínculo do sensor com o auto-ticket. É a resposta à pergunta
+                    "quais sensores podem abrir chamado?" no nível do próprio sensor. */}
+                <FormSection title="Auto-ticket">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Select
+                      label="Este sensor pode abrir chamado?"
+                      value={values.autoTicketPolicy}
+                      options={[
+                        { value: "Never", label: "Nunca" },
+                        { value: "OnEscalation", label: "Só na abertura/escala" },
+                        { value: "Always", label: "Sempre que alertar" },
+                      ]}
+                      onChange={(event) =>
+                        setField("autoTicketPolicy", event.target.value as SensorAutoTicketPolicy)
+                      }
+                      hint="“Nunca” vence as listas da política, mesmo que o sensor esteja nelas."
+                    />
+                    <Select
+                      label="Impacto"
+                      value={values.autoTicketImpact}
+                      options={[
+                        { value: "Low", label: "Baixo" },
+                        { value: "Medium", label: "Médio" },
+                        { value: "High", label: "Alto" },
+                        { value: "Critical", label: "Crítico" },
+                      ]}
+                      onChange={(event) =>
+                        setField("autoTicketImpact", event.target.value as AutoTicketImpact)
+                      }
+                      hint="Funciona como piso da prioridade sugerida pela IA."
+                    />
+                    <Input
+                      label="Duração mínima em falha (s)"
+                      type="number"
+                      min={0}
+                      value={values.autoTicketMinDurationSeconds}
+                      onChange={(event) =>
+                        setField("autoTicketMinDurationSeconds", event.target.value)
+                      }
+                      hint="Vazio ou 0 = herda a política hierárquica."
+                    />
+                  </div>
+                  <p className="text-xs text-muted">
+                    O chamado só é aberto se a política do escopo (Global/Cliente/Site) também
+                    permitir. Estas opções restringem <strong>este</strong> sensor dentro dela.
+                  </p>
+                </FormSection>
+              </>
+            ) : null}
+
+            {activeTab === "script" && isScript ? (
+              <FormSection title="Script">
+                <Select
+                  label="Script do catálogo"
+                  value={values.scriptId}
+                  options={scriptOptions}
+                  onChange={(event) => setField("scriptId", event.target.value)}
+                  error={errors.scriptId}
+                  hint="O script deve emitir as métricas no protocolo MDZ_METRIC."
+                />
+                <div className="space-y-2 rounded-lg border border-border bg-surface-light/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        Canais de métrica
+                      </p>
+                      <p className="text-[11px] text-muted">
+                        Cada canal vira uma série no gráfico. A chave é obrigatória e única;
+                        um deles deve ser o primário (valor exibido na tabela).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={addChannelRow}
+                    >
+                      <Icon name="add" className="h-4 w-4" />
+                      Adicionar canal
+                    </Button>
+                  </div>
+                  {channelRows.length === 0 ? (
+                    <p className="text-xs text-muted">
+                      Nenhum canal declarado — o backend exige ao menos um.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {channelRows.map((row, index) => (
+                        <div
+                          key={index}
+                          className="grid items-end gap-2 sm:grid-cols-[1.1fr_1.1fr_1.2fr_auto_auto]"
+                        >
+                          <Input
+                            aria-label={`Chave do canal ${index + 1}`}
+                            placeholder="ex.: uso_cpu"
+                            value={row.key}
+                            onChange={(event) =>
+                              updateChannelRow(index, "key", event.target.value)
+                            }
+                          />
+                          <Input
+                            aria-label={`Rótulo do canal ${index + 1}`}
+                            placeholder="ex.: Uso de CPU"
+                            value={row.label}
+                            onChange={(event) =>
+                              updateChannelRow(index, "label", event.target.value)
+                            }
+                          />
+                          <Select
+                            aria-label={`Unidade do canal ${index + 1}`}
+                            value={row.unit}
+                            options={SENSOR_UNIT_OPTIONS}
+                            onChange={(event) =>
+                              updateChannelRow(
+                                index,
+                                "unit",
+                                event.target.value as SensorChannelUnit,
+                              )
+                            }
+                          />
+                          <label className="flex items-center gap-1.5 pb-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={row.isPrimary}
+                              aria-label={`Canal ${index + 1} é o primário`}
+                              onChange={(event) => {
+                                if (event.target.checked) markPrimaryChannelRow(index);
+                                else updateChannelRow(index, "isPrimary", false);
+                              }}
+                              className="h-4 w-4 rounded border-border accent-primary"
+                            />
+                            Primário
+                          </label>
+                          <button
+                            type="button"
+                            aria-label={`Remover canal ${index + 1}`}
+                            title="Remover canal"
+                            onClick={() => removeChannelRow(index)}
+                            className="mb-1 rounded-lg p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-danger"
+                          >
+                            <Icon name="delete" className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {errors.channels ? (
+                    <p role="alert" className="text-xs text-danger">
+                      {errors.channels}
+                    </p>
+                  ) : null}
+                </div>
+                <TextArea
+                  label="Extratores (JSON)"
+                  value={values.extractorsJson}
+                  rows={5}
+                  onChange={(event) => setField("extractorsJson", event.target.value)}
+                  error={errors.extractorsJson}
+                  hint="Lista de extratores (regex/json/mdz) por canal. Use as mesmas chaves declaradas acima."
+                />
+                <TextArea
+                  label="Mapa de exit codes (JSON)"
+                  value={values.exitCodeMapJson}
+                  rows={4}
+                  onChange={(event) => setField("exitCodeMapJson", event.target.value)}
+                  error={errors.exitCodeMapJson}
+                  hint="Regras de status/severidade por código de saída (status/severity por exit code)."
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-light/60 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Presets de exit code, exemplos de extrator por tipo e o protocolo MDZ
+                    ficam no editor completo.
+                  </p>
                   <Button
                     type="button"
-                    size="sm"
                     variant="secondary"
-                    onClick={addChannelRow}
+                    onClick={abrirEditorCompleto}
                   >
-                    <Icon name="add" className="h-4 w-4" />
-                    Adicionar canal
+                    <Icon name="open_in_new" className="h-4 w-4" />
+                    Abrir editor completo
                   </Button>
                 </div>
-                {channelRows.length === 0 ? (
-                  <p className="text-xs text-muted">
-                    Nenhum canal declarado — o backend exige ao menos um.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {channelRows.map((row, index) => (
-                      <div
-                        key={index}
-                        className="grid items-end gap-2 sm:grid-cols-[1.1fr_1.1fr_1.2fr_auto_auto]"
-                      >
-                        <Input
-                          aria-label={`Chave do canal ${index + 1}`}
-                          placeholder="ex.: uso_cpu"
-                          value={row.key}
-                          onChange={(event) =>
-                            updateChannelRow(index, "key", event.target.value)
-                          }
-                        />
-                        <Input
-                          aria-label={`Rótulo do canal ${index + 1}`}
-                          placeholder="ex.: Uso de CPU"
-                          value={row.label}
-                          onChange={(event) =>
-                            updateChannelRow(index, "label", event.target.value)
-                          }
-                        />
-                        <Select
-                          aria-label={`Unidade do canal ${index + 1}`}
-                          value={row.unit}
-                          options={SENSOR_UNIT_OPTIONS}
-                          onChange={(event) =>
-                            updateChannelRow(
-                              index,
-                              "unit",
-                              event.target.value as SensorChannelUnit,
-                            )
-                          }
-                        />
-                        <label className="flex items-center gap-1.5 pb-2 text-xs text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            checked={row.isPrimary}
-                            aria-label={`Canal ${index + 1} é o primário`}
-                            onChange={(event) => {
-                              if (event.target.checked) markPrimaryChannelRow(index);
-                              else updateChannelRow(index, "isPrimary", false);
-                            }}
-                            className="h-4 w-4 rounded border-border accent-primary"
-                          />
-                          Primário
-                        </label>
-                        <button
-                          type="button"
-                          aria-label={`Remover canal ${index + 1}`}
-                          title="Remover canal"
-                          onClick={() => removeChannelRow(index)}
-                          className="mb-1 rounded-lg p-1.5 text-muted-foreground hover:bg-surface-hover hover:text-danger"
-                        >
-                          <Icon name="delete" className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {errors.channels ? (
-                  <p role="alert" className="text-xs text-danger">
-                    {errors.channels}
-                  </p>
-                ) : null}
-              </div>
-              <TextArea
-                label="Extratores (JSON)"
-                value={values.extractorsJson}
-                rows={5}
-                onChange={(event) => setField("extractorsJson", event.target.value)}
-                error={errors.extractorsJson}
-                hint="Lista de extratores (regex/json/mdz) por canal. Use as mesmas chaves declaradas acima."
-              />
-              <TextArea
-                label="Mapa de exit codes (JSON)"
-                value={values.exitCodeMapJson}
-                rows={4}
-                onChange={(event) => setField("exitCodeMapJson", event.target.value)}
-                error={errors.exitCodeMapJson}
-                hint="Regras de status/severidade por código de saída (status/severity por exit code)."
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-light/60 p-3">
-                <p className="text-xs text-muted-foreground">
-                  Presets de exit code, exemplos de extrator por tipo e o protocolo MDZ
-                  ficam no editor completo.
-                </p>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={abrirEditorCompleto}
-                >
-                  <Icon name="open_in_new" className="h-4 w-4" />
-                  Abrir editor completo
-                </Button>
-              </div>
-            </FormSection>
-          ) : null}
+              </FormSection>
+            ) : null}
+          </div>
 
-          <div className="flex justify-end gap-2 pt-1">
-            <button
+          <div className="flex justify-end gap-2 border-t border-border pt-3">
+            <Button
               type="button"
+              variant="secondary"
               onClick={onClose}
               disabled={isSaving}
-              className="rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted-foreground hover:bg-surface-hover disabled:opacity-50"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+              variant="primary"
+              loading={isSaving}
             >
-              {isSaving ? "Salvando..." : isEditing ? "Salvar" : "Criar sensor"}
-            </button>
+              {isEditing ? "Salvar" : "Criar sensor"}
+            </Button>
           </div>
         </form>
       )}

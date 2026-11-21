@@ -93,3 +93,50 @@ describe("guia por tipo no formulário de sensor", () => {
     expect(guia.textContent).toContain("sampleMs");
   });
 });
+
+describe("abas WAI-ARIA e validação guiada no SensorFormModal", () => {
+  it("alterna entre Geral, Limiares & Coleta e Alertas & Auto-ticket", () => {
+    renderModal();
+
+    const generalTab = screen.getByRole("tab", { name: /Geral/ });
+    const thresholdsTab = screen.getByRole("tab", { name: /Limiares & Coleta/ });
+    const alertsTab = screen.getByRole("tab", { name: /Alertas & Auto-ticket/ });
+
+    expect(generalTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Nome")).toBeTruthy();
+
+    fireEvent.click(thresholdsTab);
+    expect(thresholdsTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Atenção")).toBeTruthy();
+
+    fireEvent.click(alertsTab);
+    expect(alertsTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Este sensor pode abrir chamado?")).toBeTruthy();
+  });
+
+  it("exibe a aba Script somente quando o tipo é Script", () => {
+    renderModal();
+    expect(screen.queryByRole("tab", { name: /Script/ })).toBeNull();
+
+    fireEvent.change(selectTipo(), { target: { value: "Script" } });
+    const scriptTab = screen.getByRole("tab", { name: /Script/ });
+    expect(scriptTab).toBeTruthy();
+
+    fireEvent.click(scriptTab);
+    expect(screen.getByLabelText("Script do catálogo")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Geral/ }));
+    fireEvent.change(selectTipo(), { target: { value: "DiskSpace" } });
+    expect(screen.queryByRole("tab", { name: /Script/ })).toBeNull();
+  });
+
+  it("navega automaticamente para a aba com erro ao submeter", () => {
+    renderModal();
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Disco C" } });
+    fireEvent.click(screen.getByRole("button", { name: "Criar sensor" }));
+
+    const thresholdsTab = screen.getByRole("tab", { name: /Limiares & Coleta/ });
+    expect(thresholdsTab.getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Informe o limiar de atenção e/ou crítico.")).toBeTruthy();
+  });
+});
