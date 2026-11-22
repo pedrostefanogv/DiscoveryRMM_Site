@@ -25,7 +25,17 @@ export type RemoteSessionControlType =
    * Cabe no teto de 512 bytes porque carrega apenas o ESTADO e o motivo — nunca
    * o SDP, que trafega nos subjects dedicados .webrtc.in/.webrtc.out.
    */
-  | "transport_info";
+  | "transport_info"
+  /**
+   * Handshake de prontidão do viewer: avisa o agent que ele JÁ assinou
+   * .webrtc.out e criou o peer, para o agent reenviar o estado do transporte
+   * só quando houver quem escute.
+   *
+   * Sem isto o agent publicava o transport_info numa janela em que o viewer
+   * ainda estava assinando: a mensagem (pub/sub sem retenção) caía no vazio e
+   * o selo ficava preso em "NATS" mesmo com o peer connection conectado.
+   */
+  | "webrtcReady";
 export type RemoteSessionControlRole = "viewer" | "agent" | "server";
 
 export interface RemoteSessionControlEnvelope {
@@ -46,6 +56,7 @@ const ALLOWED_TYPES: readonly RemoteSessionControlType[] = [
   "inputLock",
   "inputLockChanged",
   "transport_info",
+  "webrtcReady",
 ];
 
 const ALLOWED_ROLES = ["viewer", "agent", "server"] as const;
@@ -129,6 +140,33 @@ export function decodeRemoteControlEnvelope(
           ? candidate.timestamp
           : undefined,
     };
+  }
+
+  // Formato legado do transport_info: agentes JÁ IMPLANTADOS publicam
+  // {"action":"transport_info",...} SEM o campo "type". O decoder tipado
+  // rejeitava a mensagem — e era exatamente isso que prendia o selo em "NATS"
+  // mesmo com o peer connection conectado e os data channels abertos. Esta
+  // ponte mantém o indicador funcionando com agentes que ainda não receberam a
+  // correção do envelope.
+  if (candidate.type === undefined && candidate.action === "transport_info") {
+    const rawTransport = candidate.transport;
+    if (
+      rawTransport &&
+      typeof rawTransport === "object" &&
+      !Array.isArray(rawTransport)
+    ) {
+      const legacySessionId =
+        typeof candidate.sessionId === "string"
+          ? candidate.sessionId.trim()
+          : "";
+      return {
+        v: REMOTE_SESSION_CONTROL_VERSION,
+        type: "transport_info",
+        sessionId: legacySessionId,
+        from: "agent",
+        payload: { transport: rawTransport as Record<string, unknown> },
+      };
+    }
   }
 
   if (!isRemoteSessionControlType(candidate.type)) return null;

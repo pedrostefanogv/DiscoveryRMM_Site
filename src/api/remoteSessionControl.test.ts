@@ -77,4 +77,58 @@ describe("remoteSessionControl (canal .control do acesso remoto)", () => {
     expect(toLivenessConnectionState("auth_error")).toBe("closed");
     expect(toLivenessConnectionState("disconnected")).toBe("closed");
   });
+
+  // ── transport_info: o contrato que prendia o selo em "NATS" ──────────────
+
+  it("aceita webrtcReady (handshake de prontidao do viewer)", () => {
+    expect(isRemoteSessionControlType("webrtcReady")).toBe(true);
+    const env = buildViewerRemoteControlEnvelope("webrtcReady", "sess-1", 3);
+    const raw = encodeRemoteControlEnvelope(env);
+    const decoded = decodeRemoteControlEnvelope(new TextDecoder().decode(raw));
+    expect(decoded?.type).toBe("webrtcReady");
+    expect(decoded?.from).toBe("viewer");
+  });
+
+  it("decodifica o transport_info TIPADO publicado pelo agent", () => {
+    const decoded = decodeRemoteControlEnvelope({
+      v: 1,
+      type: "transport_info",
+      sessionId: "sess-1",
+      from: "agent",
+      payload: { transport: { state: "webrtc", active: "webrtc" } },
+    });
+    expect(decoded).not.toBeNull();
+    expect(decoded?.type).toBe("transport_info");
+    const transport = decoded?.payload?.transport as Record<string, unknown>;
+    expect(transport.state).toBe("webrtc");
+  });
+
+  it("faz a ponte do transport_info LEGADO ({action}) de agentes ja implantados", () => {
+    // Sem esta ponte o frame era REJEITADO (o decoder exige o campo "type") e o
+    // selo ficava preso no default ("NATS") mesmo com o peer connection
+    // conectado e os data channels abertos.
+    const decoded = decodeRemoteControlEnvelope({
+      action: "transport_info",
+      sessionId: "sess-1",
+      transport: { state: "webrtc", active: "webrtc", hasStun: true },
+    });
+    expect(decoded).not.toBeNull();
+    expect(decoded?.type).toBe("transport_info");
+    expect(decoded?.from).toBe("agent");
+    const transport = decoded?.payload?.transport as Record<string, unknown>;
+    expect(transport.state).toBe("webrtc");
+  });
+
+  it("ignora transport_info legado sem bloco transport valido", () => {
+    expect(
+      decodeRemoteControlEnvelope({ action: "transport_info", sessionId: "s" }),
+    ).toBeNull();
+    expect(
+      decodeRemoteControlEnvelope({
+        action: "transport_info",
+        sessionId: "s",
+        transport: [1, 2],
+      }),
+    ).toBeNull();
+  });
 });

@@ -4,6 +4,7 @@ import { fullscreenApi } from '@/utils/fullscreen';
 import type { RemoteSessionResponse } from '@/api/remote-sessions';
 import { RemoteWebRtcPeer } from '@/modules/remote-shared/webrtcPeer';
 import {
+  buildViewerRemoteControlEnvelope,
   decodeRemoteControlEnvelope,
   type RemoteSessionControlEnvelope,
 } from '@/api/remoteSessionControl';
@@ -842,6 +843,26 @@ export default function RemoteScreenViewer({
               });
               webRtcPeerRef.current = peer;
               void peer.start();
+              // Handshake de PRONTIDÃO (fix da corrida do selo).
+              //
+              // O agent publicava o transport_info alguns milissegundos após o
+              // start, enquanto este viewer ainda estava assinando o .control.
+              // Como o canal é pub/sub SEM retenção, a mensagem caía no vazio e
+              // o selo ficava preso no default ("NATS") mesmo com o peer
+              // connection conectado e os data channels abertos.
+              //
+              // Avisar "estou pronto" faz o agent reenviar o estado sob
+              // demanda, em vez de depender de uma janela de tempo.
+              if (sessionId) {
+                controlSeqRef.current += 1;
+                sendControlEnvelope(
+                  buildViewerRemoteControlEnvelope(
+                    'webrtcReady',
+                    sessionId,
+                    controlSeqRef.current,
+                  ),
+                );
+              }
             }
             if (sessionId) {
               controlSeqRef.current += 1;
