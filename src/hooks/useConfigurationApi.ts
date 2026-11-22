@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { TicketAttachmentSettings } from "@/api";
+import { ApiError } from "@/api";
+import type {
+  ClientConfiguration,
+  SiteConfiguration,
+  TicketAttachmentSettings,
+} from "@/api";
 import {
   deleteClientConfig,
   deleteSiteConfig,
@@ -84,6 +89,31 @@ function invalidateRecentAudit(queryClient: ReturnType<typeof useQueryClient>) {
   return queryClient.invalidateQueries({ queryKey: ["config", "audit"] });
 }
 
+/**
+ * O GET de configuração de cliente/site devolve 404 quando o escopo ainda NÃO
+ * tem linha própria — o estado NORMAL de quem nunca salvou sobrescritas (tudo
+ * herda do nível acima), não um recurso inexistente. As telas de Proxy Remoto
+ * e WebRTC já tratam esse 404 manualmente; aqui ele é normalizado para um
+ * objeto vazio, que tem a MESMA semântica de "sem linha": os campos ficam
+ * marcados como herdados (buildInheritedState) e os valores vêm do endpoint
+ * /effective. Sem isso o React Query marca a consulta como erro e a tela de
+ * Configuração por Escopo morre em "404: client não encontrado".
+ */
+function emptyConfigOnNotFound<T extends object>(
+  fetcher: () => Promise<T>,
+): () => Promise<T> {
+  return async () => {
+    try {
+      return await fetcher();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return {} as T;
+      }
+      throw error;
+    }
+  };
+}
+
 export function useServerConfig() {
   return useQuery({
     queryKey: configurationQueryKeys.server,
@@ -146,7 +176,9 @@ export function useResetServerConfig() {
 export function useClientConfig(clientId: string) {
   return useQuery({
     queryKey: configurationQueryKeys.client(clientId),
-    queryFn: () => getClientConfig(clientId),
+    queryFn: emptyConfigOnNotFound<ClientConfiguration>(() =>
+      getClientConfig(clientId),
+    ),
     enabled: !!clientId,
   });
 }
@@ -264,7 +296,9 @@ export function useResetClientProperty() {
 export function useSiteConfig(siteId: string) {
   return useQuery({
     queryKey: configurationQueryKeys.site(siteId),
-    queryFn: () => getSiteConfig(siteId),
+    queryFn: emptyConfigOnNotFound<SiteConfiguration>(() =>
+      getSiteConfig(siteId),
+    ),
     enabled: !!siteId,
   });
 }
