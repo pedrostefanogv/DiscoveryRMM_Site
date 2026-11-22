@@ -937,7 +937,7 @@ export default function TicketList() {
     if (!pageRef.current) return;
 
     const rect = pageRef.current.getBoundingClientRect();
-    const menuWidth = 248;
+    const menuWidth = 288;
     // Base do menu + a linha extra de explicação do gate de atribuição.
     const menuHeight = 164 + 40;
     const rawX = clientX - rect.left;
@@ -1389,8 +1389,8 @@ export default function TicketList() {
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div className="md:col-span-2 xl:col-span-3">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-12">
+          <div className="md:col-span-2 xl:col-span-4">
             <div className="relative">
               <Input
                 label="Buscar"
@@ -1398,7 +1398,7 @@ export default function TicketList() {
                 onChange={(event) => {
                   applyFilterChange(() => setFilterText(event.target.value));
                 }}
-                placeholder="Título, descrição, categoria ou respostas do questionário"
+                placeholder="Título, descrição, categoria ou respostas"
               />
               {filterText && (
                 <button
@@ -1416,84 +1416,37 @@ export default function TicketList() {
               templateId={filterTemplate || undefined}
             />
           </div>
-          <Select
-            label="Prioridade"
-            options={PRIORITY_OPTIONS}
-            value={filterPriority}
-            onChange={(event) => {
-              applyFilterChange(() => setFilterPriority(event.target.value as TicketPriority | ''));
-            }}
-          />
-          <Select
-            label="Situação"
-            options={STATUS_OPTIONS}
-            value={filterStatus}
-            onChange={(event) => {
-              applyFilterChange(() => setFilterStatus(event.target.value as '' | 'true' | 'false'));
-            }}
-          />
-          <Select
-            label="Estado"
-            options={stateOpts}
-            value={filterState}
-            onChange={(event) => {
-              applyFilterChange(() => setFilterState(event.target.value));
-            }}
-          />
-        </div>
-
-        {/* Fila "Meu time": usa os vínculos de departamento do usuário logado
-            (GET /tickets/my-departments) — antes o hook existia sem nenhum
-            consumidor e a UI não tinha como oferecer essa fila. */}
-        <div className="mt-3 flex flex-wrap items-end gap-3">
-          <Button
-            variant={filterMyDepartments ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => {
-              applyFilterChange(() =>
-                setFilterMyDepartments((current) => {
-                  const next = !current;
-                  // Entrar na fila "Meu time" não deve manter um responsável
-                  // que não seja o próprio usuário: as duas facetas se somam.
-                  if (next && filterAssignedToUserId && filterAssignedToUserId !== currentUserId) {
-                    setFilterAssignedToUserId('');
-                  }
-                  return next;
-                }),
-              );
-            }}
-            loading={myDepartmentsQuery.isLoading}
-            disabled={myDepartmentsQuery.isError}
-            aria-pressed={filterMyDepartments}
-            title={
-              myDepartmentsQuery.isError
-                ? 'Não foi possível carregar seus departamentos.'
-                : 'Somente chamados dos departamentos em que você é membro do time'
-            }
-          >
-            <Icon name="group" className="h-4 w-4" />
-            Meu time
-            {myDepartmentIds.length > 0 && <Badge color="slate">{myDepartmentIds.length}</Badge>}
-          </Button>
-          {currentUserId && (
-            <Button
-              variant={filterAssignedToUserId === currentUserId ? 'primary' : 'secondary'}
-              size="sm"
-              onClick={() => {
-                applyFilterChange(() =>
-                  setFilterAssignedToUserId((current) =>
-                    current === currentUserId ? '' : (currentUserId ?? ''),
-                  ),
-                );
+          <div className="xl:col-span-2">
+            <Select
+              label="Prioridade"
+              options={PRIORITY_OPTIONS}
+              value={filterPriority}
+              onChange={(event) => {
+                applyFilterChange(() => setFilterPriority(event.target.value as TicketPriority | ''));
               }}
-              aria-pressed={filterAssignedToUserId === currentUserId}
-              title="Somente chamados atribuídos a você"
-            >
-              <Icon name="person" className="h-4 w-4" />
-              Atribuídos a mim
-            </Button>
-          )}
-          <div className="min-w-[220px] flex-1">
+            />
+          </div>
+          <div className="xl:col-span-2">
+            <Select
+              label="Situação"
+              options={STATUS_OPTIONS}
+              value={filterStatus}
+              onChange={(event) => {
+                applyFilterChange(() => setFilterStatus(event.target.value as '' | 'true' | 'false'));
+              }}
+            />
+          </div>
+          <div className="xl:col-span-2">
+            <Select
+              label="Estado"
+              options={stateOpts}
+              value={filterState}
+              onChange={(event) => {
+                applyFilterChange(() => setFilterState(event.target.value));
+              }}
+            />
+          </div>
+          <div className="xl:col-span-2">
             <Select
               label="Responsável"
               options={assignedToOptions}
@@ -1502,9 +1455,77 @@ export default function TicketList() {
                 const value = event.target.value;
                 applyFilterChange(() => setFilterAssignedToUserId(value));
               }}
-              hint="Filtra pelo usuário atribuído ao chamado."
             />
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={filterMyDepartments ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => {
+                applyFilterChange(() =>
+                  setFilterMyDepartments((current) => {
+                    const next = !current;
+                    if (next && filterAssignedToUserId && filterAssignedToUserId !== currentUserId) {
+                      setFilterAssignedToUserId('');
+                    }
+                    return next;
+                  }),
+                );
+              }}
+              loading={myDepartmentsQuery.isLoading}
+              disabled={myDepartmentsQuery.isError}
+              aria-pressed={filterMyDepartments}
+              title={
+                myDepartmentsQuery.isError
+                  ? 'Não foi possível carregar seus departamentos.'
+                  : 'Somente chamados dos departamentos em que você é membro do time'
+              }
+            >
+              <Icon name="group" className="h-4 w-4" />
+              Meu time
+              {myDepartmentIds.length > 0 && <Badge color="slate">{myDepartmentIds.length}</Badge>}
+            </Button>
+            {currentUserId && (
+              <Button
+                variant={filterAssignedToUserId === currentUserId ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => {
+                  applyFilterChange(() =>
+                    setFilterAssignedToUserId((current) =>
+                      current === currentUserId ? '' : (currentUserId ?? ''),
+                    ),
+                  );
+                }}
+                aria-pressed={filterAssignedToUserId === currentUserId}
+                title="Somente chamados atribuídos a você"
+              >
+                <Icon name="person" className="h-4 w-4" />
+                Atribuídos a mim
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAdvancedFiltersExpanded((current) => !current)}
+              aria-expanded={advancedFiltersExpanded}
+            >
+              <Icon name="filter_alt" className="h-4 w-4" />
+              Filtros avançados
+              {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
+              {advancedFiltersExpanded ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
+            </Button>
+            {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
+              <span className="text-xs text-muted">Ativos: {advancedFilterSummary}.</span>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+              Limpar filtros
+            </Button>
+          )}
         </div>
 
         {filterMyDepartments && myDepartmentsQuery.isSuccess && myDepartmentIds.length === 0 && (
@@ -1512,23 +1533,6 @@ export default function TicketList() {
             Você não é membro ativo do time de nenhum departamento — a fila "Meu time" fica vazia.
           </p>
         )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAdvancedFiltersExpanded((current) => !current)}
-            aria-expanded={advancedFiltersExpanded}
-          >
-            <Icon name="filter_alt" className="h-4 w-4" />
-            Filtros avançados
-            {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
-            {advancedFiltersExpanded ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
-          </Button>
-          {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
-            <span className="text-xs text-muted">Filtros ativos: {advancedFilterSummary}.</span>
-          )}
-        </div>
 
         {advancedFiltersExpanded && (
           <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -1630,13 +1634,7 @@ export default function TicketList() {
           </div>
         )}
 
-        {hasActiveFilters && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={handleClearFilters}>
-              Limpar filtros
-            </Button>
-          </div>
-        )}
+
 
         {savedViewsQuery.isLoading ? (
           <div className="mt-4"><Loading /></div>
@@ -1765,44 +1763,52 @@ export default function TicketList() {
       {ticketContextMenu && (
         <div
           ref={contextMenuRef}
-          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-border bg-surface/95 p-1 shadow-2xl backdrop-blur"
+          className="absolute z-[80] w-72 overflow-hidden rounded-xl border border-border bg-surface/95 p-1.5 shadow-2xl backdrop-blur"
           style={{ top: ticketContextMenu.y, left: ticketContextMenu.x }}
           role="menu"
-          aria-label={`Acoes do chamado ${ticketContextMenu.ticket.title}`}
+          aria-label={`Ações do chamado ${ticketContextMenu.ticket.title}`}
         >
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void handleContextMenuFollow()}
             disabled={addTicketWatcher.isPending || !currentUserId}
             role="menuitem"
           >
-            <span>Acompanhar</span>
-            <span className="text-xs text-muted">watcher</span>
+            <Icon name="visibility" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-sm font-medium">Acompanhar</p>
+              <p className="text-[11px] text-muted">Receber atualizações como watcher</p>
+            </div>
           </button>
-          {/* Assumir/Transferir dependem de canAssign (backend). Sem o gate o
-              item aparecia para quem não trata o chamado e só falhava com 403. */}
+          {/* Assumir/Transferir dependem de canAssign (backend). */}
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-0.5 flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void handleContextMenuTakeOwnership()}
             disabled={updateTicket.isPending || !currentUserId || !targetTicketCapabilities.canAssign}
             title={targetTicketCapabilities.canAssign ? undefined : (targetTicketCapabilities.reason ?? 'Sem permissão para atribuir')}
             role="menuitem"
           >
-            <span>Assumir</span>
-            <span className="text-xs text-muted">atribuição rápida</span>
+            <Icon name="person" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-sm font-medium">Assumir chamado</p>
+              <p className="text-[11px] text-muted">Atribuição rápida para você</p>
+            </div>
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-0.5 flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleContextMenuOpenAssign}
             disabled={updateTicket.isPending || !targetTicketCapabilities.canAssign}
             title={targetTicketCapabilities.canAssign ? undefined : (targetTicketCapabilities.reason ?? 'Sem permissão para transferir')}
             role="menuitem"
           >
-            <span>Transferir / Atribuir</span>
-            <span className="text-xs text-muted">departamento ou usuário</span>
+            <Icon name="group" className="mt-0.5 h-4 w-4 shrink-0 text-muted" />
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-sm font-medium">Transferir / Atribuir</p>
+              <p className="text-[11px] text-muted">Escolher departamento ou usuário</p>
+            </div>
           </button>
           {/* Explicação visível: um title em botão desabilitado não aparece no
               hover, então o usuário ficaria sem saber POR QUE não pode agir. */}

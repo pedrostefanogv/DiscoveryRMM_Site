@@ -307,7 +307,7 @@ export default function TicketDetail() {
                     ? [{ id: 'attachments', label: 'Anexos', icon: 'attach_file' } satisfies DetailTab<Tab>]
                     : []),
                   { id: 'automation', label: 'Automação', icon: 'build' },
-                  { id: 'ai', label: 'IA', icon: 'auto_awesome' },
+                  { id: 'ai', label: 'IA', icon: 'smart_toy' },
                   { id: 'chat', label: 'Chat', icon: 'desktop_windows' },
                 ]}
                 active={tab}

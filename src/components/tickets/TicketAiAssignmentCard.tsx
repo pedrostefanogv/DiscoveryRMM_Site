@@ -21,6 +21,24 @@ function pct(value: number): string {
   return (value * 100).toFixed(0) + "%";
 }
 
+function parseRationale(raw: string): { summary: string; notes: string[] } {
+  const parts = raw
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) return { summary: "", notes: [] };
+
+  const [summary, ...rest] = parts;
+  const notes = rest.filter(
+    (part) =>
+      !/^origem do candidato:/i.test(part) &&
+      !/^score\s+[0-9.,]+/i.test(part),
+  );
+
+  return { summary, notes };
+}
+
 /**
  * Decisão da triagem por IA para o chamado: quem foi escolhido, com que
  * confiança, por qual motivo e quais candidatos foram avaliados. Permite rodar
@@ -34,6 +52,7 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
 
   const data = decision.data;
   const candidates = data?.candidates ?? [];
+  const parsedRationale = data?.rationale ? parseRationale(data.rationale) : null;
 
   return (
     <div>
@@ -53,33 +72,45 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
       )}
 
       {data && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Badge color={data.strategySource === "ai" ? "accent" : "slate"}>
-              {SOURCE_LABELS[data.strategySource] ?? data.strategySource}
-            </Badge>
-            <span className="text-foreground">
-              {data.chosenUserName ?? data.chosenUserId ?? "sem responsável"}
-            </span>
-            {data.confidence > 0 && (
-              <span className="text-xs text-muted">confiança {pct(data.confidence)}</span>
-            )}
-            <span className="text-xs text-muted">dificuldade {data.difficulty}/5</span>
-            {data.maxOutputTokens > 0 && (
-              <span className="text-xs text-muted">orçamento {data.maxOutputTokens} tokens</span>
-            )}
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                {data.chosenUserName ?? data.chosenUserId ?? "sem responsável"}
+              </span>
+              <Badge color={data.strategySource === "ai" ? "accent" : "slate"}>
+                {SOURCE_LABELS[data.strategySource] ?? data.strategySource}
+              </Badge>
+            </div>
             <Badge color={data.applied ? "success" : "warning"}>
               {data.applied ? "aplicada" : "não aplicada"}
             </Badge>
           </div>
 
-          {data.rationale && <p className="text-xs text-muted">{data.rationale}</p>}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+            {data.confidence > 0 && (
+              <span>Confiança {pct(data.confidence)}</span>
+            )}
+            <span>Dificuldade {data.difficulty}/5</span>
+          </div>
+
+          {parsedRationale && parsedRationale.summary && (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {parsedRationale.summary}
+            </p>
+          )}
+
+          {parsedRationale && parsedRationale.notes.length > 0 && (
+            <p className="rounded-lg bg-surface-light px-2.5 py-1.5 text-[11px] leading-snug text-muted">
+              {parsedRationale.notes.join(" · ")}
+            </p>
+          )}
 
           {candidates.length > 0 && (
             <>
               <button
                 type="button"
-                className="text-xs text-primary hover:underline"
+                className="text-xs font-medium text-primary hover:underline"
                 onClick={() => setExpanded((value) => !value)}
               >
                 {expanded ? "Ocultar candidatos" : "Ver " + candidates.length + " candidato(s)"}
@@ -89,9 +120,9 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
                   {candidates.map((candidate) => (
                     <li
                       key={candidate.userId}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-light px-2 py-1 text-xs"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-light px-2.5 py-1.5 text-xs"
                     >
-                      <span className="text-foreground">
+                      <span className="font-medium text-foreground">
                         {candidate.userName ?? candidate.userId}
                       </span>
                       <span className="text-muted">
@@ -119,7 +150,7 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
             })
           }
         >
-          <Icon name="auto_awesome" className="mr-1.5 inline h-3.5 w-3.5" />
+          <Icon name="bolt" className="h-3.5 w-3.5" />
           Sugerir com IA
         </Button>
         <Button

@@ -96,13 +96,28 @@ describe('TicketAiAssignmentCard', () => {
 
     expect(screen.getByText('Escolha da IA')).toBeTruthy();
     expect(screen.getByText('Bruno Lima')).toBeTruthy();
-    expect(screen.getByText('confiança 82%')).toBeTruthy();
-    expect(screen.getByText('dificuldade 4/5')).toBeTruthy();
+    expect(screen.getByText('Confiança 82%')).toBeTruthy();
+    expect(screen.getByText('Dificuldade 4/5')).toBeTruthy();
     expect(screen.getByText('aplicada')).toBeTruthy();
-    expect(screen.getByText('orçamento 1200 tokens')).toBeTruthy();
+    expect(screen.queryByText(/orçamento/i)).toBeNull();
 
     fireEvent.click(screen.getByText('Ver 2 candidato(s)'));
     expect(screen.getByText('Carla Dias')).toBeTruthy();
+  });
+
+  it('limpa segmentos técnicos internos do rationale concatenado com pipes', () => {
+    decisionState.data = {
+      ...decision,
+      rationale:
+        'Único candidato disponível. | Confiança da IA (0.44) abaixo do mínimo (0.60); usado o maior score. | score 0.44 (skill 0.24, afinidade 0.00, 0 abertos) | origem do candidato: own',
+    };
+    render(<TicketAiAssignmentCard ticketId="t1" />);
+
+    expect(screen.getByText('Único candidato disponível.')).toBeTruthy();
+    expect(
+      screen.getByText('Confiança da IA (0.44) abaixo do mínimo (0.60); usado o maior score.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/origem do candidato/i)).toBeNull();
   });
 
   it('mostra o motivo quando a IA é bloqueada por limite de uso', () => {
