@@ -477,7 +477,11 @@ export default function Dashboard() {
               <StatCard
                 icon="gpp_maybe"
                 label="Conformidade de patches"
-                value={patchSnapshot.isLoading ? '\u2014' : (patchSnapshot.data?.compliancePercent ?? 0).toFixed(1) + '%'}
+                value={
+                  patchSnapshot.isLoading || patchSnapshot.isError
+                    ? '\u2014'
+                    : (patchSnapshot.data?.compliancePercent ?? 0).toFixed(1) + '%'
+                }
                 tone={(patchSnapshot.data?.criticalPending ?? 0) > 0 ? 'warning' : 'success'}
                 onClick={() => navigate('/patches')}
                 trend={
@@ -485,7 +489,10 @@ export default function Dashboard() {
                     <Badge color="danger">indisponível</Badge>
                   ) : (
                     <span className="text-xs text-muted tabular-nums">
-                      {patchSnapshot.data?.totalPending ?? 0} pendente(s) · {patchSnapshot.data?.rebootPendingAgents ?? 0} reinício
+                      {patchSnapshot.data?.totalPending ?? 0} pendente(s)
+                      {(patchSnapshot.data?.rebootPendingAgents ?? 0) > 0
+                        ? ` · ${patchSnapshot.data?.rebootPendingAgents} reinício`
+                        : ''}
                     </span>
                   )
                 }

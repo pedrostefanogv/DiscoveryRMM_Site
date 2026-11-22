@@ -21,7 +21,20 @@ const toneMap: Record<NonNullable<StatCardProps['tone']>, { bg: string; icon: st
 
 export const StatCard = memo(function StatCard({ icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
   const styles = toneMap[tone];
-  const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-border bg-surface p-5 h-full';
+  const baseClassName = 'glass-card flex items-center gap-3.5 rounded-xl border border-border bg-surface p-4 sm:p-5 h-full';
+
+  const content = (
+    <>
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ${onClick ? 'ring-1 ring-black/10 dark:ring-white/5' : 'ring-1 ring-border'}`}>
+        <Icon name={icon} className={`h-6 w-6 ${styles.icon}`} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase leading-snug tracking-wider text-muted">{label}</p>
+        <p className="mt-0.5 whitespace-nowrap text-xl font-bold leading-tight text-foreground tabular-nums sm:text-2xl">{value}</p>
+        {trend && <div className="mt-1 text-xs leading-snug text-muted">{trend}</div>}
+      </div>
+    </>
+  );
 
   if (onClick) {
     return (
@@ -29,30 +42,12 @@ export const StatCard = memo(function StatCard({ icon, label, value, trend, tone
         type="button"
         onClick={onClick}
         aria-pressed={active}
-        className={`${baseClassName} glass-card-interactive text-left transition-colors hover:border-primary/30 hover:bg-surface-light/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'border-primary/40 bg-surface-light/80 ring-1 ring-primary/30' : ''}`}
+        className={`${baseClassName} glass-card-interactive w-full text-left transition-colors hover:border-primary/30 hover:bg-surface-light/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'border-primary/40 bg-surface-light/80 ring-1 ring-primary/30' : ''}`}
       >
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-black/10 dark:ring-white/5`}>
-          <Icon name={icon} className={`h-6 w-6 ${styles.icon}`} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
-          <p className="text-xl font-bold text-foreground tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
-        </div>
-        {trend && <div className="text-sm">{trend}</div>}
+        {content}
       </button>
     );
   }
 
-  return (
-    <div className={baseClassName}>
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-border`}>
-        <Icon name={icon} className={`h-6 w-6 ${styles.icon}`} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
-        <p className="text-xl font-bold text-foreground tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
-      </div>
-      {trend && <div className="text-sm">{trend}</div>}
-    </div>
-  );
+  return <div className={baseClassName}>{content}</div>;
 });
