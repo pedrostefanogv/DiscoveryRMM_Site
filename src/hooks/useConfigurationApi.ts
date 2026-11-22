@@ -413,10 +413,15 @@ export function useResetSiteProperty() {
   });
 }
 
-export function useRecentConfigurationAudit(days = 30, limit = 200) {
+export function useRecentConfigurationAudit(
+  days = 30,
+  limit = 200,
+  enabled = true,
+) {
   return useQuery({
     queryKey: configurationQueryKeys.auditRecent(days, limit),
     queryFn: () => getRecentAudit(days, limit),
+    enabled,
   });
 }
 
@@ -424,11 +429,12 @@ export function useEntityConfigurationAudit(
   entityType: ConfigurationEntityType,
   entityId: string,
   limit?: number,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: configurationQueryKeys.auditEntity(entityType, entityId, limit),
     queryFn: () => getEntityAudit(entityType, entityId, limit),
-    enabled: !!entityType && !!entityId,
+    enabled: enabled && !!entityType && !!entityId,
   });
 }
 
@@ -436,6 +442,7 @@ export function useFieldConfigurationAudit(
   entityType: ConfigurationEntityType,
   entityId: string,
   fieldName: string,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: configurationQueryKeys.auditField(
@@ -444,26 +451,31 @@ export function useFieldConfigurationAudit(
       fieldName,
     ),
     queryFn: () => getFieldAudit(entityType, entityId, fieldName),
-    enabled: !!entityType && !!entityId && !!fieldName,
+    enabled: enabled && !!entityType && !!entityId && !!fieldName,
   });
 }
 
-export function useConfigurationAuditByUser(username: string, limit?: number) {
+export function useConfigurationAuditByUser(
+  username: string,
+  limit?: number,
+  enabled = true,
+) {
   return useQuery({
     queryKey: configurationQueryKeys.auditByUser(username, limit),
     queryFn: () => getAuditByUser(username, limit),
-    enabled: !!username,
+    enabled: enabled && !!username,
   });
 }
 
 export function useConfigurationAuditReport(
   startDate: string,
   endDate: string,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: configurationQueryKeys.auditReport(startDate, endDate),
     queryFn: () => getAuditReport(startDate, endDate),
-    enabled: !!startDate && !!endDate,
+    enabled: enabled && !!startDate && !!endDate,
   });
 }
 
