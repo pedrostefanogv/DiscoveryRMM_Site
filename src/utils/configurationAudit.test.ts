@@ -68,8 +68,8 @@ describe("helpers de auditoria de configuração", () => {
 
   it("normaliza intervalo de datas para cobrir o dia final inteiro e rejeita intervalo invertido", () => {
     expect(normalizeDateRangeForReport("2026-01-01", "2026-01-10")).toEqual({
-      startIso: "2026-01-01T00:00:00",
-      endIso: "2026-01-10T23:59:59.999",
+      startIso: new Date("2026-01-01T00:00:00").toISOString(),
+      endIso: new Date("2026-01-10T23:59:59.999").toISOString(),
     });
     expect(normalizeDateRangeForReport("2026-01-10", "2026-01-01")).toBeNull();
     expect(normalizeDateRangeForReport("2026-01-01", "")).toBeNull();

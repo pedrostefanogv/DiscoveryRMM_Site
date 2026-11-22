@@ -100,6 +100,21 @@ function useCopyFeedback() {
   return { copied, copy };
 }
 
+function useDebouncedValue<T>(value: T, delayMs = 350): T {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebounced(value);
+    }, delayMs);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [value, delayMs]);
+
+  return debounced;
+}
+
 function ClearFieldButton({
   label,
   onClear,
@@ -189,11 +204,11 @@ export default function ConfigurationAudit() {
     setSearchParams,
   ]);
 
-  const deferredDays = useDeferredValue(days);
-  const deferredLimit = useDeferredValue(limit);
-  const deferredEntityId = useDeferredValue(entityId);
-  const deferredFieldName = useDeferredValue(fieldName);
-  const deferredUsername = useDeferredValue(username);
+  const debouncedDays = useDebouncedValue(days);
+  const debouncedLimit = useDebouncedValue(limit);
+  const debouncedEntityId = useDebouncedValue(entityId);
+  const debouncedFieldName = useDebouncedValue(fieldName);
+  const debouncedUsername = useDebouncedValue(username);
   const deferredSearch = useDeferredValue(search);
 
   const clientsQuery = useClients();
@@ -210,16 +225,16 @@ export default function ConfigurationAudit() {
     return map;
   }, [clientsQuery.data, sitesQuery.data]);
 
-  const parsedDays = clampAuditNumber(deferredDays, 30, 1, 365);
-  const parsedLimit = clampAuditNumber(deferredLimit, 200, 1, 1000);
+  const parsedDays = clampAuditNumber(debouncedDays, 30, 1, 365);
+  const parsedLimit = clampAuditNumber(debouncedLimit, 200, 1, 1000);
   const reportRange = normalizeDateRangeForReport(startDate, endDate);
   const isDateRangeInvalid = Boolean(
     startDate && endDate && endDate < startDate,
   );
 
-  const trimmedEntityId = deferredEntityId.trim();
-  const trimmedFieldName = deferredFieldName.trim();
-  const trimmedUsername = deferredUsername.trim();
+  const trimmedEntityId = debouncedEntityId.trim();
+  const trimmedFieldName = debouncedFieldName.trim();
+  const trimmedUsername = debouncedUsername.trim();
 
   const queryMode: QueryMode = useMemo(() => {
     if (reportRange !== null) {
@@ -246,29 +261,29 @@ export default function ConfigurationAudit() {
   const recentQuery = useRecentConfigurationAudit(
     parsedDays,
     parsedLimit,
-    queryMode === "recent",
+    !isDateRangeInvalid && queryMode === "recent",
   );
   const byEntityQuery = useEntityConfigurationAudit(
     entityType || "Server",
     trimmedEntityId,
     parsedLimit,
-    queryMode === "entity",
+    !isDateRangeInvalid && queryMode === "entity",
   );
   const byFieldQuery = useFieldConfigurationAudit(
     entityType || "Server",
     trimmedEntityId,
     trimmedFieldName,
-    queryMode === "field",
+    !isDateRangeInvalid && queryMode === "field",
   );
   const byUserQuery = useConfigurationAuditByUser(
     trimmedUsername,
     parsedLimit,
-    queryMode === "user",
+    !isDateRangeInvalid && queryMode === "user",
   );
   const reportQuery = useConfigurationAuditReport(
     reportRange?.startIso ?? "",
     reportRange?.endIso ?? "",
-    queryMode === "report",
+    !isDateRangeInvalid && queryMode === "report",
   );
 
   const activeQuery = useMemo(() => {
@@ -308,9 +323,9 @@ export default function ConfigurationAudit() {
         sortedEntries,
         {
           entityType: "",
-          entityId: deferredEntityId,
-          fieldName: deferredFieldName,
-          username: deferredUsername,
+          entityId,
+          fieldName,
+          username,
           startDate,
           endDate,
           search: deferredSearch,
@@ -318,14 +333,14 @@ export default function ConfigurationAudit() {
         entityNameById,
       ),
     [
-      deferredEntityId,
-      deferredFieldName,
       deferredSearch,
-      deferredUsername,
       endDate,
+      entityId,
       entityNameById,
+      fieldName,
       sortedEntries,
       startDate,
+      username,
     ],
   );
 
@@ -384,12 +399,16 @@ export default function ConfigurationAudit() {
   };
 
   const handleEntityTypeChange = (nextType: "" | ConfigurationEntityType) => {
-    setEntityType((prev) => {
-      if (prev !== nextType && (prev === "Client" || prev === "Site" || nextType === "Client" || nextType === "Site")) {
-        setEntityId("");
-      }
-      return nextType;
-    });
+    if (
+      entityType !== nextType &&
+      (entityType === "Client" ||
+        entityType === "Site" ||
+        nextType === "Client" ||
+        nextType === "Site")
+    ) {
+      setEntityId("");
+    }
+    setEntityType(nextType);
     setPage(1);
   };
 

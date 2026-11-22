@@ -82,12 +82,19 @@ export function normalizeDateRangeForReport(
   startDate: string,
   endDate: string,
 ): { startIso: string; endIso: string } | null {
-  const start = startDate.trim();
-  const end = endDate.trim();
-  if (!start || !end || end < start) return null;
+  const startStr = startDate.trim();
+  const endStr = endDate.trim();
+  if (!startStr || !endStr || endStr < startStr) return null;
+
+  const start = new Date(`${startStr}T00:00:00`);
+  const end = new Date(`${endStr}T23:59:59.999`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return null;
+  }
+
   return {
-    startIso: `${start}T00:00:00`,
-    endIso: `${end}T23:59:59.999`,
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
   };
 }
 

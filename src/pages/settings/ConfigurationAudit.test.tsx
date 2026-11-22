@@ -101,7 +101,7 @@ describe("ConfigurationAudit", () => {
     expect(mockReport).toHaveBeenLastCalledWith("", "", false);
   });
 
-  it("habilita apenas useConfigurationAuditReport com T00:00:00..T23:59:59.999 e valida intervalo invertido", () => {
+  it("habilita apenas useConfigurationAuditReport com intervalo UTC e desabilita queries em intervalo invertido", () => {
     renderPage();
 
     const startInput = screen.getByLabelText("Data início");
@@ -111,8 +111,8 @@ describe("ConfigurationAudit", () => {
     fireEvent.change(endInput, { target: { value: "2026-01-10" } });
 
     expect(mockReport).toHaveBeenLastCalledWith(
-      "2026-01-01T00:00:00",
-      "2026-01-10T23:59:59.999",
+      new Date("2026-01-01T00:00:00").toISOString(),
+      new Date("2026-01-10T23:59:59.999").toISOString(),
       true,
     );
     expect(mockRecent).toHaveBeenLastCalledWith(30, 200, false);
@@ -123,6 +123,7 @@ describe("ConfigurationAudit", () => {
       screen.getByText("A data final não pode ser anterior à data inicial."),
     ).toBeTruthy();
     expect(mockReport).toHaveBeenLastCalledWith("", "", false);
+    expect(mockRecent).toHaveBeenLastCalledWith(30, 200, false);
   });
 
   it("filtra por Entidade = Cliente localmente sem exigir Entity ID e exibe seletor de clientes", () => {
