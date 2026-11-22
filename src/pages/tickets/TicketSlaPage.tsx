@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import toast from "react-hot-toast";
@@ -308,6 +308,7 @@ export default function TicketSlaPage() {
 
   const [selectedClientId, setSelectedClientId] = useState(() => searchParams.get("client") ?? "");
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
+  const seededCalendarIdRef = useRef<string | null>(null);
   const [holidayCalendarId, setHolidayCalendarId] = useState<string | null>(null);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
@@ -529,6 +530,7 @@ export default function TicketSlaPage() {
 
   useEffect(() => {
     if (!editingCalendarId) {
+      seededCalendarIdRef.current = null;
       setCalendarForm({
         ...DEFAULT_CALENDAR_FORM,
         clientId: selectedClientId,
@@ -536,7 +538,11 @@ export default function TicketSlaPage() {
       return;
     }
 
-    if (calendarDetailQuery.data) {
+    if (
+      calendarDetailQuery.data &&
+      seededCalendarIdRef.current !== calendarDetailQuery.data.id
+    ) {
+      seededCalendarIdRef.current = calendarDetailQuery.data.id;
       setCalendarForm(toCalendarFormState(calendarDetailQuery.data));
     }
   }, [calendarDetailQuery.data, editingCalendarId, selectedClientId]);
@@ -590,6 +596,7 @@ export default function TicketSlaPage() {
   function closeCalendarModal() {
     setIsCalendarModalOpen(false);
     setEditingCalendarId(null);
+    seededCalendarIdRef.current = null;
     setCalendarForm({
       ...DEFAULT_CALENDAR_FORM,
       clientId: selectedClientId,
@@ -941,9 +948,8 @@ export default function TicketSlaPage() {
         toast.success("Regra de escalonamento criada.");
       }
 
-      setSelectedWorkflowProfileId(ruleForm.workflowProfileId);
       setIsRuleModalOpen(false);
-      resetRuleForm(ruleForm.workflowProfileId);
+      resetRuleForm(selectedWorkflowProfileId);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -998,8 +1004,8 @@ export default function TicketSlaPage() {
           variant="secondary"
           onClick={() => {
             void calendarsQuery.refetch();
-            void activeRulesQuery.refetch();
             if (selectedWorkflowProfileId) void profileRulesQuery.refetch();
+            else void activeRulesQuery.refetch();
           }}
           disabled={calendarsQuery.isFetching || activeRulesQuery.isFetching || profileRulesQuery.isFetching}
         >
@@ -1475,7 +1481,11 @@ export default function TicketSlaPage() {
               {editingCalendarId && (
                 <Button
                   variant="secondary"
-                  onClick={() => openHolidayModal(editingCalendarId)}
+                  onClick={() => {
+                    const calendarId = editingCalendarId;
+                    closeCalendarModal();
+                    openHolidayModal(calendarId);
+                  }}
                 >
                   <Icon name="calendar_month" className="h-4 w-4" />
                   Gerenciar feriados
