@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { Icon, Button, Card, CardHeader, ErrorDisplay, Loading, Select,
 PageHeader,
 } from "@/components/ui";
+import { AgentSearchSelect } from "@/components/agents/AgentSearchSelect";
 import { useAllSites, useClients, useIamGroups, useIamUsers, useSites } from "@/hooks";
 import {
   remoteConsentApi,
@@ -185,7 +186,7 @@ export default function RemoteConsentSettings({ embedded = false }: { embedded?:
   };
 
   const loadEffective = async () => {
-    if (!agentId) { toast.error("Informe o agentId."); return; }
+    if (!agentId) { toast.error("Selecione um agente."); return; }
     try {
       setEffective(await remoteConsentApi.getEffective(agentId, previewUserId || undefined));
     } catch (err) {
@@ -237,14 +238,15 @@ export default function RemoteConsentSettings({ embedded = false }: { embedded?:
       <Card>
         <CardHeader
           title="Política efetiva (preview)"
-          subtitle="Informe um agente e, opcionalmente, um usuário para ver a política e a origem de cada campo."
+          subtitle="Selecione um agente (dos que o seu perfil tem acesso) e, opcionalmente, um usuário para ver a política e a origem de cada campo."
           action={<Button size="sm" variant="ghost" onClick={() => void loadEffective()}><Icon name="refresh" className="mr-1 h-4 w-4" />Resolver</Button>}
         />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-xs text-muted">
-            Agent ID
-            <input className="mt-1 w-full rounded-md border border-border bg-surface px-2 py-1 text-sm" value={agentId} onChange={(event) => setAgentId(event.target.value)} />
-          </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AgentSearchSelect
+            value={agentId}
+            onChange={setAgentId}
+            label="Agente"
+          />
           <label className="text-xs text-muted">
             Usuário (opcional)
             <Select value={previewUserId} onChange={(event) => setPreviewUserId(event.target.value)} options={[

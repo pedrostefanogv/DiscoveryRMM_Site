@@ -1,13 +1,18 @@
+import { useMemo, useRef } from "react";
 import {
   useQuery,
   useMutation,
   useQueryClient,
   useInfiniteQuery,
+  useQueries,
   keepPreviousData,
 } from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
+import { useClients } from "./useClients";
+import { useAllSites } from "./useSites";
 import { LISTENING_PORTS_BACKEND_LIMIT, OPEN_SOCKETS_BACKEND_LIMIT } from "@/api/backendLimits";
 import type {
+  Agent,
   AgentSoftwareInventoryPage,
   AgentSoftwareOrder,
   UpdateAgentRequest,
@@ -183,6 +188,188 @@ export function useAgentsBySite(siteId: string) {
     refetchInterval: 300_000,
     refetchIntervalInBackground: false,
   });
+}
+
+/** Agente já resolvido com o cliente/site a que pertence (contexto de exibição). */
+export interface AccessibleAgent extends Agent {
+  clientId: string;
+  clientName: string;
+  siteName: string;
+}
+
+/**
+ * Carrega TODOS os agentes que o usuário tem acesso, para seleção em listas
+ * (ex.: preview da política de consentimento remoto).
+ *
+ * O recorte de tenant NÃO é feito aqui: ele vem do backend. `/clients` e
+ * `/sites` já devolvem apenas os clientes/sites permitidos pelo perfil, e
+ * `/agents/by-client|by-site` respondem 403 para escopo fora do permitido.
+ *
+ * A união de clientes + sites cobre também o perfil com acesso apenas a sites
+ * específicos (sem acesso ao cliente inteiro): esses não aparecem em
+ * `/clients`, então os agentes deles vêm por `by-site`. Sites de clientes já
+ * cobertos não são consultados de novo (evita chamadas duplicadas no perfil
+ * global).
+ *
+ * As chaves de cache são as mesmas de `useAgentsByClient`/`useAgentsBySite`
+ * (e da tela de agentes), então quem já visitou a listagem reaproveita o cache.
+ */
+export function useAccessibleAgents(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+
+  const clientsQuery = useClients();
+  const sitesQuery = useAllSites();
+
+  const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
+  const sites = useMemo(() => sitesQuery.data ?? [], [sitesQuery.data]);
+
+  const clientIds = useMemo(() => clients.map((client) => client.id), [clients]);
+  const accessibleClientIds = useMemo(
+    () => new Set(clientIds),
+    [clientIds],
+  );
+
+  // Só decide "sites não cobertos por clientes" DEPOIS que /clients respondeu.
+  // Enquanto /clients e /sites carregam em paralelo, a lista de clientes ainda
+  // está vazia: sem esta trava TODO site acessível seria tratado como
+  // "descoberto" e dispararia uma consulta by-site por site (rajada de
+  // requisições no perfil global, que já cobre tudo via by-client).
+  const clientsLoaded =
+    !clientsQuery.isLoading && clientsQuery.data !== undefined;
+
+  const uncoveredSiteIds = useMemo(
+    () =>
+      clientsLoaded
+        ? sites
+            .filter((site) => !accessibleClientIds.has(site.clientId))
+            .map((site) => site.id)
+        : [],
+    [clientsLoaded, sites, accessibleClientIds],
+  );
+
+  const clientAgentQueries = useQueries({
+    queries: clientIds.map((clientId) => ({
+      queryKey: KEYS.byClient(clientId),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        agentsApi.listByClient(clientId, { signal }),
+      enabled,
+      refetchInterval: 300_000,
+      refetchIntervalInBackground: false,
+    })),
+  });
+
+  const siteAgentQueries = useQueries({
+    queries: uncoveredSiteIds.map((siteId) => ({
+      queryKey: KEYS.bySite(siteId),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        agentsApi.listBySite(siteId, { signal }),
+      enabled,
+      refetchInterval: 300_000,
+      refetchIntervalInBackground: false,
+    })),
+  });
+
+  // O resultado de useQueries é um array NOVO a cada render. Se ele entrasse
+  // nas deps do useMemo abaixo, a mesclagem + ordenação rodaria a cada tecla
+  // digitada na busca (o seletor vive no mesmo componente). Guardamos o array
+  // numa ref e usamos `dataUpdatedAt` como assinatura: só remonta quando os
+  // dados realmente mudam (mesmo padrão do AgentList).
+  const clientAgentQueriesRef = useRef(clientAgentQueries);
+  clientAgentQueriesRef.current = clientAgentQueries;
+  const siteAgentQueriesRef = useRef(siteAgentQueries);
+  siteAgentQueriesRef.current = siteAgentQueries;
+
+  const agentDataSignature = [
+    ...clientAgentQueries.map((query) => query.dataUpdatedAt),
+    ...siteAgentQueries.map((query) => query.dataUpdatedAt),
+  ].join("|");
+
+  const agents = useMemo<AccessibleAgent[]>(() => {
+    const result: AccessibleAgent[] = [];
+    const seen = new Set<string>();
+
+    const push = (
+      agent: Agent,
+      context: { clientId: string; clientName: string; siteName: string },
+    ) => {
+      if (seen.has(agent.id)) return;
+      seen.add(agent.id);
+      result.push({
+        ...agent,
+        clientId: context.clientId,
+        clientName: context.clientName,
+        siteName: context.siteName,
+      });
+    };
+
+    const clientById = new Map(clients.map((client) => [client.id, client]));
+    clientAgentQueriesRef.current.forEach((query, index) => {
+      const clientId = clientIds[index];
+      if (!clientId) return;
+      const clientName = clientById.get(clientId)?.name ?? clientId;
+      for (const agent of query.data ?? []) {
+        push(agent, { clientId, clientName, siteName: "" });
+      }
+    });
+
+    const siteById = new Map(sites.map((site) => [site.id, site]));
+    siteAgentQueriesRef.current.forEach((query, index) => {
+      const siteId = uncoveredSiteIds[index];
+      if (!siteId) return;
+      const site = siteById.get(siteId);
+      for (const agent of query.data ?? []) {
+        push(agent, {
+          clientId: site?.clientId ?? agent.clientId ?? "",
+          clientName: site?.clientName ?? agent.clientId ?? "",
+          siteName: site?.name ?? agent.siteId,
+        });
+      }
+    });
+
+    // Nomes de site para os agentes carregados por cliente.
+    const siteNameById = new Map(sites.map((site) => [site.id, site.name]));
+    return result
+      .map((agent) => ({
+        ...agent,
+        siteName: siteNameById.get(agent.siteId) ?? agent.siteName,
+      }))
+      .sort((a, b) => {
+        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+        return a.hostname.localeCompare(b.hostname);
+      });
+    // A assinatura não aparece no corpo (os dados vêm das refs), por isso o
+    // eslint a considera "desnecessária" — mas é o gatilho correto de recálculo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    agentDataSignature,
+    clients,
+    sites,
+    clientIds,
+    uncoveredSiteIds,
+  ]);
+
+  // Todas as consultas de agentes falharam (ex.: perfil sem permissão de
+  // Agentes): trata como erro em vez de mentir "nenhum agente no escopo".
+  const agentQueries = [...clientAgentQueries, ...siteAgentQueries];
+  const allAgentQueriesFailed =
+    agentQueries.length > 0 && agentQueries.every((query) => query.isError);
+
+  // /sites é complementar (cobre escopo só-por-site). A falha dele só é fatal
+  // quando não há nenhuma lista de clientes para mostrar agentes — senão a tela
+  // ficaria inutilizável por um erro de um endpoint acessório.
+  const sitesFailureIsFatal = sitesQuery.isError && clients.length === 0;
+
+  return {
+    agents,
+    isLoading:
+      enabled &&
+      (clientsQuery.isLoading ||
+        sitesQuery.isLoading ||
+        clientAgentQueries.some((query) => query.isLoading) ||
+        siteAgentQueries.some((query) => query.isLoading)),
+    isError:
+      clientsQuery.isError || sitesFailureIsFatal || allAgentQueriesFailed,
+  };
 }
 
 export function useAgent(id: string | undefined) {
