@@ -280,7 +280,7 @@ export default function DeployTokens() {
         if (activeTab === 'manage') next.set('tab', 'manage');
         else next.delete('tab');
 
-        return next;
+        return next.toString() === prev.toString() ? prev : next;
       },
       { replace: true },
     );
@@ -857,6 +857,7 @@ export default function DeployTokens() {
                         placeholder="Descrição, ID ou prefixo do token"
                         value={tokenSearch}
                         onChange={e => setTokenSearch(e.target.value)}
+                        className="pr-8"
                       />
                       {tokenSearch && (
                         <button

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { DetailTabs } from "@/components/entity/DetailTabs";
 import toast from "react-hot-toast";
 import { DepartmentCustomFieldsSection } from "@/components/configuration/DepartmentCustomFieldsSection";
 import { InheritableFieldToggle } from "@/components/configuration/InheritableFieldToggle";
@@ -723,6 +724,7 @@ function DepartmentMembersCard({
   const remove = useRemoveDepartmentMember();
   const users = useIamUsers();
   const [userId, setUserId] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; name: string } | null>(null);
 
   const effective = useMemo(
     () => normalizeDepartmentEffective(effectiveQuery.data),
@@ -773,10 +775,7 @@ function DepartmentMembersCard({
                 aria-label="Remover membro"
                 className="p-1 text-muted hover:text-danger"
                 onClick={() =>
-                  remove.mutate(
-                    { departmentId, userId: m.userId },
-                    { onError: () => toast.error("Erro ao remover membro") },
-                  )
+                  setRemoveTarget({ userId: m.userId, name: m.userName ?? m.userId })
                 }
               >
                 <Icon name="delete" className="h-4 w-4" />
@@ -817,7 +816,10 @@ function DepartmentMembersCard({
               add.mutate(
                 { departmentId, userId },
                 {
-                  onSuccess: () => setUserId(""),
+                  onSuccess: () => {
+                    setUserId("");
+                    toast.success("Membro adicionado ao departamento.");
+                  },
                   onError: () => toast.error("Erro ao adicionar membro"),
                 },
               )
@@ -827,6 +829,34 @@ function DepartmentMembersCard({
           </Button>
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(removeTarget)}
+        title="Remover membro"
+        message={
+          removeTarget
+            ? `Remover "${removeTarget.name}" da equipe deste departamento?`
+            : ""
+        }
+        confirmLabel="Remover"
+        tone="danger"
+        isLoading={remove.isPending}
+        onConfirm={() => {
+          if (!removeTarget) return;
+          remove.mutate(
+            { departmentId, userId: removeTarget.userId },
+            {
+              onSuccess: () => {
+                setRemoveTarget(null);
+                toast.success("Membro removido do departamento.");
+              },
+              onError: () => toast.error("Erro ao remover membro"),
+            },
+          );
+        }}
+        onClose={() => {
+          if (!remove.isPending) setRemoveTarget(null);
+        }}
+      />
     </Card>
   );
 }
@@ -843,17 +873,36 @@ export default function DepartmentDetailPage() {
   const updateDepartment = useUpdateDepartment();
   const deleteDepartment = useDeleteDepartment();
 
-  const [tab, setTab] = useState<DepartmentTab>("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get("tab");
+  const tab: DepartmentTab =
+    rawTab === "fields" || rawTab === "team" ? rawTab : "general";
+  const setTab = useCallback(
+    (nextTab: DepartmentTab) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (nextTab === "general") next.delete("tab");
+          else next.set("tab", nextTab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [form, setForm] = useState<UpdateDepartmentRequest | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   /** Erros de validação do último save (422/400), exibidos no formulário. */
   const [saveErrors, setSaveErrors] = useState<string[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
   // Semeadura do form: só quando muda o departamento; refetch não sobrescreve
   // edições pendentes do usuário.
   const seededDepartmentIdRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const markDirty = () => {
     dirtyRef.current = true;
+    setIsDirty(true);
   };
 
   const clientsById = useMemo(
@@ -877,7 +926,10 @@ export default function DepartmentDetailPage() {
 
     setForm(buildDepartmentForm(departmentQuery.data, effective));
     seededDepartmentIdRef.current = departmentQuery.data.id;
-    if (entityChanged) dirtyRef.current = false;
+    if (entityChanged) {
+      dirtyRef.current = false;
+      setIsDirty(false);
+    }
   }, [departmentQuery.data, effective]);
 
   if (!departmentId) {
@@ -961,15 +1013,29 @@ export default function DepartmentDetailPage() {
       : strategyOrigin;
 
   const weightsInherited =
+    canInherit &&
+    form.aiAssignmentWeightsJson === null &&
     (origins.aiAssignmentWeightsJson ?? origins.aiAssignmentWeightsJsonOverride) ===
-    "inherited-global";
+      "inherited-global";
   const weights = parseWeights(
     weightsInherited
       ? fieldText(effectiveConfig.aiAssignmentWeightsJson, "")
       : form.aiAssignmentWeightsJson,
   );
+  const weightsSum = Object.values(weights).reduce(
+    (acc, val) => acc + (Number.isFinite(val) ? val : 0),
+    0,
+  );
 
   const valid = form.name.trim().length >= 2;
+
+  function handleDiscard() {
+    if (!departmentQuery.data) return;
+    setForm(buildDepartmentForm(departmentQuery.data, effective));
+    setSaveErrors([]);
+    dirtyRef.current = false;
+    setIsDirty(false);
+  }
 
   async function handleSave() {
     const currentForm = form;
@@ -989,6 +1055,7 @@ export default function DepartmentDetailPage() {
       });
       setSaveErrors([]);
       dirtyRef.current = false;
+      setIsDirty(false);
       toast.success("Departamento atualizado com sucesso.");
       void departmentQuery.refetch();
       void effectiveQuery.refetch();
@@ -1025,11 +1092,22 @@ function handleDelete() {
       <PageHeader
         title={department.name}
         description={desc}
-        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+        onBack={() => navigate("/tickets/departments")}
+        breadcrumb={<Link to="/tickets/departments" className="transition-colors hover:text-foreground">Departamentos</Link>}
       >
-        <Button variant="ghost" onClick={() => navigate("/tickets/departments")}>
-          <Icon name="arrow_back" className="h-4 w-4" />
-          Voltar para listagem
+        <Button
+          variant="secondary"
+          onClick={() => {
+            void departmentQuery.refetch();
+            void effectiveQuery.refetch();
+          }}
+          disabled={departmentQuery.isFetching || effectiveQuery.isFetching}
+        >
+          <Icon
+            name="refresh"
+            className={`h-4 w-4 ${departmentQuery.isFetching || effectiveQuery.isFetching ? "animate-spin" : ""}`}
+          />
+          Atualizar
         </Button>
       </PageHeader>
 
@@ -1054,45 +1132,23 @@ function handleDelete() {
         />
       </div>
 
-      <div className="inline-flex rounded-xl border border-border bg-surface-light p-1">
-        <button
-          type="button"
-          onClick={() => setTab("general")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "general"
-              ? "bg-primary/20 text-foreground"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          <Icon name="settings" className="mr-1.5 inline h-4 w-4" />
-          Geral
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("fields")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "fields"
-              ? "bg-primary/20 text-foreground"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          <Icon name="fact_check" className="mr-1.5 inline h-4 w-4" />
-          Campos customizados
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("team")}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "team"
-              ? "bg-primary/20 text-foreground"
-              : "text-muted hover:text-foreground"
-          }`}
-        >
-          <Icon name="group" className="mr-1.5 inline h-4 w-4" />
-          Equipe
-        </button>
-      </div>
+      <DetailTabs
+        tabs={[
+          { id: "general", label: "Geral", icon: "settings" },
+          { id: "fields", label: "Campos customizados", icon: "fact_check" },
+          { id: "team", label: "Equipe", icon: "group" },
+        ]}
+        active={tab}
+        onChange={setTab}
+        ariaLabel="Seções do departamento"
+        panelIdPrefix="department-detail-tabs"
+      />
 
+      <div
+        id="department-detail-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`department-detail-tabs-tab-${tab}`}
+      >
       {tab === "general" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
           <Card>
@@ -1275,7 +1331,23 @@ function handleDelete() {
 
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <p className="text-xs uppercase tracking-wide text-muted">Pesos do score</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs uppercase tracking-wide text-muted">Pesos do score</p>
+                        <Badge color={Math.abs(weightsSum - 1) <= 0.02 ? "success" : "warning"}>
+                          Soma: {weightsSum.toFixed(2)}
+                        </Badge>
+                        {!weightsInherited && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOverride("aiAssignmentWeightsJson", JSON.stringify(DEFAULT_WEIGHTS))
+                            }
+                            className="text-[11px] text-primary hover:underline"
+                          >
+                            Restaurar padrão
+                          </button>
+                        )}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <InheritedOriginBadge
                           origin={fieldOrigin("aiAssignmentWeightsJson")}
@@ -1351,7 +1423,7 @@ function handleDelete() {
                 <p className="text-xs uppercase tracking-wide text-muted">Cliente vinculado</p>
                 <p className="mt-1 text-foreground">{clientName ?? "Global"}</p>
                 <p className="mt-1 text-xs text-muted">
-                  O escopo cliente/global nao pode ser alterado por este endpoint.
+                  O escopo cliente/global não pode ser alterado por este endpoint.
                 </p>
               </div>
 
@@ -1370,7 +1442,19 @@ function handleDelete() {
                 Ativo
               </label>
 
-              <div className="flex flex-wrap justify-end gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-3">
+                {isDirty && (
+                  <>
+                    <Badge color="warning">Alterações não salvas</Badge>
+                    <Button
+                      variant="ghost"
+                      onClick={handleDiscard}
+                      disabled={updateDepartment.isPending}
+                    >
+                      Descartar
+                    </Button>
+                  </>
+                )}
                 <Button
                   onClick={() => void handleSave()}
                   loading={updateDepartment.isPending}
@@ -1422,6 +1506,7 @@ function handleDelete() {
           <DepartmentLearningCard departmentId={department.id} />
         </div>
       )}
+      </div>
 
       <ConfirmDialog
         open={confirmDeleteOpen}
@@ -1459,7 +1544,10 @@ function DepartmentAssignmentTeamCard({ departmentId }: { departmentId: string }
       <div className="space-y-3">
         {metrics.isLoading && <Loading />}
         {metrics.isError && (
-          <p className="text-sm text-danger">Não foi possível carregar as métricas da equipe.</p>
+          <ErrorDisplay
+            message="Não foi possível carregar as métricas da equipe."
+            onRetry={() => void metrics.refetch()}
+          />
         )}
         {!metrics.isLoading && !metrics.isError && rows.length === 0 && (
           <p className="text-sm text-muted">Nenhum membro cadastrado neste departamento.</p>
@@ -1502,13 +1590,28 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
   // (para a IA e para o gestor enxergarem a equipe efetiva), mas a edição fica
   // bloqueada aqui; o backend responde 422 se alguém tentar mesmo assim.
   const inherited = isInheritedMember(member);
-  const [tags, setTags] = useState(member.skillTags.join(", "));
+  const skillTagsText = member.skillTags.join(", ");
+  const [tags, setTags] = useState(skillTagsText);
   const [level, setLevel] = useState(String(member.skillLevel));
   const [maxOpen, setMaxOpen] = useState(
     member.maxOpenTickets == null ? "" : String(member.maxOpenTickets),
   );
   const [weight, setWeight] = useState(String(member.weight));
   const [accepts, setAccepts] = useState(member.acceptsAiAssignment);
+
+  useEffect(() => {
+    setTags(skillTagsText);
+    setLevel(String(member.skillLevel));
+    setMaxOpen(member.maxOpenTickets == null ? "" : String(member.maxOpenTickets));
+    setWeight(String(member.weight));
+    setAccepts(member.acceptsAiAssignment);
+  }, [
+    skillTagsText,
+    member.skillLevel,
+    member.maxOpenTickets,
+    member.weight,
+    member.acceptsAiAssignment,
+  ]);
 
   const m = member.metrics;
 
@@ -1680,7 +1783,10 @@ export function DepartmentLearningCard({ departmentId }: { departmentId: string 
       <div className="space-y-3">
         {suggestions.isLoading && <Loading />}
         {suggestions.isError && (
-          <p className="text-sm text-danger">Não foi possível carregar as sugestões.</p>
+          <ErrorDisplay
+            message="Não foi possível carregar as sugestões."
+            onRetry={() => void suggestions.refetch()}
+          />
         )}
         {!suggestions.isLoading && !suggestions.isError && pending === 0 && (
           <p className="text-sm text-muted">

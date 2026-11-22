@@ -551,7 +551,7 @@ export default function TicketList() {
         if (filterAssignedToUserId) next.set('assigned', filterAssignedToUserId); else next.delete('assigned');
         if (filterMyDepartments) next.set('myTeam', '1'); else next.delete('myTeam');
         if (filterSlaBreached) next.set('slaBreached', '1'); else next.delete('slaBreached');
-        return next;
+        return next.toString() === prev.toString() ? prev : next;
       },
       { replace: true },
     );
@@ -1399,6 +1399,7 @@ export default function TicketList() {
                   applyFilterChange(() => setFilterText(event.target.value));
                 }}
                 placeholder="Título, descrição, categoria ou respostas"
+                className="pr-8"
               />
               {filterText && (
                 <button

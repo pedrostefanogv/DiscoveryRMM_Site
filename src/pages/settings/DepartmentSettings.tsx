@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   useDepartments,
@@ -79,12 +79,36 @@ export function filterDepartmentsByScope<T extends { clientId: string | null }>(
   return departments.filter((department) => department.clientId === scope);
 }
 
+type DepartmentStatusFilter = "all" | "active" | "inactive";
+
 export default function DepartmentSettings() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [scope, setScope] = useState(ALL_DEPARTMENTS_SCOPE);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [scope, setScope] = useState(() => searchParams.get("scope") ?? ALL_DEPARTMENTS_SCOPE);
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [statusFilter, setStatusFilter] = useState<DepartmentStatusFilter>(() => {
+    const raw = searchParams.get("status");
+    return raw === "active" || raw === "inactive" ? raw : "all";
+  });
   const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (scope) next.set("scope", scope);
+        else next.delete("scope");
+        if (searchTerm.trim()) next.set("q", searchTerm.trim());
+        else next.delete("q");
+        if (statusFilter !== "all") next.set("status", statusFilter);
+        else next.delete("status");
+        return next.toString() === prev.toString() ? prev : next;
+      },
+      { replace: true },
+    );
+  }, [scope, searchTerm, statusFilter, setSearchParams]);
 
   // Uma única consulta pede TODOS os escopos (allClients) e o filtro é aplicado
   // sobre a lista, então o rótulo sempre bate com o exibido. Sem allClients a
@@ -124,10 +148,13 @@ export default function DepartmentSettings() {
   );
 
   const filteredDepartments = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase("pt-BR");
-    if (!term) return scopedDepartments;
+    const term = deferredSearchTerm.trim().toLocaleLowerCase("pt-BR");
 
     return scopedDepartments.filter((department) => {
+      if (statusFilter === "active" && !department.isActive) return false;
+      if (statusFilter === "inactive" && department.isActive) return false;
+      if (!term) return true;
+
       const clientName = department.clientId
         ? clientsById.get(department.clientId) ?? ""
         : "global";
@@ -142,7 +169,9 @@ export default function DepartmentSettings() {
         .toLocaleLowerCase("pt-BR")
         .includes(term);
     });
-  }, [clientsById, searchTerm, scopedDepartments]);
+  }, [clientsById, deferredSearchTerm, scopedDepartments, statusFilter]);
+
+  const hasActiveFilters = Boolean(scope || searchTerm.trim() || statusFilter !== "all");
 
   const totalDepartments = scopedDepartments.length;
   const globalDepartments = scopedDepartments.filter(
@@ -173,8 +202,19 @@ export default function DepartmentSettings() {
       <PageHeader
         title="Departamentos"
         description="Estruture atendimento por cliente e mantenha cada departamento com uma URL própria para consulta e configuração."
-        breadcrumb={<Link to="/settings" className="transition-colors hover:text-foreground">Configurações</Link>}
+        breadcrumb={<Link to="/tickets" className="transition-colors hover:text-foreground">Chamados</Link>}
       >
+        <Button
+          variant="secondary"
+          onClick={() => {
+            void depts.refetch();
+            void clients.refetch();
+          }}
+          disabled={depts.isFetching || clients.isFetching}
+        >
+          <Icon name="refresh" className={`h-4 w-4 ${depts.isFetching || clients.isFetching ? "animate-spin" : ""}`} />
+          Atualizar
+        </Button>
         <Button onClick={() => setCreateOpen(true)}>
           <Icon name="add" className="h-4 w-4" />
           Novo departamento
@@ -182,28 +222,101 @@ export default function DepartmentSettings() {
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon="apartment" label="Total" value={totalDepartments} tone="primary" />
-        <StatCard icon="public" label="Globais" value={globalDepartments} tone="accent" />
+        <StatCard
+          icon="apartment"
+          label="Total"
+          value={totalDepartments}
+          tone="primary"
+          active={scope === ALL_DEPARTMENTS_SCOPE && statusFilter === "all"}
+          onClick={() => {
+            setScope(ALL_DEPARTMENTS_SCOPE);
+            setStatusFilter("all");
+          }}
+        />
+        <StatCard
+          icon="public"
+          label="Globais"
+          value={globalDepartments}
+          tone="accent"
+          active={scope === GLOBAL_DEPARTMENTS_SCOPE}
+          onClick={() =>
+            setScope((current) =>
+              current === GLOBAL_DEPARTMENTS_SCOPE ? ALL_DEPARTMENTS_SCOPE : GLOBAL_DEPARTMENTS_SCOPE,
+            )
+          }
+        />
         <StatCard icon="group" label="Por cliente" value={clientDepartments} tone="success" />
-        <StatCard icon="apartment" label="Inativos" value={inactiveDepartments} tone="warning" />
+        <StatCard
+          icon="apartment"
+          label="Inativos"
+          value={inactiveDepartments}
+          tone="warning"
+          active={statusFilter === "inactive"}
+          onClick={() =>
+            setStatusFilter((current) => (current === "inactive" ? "all" : "inactive"))
+          }
+        />
       </div>
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
-          <Select
-            label="Filtrar por escopo"
-            options={scopeOpts}
-            value={scope}
-            onChange={(event) => setScope(event.target.value)}
-            hint="A lista mostra exatamente o escopo escolhido."
-          />
-          <Input
-            label="Buscar departamento"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Nome, descrição, cliente ou ordem"
-          />
+        <div className="grid gap-4 md:grid-cols-12">
+          <div className="md:col-span-4">
+            <Select
+              label="Filtrar por escopo"
+              options={scopeOpts}
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+            />
+          </div>
+          <div className="md:col-span-5">
+            <div className="relative">
+              <Input
+                label="Buscar departamento"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Nome, descrição, cliente ou ordem"
+                className="pr-8"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  aria-label="Limpar busca de departamentos"
+                  className="absolute right-2.5 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="md:col-span-3">
+            <Select
+              label="Status"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as DepartmentStatusFilter)}
+              options={[
+                { value: "all", label: "Todos" },
+                { value: "active", label: "Ativos" },
+                { value: "inactive", label: "Inativos" },
+              ]}
+            />
+          </div>
         </div>
+        {hasActiveFilters && (
+          <div className="mt-3 flex justify-end border-t border-border/60 pt-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setScope(ALL_DEPARTMENTS_SCOPE);
+                setSearchTerm("");
+                setStatusFilter("all");
+              }}
+            >
+              Limpar filtros
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card>
@@ -221,10 +334,17 @@ export default function DepartmentSettings() {
 
           {totalDepartments > 0 && filteredDepartments.length === 0 && (
             <div className="rounded-xl border border-border bg-surface-light px-4 py-5 text-sm text-muted">
-              <p>Nenhum departamento encontrado para a busca atual.</p>
+              <p>Nenhum departamento encontrado para os filtros atuais.</p>
               <div className="mt-2">
-                <Button size="sm" variant="ghost" onClick={() => setSearchTerm("")}>
-                  Limpar busca
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setStatusFilter("all");
+                  }}
+                >
+                  Limpar filtros
                 </Button>
               </div>
             </div>
@@ -290,6 +410,7 @@ export default function DepartmentSettings() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         clients={clients.data ?? []}
+        defaultClientId={scope && scope !== GLOBAL_DEPARTMENTS_SCOPE ? scope : null}
         onCreated={(department) => navigate(`/tickets/departments/${department.id}`)}
       />
     </div>
@@ -300,11 +421,13 @@ function CreateDepartmentModal({
   open,
   onClose,
   clients,
+  defaultClientId,
   onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   clients: Array<{ id: string; name: string }>;
+  defaultClientId?: string | null;
   onCreated: (department: Department) => void;
 }) {
   const create = useCreateDepartment();
@@ -312,6 +435,15 @@ function CreateDepartmentModal({
   const globals = useGlobalDepartments(open);
   const [form, setForm] = useState<CreateDepartmentRequest>({ ...EMPTY_CREATE_FORM });
   const [createErrors, setCreateErrors] = useState<string[]>([]);
+  const prevOpenRef = useRef(open);
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setForm({ ...EMPTY_CREATE_FORM, clientId: defaultClientId ?? null });
+      setCreateErrors([]);
+    }
+    prevOpenRef.current = open;
+  }, [open, defaultClientId]);
 
   const clientOpts = useMemo(
     () => [
