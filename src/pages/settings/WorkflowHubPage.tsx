@@ -33,7 +33,7 @@ export default function WorkflowHubPage({ initialTab = 'states' }: WorkflowHubPa
     setActiveTab(tab);
     const targetPath = tab === 'states' ? '/settings/workflow' : '/settings/workflow-profiles';
     if (location.pathname !== targetPath) {
-      navigate(targetPath, { replace: true });
+      navigate(`${targetPath}${location.search}`, { replace: true });
     }
     tabRefs.current[tab]?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   };
@@ -73,12 +73,14 @@ export default function WorkflowHubPage({ initialTab = 'states' }: WorkflowHubPa
           return (
             <button
               key={tab.id}
+              id={`workflow-hub-tab-${tab.id}`}
               ref={(el) => {
                 tabRefs.current[tab.id] = el;
               }}
               type="button"
               role="tab"
               aria-selected={isSelected}
+              aria-controls="workflow-hub-panel"
               tabIndex={isSelected ? 0 : -1}
               onClick={() => selectTab(tab.id)}
               onKeyDown={(e) => handleKeyDown(e, index)}
@@ -96,7 +98,11 @@ export default function WorkflowHubPage({ initialTab = 'states' }: WorkflowHubPa
         })}
       </div>
 
-      <div role="tabpanel">
+      <div
+        id="workflow-hub-panel"
+        role="tabpanel"
+        aria-labelledby={`workflow-hub-tab-${activeTab}`}
+      >
         {activeTab === 'states' ? <WorkflowSettings embedded /> : <WorkflowProfileSettings embedded />}
       </div>
     </div>

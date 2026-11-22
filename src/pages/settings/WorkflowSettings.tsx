@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useSearchParams } from "react-router-dom";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -13,7 +13,20 @@ import { buildStateTicketCounts, buildWorkflowReorder, sortStatesByOrder } from 
 import toast from 'react-hot-toast';
 
 export default function WorkflowSettings({ embedded = false }: { embedded?: boolean } = {}) {
-  const [clientId, setClientId] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [clientId, setClientId] = useState(() => searchParams.get('client') ?? '');
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (clientId) next.set('client', clientId);
+        else next.delete('client');
+        return next.toString() === prev.toString() ? prev : next;
+      },
+      { replace: true },
+    );
+  }, [clientId, setSearchParams]);
   const clientsQuery = useClients();
   const selectedClientId = clientId || undefined;
 
@@ -31,6 +44,10 @@ export default function WorkflowSettings({ embedded = false }: { embedded?: bool
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const orderedStates = useMemo(() => sortStatesByOrder(states.data ?? []), [states.data]);
+  const nextSortOrder = useMemo(
+    () => (orderedStates.length > 0 ? Math.max(...orderedStates.map((s) => s.sortOrder)) + 1 : 1),
+    [orderedStates],
+  );
   const stateMap = useMemo(() => new Map(orderedStates.map(s => [s.id, s])), [orderedStates]);
   const stateCounts = useMemo(() => buildStateTicketCounts(kpiQuery.data?.byState), [kpiQuery.data]);
 
@@ -83,15 +100,34 @@ export default function WorkflowSettings({ embedded = false }: { embedded?: bool
       />
       )}
 
-      <div className="max-w-md">
-        <Select
-          label="Cliente"
-          options={clientOptions}
-          value={clientId}
-          onChange={e => handleClientChange(e.target.value)}
-          hint="Estados globais valem para todos os clientes. Estados de cliente só aparecem nos chamados daquele cliente."
-        />
-      </div>
+      <Card>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-[240px] max-w-md flex-1">
+            <Select
+              label="Cliente"
+              options={clientOptions}
+              value={clientId}
+              onChange={e => handleClientChange(e.target.value)}
+              hint="Estados globais valem para todos os clientes. Estados de cliente só aparecem nos chamados daquele cliente."
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              void states.refetch();
+              void transitions.refetch();
+              if ('refetch' in kpiQuery && typeof kpiQuery.refetch === 'function') {
+                void kpiQuery.refetch();
+              }
+            }}
+            disabled={states.isFetching || transitions.isFetching}
+          >
+            <Icon name="refresh" className={`h-4 w-4 ${states.isFetching || transitions.isFetching ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
+        </div>
+      </Card>
 
       {states.isLoading ? (
         <Loading />
@@ -141,18 +177,24 @@ export default function WorkflowSettings({ embedded = false }: { embedded?: bool
                 </Button>
               }
             />
-            <div className="space-y-2">
-              {(transitions.data ?? []).map(t => {
-                const from = stateMap.get(t.fromStateId);
-                const to = stateMap.get(t.toStateId);
-                return (
-                  <TransitionRow key={t.id} id={t.id} name={t.name} fromName={from?.name ?? '?'} fromColor={from?.color ?? null} toName={to?.name ?? '?'} toColor={to?.color ?? null} />
-                );
-              })}
-              {(transitions.data?.length ?? 0) === 0 && (
-                <p className="text-sm text-muted">Nenhuma transição</p>
-              )}
-            </div>
+            {transitions.isLoading ? (
+              <Loading />
+            ) : transitions.isError ? (
+              <ErrorDisplay onRetry={() => void transitions.refetch()} />
+            ) : (
+              <div className="space-y-2">
+                {(transitions.data ?? []).map(t => {
+                  const from = stateMap.get(t.fromStateId);
+                  const to = stateMap.get(t.toStateId);
+                  return (
+                    <TransitionRow key={t.id} id={t.id} name={t.name} fromName={from?.name ?? '?'} fromColor={from?.color ?? null} toName={to?.name ?? '?'} toColor={to?.color ?? null} />
+                  );
+                })}
+                {(transitions.data?.length ?? 0) === 0 && (
+                  <p className="text-sm text-muted">Nenhuma transição</p>
+                )}
+              </div>
+            )}
           </Card>
         </>
       )}
@@ -160,6 +202,7 @@ export default function WorkflowSettings({ embedded = false }: { embedded?: bool
       <CreateStateModal
         open={stateModalOpen}
         clientId={selectedClientId ?? null}
+        defaultSortOrder={nextSortOrder}
         onClose={() => setStateModalOpen(false)}
       />
       <CreateTransitionModal
@@ -312,7 +355,7 @@ function StateCard({ state, ticketCount, showCount, reorderDisabled, onEdit }: {
         tone="danger"
         isLoading={deleteState.isPending}
         onConfirm={handleConfirmDelete}
-        onClose={() => setConfirmDeleteOpen(false)}
+        onClose={() => { if (!deleteState.isPending) setConfirmDeleteOpen(false); }}
       />
     </div>
   );
@@ -320,6 +363,18 @@ function StateCard({ state, ticketCount, showCount, reorderDisabled, onEdit }: {
 
 function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id: string; name: string; fromName: string; fromColor: string | null; toName: string; toColor: string | null }) {
   const deleteTrans = useDeleteWorkflowTransition();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  const handleConfirmDelete = () => {
+    deleteTrans.mutate(id, {
+      onSuccess: () => {
+        setConfirmDeleteOpen(false);
+        toast.success('Transição excluída');
+      },
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : 'Erro ao excluir a transição'),
+    });
+  };
 
   return (
     <div className="flex items-center gap-3 rounded-lg bg-surface-light px-4 py-2">
@@ -334,28 +389,48 @@ function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id:
       </span>
       <span className="ml-auto text-xs text-muted">{name}</span>
       <button
-        onClick={() => deleteTrans.mutate(id, {
-          onSuccess: () => toast.success('Transição excluída'),
-          onError: (error) =>
-            toast.error(error instanceof Error ? error.message : 'Erro ao excluir a transição'),
-        })}
+        type="button"
+        onClick={() => setConfirmDeleteOpen(true)}
         aria-label="Excluir transição"
         className="p-1 text-muted hover:text-danger transition-colors"
       >
         <Icon name="delete" className="h-3.5 w-3.5" />
       </button>
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Excluir transição"
+        message={`Excluir a transição "${name}" (${fromName} → ${toName})?`}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteTrans.isPending}
+        onConfirm={handleConfirmDelete}
+        onClose={() => { if (!deleteTrans.isPending) setConfirmDeleteOpen(false); }}
+      />
     </div>
   );
 }
 
-function CreateStateModal({ open, clientId, onClose }: { open: boolean; clientId: string | null; onClose: () => void }) {
+function CreateStateModal({ open, clientId, defaultSortOrder, onClose }: { open: boolean; clientId: string | null; defaultSortOrder: number; onClose: () => void }) {
   const create = useCreateWorkflowState();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#6366f1');
   const [isInitial, setIsInitial] = useState(false);
   const [isFinal, setIsFinal] = useState(false);
-  const [sortOrder, setSortOrder] = useState(0);
+  const [sortOrder, setSortOrder] = useState(defaultSortOrder);
   const [pausesSla, setPausesSla] = useState(false);
+  const prevOpenRef = useRef(open);
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setName('');
+      setColor('#6366f1');
+      setIsInitial(false);
+      setIsFinal(false);
+      setSortOrder(defaultSortOrder);
+      setPausesSla(false);
+    }
+    prevOpenRef.current = open;
+  }, [open, defaultSortOrder]);
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -467,6 +542,17 @@ function CreateTransitionModal({ open, clientId, onClose, states }: { open: bool
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const prevOpenRef = useRef(open);
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setName('');
+      setFromId('');
+      setToId('');
+      setValidationError(null);
+    }
+    prevOpenRef.current = open;
+  }, [open]);
 
   const stateOptions = [
     { value: '', label: 'Selecione...' },
@@ -515,16 +601,16 @@ function CreateTransitionModal({ open, clientId, onClose, states }: { open: bool
         </p>
         <FieldHint text={clientId ? 'A transição será criada para o cliente selecionado.' : STATE_HELP.client} />
         <Field label="Nome" htmlFor="transition-name" hint={TRANSITION_HELP.name}>
-          <Input id="transition-name" value={name} onChange={e => setName(e.target.value)} />
+          <Input id="transition-name" value={name} onChange={e => { setName(e.target.value); setValidationError(null); }} />
         </Field>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="De" htmlFor="transition-from" hint={TRANSITION_HELP.from}>
-            <select id="transition-from" value={fromId} onChange={e => setFromId(e.target.value)} className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none">
+            <select id="transition-from" value={fromId} onChange={e => { setFromId(e.target.value); setValidationError(null); }} className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none">
               {stateOptions.map(o => <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>)}
             </select>
           </Field>
           <Field label="Para" htmlFor="transition-to" hint={TRANSITION_HELP.to}>
-            <select id="transition-to" value={toId} onChange={e => setToId(e.target.value)} className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none">
+            <select id="transition-to" value={toId} onChange={e => { setToId(e.target.value); setValidationError(null); }} className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none">
               {stateOptions.map(o => <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>)}
             </select>
           </Field>
