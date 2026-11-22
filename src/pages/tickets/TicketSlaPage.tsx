@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import toast from "react-hot-toast";
 import type {
@@ -11,17 +11,20 @@ import type {
   UserDto,
   WorkflowProfile,
 } from "@/api";
-import { Icon,
+import {
+  Icon,
   Badge,
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   ErrorDisplay,
   Input,
   Loading,
   Modal,
+  PageHeader,
   Select,
-PageHeader,
+  StatCard,
 } from "@/components/ui";
 import {
   useAddSlaCalendarHoliday,
@@ -49,7 +52,7 @@ const WORKDAY_OPTIONS = [
   { value: 3, label: "Qua" },
   { value: 4, label: "Qui" },
   { value: 5, label: "Sex" },
-  { value: 6, label: "Sab" },
+  { value: 6, label: "Sáb" },
   { value: 0, label: "Dom" },
 ];
 
@@ -112,15 +115,19 @@ const HOLIDAY_TYPE_OPTIONS = [
   { value: "2", label: "Relativo (cálculo por regra - ex: 3ª seg de jan)" },
 ];
 
+const DEFAULT_TIMEZONE = TIMEZONE_OPTIONS.some((o) => o.value === "America/Sao_Paulo")
+  ? "America/Sao_Paulo"
+  : "UTC";
+
 const RELATIVE_METHOD_OPTIONS = [
-  { value: "0", label: "Enesima ocorrencia de dia da semana" },
-  { value: "1", label: "Enesimo dia util do mes" },
+  { value: "0", label: "Enésima ocorrência de dia da semana" },
+  { value: "1", label: "Enésimo dia útil do mês" },
 ];
 
 const MONTH_OPTIONS = [
   { value: "1", label: "Janeiro" },
   { value: "2", label: "Fevereiro" },
-  { value: "3", label: "Marco" },
+  { value: "3", label: "Março" },
   { value: "4", label: "Abril" },
   { value: "5", label: "Maio" },
   { value: "6", label: "Junho" },
@@ -135,11 +142,11 @@ const MONTH_OPTIONS = [
 const DAY_OF_WEEK_OPTIONS = [
   { value: "0", label: "Domingo" },
   { value: "1", label: "Segunda-feira" },
-  { value: "2", label: "Terca-feira" },
+  { value: "2", label: "Terça-feira" },
   { value: "3", label: "Quarta-feira" },
   { value: "4", label: "Quinta-feira" },
   { value: "5", label: "Sexta-feira" },
-  { value: "6", label: "Sabado" },
+  { value: "6", label: "Sábado" },
 ];
 
 const OCCURRENCE_OPTIONS = [
@@ -147,7 +154,7 @@ const OCCURRENCE_OPTIONS = [
   { value: "2", label: "2ª" },
   { value: "3", label: "3ª" },
   { value: "4", label: "4ª" },
-  { value: "5", label: "Ultima" },
+  { value: "5", label: "Última" },
 ];
 
 type CalendarFormState = {
@@ -176,7 +183,7 @@ type EscalationFormState = {
 const DEFAULT_CALENDAR_FORM: CalendarFormState = {
   name: "",
   clientId: "",
-  timezone: "UTC",
+  timezone: DEFAULT_TIMEZONE,
   workDayStartHour: "8",
   workDayEndHour: "18",
   workDays: [1, 2, 3, 4, 5],
@@ -221,6 +228,24 @@ function formatWorkDays(raw: string) {
   return WORKDAY_OPTIONS.filter((option) => workDays.includes(option.value))
     .map((option) => option.label)
     .join(", ");
+}
+
+function parseLocalDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatCooldown(minutes: number | null | undefined): string | null {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes < 60) return `Cooldown ${minutes}min`;
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? `Cooldown ${hours}h` : `Cooldown ${hours.toFixed(1)}h`;
 }
 
 function formatHoursBefore(hours: number) {
@@ -275,12 +300,13 @@ function getWorkflowProfileLabel(
 
 export default function TicketSlaPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const clientsQuery = useClients();
   const departmentsQuery = useDepartments({ includeGlobal: true });
   const usersQuery = useIamUsers();
   const workflowProfilesQuery = useWorkflowProfiles({ includeGlobal: true });
 
-  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState(() => searchParams.get("client") ?? "");
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
   const [holidayCalendarId, setHolidayCalendarId] = useState<string | null>(null);
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
@@ -288,7 +314,10 @@ export default function TicketSlaPage() {
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [calendarSearchTerm, setCalendarSearchTerm] = useState("");
+  const deferredCalendarSearch = useDeferredValue(calendarSearchTerm);
   const [ruleSearchTerm, setRuleSearchTerm] = useState("");
+  const deferredRuleSearch = useDeferredValue(ruleSearchTerm);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [calendarForm, setCalendarForm] =
     useState<CalendarFormState>(DEFAULT_CALENDAR_FORM);
   const [holidayName, setHolidayName] = useState("");
@@ -306,7 +335,23 @@ export default function TicketSlaPage() {
     onConfirm: () => Promise<void>;
   } | null>(null);
 
-  const [selectedWorkflowProfileId, setSelectedWorkflowProfileId] = useState("");
+  const [selectedWorkflowProfileId, setSelectedWorkflowProfileId] = useState(
+    () => searchParams.get("profile") ?? "",
+  );
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (selectedClientId) next.set("client", selectedClientId);
+        else next.delete("client");
+        if (selectedWorkflowProfileId) next.set("profile", selectedWorkflowProfileId);
+        else next.delete("profile");
+        return next.toString() === prev.toString() ? prev : next;
+      },
+      { replace: true },
+    );
+  }, [selectedClientId, selectedWorkflowProfileId, setSearchParams]);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [ruleForm, setRuleForm] = useState<EscalationFormState>(DEFAULT_RULE_FORM);
 
@@ -434,7 +479,7 @@ export default function TicketSlaPage() {
   );
 
   const filteredCalendars = useMemo(() => {
-    const term = calendarSearchTerm.trim().toLocaleLowerCase("pt-BR");
+    const term = deferredCalendarSearch.trim().toLocaleLowerCase("pt-BR");
     if (!term) return sortedCalendars;
 
     return sortedCalendars.filter((calendar) => {
@@ -452,10 +497,10 @@ export default function TicketSlaPage() {
         .toLocaleLowerCase("pt-BR")
         .includes(term);
     });
-  }, [calendarSearchTerm, clientsById, sortedCalendars]);
+  }, [deferredCalendarSearch, clientsById, sortedCalendars]);
 
   const filteredRules = useMemo(() => {
-    const term = ruleSearchTerm.trim().toLocaleLowerCase("pt-BR");
+    const term = deferredRuleSearch.trim().toLocaleLowerCase("pt-BR");
     if (!term) return sortedRules;
 
     return sortedRules.filter((rule) => {
@@ -472,7 +517,7 @@ export default function TicketSlaPage() {
   }, [
     clientsById,
     departmentsById,
-    ruleSearchTerm,
+    deferredRuleSearch,
     sortedRules,
     workflowProfilesById,
   ]);
@@ -500,19 +545,13 @@ export default function TicketSlaPage() {
     (clientsQuery.isLoading && clients.length === 0) ||
     (departmentsQuery.isLoading && departments.length === 0) ||
     (usersQuery.isLoading && users.length === 0) ||
-    (workflowProfilesQuery.isLoading && workflowProfiles.length === 0) ||
-    (calendarsQuery.isLoading && calendars.length === 0) ||
-    (!selectedWorkflowProfileId && activeRulesQuery.isLoading && rules.length === 0) ||
-    (!!selectedWorkflowProfileId && profileRulesQuery.isLoading && rules.length === 0);
+    (workflowProfilesQuery.isLoading && workflowProfiles.length === 0);
 
   const hasError =
     clientsQuery.isError ||
     departmentsQuery.isError ||
     usersQuery.isError ||
-    workflowProfilesQuery.isError ||
-    calendarsQuery.isError ||
-    activeRulesQuery.isError ||
-    profileRulesQuery.isError;
+    workflowProfilesQuery.isError;
 
   if (loading) {
     return <Loading />;
@@ -606,7 +645,7 @@ export default function TicketSlaPage() {
     }
 
     if (calendarForm.workDays.length === 0) {
-      toast.error("Selecione ao menos um dia util.");
+      toast.error("Selecione ao menos um dia útil.");
       return;
     }
 
@@ -698,9 +737,8 @@ export default function TicketSlaPage() {
     }
 
     if (typeNum === 2) {
-      // Relative: precisa de mes
       if (!holidayRelativeMonth) {
-        toast.error("Informe o mes para o feriado relativo.");
+        toast.error("Informe o mês para o feriado relativo.");
         return;
       }
     }
@@ -708,8 +746,8 @@ export default function TicketSlaPage() {
     try {
       const payload: Record<string, unknown> = {
         name: holidayName.trim(),
-        // Feriado relativo não tem data própria: envia null.
-        date: holidayDate ? `${holidayDate}T00:00:00` : null,
+        // Feriado relativo não tem data própria: envia null mesmo se havia data antes.
+        date: typeNum === 2 ? null : holidayDate ? `${holidayDate}T00:00:00` : null,
         holidayType: typeNum,
       };
 
@@ -789,7 +827,7 @@ export default function TicketSlaPage() {
       const month = MONTH_OPTIONS.find(m => m.value === String(holiday.relativeMonth))?.label ?? "";
       if (holiday.relativeMethod === 1) {
         const occ = OCCURRENCE_OPTIONS.find(o => o.value === String(holiday.relativeOccurrence))?.label ?? "";
-        return `${occ} dia util de ${month}`;
+        return `${occ} dia útil de ${month}`;
       }
       const dow = DAY_OF_WEEK_OPTIONS.find(d => d.value === String(holiday.relativeDayOfWeek))?.label ?? "";
       const occ = OCCURRENCE_OPTIONS.find(o => o.value === String(holiday.relativeOccurrence))?.label ?? "";
@@ -847,13 +885,13 @@ export default function TicketSlaPage() {
     const triggerAtHoursBefore = Number(ruleForm.triggerAtHoursBefore || "0");
     const escalationCooldownMinutes = Number(ruleForm.escalationCooldownMinutes || "360");
 
-    if (!Number.isFinite(triggerAtSlaPercent) || triggerAtSlaPercent < 0) {
-      toast.error("Percentual de disparo inválido.");
+    if (!Number.isFinite(triggerAtSlaPercent) || triggerAtSlaPercent < 0 || triggerAtSlaPercent > 100) {
+      toast.error("Percentual de disparo inválido (0 a 100).");
       return;
     }
 
     if (!Number.isFinite(triggerAtHoursBefore) || triggerAtHoursBefore < 0) {
-      toast.error("Horas antes do vencimento invalidas.");
+      toast.error("Horas antes do vencimento inválidas.");
       return;
     }
 
@@ -951,37 +989,40 @@ export default function TicketSlaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <PageHeader title="SLA, calendários e escalonamento" description="Visualize rapidamente calendários e regras, e abra os detalhes somente quando precisar." />
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => setIsHelpModalOpen(true)}>
-            <Icon name="schedule" className="h-4 w-4" />
-            Guia rápido
-          </Button>
-          <Badge color="primary">Calendários úteis</Badge>
-          <Badge color="warning">Escalonamento automático</Badge>
-        </div>
-      </div>
+      <PageHeader
+        title="SLA, calendários e escalonamento"
+        description="Visualize rapidamente calendários e regras de escalonamento e gerencie os detalhes em modal."
+        breadcrumb={<Link to="/tickets" className="transition-colors hover:text-foreground">Chamados</Link>}
+      >
+        <Button
+          variant="secondary"
+          onClick={() => {
+            void calendarsQuery.refetch();
+            void activeRulesQuery.refetch();
+            if (selectedWorkflowProfileId) void profileRulesQuery.refetch();
+          }}
+          disabled={calendarsQuery.isFetching || activeRulesQuery.isFetching || profileRulesQuery.isFetching}
+        >
+          <Icon
+            name="refresh"
+            className={`h-4 w-4 ${
+              calendarsQuery.isFetching || activeRulesQuery.isFetching || profileRulesQuery.isFetching
+                ? "animate-spin"
+                : ""
+            }`}
+          />
+          Atualizar
+        </Button>
+        <Button variant="secondary" onClick={() => setIsHelpModalOpen(true)}>
+          <Icon name="schedule" className="h-4 w-4" />
+          Guia rápido
+        </Button>
+      </PageHeader>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted">Calendários</p>
-            <p className="text-2xl font-semibold text-foreground">{sortedCalendars.length}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted">Feriados mapeados</p>
-            <p className="text-2xl font-semibold text-foreground">{totalHolidays}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted">Regras visíveis</p>
-            <p className="text-2xl font-semibold text-foreground">{sortedRules.length}</p>
-          </div>
-        </Card>
+        <StatCard icon="calendar_month" label="Calendários" value={sortedCalendars.length} tone="primary" />
+        <StatCard icon="schedule" label="Feriados mapeados" value={totalHolidays} tone="accent" />
+        <StatCard icon="notifications_active" label="Regras visíveis" value={sortedRules.length} tone="warning" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -1004,12 +1045,25 @@ export default function TicketSlaPage() {
               value={selectedClientId}
               onChange={(event) => setSelectedClientId(event.target.value)}
             />
-            <Input
-              label="Buscar calendário"
-              value={calendarSearchTerm}
-              onChange={(event) => setCalendarSearchTerm(event.target.value)}
-              placeholder="Nome, timezone ou cliente"
-            />
+            <div className="relative">
+              <Input
+                label="Buscar calendário"
+                value={calendarSearchTerm}
+                onChange={(event) => setCalendarSearchTerm(event.target.value)}
+                placeholder="Nome, timezone ou cliente"
+                className="pr-8"
+              />
+              {calendarSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setCalendarSearchTerm("")}
+                  aria-label="Limpar busca de calendários"
+                  className="absolute right-2.5 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="mb-4 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
@@ -1020,6 +1074,12 @@ export default function TicketSlaPage() {
           </div>
 
           <div className="space-y-3">
+            {calendarsQuery.isLoading ? (
+              <Loading />
+            ) : calendarsQuery.isError ? (
+              <ErrorDisplay onRetry={() => void calendarsQuery.refetch()} />
+            ) : (
+              <>
             <p className="text-xs text-muted">
               Mostrando {filteredCalendars.length} de {sortedCalendars.length} calendários.
             </p>
@@ -1086,6 +1146,8 @@ export default function TicketSlaPage() {
                 </div>
               </div>
             ))}
+              </>
+            )}
           </div>
         </Card>
 
@@ -1120,13 +1182,24 @@ export default function TicketSlaPage() {
             }}
           />
 
-          <div className="mt-4">
+          <div className="mt-4 relative">
             <Input
               label="Buscar regra"
               value={ruleSearchTerm}
               onChange={(event) => setRuleSearchTerm(event.target.value)}
               placeholder="Nome da regra ou workflow profile"
+              className="pr-8"
             />
+            {ruleSearchTerm && (
+              <button
+                type="button"
+                onClick={() => setRuleSearchTerm("")}
+                aria-label="Limpar busca de regras"
+                className="absolute right-2.5 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+              >
+                <Icon name="close" className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           {workflowProfiles.length === 0 && (
@@ -1142,16 +1215,26 @@ export default function TicketSlaPage() {
             </div>
           )}
           {!selectedWorkflowProfileId && workflowProfiles.length > 0 && (
-            <div className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
-              <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-light p-3 text-xs text-muted-foreground">
+              <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <p>
-                As regras são sempre listadas por workflow profile. Selecione um perfil acima
-                para ver (e editar) as regras dele, inclusive as inativas.
+                Exibindo regras <strong>ativas</strong> de todos os perfis. Selecione um workflow profile acima para ver também as regras inativas.
               </p>
             </div>
           )}
 
           <div className="mt-4 space-y-3">
+            {(selectedWorkflowProfileId ? profileRulesQuery.isLoading : activeRulesQuery.isLoading) ? (
+              <Loading />
+            ) : (selectedWorkflowProfileId ? profileRulesQuery.isError : activeRulesQuery.isError) ? (
+              <ErrorDisplay
+                onRetry={() => {
+                  if (selectedWorkflowProfileId) void profileRulesQuery.refetch();
+                  else void activeRulesQuery.refetch();
+                }}
+              />
+            ) : (
+              <>
             <p className="text-xs text-muted">
               Mostrando {filteredRules.length} de {sortedRules.length} regras.
             </p>
@@ -1205,7 +1288,6 @@ export default function TicketSlaPage() {
                         size="sm"
                         variant="secondary"
                         onClick={() => {
-                          setSelectedWorkflowProfileId(rule.workflowProfileId);
                           setEditingRuleId(rule.id);
                           setRuleForm(toRuleFormState(rule));
                           setIsRuleModalOpen(true);
@@ -1226,6 +1308,9 @@ export default function TicketSlaPage() {
                     )}
                     {rule.bumpPriority && <Badge color="danger">Aumenta prioridade</Badge>}
                     {rule.notifyAssignee && <Badge color="primary">Notifica responsável</Badge>}
+                    {formatCooldown(rule.escalationCooldownMinutes) && (
+                      <Badge color="slate">{formatCooldown(rule.escalationCooldownMinutes)}</Badge>
+                    )}
                   </div>
 
                   <div className="mt-3 space-y-1 text-xs text-muted">
@@ -1237,6 +1322,8 @@ export default function TicketSlaPage() {
                 </div>
               );
             })}
+              </>
+            )}
           </div>
         </Card>
       </div>
@@ -1328,31 +1415,28 @@ export default function TicketSlaPage() {
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">Dias úteis</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Dias úteis">
                 {WORKDAY_OPTIONS.map((option) => {
                   const checked = calendarForm.workDays.includes(option.value);
                   return (
-                    <label
+                    <button
                       key={option.value}
-                      className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${
+                      type="button"
+                      aria-pressed={checked}
+                      onClick={() =>
+                        setCalendarForm((current) => ({
+                          ...current,
+                          workDays: toggleWorkDay(current.workDays, option.value),
+                        }))
+                      }
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
                         checked
                           ? "border-primary/40 bg-primary/10 text-foreground"
-                          : "border-border bg-surface-light text-muted"
+                          : "border-border bg-surface-light text-muted hover:text-foreground"
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        className="hidden"
-                        checked={checked}
-                        onChange={() =>
-                          setCalendarForm((current) => ({
-                            ...current,
-                            workDays: toggleWorkDay(current.workDays, option.value),
-                          }))
-                        }
-                      />
                       {option.label}
-                    </label>
+                    </button>
                   );
                 })}
               </div>
@@ -1548,18 +1632,14 @@ export default function TicketSlaPage() {
                         ) : holiday.holidayType === 1 ? (
                           <span className="text-primary">
                             Anual:{" "}
-                            {holiday.date
-                              ? new Date(holiday.date).toLocaleDateString("pt-BR", {
-                                  day: "numeric",
-                                  month: "long",
-                                })
-                              : "sem data"}
+                            {parseLocalDate(holiday.date)?.toLocaleDateString("pt-BR", {
+                              day: "numeric",
+                              month: "long",
+                            }) ?? "sem data"}
                           </span>
                         ) : (
                           <span>
-                            {holiday.date
-                              ? new Date(holiday.date).toLocaleDateString("pt-BR")
-                              : "sem data"}
+                            {parseLocalDate(holiday.date)?.toLocaleDateString("pt-BR") ?? "sem data"}
                           </span>
                         )}
                       </div>
@@ -1620,6 +1700,7 @@ export default function TicketSlaPage() {
                 label="Workflow profile"
                 options={workflowProfileOptions}
                 value={ruleForm.workflowProfileId}
+                disabled={Boolean(editingRuleId)}
                 onChange={(event) =>
                   setRuleForm((current) => ({
                     ...current,
@@ -1772,7 +1853,7 @@ export default function TicketSlaPage() {
                   Excluir regra
                 </Button>
               )}
-              {(editingRuleId || ruleForm.workflowProfileId) && (
+              {!editingRuleId && ruleForm.workflowProfileId && (
                 <Button variant="ghost" onClick={() => resetRuleForm()}>
                   <Icon name="restart_alt" className="h-4 w-4" />
                   Limpar formulário
@@ -1827,37 +1908,33 @@ export default function TicketSlaPage() {
             </div>
           </div>
           <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-xs text-muted">
-            Dica: selecione um workflow profile para listar as regras — sem filtro nenhuma
-            regra é exibida.
+            Dica: sem filtro de perfil são exibidas todas as regras ativas. Selecione um workflow
+            profile para visualizar e gerenciar também as regras inativas.
           </div>
         </div>
       </Modal>
 
-      <Modal
-        open={!!confirmState}
-        onClose={() => setConfirmState(null)}
+      <ConfirmDialog
+        open={Boolean(confirmState)}
         title={confirmState?.title ?? "Confirmar"}
-        maxWidth="max-w-md"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">{confirmState?.message}</p>
-          <div className="flex justify-end gap-3">
-            <Button variant="ghost" onClick={() => setConfirmState(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                const action = confirmState?.onConfirm;
-                setConfirmState(null);
-                void action?.();
-              }}
-            >
-              {confirmState?.confirmLabel ?? "Confirmar"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        message={confirmState?.message ?? ""}
+        confirmLabel={confirmState?.confirmLabel ?? "Confirmar"}
+        tone="danger"
+        isLoading={isConfirming}
+        onConfirm={async () => {
+          if (!confirmState) return;
+          setIsConfirming(true);
+          try {
+            await confirmState.onConfirm();
+            setConfirmState(null);
+          } finally {
+            setIsConfirming(false);
+          }
+        }}
+        onClose={() => {
+          if (!isConfirming) setConfirmState(null);
+        }}
+      />
     </div>
   );
 }
