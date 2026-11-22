@@ -2251,6 +2251,7 @@ export default function RemoteSession() {
                   natsSubject={sessions.terminal.natsSubject}
                   natsUrl={sessions.terminal.natsUrl}
                   jwt={sessions.terminal.jwt}
+                  webrtc={sessions.terminal.webrtc}
                   onStatus={setTerminalStatus}
                   onShells={(shells) => setAvailableShells(shells)}
                   // Reconexão automática do WebSocket: busca credencial nova
@@ -2328,6 +2329,7 @@ export default function RemoteSession() {
                   natsSubject={processSession.natsSubject}
                   natsUrl={processSession.natsUrl}
                   jwt={processSession.jwt}
+                  webrtc={processSession.webrtc}
                   nkeySeed={processSession.nkeySeed}
                   getFreshCredentials={() =>
                     remoteSessionsApi
@@ -2391,6 +2393,7 @@ export default function RemoteSession() {
                   natsSubject={processSession.natsSubject}
                   natsUrl={processSession.natsUrl}
                   jwt={processSession.jwt}
+                  webrtc={processSession.webrtc}
                   nkeySeed={processSession.nkeySeed}
                   getFreshCredentials={() =>
                     remoteSessionsApi

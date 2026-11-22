@@ -1,6 +1,6 @@
 import { formatDateTime, formatDate } from '@/utils/format';
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
 import {
@@ -207,7 +207,7 @@ function suggestSavedViewName(
   const parts = [clientName, stateName, priority ? getTicketPriorityMeta(priority).label : undefined].filter(Boolean);
 
   if (parts.length === 0) {
-    return 'Minha visao';
+    return 'Minha visão';
   }
 
   return parts.join(' · ');
@@ -282,11 +282,15 @@ function KpiTile({
   value,
   tone = 'slate',
   description,
+  onClick,
+  active,
 }: {
   label: string;
   value: string;
   tone?: 'slate' | 'success' | 'warning' | 'danger' | 'primary';
   description: string;
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const toneClass =
     tone === 'success'
@@ -299,20 +303,30 @@ function KpiTile({
             ? 'text-sky-700 dark:text-sky-300'
             : 'text-foreground';
 
+  const card = (
+    <Card className={`${onClick ? 'cursor-pointer transition-all hover:border-border-strong' : ''} ${active ? 'ring-2 ring-primary/50' : ''}`}>
+      <div className="space-y-1 text-left">
+        <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+        <p className={`text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</p>
+      </div>
+    </Card>
+  );
+
   return (
     <Tooltip
       className="block w-full"
       content={description}
-      delay={1200}
+      delay={300}
       position="bottom"
       variant="hover-card"
     >
-      <Card>
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-          <p className={`text-2xl font-semibold ${toneClass}`}>{value}</p>
-        </div>
-      </Card>
+      {onClick ? (
+        <button type="button" onClick={onClick} aria-pressed={active} className="block w-full text-left">
+          {card}
+        </button>
+      ) : (
+        card
+      )}
     </Tooltip>
   );
 }
@@ -320,6 +334,7 @@ function KpiTile({
 export default function TicketList() {
   const DEFAULT_PAGE_SIZE = 50;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { session } = useAuth();
   const pageRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -328,18 +343,27 @@ export default function TicketList() {
   const [savedViewModalOpen, setSavedViewModalOpen] = useState(false);
   const [editingSavedView, setEditingSavedView] = useState<TicketSavedView | null>(null);
   const [activeSavedViewId, setActiveSavedViewId] = useState<string | null>(null);
-  const [filterClient, setFilterClient] = useState('');
-  const [filterState, setFilterState] = useState('');
-  const [filterPriority, setFilterPriority] = useState<TicketPriority | ''>('');
-  const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>(DEFAULT_STATUS_FILTER);
-  const [filterText, setFilterText] = useState('');
+  const [filterClient, setFilterClient] = useState(() => searchParams.get('client') ?? '');
+  const [filterState, setFilterState] = useState(() => searchParams.get('state') ?? '');
+  const [filterPriority, setFilterPriority] = useState<TicketPriority | ''>(() => {
+    const raw = searchParams.get('priority');
+    return isTicketPriority(raw) ? raw : '';
+  });
+  const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>(() => {
+    const raw = searchParams.get('status');
+    if (raw === 'all') return '';
+    if (raw === 'true' || raw === 'false') return raw;
+    return DEFAULT_STATUS_FILTER;
+  });
+  const [filterText, setFilterText] = useState(() => searchParams.get('q') ?? '');
   const [filterTemplate, setFilterTemplate] = useState('');
   // Responsável (id de usuário). Dois atalhos o escrevem, além do seletor:
   // "Atribuídos a mim" (currentUserId) e a aplicação de uma visão salva.
-  const [filterAssignedToUserId, setFilterAssignedToUserId] = useState('');
+  const [filterAssignedToUserId, setFilterAssignedToUserId] = useState(() => searchParams.get('assigned') ?? '');
   // Fila "Meu time": liga o filtro pelos departamentos em que o usuário é
   // membro ativo do time (backend: GET /tickets/my-departments).
-  const [filterMyDepartments, setFilterMyDepartments] = useState(false);
+  const [filterMyDepartments, setFilterMyDepartments] = useState(() => searchParams.get('myTeam') === '1');
+  const [filterSlaBreached, setFilterSlaBreached] = useState(() => searchParams.get('slaBreached') === '1');
   const [filterAnswerKey, setFilterAnswerKey] = useState('');
   const [filterAnswerValue, setFilterAnswerValue] = useState('');
   const [filterAnswerMatch, setFilterAnswerMatch] = useState<TicketAnswerMatch>(TicketAnswerMatch.Exact);
@@ -361,7 +385,7 @@ export default function TicketList() {
     cursors: [undefined],
   });
   const [savedViewForm, setSavedViewForm] = useState<SavedViewFormState>({
-    name: 'Minha visao',
+    name: 'Minha visão',
     isShared: false,
   });
   const [deletingSavedViewId, setDeletingSavedViewId] = useState<string | null>(null);
@@ -395,6 +419,7 @@ export default function TicketList() {
     departmentId: myDepartmentsFilterId,
     assignedToUserId: filterAssignedToUserId || undefined,
     priority: filterPriority || undefined,
+    slaBreached: filterSlaBreached ? true : undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     // Debounced: evita um request de listagem a cada tecla (o input continua
     // com o valor imediato; o KPI e as sugestões já usam valores adiados).
@@ -415,6 +440,7 @@ export default function TicketList() {
     departmentId: myDepartmentsFilterId,
     assignedToUserId: filterAssignedToUserId || undefined,
     priority: filterPriority || undefined,
+    slaBreached: filterSlaBreached ? true : undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: deferredFilterText.trim() || undefined,
     templateId: filterTemplate || undefined,
@@ -512,6 +538,36 @@ export default function TicketList() {
   }, [filterClient]);
 
   useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (filterClient) next.set('client', filterClient); else next.delete('client');
+        if (filterState) next.set('state', filterState); else next.delete('state');
+        if (filterPriority) next.set('priority', filterPriority); else next.delete('priority');
+        if (filterStatus === '') next.set('status', 'all');
+        else if (filterStatus === 'true') next.set('status', 'true');
+        else next.delete('status');
+        if (filterText.trim()) next.set('q', filterText.trim()); else next.delete('q');
+        if (filterAssignedToUserId) next.set('assigned', filterAssignedToUserId); else next.delete('assigned');
+        if (filterMyDepartments) next.set('myTeam', '1'); else next.delete('myTeam');
+        if (filterSlaBreached) next.set('slaBreached', '1'); else next.delete('slaBreached');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [
+    filterClient,
+    filterState,
+    filterPriority,
+    filterStatus,
+    filterText,
+    filterAssignedToUserId,
+    filterMyDepartments,
+    filterSlaBreached,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
     if (!hoverPreviewTicketId) return;
     const existsInCurrentPage = visibleTickets.some((ticket) => ticket.id === hoverPreviewTicketId);
     if (!existsInCurrentPage) {
@@ -587,6 +643,7 @@ export default function TicketList() {
     Boolean(filterTemplate) ||
     Boolean(filterAssignedToUserId) ||
     filterMyDepartments ||
+    filterSlaBreached ||
     Boolean(filterAnswerKey) ||
     filterStatus !== DEFAULT_STATUS_FILTER;
 
@@ -612,7 +669,7 @@ export default function TicketList() {
   const assignUserOptions = [
     {
       value: '',
-      label: iamUsersQuery.isLoading ? 'Carregando usuarios...' : 'Manter responsável atual',
+      label: iamUsersQuery.isLoading ? 'Carregando usuários...' : 'Manter responsável atual',
     },
     ...(iamUsersQuery.data ?? []).map((user) => ({
       value: user.id,
@@ -718,6 +775,28 @@ export default function TicketList() {
         <span className="text-xs text-muted">
           {formatDate(ticket.createdAt)}
         </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      className: 'w-12 text-right',
+      sortable: false,
+      render: (ticket) => (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="px-2"
+          aria-label={`Ações para ${ticket.title}`}
+          title="Mais ações"
+          onClick={(event) => {
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            openTicketContextMenuAt(rect.right, rect.bottom + 4, ticket);
+          }}
+        >
+          <Icon name="more_vert" className="h-4 w-4" />
+        </Button>
       ),
     },
   ];
@@ -854,23 +933,26 @@ export default function TicketList() {
     toast.success(successMessage);
   };
 
-  const openTicketContextMenu = (event: React.MouseEvent<HTMLTableRowElement>, ticket: Ticket) => {
-    event.preventDefault();
-    event.stopPropagation();
-
+  const openTicketContextMenuAt = (clientX: number, clientY: number, ticket: Ticket) => {
     if (!pageRef.current) return;
 
     const rect = pageRef.current.getBoundingClientRect();
     const menuWidth = 248;
     // Base do menu + a linha extra de explicação do gate de atribuição.
     const menuHeight = 164 + 40;
-    const rawX = event.clientX - rect.left;
-    const rawY = event.clientY - rect.top;
+    const rawX = clientX - rect.left;
+    const rawY = clientY - rect.top;
 
     const x = Math.max(8, Math.min(rawX, rect.width - menuWidth - 8));
     const y = Math.max(8, Math.min(rawY, rect.height - menuHeight - 8));
 
     setTicketContextMenu({ ticket, x, y });
+  };
+
+  const openTicketContextMenu = (event: React.MouseEvent<HTMLTableRowElement>, ticket: Ticket) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTicketContextMenuAt(event.clientX, event.clientY, ticket);
   };
 
   const handleContextMenuFollow = async () => {
@@ -1005,6 +1087,7 @@ export default function TicketList() {
     setFilterTemplate('');
     setFilterAssignedToUserId('');
     setFilterMyDepartments(false);
+    setFilterSlaBreached(false);
     setFilterAnswerKey('');
     setFilterAnswerValue('');
     setFilterAnswerMatch(TicketAnswerMatch.Exact);
@@ -1022,6 +1105,7 @@ export default function TicketList() {
     // completa: o que é lido ao aplicar também precisa ser gravado ao salvar.
     assignedToUserId: filterAssignedToUserId || undefined,
     priority: filterPriority || undefined,
+    slaBreached: filterSlaBreached || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: filterText.trim() || undefined,
     templateId: filterTemplate || undefined,
@@ -1050,6 +1134,7 @@ export default function TicketList() {
     // A fila "Meu time" é um filtro derivado dos vínculos do usuário, não um
     // parâmetro de visão salva: aplicar uma visão não deve ligá-la.
     setFilterMyDepartments(false);
+    setFilterSlaBreached(Boolean(filter.slaBreached));
     setFilterAnswerKey(filter.answerKey ?? '');
     setFilterAnswerValue(filter.answerValue ?? '');
     setFilterAnswerMatch(filter.answerMatch ?? TicketAnswerMatch.Exact);
@@ -1060,7 +1145,7 @@ export default function TicketList() {
       Boolean(filter.clientId || filter.templateId || filter.answerKey || filter.answerValue),
     );
     resetPagination();
-    toast.success(`Visao aplicada: ${view.name}`);
+    toast.success(`Visão aplicada: ${view.name}`);
   };
 
   const renderPaginationBar = (position: 'top' | 'bottom') => (
@@ -1202,6 +1287,17 @@ export default function TicketList() {
         title="Chamados"
         description={`${visibleTickets.length} chamados na página ${page}`}
       >
+        <Button
+          variant="secondary"
+          onClick={() => {
+            void tickets.refetch();
+            void kpiQuery.refetch();
+          }}
+          disabled={tickets.isFetching || kpiQuery.isFetching}
+        >
+          <Icon name="refresh" className={`h-4 w-4 ${tickets.isFetching || kpiQuery.isFetching ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
         <Button onClick={() => setModalOpen(true)}>
           <Icon name="add" className="h-4 w-4" /> Novo Chamado
         </Button>
@@ -1212,17 +1308,41 @@ export default function TicketList() {
           label="Abertos"
           value={String(kpi?.totalOpen ?? '--')}
           tone="primary"
+          active={filterStatus === 'false' && !filterSlaBreached}
+          onClick={() =>
+            applyFilterChange(() => {
+              setFilterStatus('false');
+              setFilterSlaBreached(false);
+            })
+          }
           description="Quantidade de chamados abertos no momento, considerando os filtros aplicados."
         />
         <KpiTile
           label="Encerrados"
           value={String(kpi?.totalClosed ?? '--')}
+          active={filterStatus === 'true' && !filterSlaBreached}
+          onClick={() =>
+            applyFilterChange(() => {
+              setFilterStatus('true');
+              setFilterSlaBreached(false);
+            })
+          }
           description="Quantidade de chamados encerrados no recorte atual de filtros."
         />
         <KpiTile
           label="SLA violado"
           value={String(kpi?.slaBreached ?? '--')}
           tone="danger"
+          active={filterSlaBreached}
+          onClick={() =>
+            applyFilterChange(() => {
+              setFilterSlaBreached((current) => {
+                const next = !current;
+                if (next) setFilterStatus('false');
+                return next;
+              });
+            })
+          }
           description="Chamados que ultrapassaram o prazo definido em SLA."
         />
         <KpiTile
@@ -1253,7 +1373,7 @@ export default function TicketList() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={openCreateSavedViewModal} disabled={!currentUserId}>
-              <Icon name="save" className="h-4 w-4" /> Salvar visao atual
+              <Icon name="save" className="h-4 w-4" /> Salvar visão atual
             </Button>
             <Button
               variant="ghost"
@@ -1271,14 +1391,26 @@ export default function TicketList() {
 
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <div className="md:col-span-2 xl:col-span-3">
-            <Input
-              label="Buscar"
-              value={filterText}
-              onChange={(event) => {
-                applyFilterChange(() => setFilterText(event.target.value));
-              }}
-              placeholder="Título, descrição, categoria ou respostas do questionário"
-            />
+            <div className="relative">
+              <Input
+                label="Buscar"
+                value={filterText}
+                onChange={(event) => {
+                  applyFilterChange(() => setFilterText(event.target.value));
+                }}
+                placeholder="Título, descrição, categoria ou respostas do questionário"
+              />
+              {filterText && (
+                <button
+                  type="button"
+                  onClick={() => applyFilterChange(() => setFilterText(''))}
+                  aria-label="Limpar busca de chamados"
+                  className="absolute right-2.5 bottom-2 rounded-full p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             <TicketAnswerSemanticSearchPanel
               term={debouncedFilterText}
               templateId={filterTemplate || undefined}
@@ -1659,7 +1791,7 @@ export default function TicketList() {
             role="menuitem"
           >
             <span>Assumir</span>
-            <span className="text-xs text-muted">atribuicao rapida</span>
+            <span className="text-xs text-muted">atribuição rápida</span>
           </button>
           <button
             type="button"
@@ -1670,7 +1802,7 @@ export default function TicketList() {
             role="menuitem"
           >
             <span>Transferir / Atribuir</span>
-            <span className="text-xs text-muted">departamento ou usuario</span>
+            <span className="text-xs text-muted">departamento ou usuário</span>
           </button>
           {/* Explicação visível: um title em botão desabilitado não aparece no
               hover, então o usuário ficaria sem saber POR QUE não pode agir. */}

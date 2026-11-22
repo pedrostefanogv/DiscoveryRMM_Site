@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProcessesStream, type ServiceInfo } from './useProcessStream';
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
 import { formatBytes, formatConnections, formatCpuPercent } from './format';
 
 interface RemoteServicesProps {
@@ -11,6 +12,11 @@ interface RemoteServicesProps {
     nkeySeed?: string;
     /** Renova o JWT NATS escopado em sessões longas. */
     getFreshCredentials?: () => Promise<string>;
+    /**
+     * Bloco WebRTC da sessão. Serviços compartilham a sessão de processos
+     * (kind 'processes'), então usam o MESMO canal 'processes'.
+     */
+    webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 type ServiceSortKey = 'name' | 'state' | 'startType' | 'pid' | 'cpuPercent' | 'memoryBytes' | 'connections';
@@ -63,7 +69,7 @@ const stateLabel = (s: string) => {
     return map[s] ?? s;
 };
 
-export function RemoteServices({ natsSubject, natsUrl, jwt, getFreshCredentials }: RemoteServicesProps) {
+export function RemoteServices({ natsSubject, natsUrl, jwt, getFreshCredentials, webrtc }: RemoteServicesProps) {
     const [services, setServices] = useState<ServiceInfo[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -79,6 +85,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt, getFreshCredentials 
         natsUrl: natsUrl ?? '',
         jwt: jwt ?? '',
         getFreshCredentials,
+        webrtc,
     });
 
     const connected = stream.isConnected;

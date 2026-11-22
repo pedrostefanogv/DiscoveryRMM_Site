@@ -1,7 +1,7 @@
 import { formatDateTime, formatDate, formatBytes as formatBytesBase } from '@/utils/format';
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useCallback, useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt, getUserNameFromJwt } from '@/auth/jwt';
@@ -63,10 +63,11 @@ import {
   useTicketAiSummary,
   useTicketAiTriage,
 } from '@/hooks/useTicketAi';
-import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox,
+import { Icon, Button, Card, CardHeader, Badge, ConfirmDialog, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox,
 Modal,
 PageHeader,
 } from '@/components/ui';
+import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
 import { ticketsApi } from '@/api';
 import type {
   AutomationTaskSummary,
@@ -145,12 +146,26 @@ export default function TicketDetail() {
   // Enquanto carrega, as capacidades são negadas (fail-closed).
   const { capabilities } = useTicketCapabilities(id);
   const iamUsers = useIamUsers();
-  // ?tab=chat permite deep-link (notificação de nova mensagem no chat).
-  const [tab, setTab] = useState<Tab>(() => {
-    if (typeof window === 'undefined') return 'comments';
-    const requested = new URLSearchParams(window.location.search).get('tab');
-    return requested === 'chat' ? 'chat' : 'comments';
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const tab: Tab =
+    rawTab === 'timeline' || rawTab === 'attachments' || rawTab === 'automation' || rawTab === 'ai' || rawTab === 'chat'
+      ? rawTab
+      : 'comments';
+  const setTab = useCallback(
+    (nextTab: Tab) => {
+      setSearchParams(
+        prev => {
+          const next = new URLSearchParams(prev);
+          if (nextTab === 'comments') next.delete('tab');
+          else next.set('tab', nextTab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [commentSeed, setCommentSeed] = useState<CommentSeed | null>(null);
   const iamUsersData = useMemo(
     () => (Array.isArray(iamUsers.data) ? iamUsers.data : []),
@@ -199,7 +214,7 @@ export default function TicketDetail() {
     if (!attachmentsEnabled && tab === 'attachments') {
       setTab('comments');
     }
-  }, [attachmentsEnabled, tab]);
+  }, [attachmentsEnabled, tab, setTab]);
 
   if (ticket.isLoading) return <Loading />;
   if (ticket.isError || !ticket.data) return <ErrorDisplay onRetry={() => ticket.refetch()} />;
@@ -234,6 +249,18 @@ export default function TicketDetail() {
           <TicketStateBadge name={currentState.name} color={currentState.color} />
         )}
         <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            void ticket.refetch();
+            void comments.refetch();
+          }}
+          disabled={ticket.isFetching || comments.isFetching}
+        >
+          <Icon name="refresh" className={`h-4 w-4 ${ticket.isFetching || comments.isFetching ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
         <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
           <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
         </Button>
@@ -269,53 +296,32 @@ export default function TicketDetail() {
             </div>
           </Card>
 
-          {/* Tabs: Comments / Timeline */}
+          {/* Tabs: Comments / Timeline / Attachments / Automation / AI / Chat */}
           <Card padding={false}>
-            <div className="flex border-b border-border">
-              <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'comments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                onClick={() => setTab('comments')}
-              >
-                Comentários ({comments.data?.items?.length ?? 0})
-              </button>
-              <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'timeline' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                onClick={() => setTab('timeline')}
-              >
-                <Icon name="monitoring" className="inline h-4 w-4 mr-1" />
-                Timeline
-              </button>
-              {attachmentsEnabled && (
-                <button
-                  className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                  onClick={() => setTab('attachments')}
-                >
-                  <Icon name="attach_file" className="inline h-4 w-4 mr-1" />
-                  Anexos
-                </button>
-              )}
-              <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'automation' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                onClick={() => setTab('automation')}
-              >
-                <Icon name="build" className="inline h-4 w-4 mr-1" />
-                Automação
-              </button>
-              <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'ai' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                onClick={() => setTab('ai')}
-              >
-                IA
-              </button>
-              <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'chat' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                onClick={() => setTab('chat')}
-              >
-                <Icon name="desktop_windows" className="inline h-4 w-4 mr-1" />
-                Chat
-              </button>
+            <div className="px-3 pt-1">
+              <DetailTabs
+                tabs={[
+                  { id: 'comments', label: 'Comentários', icon: 'chat', badge: comments.data?.items?.length ?? 0 },
+                  { id: 'timeline', label: 'Timeline', icon: 'monitoring' },
+                  ...(attachmentsEnabled
+                    ? [{ id: 'attachments', label: 'Anexos', icon: 'attach_file' } satisfies DetailTab<Tab>]
+                    : []),
+                  { id: 'automation', label: 'Automação', icon: 'build' },
+                  { id: 'ai', label: 'IA', icon: 'auto_awesome' },
+                  { id: 'chat', label: 'Chat', icon: 'desktop_windows' },
+                ]}
+                active={tab}
+                onChange={setTab}
+                ariaLabel="Seções do chamado"
+                panelIdPrefix="ticket-detail-tabs"
+              />
             </div>
-            <div className="p-4">
+            <div
+              id="ticket-detail-tabs-panel"
+              role="tabpanel"
+              aria-labelledby={`ticket-detail-tabs-tab-${tab}`}
+              className="p-4"
+            >
               {tab === 'comments' ? (
                 <CommentsPanel
                   ticketId={id!}
@@ -624,7 +630,7 @@ function TicketAiPanel({
                 <p className="text-sm text-muted-foreground">
                    A IA retornou uma saída não estruturada. O conteúdo bruto continua disponível abaixo.
                 </p>
-                <div className="rounded-lg bg-black/20 p-3">
+                <div className="rounded-lg border border-border bg-surface p-3">
                   <MarkdownViewer source={triage.data.suggestion} />
                 </div>
                 <Button
@@ -1274,12 +1280,12 @@ export function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
 function DeleteTicketButton({ ticketId, title }: { ticketId: string; title: string }) {
   const navigate = useNavigate();
   const deleteTicket = useDeleteTicket();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handleDelete = () => {
-    if (!window.confirm(`Excluir o chamado "${title}"?\n\nEle será movido para a lixeira e deixará de aparecer nas listagens.`))
-      return;
+  const handleConfirmDelete = () => {
     deleteTicket.mutate(ticketId, {
       onSuccess: () => {
+        setConfirmOpen(false);
         toast.success('Chamado movido para a lixeira');
         navigate('/tickets');
       },
@@ -1293,17 +1299,31 @@ function DeleteTicketButton({ ticketId, title }: { ticketId: string; title: stri
   };
 
   return (
-    <Button
-      size="sm"
-      variant="ghost"
-      onClick={handleDelete}
-      loading={deleteTicket.isPending}
-      aria-label="Excluir chamado"
-      title="Excluir chamado"
-      className="text-danger hover:bg-danger/10"
-    >
-      <Icon name="delete" className="h-4 w-4" /> Excluir
-    </Button>
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setConfirmOpen(true)}
+        loading={deleteTicket.isPending}
+        aria-label="Excluir chamado"
+        title="Excluir chamado"
+        className="text-danger hover:bg-danger/10"
+      >
+        <Icon name="delete" className="h-4 w-4" /> Excluir
+      </Button>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Excluir chamado"
+        message={`Excluir o chamado "${title}"? Ele será movido para a lixeira e deixará de aparecer nas listagens.`}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteTicket.isPending}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          if (!deleteTicket.isPending) setConfirmOpen(false);
+        }}
+      />
+    </>
   );
 }
 function TicketSummaryPanel({
@@ -2074,15 +2094,24 @@ function CommentsPanel({
   const scrollAnchorRef = useRef<{ id: string; top: number; scrollTop: number } | null>(null);
   const scrollToBottomRef = useRef(false);
   const removeComment = useDeleteComment();
+  const [deleteCommentId, setDeleteCommentId] = useState<string | null>(null);
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'internal'>('all');
 
-  const handleDeleteComment = (commentId: string) => {
-    if (!window.confirm('Excluir este comentário? Ele continua visível no histórico, marcado como excluído.')) {
-      return;
-    }
+  const hasInternalComments = useMemo(() => items.some(c => c.isInternal), [items]);
+  const filteredItems = useMemo(() => {
+    if (visibilityFilter === 'all') return items;
+    return items.filter(c => (visibilityFilter === 'internal' ? c.isInternal : !c.isInternal));
+  }, [items, visibilityFilter]);
+
+  const handleConfirmDeleteComment = () => {
+    if (!deleteCommentId) return;
     removeComment.mutate(
-      { ticketId, commentId },
+      { ticketId, commentId: deleteCommentId },
       {
-        onSuccess: () => toast.success('Comentário excluído'),
+        onSuccess: () => {
+          setDeleteCommentId(null);
+          toast.success('Comentário excluído');
+        },
         onError: (error) =>
           toast.error(error instanceof Error && error.message ? error.message : 'Erro ao excluir comentário'),
       },
@@ -2161,7 +2190,32 @@ function CommentsPanel({
 
   return (
     <>
-      <div ref={commentsListRef} className="space-y-3 max-h-80 overflow-y-auto">
+      {hasInternalComments && (
+        <div className="mb-3 flex items-center gap-1.5" role="group" aria-label="Filtrar visibilidade dos comentários">
+          {(
+            [
+              { id: 'all', label: 'Todos' },
+              { id: 'public', label: 'Públicos' },
+              { id: 'internal', label: 'Internos' },
+            ] as const
+          ).map(opt => (
+            <button
+              key={opt.id}
+              type="button"
+              aria-pressed={visibilityFilter === opt.id}
+              onClick={() => setVisibilityFilter(opt.id)}
+              className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                visibilityFilter === opt.id
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted hover:bg-surface-hover hover:text-foreground'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div ref={commentsListRef} className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
         {comments.isLoading && <Loading />}
         {comments.isError && !comments.isLoading && (
           <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
@@ -2185,7 +2239,7 @@ function CommentsPanel({
           </div>
         )}
         {!comments.isError &&
-          items.map(c => {
+          filteredItems.map(c => {
             const own = isOwnComment(c.author);
             // Classe por combinação (proprio/suporte x publico/interno): uma única
             // classe de cor de borda por balão, sem depender da ordem do Tailwind.
@@ -2239,7 +2293,7 @@ function CommentsPanel({
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 rounded px-1 text-xs text-muted hover:text-danger"
-                      onClick={() => handleDeleteComment(c.id)}
+                      onClick={() => setDeleteCommentId(c.id)}
                       title="Excluir comentário"
                     >
                       <Icon name="delete" className="h-3 w-3" />
@@ -2268,8 +2322,32 @@ function CommentsPanel({
           scrollToBottomRef.current = true;
         }}
       />
+      <ConfirmDialog
+        open={Boolean(deleteCommentId)}
+        title="Excluir comentário"
+        message="Excluir este comentário? Ele continua visível no histórico, marcado como excluído."
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={removeComment.isPending}
+        onConfirm={handleConfirmDeleteComment}
+        onClose={() => {
+          if (!removeComment.isPending) setDeleteCommentId(null);
+        }}
+      />
     </>
   );
+}
+
+type TimelineCategoryFilter = 'all' | 'comments' | 'workflow' | 'assignment' | 'sla' | 'chat';
+
+function matchesTimelineCategory(activityType: string, category: TimelineCategoryFilter): boolean {
+  if (category === 'all') return true;
+  if (category === 'comments') return activityType === 'Commented' || activityType === 'CommentDeleted' || activityType === 'AttachmentAdded';
+  if (category === 'workflow') return activityType === 'StateChanged' || activityType === 'Created' || activityType === 'Reopened' || activityType === 'Closed';
+  if (category === 'assignment') return activityType === 'Assigned' || activityType === 'DepartmentChanged';
+  if (category === 'sla') return activityType.toLowerCase().includes('sla');
+  if (category === 'chat') return activityType === 'ChatStarted' || activityType === 'ChatEnded';
+  return true;
 }
 
 function TimelinePanel({
@@ -2282,6 +2360,7 @@ function TimelinePanel({
   onOpenChat?: () => void;
 }) {
   const timeline = useTicketTimeline(ticketId);
+  const [categoryFilter, setCategoryFilter] = useState<TimelineCategoryFilter>('all');
 
   if (timeline.isLoading) return <Loading />;
   if (timeline.isError) {
@@ -2301,11 +2380,59 @@ function TimelinePanel({
     return <p className="text-sm text-muted py-4 text-center">Nenhum evento registrado</p>;
   }
 
-  const groups = groupTimelineByDay(entries);
+  const filteredEntries = entries.filter(entry => matchesTimelineCategory(entry.activityType, categoryFilter));
+  const groups = groupTimelineByDay(filteredEntries);
 
   return (
     <div className="min-h-[24rem] max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-      <p className="text-xs text-muted">{entries.length} evento(s)</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filtrar eventos da timeline">
+          {(
+            [
+              { id: 'all', label: 'Todos' },
+              { id: 'comments', label: 'Comentários' },
+              { id: 'workflow', label: 'Workflow' },
+              { id: 'assignment', label: 'Atribuições' },
+              { id: 'sla', label: 'SLA' },
+              { id: 'chat', label: 'Chat' },
+            ] as const
+          ).map(cat => (
+            <button
+              key={cat.id}
+              type="button"
+              aria-pressed={categoryFilter === cat.id}
+              onClick={() => setCategoryFilter(cat.id)}
+              className={`rounded-lg px-2 py-1 text-xs font-medium transition-colors ${
+                categoryFilter === cat.id
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted hover:bg-surface-hover hover:text-foreground'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted">
+            {categoryFilter === 'all'
+              ? `${entries.length} evento(s)`
+              : `${filteredEntries.length} de ${entries.length} evento(s)`}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void timeline.refetch()}
+            disabled={timeline.isFetching}
+            aria-label="Atualizar timeline"
+            title="Atualizar timeline"
+          >
+            <Icon name="refresh" className={`h-4 w-4 ${timeline.isFetching ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
+      </div>
+      {groups.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted">Nenhum evento nesta categoria.</p>
+      )}
 
       {groups.map((group) => (
         <div key={group.key}>
@@ -2566,6 +2693,7 @@ function CommentForm({
                 // paralelo com o mesmo comentário em alguns providers.
                 await uploadOne(createdId, entry);
               }
+              setPending((prev) => prev.filter((item) => item.status !== 'done'));
             })();
           } else if (queued.length > 0) {
             setPending((prev) =>
@@ -2607,7 +2735,18 @@ function CommentForm({
           }
         }}
       >
-        <TextArea placeholder="Escreva um comentário... (mín. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
+        <TextArea
+          placeholder={isInternal ? 'Escreva uma nota interna... (Ctrl+Enter para enviar)' : 'Escreva um comentário... (Ctrl+Enter para enviar)'}
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          className={isInternal ? 'border-warning/60 bg-warning/5' : undefined}
+        />
       </div>
       {pending.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -2622,6 +2761,16 @@ function CommentForm({
                   <Icon name="cancel" className="h-3 w-3 text-danger" />
                   <span className="text-danger" title={item.error}>falhou</span>
                 </>
+              )}
+              {(item.status === 'queued' || item.status === 'error') && (
+                <button
+                  type="button"
+                  aria-label={`Remover ${item.fileName}`}
+                  onClick={() => setPending((prev) => prev.filter((p) => p.key !== item.key))}
+                  className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3 w-3" />
+                </button>
               )}
             </span>
           ))}
@@ -2657,6 +2806,9 @@ function CommentForm({
             {isInternal ? <Icon name="lock" className="h-3.5 w-3.5" /> : <Icon name="lock_open" className="h-3.5 w-3.5" />}
             Nota interna
           </label>
+          {isInternal && (
+            <Badge color="warning">Visível apenas para a equipe</Badge>
+          )}
         </div>
         <Button size="sm" onClick={handleSubmit} loading={addComment.isPending} disabled={content.trim().length < 3 || uploading}>
           <Icon name="send" className="h-4 w-4" /> Enviar
@@ -3030,7 +3182,8 @@ function AttachmentsPanel({
       if (
         term &&
         !item.fileName.toLowerCase().includes(term) &&
-        !String(item.uploadedBy ?? '').toLowerCase().includes(term)
+        !String(item.uploadedBy ?? '').toLowerCase().includes(term) &&
+        !String(item.author ?? '').toLowerCase().includes(term)
       ) {
         return false;
       }
@@ -3061,6 +3214,7 @@ function AttachmentsPanel({
   const [queue, setQueue] = useState<FileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Baixa via API autenticada (blob) — um <a href> não envia Authorization.
@@ -3099,9 +3253,12 @@ function AttachmentsPanel({
         entries.push({ file, status: 'error', error: `Arquivo excede o limite de ${formatBytes(maxBytes)}` });
         continue;
       }
-      if (cfg?.allowedContentTypes && !cfg.allowedContentTypes.includes(file.type)) {
-        entries.push({ file, status: 'error', error: `Tipo não permitido: ${file.type}` });
-        continue;
+      if (cfg?.allowedContentTypes) {
+        const allowedLower = cfg.allowedContentTypes.map(t => t.trim().toLowerCase());
+        if (!allowedLower.includes(file.type.toLowerCase())) {
+          entries.push({ file, status: 'error', error: `Tipo não permitido: ${file.type || 'desconhecido'}` });
+          continue;
+        }
       }
       entries.push({ file, status: 'idle' });
     }
@@ -3214,7 +3371,11 @@ function AttachmentsPanel({
             role="button"
             tabIndex={0}
             aria-label="Selecionar ou arrastar arquivos para anexar"
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-8 text-center transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+              isDragging
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-border-strong'
+            }`}
             onClick={() => fileRef.current?.click()}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -3222,8 +3383,16 @@ function AttachmentsPanel({
                 fileRef.current?.click();
               }
             }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              handleFiles(e.dataTransfer.files);
+            }}
           >
             <Icon name="attach_file" className="h-6 w-6 text-muted" />
             <p className="text-sm text-muted">
@@ -3242,7 +3411,10 @@ function AttachmentsPanel({
             aria-label="Selecionar arquivos para anexar"
             title="Selecionar arquivos para anexar"
             className="hidden"
-            onChange={(e) => handleFiles(e.target.files)}
+            onChange={(e) => {
+              handleFiles(e.target.files);
+              e.target.value = '';
+            }}
           />
 
           {queue.length > 0 && (
@@ -3323,13 +3495,39 @@ function AttachmentsPanel({
               <option value="7">Últimos 7 dias</option>
               <option value="30">Últimos 30 dias</option>
             </select>
-            <Input
-              aria-label="Buscar anexo por nome ou autor"
-              placeholder="Buscar por nome/autor"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-48"
-            />
+            <div className="relative">
+              <Input
+                aria-label="Buscar anexo por nome ou autor"
+                placeholder="Buscar por nome/autor"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-48 pr-7"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Limpar busca de anexos"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                >
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {(originFilter !== 'all' || typeFilter !== 'all' || periodFilter !== 'all' || search.trim()) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setOriginFilter('all');
+                  setTypeFilter('all');
+                  setPeriodFilter('all');
+                  setSearch('');
+                }}
+              >
+                Limpar filtros
+              </Button>
+            )}
           </div>
         </div>
 

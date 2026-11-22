@@ -7,6 +7,8 @@ import {
     type NatsCredentialsResponse,
     type NatsService,
 } from '@/api/nats';
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
+import { RemoteWebRtcPeer } from '@/modules/remote-shared/webrtcPeer';
 
 /**
  * Versão do protocolo do canal de terminal, enviada no hello ("pv").
@@ -36,6 +38,14 @@ interface UseTerminalStreamOptions {
      * no reconnect.
      */
     reconnectToken?: number;
+    /**
+     * Bloco WebRTC da sessão (nulo quando a política não autorizou o terminal).
+     *
+     * Preenchido, a entrada e a saída preferem o data channel; o NATS continua
+     * ativo como fallback e é ele que sustenta o replay (lastSeq) quando o peer
+     * cai — o seq vai no payload, então o handshake não depende do transporte.
+     */
+    webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 export interface TerminalReadyInfo {
@@ -196,10 +206,28 @@ export function useTerminalStream({
     jwt,
     getFreshCredentials,
     reconnectToken = 0,
+    webrtc,
 }: UseTerminalStreamOptions): UseTerminalStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const serviceRef = useRef<NatsService | null>(null);
+    // Peer connection do console (canal 'terminal'). Só existe quando a política
+    // autorizou ESTE kind.
+    const webRtcPeerRef = useRef<RemoteWebRtcPeer | null>(null);
+    const webrtcRef = useRef(webrtc);
+    webrtcRef.current = webrtc;
+    // Implementação corrente do envio de entrada, publicada pelo efeito de
+    // conexão. Existe como ref porque sendData/sendResize/sendCompletionRequest
+    // vivem FORA daquele efeito e precisam do service/peer da conexão ativa.
+    const publishInRef = useRef<((subject: string, payload: Record<string, unknown>) => Promise<void>) | null>(null);
+    // term.ready recebido? O canal do terminal só é usado DEPOIS disso.
+    //
+    // Motivo: o handshake (hello) é o que destrava o replay, e ele pode ser o
+    // PRIMEIRO frame. Se o canal abrir antes de o agente registrar o handler, o
+    // hello cairia no vazio — no NATS ele já era tolerado, mas aqui não há retry.
+    // Com o gate, o handshake segue pelo caminho confiável e só o volume
+    // (teclas + saída) passa a usar o P2P.
+    const termReadyRef = useRef(false);
     const outputCallbacksRef = useRef<Set<(data: string) => void>>(new Set());
     const exitCallbacksRef = useRef<Set<(reason: string) => void>>(new Set());
     const readyCallbacksRef = useRef<Set<(info: TerminalReadyInfo) => void>>(new Set());
@@ -237,6 +265,16 @@ export function useTerminalStream({
     const statsSubject = `${subj}.stats`;
     const completionReqSubject = `${subj}.completion.req`;
     const completionResSubject = `${subj}.completion.res`;
+    // Subjects DEDICADOS de sinalização WebRTC: o SDP (1-4 KB) não cabe no
+    // .control (teto de 512 B) nem pertence ao contrato do .term.*.
+    const webrtcInSubject = `${subj}.webrtc.in`;
+    const webrtcOutSubject = `${subj}.webrtc.out`;
+
+    // Envio de ENTRADA, estável entre renders: delega para a implementação do
+    // efeito de conexão corrente (que conhece o service e o peer daquela sessão).
+    const publishIn = useCallback((subject: string, payload: Record<string, unknown>) => {
+        return publishInRef.current?.(subject, payload) ?? Promise.resolve();
+    }, []);
 
     useEffect(() => { jwtRef.current = jwt; }, [jwt]);
     useEffect(() => { freshCredsRef.current = getFreshCredentials; }, [getFreshCredentials]);
@@ -281,6 +319,7 @@ export function useTerminalStream({
             }
             if (parsed.shells && Array.isArray(parsed.shells)) {
                 // term.ready — shells disponiveis + console pronto
+                termReadyRef.current = true;
                 readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as TerminalReadyInfo));
             }
         };
@@ -325,14 +364,17 @@ export function useTerminalStream({
 
     // allow-list CLIENT-SIDE (o NatsService bloqueia subscribe fora dela; o
     // servidor aplica a propria via JWT reemitido).
-    const subjectAllowList = [outSubject, readySubject, statsSubject, eventSubject, completionResSubject];
+    // .webrtc.out entra na allow-list para o próprio NatsService permitir o SUB
+    // quando a política autorizou este kind (o servidor aplica a dele via JWT).
+    const subjectAllowList = [outSubject, readySubject, statsSubject, eventSubject, completionResSubject, webrtcOutSubject];
 
     const buildCreds = (token: string): NatsCredentialsResponse => ({
         jwt: token,
         nkeySeed: '',
         publicKey: '',
         expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
-        publishSubjects: [],
+        // .webrtc.in: o viewer PRECISA publicar a oferta/candidatos para negociar.
+        publishSubjects: [webrtcInSubject],
         subscribeSubjects: subjectAllowList,
     });
 
@@ -351,6 +393,62 @@ export function useTerminalStream({
         scopeMode: 'preserve',
     });
     serviceRef.current = service;
+
+    // ── Caminho WebRTC do terminal ──
+    //
+    // SAÍDA: as mensagens chegam pelo canal 'terminal' e entram na MESMA
+    // handleTermOut do NATS. O seq vai no payload, então o replay por lastSeq
+    // continua valendo sem nenhuma mudança de protocolo — é por isso que trocar
+    // o transporte é seguro aqui.
+    //
+    // ENTRADA: publishIn decide, uma vez por mensagem, entre canal e NATS.
+    const handleWebRtcOut = (parsed: unknown) => {
+        if (!mounted) return;
+        // O peer espera o TEXTO do frame; o NatsService já parseou o JSON, então
+        // re-serializamos o mesmo conteúdo (sem perda).
+        void webRtcPeerRef.current?.handleSignal(JSON.stringify(parsed));
+    };
+
+    if (webrtcRef.current?.enabled) {
+        webRtcPeerRef.current?.close();
+        webRtcPeerRef.current = new RemoteWebRtcPeer({
+            config: webrtcRef.current,
+            channels: ['terminal'],
+            sendSignal: (frame) => {
+                    void service
+                            .publish(webrtcInSubject, frame as unknown as Record<string, unknown>)
+                            .catch(() => { /* best-effort */ });
+            },
+            onMessage: (label, buf) => {
+                    if (label !== 'terminal' || !mounted) return;
+                    try {
+                            handleTermOut(JSON.parse(new TextDecoder().decode(buf)) as Record<string, unknown>);
+                    } catch { /* frame inválido não pode derrubar o terminal */ }
+            },
+        });
+    }
+
+    // Envio de ENTRADA: data channel primeiro, NATS como fallback.
+    //
+    // Único ponto de decisão: hello, resize, teclas, paste e completion passam
+    // por aqui. O NATS NUNCA é desligado — se o peer cair, o terminal continua
+    // funcionando, apenas mais lento. É a mesma garantia que protege a tela.
+    const publishInImpl = (subject: string, payload: Record<string, unknown>) => {
+        const peer = webRtcPeerRef.current;
+        if (
+            subject === inSubject &&
+            termReadyRef.current &&
+            peer &&
+            peer.isChannelOpen('terminal') &&
+            peer.send('terminal', JSON.stringify(payload))
+        ) {
+            return Promise.resolve();
+        }
+        const svc = serviceRef.current;
+        if (!svc) return Promise.resolve();
+        return svc.publish(subject, payload).catch(() => { /* best-effort */ });
+    };
+    publishInRef.current = publishInImpl;
 
     // Handshake do console: hello com lastSeq (replay) + drenagem das filas
     // de input/resize. Chamado a cada 'connected' (mount e reconexoes).
@@ -371,22 +469,24 @@ export function useTerminalStream({
             hello.cols = lastDimsRef.current.cols;
             hello.rows = lastDimsRef.current.rows;
         }
-        void svc.publish(inSubject, hello).catch(() => { /* best-effort */ });
+        void publishIn(inSubject, hello);
         const resize = pendingResizeRef.current;
         if (resize) {
             pendingResizeRef.current = null;
-            void svc.publish(inSubject, resize).catch(() => { /* best-effort */ });
+            void publishIn(inSubject, resize);
         }
         const pending = pendingInputRef.current;
         pendingInputRef.current = [];
         pendingInputBytesRef.current = 0;
         for (const payload of pending) {
-            void svc.publish(inSubject, JSON.parse(payload)).catch(() => { /* best-effort */ });
+            void publishIn(inSubject, JSON.parse(payload));
         }
     };
     // Handshake (hello + drenagem das filas) a cada 'connected' — inclusive
     // reconexoes internas do service (os SUBs sao restaurados antes do
     // 'connected' e o agente reenvia o que faltou via lastSeq).
+    // Negociação WebRTC: disparada UMA vez, no primeiro 'connected'.
+    let webRtcStarted = false;
     const onState = (state: NatsConnectionState) => {
         if (!mounted) return;
         switch (state) {
@@ -395,6 +495,10 @@ export function useTerminalStream({
                 setIsConnected(true);
                 setError(null);
                 sendHello();
+                if (!webRtcStarted && webrtcRef.current?.enabled && webRtcPeerRef.current) {
+                    webRtcStarted = true;
+                    void webRtcPeerRef.current.start();
+                }
                 return;
             }
             case 'auth_error': {
@@ -443,6 +547,11 @@ export function useTerminalStream({
         [statsSubject, handleStats as unknown as NatsHandler],
         [completionResSubject, handleCompletionRes as unknown as NatsHandler],
     ];
+    // Sinalização WebRTC: assinada só quando a política autorizou este kind.
+    // Fora disso o JWT não concede o subject e o SUB falharia.
+    if (webrtcRef.current?.enabled) {
+        subjectHandlers.push([webrtcOutSubject, handleWebRtcOut as unknown as NatsHandler]);
+    }
     for (const [subject, handler] of subjectHandlers) {
         service.subscribe(subject, handler, { connectIfNeeded: false }).catch(() => {
             // o connect() subsequente restaura as assinaturas via restoreSubscriptions
@@ -462,6 +571,13 @@ export function useTerminalStream({
         mounted = false;
         offState();
         offAuth();
+        // Fecha o peer antes de derrubar o service: sem isto o data channel
+        // sobreviveria ao unmount e seguraria a conexão ICE.
+        webRtcPeerRef.current?.close();
+        webRtcPeerRef.current = null;
+        // Sem isto o ref guardaria o serviço de uma conexão já descartada.
+        publishInRef.current = null;
+        termReadyRef.current = false;
         for (const [subject, handler] of subjectHandlers) {
             try { service.unsubscribe(subject, handler); } catch { /* teardown best-effort */ }
         }
@@ -524,7 +640,7 @@ export function useTerminalStream({
         );
         if (open && service) {
             for (const payload of payloads) {
-                void service.publish(inSubject, JSON.parse(payload)).catch(() => { /* best-effort */ });
+                void publishIn(inSubject, JSON.parse(payload));
             }
             return;
         }
@@ -558,7 +674,7 @@ export function useTerminalStream({
         lastDimsRef.current = { cols, rows };
         const service = serviceRef.current;
         if (service && service.isConnected()) {
-            void service.publish(inSubject, { cols, rows }).catch(() => { /* best-effort */ });
+            void publishIn(inSubject, { cols, rows });
         } else {
             pendingResizeRef.current = { cols, rows };
         }
@@ -569,7 +685,7 @@ export function useTerminalStream({
     const sendCompletionRequest = useCallback((req: CompletionRequest) => {
         const service = serviceRef.current;
         if (!service || !service.isConnected()) return;
-        void service.publish(completionReqSubject, { ...req }).catch(() => { /* best-effort */ });
+        void publishIn(completionReqSubject, { ...req });
     }, [completionReqSubject]);
 
     const onOutput = useCallback((callback: (data: string) => void) => {

@@ -9,7 +9,19 @@
  * devolve `false` em `send()`, permitindo fallback transparente para o NATS.
  */
 
-export type WebRtcChannelLabel = "media" | "control" | "tunnel" | "files" | "rdp-cleanpath";
+export type WebRtcChannelLabel =
+  | "media"
+  | "control"
+  | "tunnel"
+  | "files"
+  | "rdp-cleanpath"
+  // Canal do terminal: saída do shell e stdin/resize/hello no MESMO JSON do
+  // .term.out/.term.in. O seq vai no payload, então o replay não depende do
+  // transporte.
+  | "terminal"
+  // Canal de processos/serviços: cada mensagem é uma requisição ou uma resposta
+  // inteira (SCTP é orientado a mensagem), com o pareamento por requestId.
+  | "processes";
 
 export interface WebRtcPeerConfig {
   enabled: boolean;

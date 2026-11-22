@@ -186,13 +186,22 @@ describe("resolveWebRtcKinds", () => {
     }
   });
 
-  it("descarta kinds não suportados (terminal fora)", () => {
+  it("mantém terminal/processes e descarta registry e kinds inexistentes", () => {
     const kinds = resolveWebRtcKinds({
       remoteAccessWebRtcEnabled: true,
-      remoteAccessWebRtcPolicyJson: policy(["screen", "terminal", "processes", "banana"]),
+      remoteAccessWebRtcPolicyJson: policy([
+        "screen",
+        "terminal",
+        "processes",
+        "registry",
+        "banana",
+      ]),
     });
 
-    expect(kinds).toEqual(["screen"]);
+    // terminal e processes passaram a ser suportados quando o caminho de dados
+    // deles existe de fato (canais "terminal" e "processes"). registry segue
+    // fora: o gargalo é o TAMANHO da página (500 itens), não o transporte.
+    expect(kinds).toEqual(["screen", "terminal", "processes"]);
   });
 
   it("aceita all, que cobre a sessão composta de tela", () => {

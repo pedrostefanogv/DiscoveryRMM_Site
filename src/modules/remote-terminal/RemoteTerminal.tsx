@@ -8,6 +8,7 @@ import {
   useTerminalStream,
   type TerminalErrorInfo,
 } from './useTerminalStream';
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
 import CompletionPopup from './CompletionPopup';
 import {
   COMPLETION_PAGE_SIZE,
@@ -82,6 +83,12 @@ interface RemoteTerminalProps {
    * troca de aba; ao voltar, refaz o fit e repinta o canvas.
    */
   isVisible?: boolean;
+  /**
+   * Bloco WebRTC da sessão (ausente quando a política não autorizou o terminal).
+   * Preenchido, entrada e saída preferem o data channel; o NATS segue como
+   * fallback e sustenta o replay (lastSeq) se o peer cair.
+   */
+  webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 // TermReadyInfo compatível com o hook (avoid import cycle). Os campos v3 são
@@ -614,6 +621,7 @@ export default function RemoteTerminal({
   getFreshCredentials,
   reconnectToken,
   isVisible = true,
+  webrtc,
 }: RemoteTerminalProps) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -686,6 +694,7 @@ export default function RemoteTerminal({
     jwt,
     getFreshCredentials,
     reconnectToken,
+    webrtc,
   });
 
   // Último erro reportado pelo agente/hook, exibido como banner persistente.

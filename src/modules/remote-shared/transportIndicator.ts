@@ -172,12 +172,16 @@ export function resolveWebRtcKinds(effective: unknown): string[] {
  * com framing binário de 6 B), e o destino do proxy costuma estar em outra rede
  * — onde o P2P mais ajuda.
  *
- * Terminal e registry ficam FORA: no terminal o gargalo é 1 round-trip com
- * volume de KB/s; no registry a resposta já é paginada em 500 itens porque
- * estouraria o limite do NATS, então o gargalo é o tamanho da página, não o
- * transporte.
+ * "terminal" e "processes" entraram junto com o caminho de dados deles (canais
+ * "terminal" e "processes" no agente e neste console). Antes ficavam fora — e a
+ * exclusão era correta enquanto o caminho de dados não existia: liberar aqui sem
+ * ele faria o peer conectar e o tráfego seguir no NATS, com o selo verde
+ * mentindo. O ganho agora é o CAMINHO (P2P sem broker), não o codec.
+ *
+ * "registry" SEGUE fora: a resposta já é paginada em 500 itens porque estouraria
+ * o limite do NATS, então o gargalo é o TAMANHO da página, não o transporte.
  */
-export const WEBRTC_KIND_CANDIDATES = ["screen", "rdp", "files", "proxy", "all"] as const;
+export const WEBRTC_KIND_CANDIDATES = ["screen", "rdp", "files", "proxy", "terminal", "processes", "all"] as const;
 
 /**
  * Extrai o bloco de transporte de um frame do canal .control.

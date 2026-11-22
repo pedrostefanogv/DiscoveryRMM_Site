@@ -5,6 +5,8 @@ import {
     type NatsCredentialsResponse,
     type NatsService,
 } from '@/api/nats';
+import type { RemoteSessionResponse } from '@/api/remote-sessions';
+import { RemoteWebRtcPeer } from '@/modules/remote-shared/webrtcPeer';
 
 interface UseProcessesStreamOptions {
     natsSubject: string;
@@ -14,6 +16,13 @@ interface UseProcessesStreamOptions {
     nkeySeed?: string;
     /** Renova o JWT NATS escopado antes/após expiração (sessões longas). */
     getFreshCredentials?: () => Promise<string>;
+    /**
+     * Bloco WebRTC da sessão (nulo quando a política não autorizou este kind).
+     *
+     * Preenchido, o request/response passa a preferir o data channel; o NATS
+     * continua ativo como fallback — nunca é desligado.
+     */
+    webrtc?: RemoteSessionResponse['webrtc'];
 }
 
 export interface ProcessInfo {
@@ -71,7 +80,7 @@ export interface UseProcessesStreamReturn {
 let _seq = 0;
 function nextReqId() { return `p${++_seq}`; }
 
-export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', getFreshCredentials }: UseProcessesStreamOptions): UseProcessesStreamReturn {
+export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', getFreshCredentials, webrtc }: UseProcessesStreamOptions): UseProcessesStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -96,6 +105,17 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
 
     // ── Transporte NatsService ──
     const serviceRef = useRef<NatsService | null>(null);
+    // Peer connection do console. Só existe quando a política autorizou ESTE kind.
+    const webRtcPeerRef = useRef<RemoteWebRtcPeer | null>(null);
+    const webrtcRef = useRef(webrtc);
+    // proc.ready recebido? O data channel só é usado DEPOIS disso.
+    //
+    // Sem o gate, a PRIMEIRA requisição poderia chegar antes de o agente
+    // registrar o handler do canal: ela cairia no vazio e o viewer ficaria
+    // 60 s esperando o timeout. O gate troca uma corrida por um atraso de um
+    // round-trip NATS — e a partir daí todo o resto vai por P2P.
+    const readyRef = useRef(false);
+    webrtcRef.current = webrtc;
     const jwtRef = useRef(jwt);
     const freshCredsRef = useRef(getFreshCredentials);
     freshCredsRef.current = getFreshCredentials;
@@ -103,13 +123,17 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
     const reqSubject = `${subj}.proc.req`;
     const respSubject = `${subj}.proc.resp`;
     const readySubject = `${subj}.proc.ready`;
+    // Subjects DEDICADOS de sinalização WebRTC. O SDP não cabe no .proc.* (que é
+    // contrato de domínio) nem no .control (teto de 512 B).
+    const webrtcInSubject = `${subj}.webrtc.in`;
+    const webrtcOutSubject = `${subj}.webrtc.out`;
 
     useEffect(() => { jwtRef.current = jwt; }, [jwt]);
 
     useEffect(() => {
         let mounted = true;
         mountedRef.current = true;
-        const subjectAllowList = [respSubject, readySubject];
+        const subjectAllowList = [respSubject, readySubject, webrtcOutSubject];
         const buildCreds = (token: string): NatsCredentialsResponse => ({
             jwt: token,
             nkeySeed,
@@ -117,7 +141,7 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
             // O JWT escopado da sessão tem TTL próprio: usa o claim exp do
             // próprio token (fallback 60 min quando ilegível).
             expiresAtUtc: jwtExpiresAtUtc(token),
-            publishSubjects: [reqSubject],
+            publishSubjects: [reqSubject, webrtcInSubject],
             subscribeSubjects: subjectAllowList,
         });
         const service = createNatsService({
@@ -163,6 +187,7 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
             // está ativo (evita a race em que o primeiro request chega antes).
             if (parsed.status === 'ready' && !('requestId' in parsed)) {
                 setIsReady(true);
+                readyRef.current = true;
                 readyCallbacksRef.current.forEach(cb => cb());
                 return;
             }
@@ -196,6 +221,41 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
             })
             : () => {};
 
+        // ── Caminho WebRTC: request/response pelo data channel ──
+        //
+        // O data channel é orientado a MENSAGEM, então cada requisição e cada resposta
+        // inteira é uma mensagem — o mesmo contrato do .proc.req/.proc.resp, e o
+        // pareamento continua sendo por requestId. O NATS NÃO é desligado: é o fallback
+        // quando o canal não está utilizável.
+        if (webrtcRef.current?.enabled) {
+            webRtcPeerRef.current?.close();
+            webRtcPeerRef.current = new RemoteWebRtcPeer({
+                    config: webrtcRef.current,
+                    channels: ['processes'],
+                    sendSignal: (frame) => {
+                        void service
+                                .publish(webrtcInSubject, frame as unknown as Record<string, unknown>)
+                                .catch(() => { /* best-effort */ });
+                    },
+                    onMessage: (label, buf) => {
+                        if (label !== 'processes' || !mounted) return;
+                        try {
+                                // Mesma porta de entrada do .proc.resp: o pending é resolvido pelo
+                                // requestId, então não importa por qual transporte a resposta veio.
+                                handleMsg(JSON.parse(new TextDecoder().decode(buf)) as Record<string, unknown>);
+                        } catch { /* frame inválido não pode derrubar a lista */ }
+                    },
+            });
+            void service.subscribe(
+                    webrtcOutSubject,
+                    ((parsed: Record<string, unknown>) => {
+                        if (!mounted) return;
+                        void webRtcPeerRef.current?.handleSignal(JSON.stringify(parsed));
+                    }) as never,
+                    { connectIfNeeded: false },
+            );
+        }
+
         // Subscrições registradas ANTES do connect(): o connect() restaura os
         // SUBs a partir dos listeners e só depois emite 'connected' — nenhuma
         // resposta inicial (proc.ready/proc.resp) é perdida na corrida do mount.
@@ -215,6 +275,11 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
             mountedRef.current = false;
             offState();
             offAuth();
+            // Fecha o peer antes de derrubar o service: sem isto o data channel
+            // sobreviveria ao unmount e seguraria a conexão ICE.
+            webRtcPeerRef.current?.close();
+            webRtcPeerRef.current = null;
+            readyRef.current = false;
             try {
                 service.unsubscribe(respSubject, handleMsg as never);
                 service.unsubscribe(readySubject, handleMsg as never);
@@ -262,6 +327,13 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt, nkeySeed = '', g
                 action,
                 ...(extra ?? {}),
             });
+            // Data channel PRIMEIRO; NATS como fallback. O pending já está registrado,
+            // então qualquer um dos dois resolve o MESMO pedido pelo requestId — não há
+            // estado novo de correlação para manter.
+            const peer = webRtcPeerRef.current;
+            if (readyRef.current && peer && peer.isChannelOpen('processes') && peer.send('processes', pl)) {
+                return;
+            }
             void service.publish(reqSubject, JSON.parse(pl)).catch((e: Error) => {
                 pendingRef.current.delete(rid);
                 reject(e);
