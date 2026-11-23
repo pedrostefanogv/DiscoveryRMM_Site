@@ -19,6 +19,13 @@ interface BatteryGaugeProps {
   className?: string;
 }
 
+const TONE_FILL: Record<BatteryTone, string> = {
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  neutral: 'bg-muted',
+};
+
 const TONE_TEXT: Record<BatteryTone, string> = {
   success: 'text-success',
   warning: 'text-warning',
@@ -27,82 +34,40 @@ const TONE_TEXT: Record<BatteryTone, string> = {
 };
 
 /**
- * Recorte da família battery_android_*: no grid 960 o desenho ocupa x 40..920 e
- * y -720..-240 (880×480, aspecto 1,83). Recortando, o ícone fica do tamanho do
- * DESENHO — sem a área vazia do grid — e os dois estados saem iguais.
- */
-const ANDROID_BATTERY_VIEWBOX = '40 -720 880 480';
-
-/**
- * Nível por barras na versão VAZADA: _1 (menos carga) a _6 (cheio). Não existe
- * `battery_android_frame_0` no Material Symbols, então a faixa mais baixa usa _1.
- */
-const ANDROID_BATTERY_LEVELS = [
-  'battery_android_frame_1',
-  'battery_android_frame_2',
-  'battery_android_frame_3',
-  'battery_android_frame_4',
-  'battery_android_frame_5',
-  'battery_android_frame_6',
-] as const;
-
-type AndroidBatteryGlyph =
-  | (typeof ANDROID_BATTERY_LEVELS)[number]
-  | 'battery_android_frame_bolt';
-
-/**
- * Glifo do estado "na bateria" pela faixa do percentual. Percentual desconhecido
- * usa o MEIO da escala: não afirma vazio nem cheio (o rótulo fica "—" e o
- * percentual também).
- */
-function batteryLevelGlyph(percent: number | null | undefined): AndroidBatteryGlyph {
-  if (percent == null || !Number.isFinite(percent) || percent < 0 || percent > 100) {
-    return 'battery_android_frame_3';
-  }
-  // Faixas naturais da escala: _N corresponde a N/6 da carga.
-  if (percent < 17) return 'battery_android_frame_1';
-  if (percent < 33) return 'battery_android_frame_2';
-  if (percent < 50) return 'battery_android_frame_3';
-  if (percent < 67) return 'battery_android_frame_4';
-  if (percent < 83) return 'battery_android_frame_5';
-  return 'battery_android_frame_6';
-}
-
-/**
- * Mesma altura e larguras equivalentes nos dois estados (o indicador não
- * "pula"), agora em escala mais discreta: a família battery_android_* é de
- * traço cheio (a API do Material só publica a variante fill1 destes glifos), e
- * no tamanho anterior ela ficava pesada dentro do badge colorido — o ícone
- * brigava com o texto "41%". Alinhado ao tamanho dos outros ícones do badge
- * (o wifi do selo de status é h-2.5).
+ * Desenho feito em CSS de propósito.
+ *
+ * Os glifos de bateria do Material Symbols têm parede de ~85 unidades no grid
+ * 960 — cerca de 2 px no tamanho usado no badge, o que fazia o ícone parecer
+ * "em negrito" ao lado dos outros ícones (linha fina). Não existe família mais
+ * fina (a \'fill0\' não é publicada para esses glifos e a família \'_bar\' também é
+ * maciça), então o desenho aqui usa CONTORNO DE 1 px, que é o que dá o peso
+ * visual leve e permite ajustar cor/espessura sem trocar de conjunto de ícones.
+ *
+ * Nível = preenchimento proporcional (não depende de variantes de glifo) e o
+ * estado na tomada usa o raio DENTRO da bateria — um ícone só.
  */
 const SIZES = {
-  sm: { height: 'h-3', width: 'w-[21px]', text: 'text-[10px]' },
-  md: { height: 'h-4', width: 'w-[29px]', text: 'text-xs' },
+  sm: { height: 'h-3', width: 'w-[21px]', pole: 'h-[5px] w-[1px]', bolt: 'h-2.5 w-2.5', text: 'text-[10px]' },
+  md: { height: 'h-4', width: 'w-[29px]', pole: 'h-[7px] w-[1px]', bolt: 'h-3 w-3', text: 'text-xs' },
 } as const;
 
 /**
- * Indicador de energia do agente, sempre com UM ícone da família
- * battery_android_* (Material Symbols Rounded, fill1) — bateria HORIZONTAL, a
- * mesma linguagem visual nos dois estados:
+ * Indicador de energia do agente.
  *
- * - NA BATERIA: battery_android_frame_1..6 conforme a faixa do percentual
- *   (barrinhas = nível, como o preenchimento da versão desenhada);
- * - NA TOMADA: battery_android_frame_bolt (moldura + raio), sem variantes de
- *   nível — o nível continua no percentual ao lado.
+ * - NA BATERIA: bateria desenhada (contorno 1 px + preenchimento proporcional ao
+ *   nível real, na cor da faixa);
+ * - NA TOMADA: o mesmo desenho com o RAIO dentro da bateria — um ícone só;
+ * - contorno de 1 px em `currentColor` — MESMA espessura e cor dos outros ícones
+ *   (o wifi do selo "Online", por exemplo) e corpo transparente, para o fundo do
+ *   badge aparecer. Foi a comparação com o wifi que mostrou o excesso de peso:
+ *   qualquer glifo de bateria do Material tem parede de ~2 px neste tamanho, e o
+ *   contorno preto/branco puro ainda destoava do traço do restante do card;
+ * - os dois estados têm o MESMO tamanho, então o indicador não "pula" ao
+ *   conectar/desconectar.
  *
- * A família `_frame_` é a VAZADA: moldura fina, que acompanha o traço dos outros
- * ícones (o wifi do selo, por exemplo) — a família maciça ficava pesada e
- * destoante dentro do badge.
- *
- * Os glifos são de traço cheio (fill1); por isso o tamanho é contido — no badge
- * eles ficavam "gordos" demais no tamanho anterior.
- *
- * A cor segue a faixa do percentual (verde > 30%, âmbar ≤ 30%, vermelho ≤ 15%),
- * preservando o alerta de bateria baixa. O estado vem de onAc/charging; quando o
- * agente não reportou o booleano (coleta antiga), o texto cru do SO ("On AC") é
- * usado como fallback — senão o painel mostrava "—" para um notebook que estava
- * na tomada.
+ * O estado vem de onAc/charging; quando o agente não reportou o booleano (coleta
+ * antiga), o texto cru do SO ("On AC") é usado como fallback — senão o painel
+ * mostrava "—" para um notebook que estava na tomada.
  */
 export function BatteryGauge({
   percent,
@@ -114,6 +79,8 @@ export function BatteryGauge({
   className = '',
 }: BatteryGaugeProps) {
   const tone = batteryTone(percent);
+  const fillPercent =
+    percent == null || !Number.isFinite(percent) ? 0 : Math.min(100, Math.max(0, percent));
   const s = SIZES[size];
   const resolvedLabel = batteryPowerLabel(onAc, charging, state);
   const showResolvedLabel = showLabel && resolvedLabel !== '—';
@@ -121,9 +88,9 @@ export function BatteryGauge({
     onAc === true || charging || resolvedLabel === 'Na tomada' || resolvedLabel === 'Carregando';
   const percentLabel = formatBatteryPercent(percent);
   const title = 'Bateria: ' + percentLabel + (resolvedLabel !== '—' ? ' · ' + resolvedLabel : '');
-  const glyph: AndroidBatteryGlyph = plugged
-    ? 'battery_android_frame_bolt'
-    : batteryLevelGlyph(percent);
+  // Com preenchimento suficiente o raio fica sobre a cor da faixa (branco); com
+  // carga pequena ele cai na área vazia e precisa da cor do contorno.
+  const boltColor = fillPercent >= 45 ? 'text-white' : 'text-foreground';
 
   return (
     <span
@@ -132,11 +99,31 @@ export function BatteryGauge({
       title={title}
       aria-label={title}
     >
-      <Icon
-        name={glyph}
-        viewBox={ANDROID_BATTERY_VIEWBOX}
-        className={s.height + ' ' + s.width + ' shrink-0 ' + TONE_TEXT[tone]}
-      />
+      <span className="inline-flex items-center gap-[1px]">
+        <span
+          className={
+            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-current ' +
+            s.height +
+            ' ' +
+            s.width
+          }
+        >
+          <span
+            className={
+              'absolute inset-y-[1px] left-[1px] rounded-[1px] transition-all duration-500 ' +
+              TONE_FILL[tone]
+            }
+            // max(0px, ...) evita calc() negativo em 0% (largura negativa é
+            // inválida em CSS e o valor seria descartado).
+            style={{ width: 'max(0px, calc(' + fillPercent + '% - 2px))' }}
+          />
+          {plugged && (
+            <Icon name="bolt" className={s.bolt + ' relative z-10 ' + boltColor} />
+          )}
+        </span>
+        {/* Polo positivo: mesmo contorno, 1 px de largura. */}
+        <span className={'shrink-0 rounded-r-[1px] bg-current ' + s.pole} />
+      </span>
       {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
       <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
     </span>

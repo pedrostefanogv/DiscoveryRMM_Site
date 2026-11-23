@@ -28,7 +28,7 @@ describe("Icon & split materialSymbols registry", () => {
     restoreAllChunks();
   });
 
-  it("partitions all 198 glyphs across core and 4 lazy chunks with zero duplicates or gaps", () => {
+  it("partitions all 191 glyphs across core and 4 lazy chunks with zero duplicates or gaps", () => {
     const groups = [
       Object.keys(CORE_SYMBOL_PATHS),
       Object.keys(FILES_MEDIA_SYMBOL_PATHS),
@@ -46,7 +46,7 @@ describe("Icon & split materialSymbols registry", () => {
     }
 
     const allLegacyKeys = Object.keys(MATERIAL_SYMBOL_PATHS);
-    expect(allLegacyKeys.length).toBe(198);
+    expect(allLegacyKeys.length).toBe(191);
     expect(seen.size).toBe(allLegacyKeys.length);
 
     for (const key of allLegacyKeys) {
@@ -54,7 +54,7 @@ describe("Icon & split materialSymbols registry", () => {
     }
 
     const lazyKeys = Object.keys(ICON_CHUNK_MAP);
-    expect(lazyKeys.length).toBe(198 - Object.keys(CORE_SYMBOL_PATHS).length);
+    expect(lazyKeys.length).toBe(191 - Object.keys(CORE_SYMBOL_PATHS).length);
   });
 
   it("renders core icons synchronously even when registry only holds core", () => {
