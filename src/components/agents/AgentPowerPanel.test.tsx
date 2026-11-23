@@ -1,9 +1,9 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BatteryInfo } from '@/api';
-import { AgentPowerCard } from './AgentPowerCard';
+import { AgentPowerPanel } from './AgentPowerPanel';
 
-// Sem heartbeat ao vivo no store e com "agora" fixo, o card cai para o
+// Sem heartbeat ao vivo no store e com "agora" fixo, o painel cai para o
 // inventário — exatamente o caso dos agentes offline/em polling.
 vi.mock('@/stores/heartbeatStore', () => ({
   useAgentHeartbeat: () => undefined,
@@ -39,10 +39,14 @@ function battery(overrides: Partial<BatteryInfo> = {}): BatteryInfo {
 
 afterEach(() => cleanup());
 
-describe('AgentPowerCard', () => {
+/**
+ * Painel de dispositivo/energia que vive DENTRO do card "Informações" do
+ * detalhe do agente (antes era um card próprio, solto na página).
+ */
+describe('AgentPowerPanel', () => {
   it('mostra tipo de máquina, energia e saúde da bateria do inventário', () => {
     render(
-      <AgentPowerCard
+      <AgentPowerPanel
         agentId="a1"
         isLaptop
         machineType="notebook"
@@ -51,38 +55,53 @@ describe('AgentPowerCard', () => {
       />,
     );
 
-    expect(screen.getByText('Energia e bateria')).toBeTruthy();
+    expect(screen.getByText('Dispositivo e energia')).toBeTruthy();
     expect(screen.getByText('Notebook')).toBeTruthy();
     expect(screen.getByText('Na bateria')).toBeTruthy();
-    expect(screen.getByText('63%')).toBeTruthy();
+    // O percentual aparece no resumo e na bateria detalhada; a cor segue a faixa
+    // (63% = success).
+    const percentuais = screen.getAllByText('63%');
+    expect(percentuais.length).toBeGreaterThanOrEqual(1);
+    expect(percentuais[0].className).toContain('text-success');
     // Saúde = máxima/desenho (41000/45000 ≈ 91%).
     expect(screen.getByText('Saúde: 91%')).toBeTruthy();
     expect(screen.getByText('Ciclos: 212')).toBeTruthy();
     // Valor vindo do inventário é rotulado — o inventário roda a cada 24 h.
-    expect(screen.getByText('última coleta')).toBeTruthy();
+    expect(screen.getByText(/Inventário de/)).toBeTruthy();
   });
 
-  it('mostra "Na tomada" quando o inventário reporta AC', () => {
-    render(<AgentPowerCard agentId="a1" isLaptop machineType="notebook" batteries={[battery({ onAc: true, charging: true })]} />);
+  it('mostra "Carregando" na tomada', () => {
+    render(
+      <AgentPowerPanel
+        agentId="a1"
+        isLaptop
+        machineType="notebook"
+        batteries={[battery({ onAc: true, charging: true })]}
+      />,
+    );
 
     expect(screen.getByText('Carregando')).toBeTruthy();
   });
 
   it('mostra Desktop sem detalhes de bateria', () => {
-    render(<AgentPowerCard agentId="a1" isLaptop={false} machineType="desktop" batteries={[]} />);
+    render(<AgentPowerPanel agentId="a1" isLaptop={false} machineType="desktop" batteries={[]} />);
 
     expect(screen.getByText('Desktop')).toBeTruthy();
-    // O rótulo "Bateria" do resumo continua (com "—"), mas nenhum detalhe de
-    // bateria é renderizado: desktop não tem bateria para listar.
-    expect(screen.getByText('Bateria')).toBeTruthy();
-    expect(screen.queryByText('—', { selector: 'p.tabular-nums' })).toBeTruthy();
     expect(screen.queryByText(/Desenho:/)).toBeNull();
     expect(screen.queryByText(/Ciclos:/)).toBeNull();
   });
 
   it('não renderiza nada quando o agente não reportou nada (nem tipo, nem bateria)', () => {
-    const { container } = render(<AgentPowerCard agentId="a1" isLaptop={null} machineType={null} batteries={null} />);
+    const { container } = render(
+      <AgentPowerPanel agentId="a1" isLaptop={null} machineType={null} batteries={null} />,
+    );
 
     expect(container.firstChild).toBeNull();
+  });
+
+  it('reconhece notebook pelo machineType mesmo sem o booleano isLaptop', () => {
+    render(<AgentPowerPanel agentId="a1" isLaptop={null} machineType="notebook" batteries={[battery()]} />);
+
+    expect(screen.getByText('Notebook')).toBeTruthy();
   });
 });

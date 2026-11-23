@@ -1,6 +1,13 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AgentCard, getAgentOsIcon, isAgentWindowsServer, isWindowsServerOs } from './AgentCard';
+import { Icon } from '@/components/ui';
+import {
+  AgentCard,
+  getAgentDeviceIcon,
+  getAgentOsIcon,
+  isAgentWindowsServer,
+  isWindowsServerOs,
+} from './AgentCard';
 
 /**
  * O card do agente exibe o usuário logado no Windows reportado pelo agent,
@@ -315,6 +322,82 @@ describe('AgentCard — ícone de Windows Server', () => {
     const d = iconeDoSo?.getAttribute('d');
     expect(d).toBe(clientePath);
     expect(d).not.toBe(renderOsIconPath('Windows Server 2022 Standard'));
+  });
+});
+
+/**
+ * Ícone do DISPOSITIVO: antes o card mostrava sempre o ícone do SO, então um
+ * notebook ficava visualmente idêntico a um desktop na listagem.
+ */
+describe('AgentCard — ícone de dispositivo (notebook)', () => {
+  /** Path do glifo de notebook renderizado direto, para comparar sem fixar dados. */
+  function laptopGlyphPath(): string | null {
+    const { container, unmount } = render(<>{<Icon name="laptop_mac" />}</>);
+    const d = container.querySelector('svg path')?.getAttribute('d') ?? null;
+    unmount();
+    return d;
+  }
+
+  it('usa o glifo de notebook quando o agente é notebook', () => {
+    const laptopPath = laptopGlyphPath();
+    const { container } = render(
+      <AgentCard agent={buildAgent({ operatingSystem: 'Windows 11 Pro', isLaptop: true, machineType: 'notebook' })} now={Date.now()} />,
+    );
+
+    expect(container.querySelector('.h-11.w-11 svg path')?.getAttribute('d')).toBe(laptopPath);
+  });
+
+  it('reconhece notebook só pelo machineType (sem o booleano)', () => {
+    const laptopPath = laptopGlyphPath();
+    const { container } = render(
+      <AgentCard agent={buildAgent({ operatingSystem: 'Windows 11 Pro', isLaptop: null, machineType: 'notebook' })} now={Date.now()} />,
+    );
+
+    expect(container.querySelector('.h-11.w-11 svg path')?.getAttribute('d')).toBe(laptopPath);
+  });
+
+  it('mantém o ícone do SO quando o campo não foi reportado (null)', () => {
+    const laptopPath = laptopGlyphPath();
+    const clientePath = renderOsIconPath('Windows 11 Pro');
+    const { container } = render(
+      <AgentCard agent={buildAgent({ operatingSystem: 'Windows 11 Pro', isLaptop: null, machineType: null })} now={Date.now()} />,
+    );
+
+    const d = container.querySelector('.h-11.w-11 svg path')?.getAttribute('d');
+    expect(d).toBe(clientePath);
+    expect(d).not.toBe(laptopPath);
+  });
+
+  it('servidor vence notebook: uma máquina Windows Server não vira ícone de notebook', () => {
+    const laptopPath = laptopGlyphPath();
+    const { container } = render(
+      <AgentCard
+        agent={buildAgent({
+          operatingSystem: 'Windows Server 2022 Standard',
+          isServer: true,
+          productType: '3',
+          isLaptop: true,
+          machineType: 'notebook',
+        })}
+        now={Date.now()}
+      />,
+    );
+
+    expect(container.querySelector('.h-11.w-11 svg path')?.getAttribute('d')).not.toBe(laptopPath);
+  });
+
+  it('getAgentDeviceIcon devolve o glifo de notebook apenas para máquinas móveis', () => {
+    const laptopPath = laptopGlyphPath();
+    const { container, unmount } = render(
+      <>{getAgentDeviceIcon({ operatingSystem: 'Windows 11 Pro', isLaptop: true })}</>,
+    );
+    expect(container.querySelector('svg path')?.getAttribute('d')).toBe(laptopPath);
+    unmount();
+
+    const { container: desktopContainer } = render(
+      <>{getAgentDeviceIcon({ operatingSystem: 'Windows 11 Pro', isLaptop: false, machineType: 'desktop' })}</>,
+    );
+    expect(desktopContainer.querySelector('svg path')?.getAttribute('d')).not.toBe(laptopPath);
   });
 });
 

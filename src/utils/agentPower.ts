@@ -13,14 +13,37 @@ export interface AgentMachineLike {
 }
 
 /**
- * Decide se o agente é notebook.
+ * Decide se o agente é notebook/tablet.
  *
- * Só `true` explícito marca. `null`/`undefined` é "NÃO REPORTADO" (agente
- * antigo, VM sem WMI ou coleta inconclusiva) e não pode virar "desktop" nem
- * esconder o selo por engano — é o mesmo princípio do isServer (M272).
+ * `true` explícito marca. Quando o booleano não veio (linha antiga, agente que
+ * só reportou o tipo), o vocabulário canônico `machineType` decide — é o MESMO
+ * dado, e sem isso o selo/ícone de notebook sumiria numa máquina que o detalhe
+ * mostra corretamente como "Notebook".
+ *
+ * `false` é resposta positiva ("é desktop") e vence. `null`/`undefined` é "NÃO
+ * REPORTADO" (agente antigo, VM sem WMI, coleta inconclusiva) e não pode virar
+ * "desktop" nem esconder o selo por engano — mesmo princípio do isServer (M272).
  */
 export function isAgentLaptop(agent: AgentMachineLike): boolean {
-  return agent.isLaptop === true;
+  if (agent.isLaptop === true) return true;
+  if (agent.isLaptop === false) return false;
+
+  const raw = agent.machineType?.trim().toLowerCase();
+  return raw === 'notebook' || raw === 'tablet';
+}
+
+/** Faixa de cor do indicador de bateria. Em bateria, valor ALTO é bom. */
+export type BatteryTone = 'success' | 'warning' | 'danger' | 'neutral';
+
+/**
+ * Cor do indicador pelo percentual: verde acima de 30%, âmbar até 30%, vermelho
+ * até 15%. Desconhecido/fora da faixa rende neutro (nunca finge 0%).
+ */
+export function batteryTone(percent: number | null | undefined): BatteryTone {
+  if (percent == null || !Number.isFinite(percent) || percent < 0 || percent > 100) return 'neutral';
+  if (percent <= 15) return 'danger';
+  if (percent <= 30) return 'warning';
+  return 'success';
 }
 
 const MACHINE_TYPE_LABELS: Record<string, string> = {

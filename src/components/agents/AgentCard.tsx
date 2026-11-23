@@ -7,10 +7,11 @@ import { formatDateCompact } from '@/utils/format';
 import {
   batteryFromMetrics,
   batteryPowerLabel,
-  formatBatteryPercent,
   isAgentLaptop,
   laptopBadgeLabel,
+  type AgentMachineLike,
 } from '@/utils/agentPower';
+import { BatteryGauge } from '@/components/ui';
 
 /** Agente com cliente/site já resolvidos para exibição. */
 export type AgentCardAgent = Agent & { clientName: string; clientId: string; siteName?: string };
@@ -76,6 +77,17 @@ export function isAgentWindowsServer(agent: AgentOsIdentity): boolean {
 const windowsServerIcon = () => <Icon name="storage" className="h-5 w-5 text-warning" />;
 
 /**
+ * Ícone de NOTEBOOK/TABLET (reaproveitado pelo card e pela listagem).
+ *
+ * Sem glifo próprio de notebook no registry (só laptop_mac/laptop_chromebook),
+ * usamos o glifo de laptop já registrado — o que importa é o card parar de
+ * mostrar o ícone genérico de DESKTOP em uma máquina que é claramente portátil.
+ * Cor accent (roxo) para não colidir com o text-primary do desktop nem com o
+ * text-warning do servidor.
+ */
+const laptopIcon = () => <Icon name="laptop_mac" className="h-5 w-5 text-accent" />;
+
+/**
  * Ícone do SO usado no card (extraído do AgentList para reuso).
  *
  * `isServer` permite que quem já sabe a resposta pelo campo dedicado desligue a
@@ -84,6 +96,32 @@ const windowsServerIcon = () => <Icon name="storage" className="h-5 w-5 text-war
  * servidor — o campo vence e o glifo de servidor não é reintroduzido.
  * Omitido/null = decide pelo texto (comportamento do fallback).
  */
+/**
+ * Ícone do DISPOSITIVO exibido no card/listagem, com precedência explícita:
+ * servidor > notebook/tablet > ícone do SO.
+ *
+ * Antes o card mostrava sempre o ícone do SO (desktop_windows no Windows), então
+ * um notebook ficava indistinguível de um desktop na listagem.
+ */
+export function getAgentDeviceIcon(
+  agent: AgentOsIdentity & AgentMachineLike,
+) {
+  if (isAgentWindowsServer(agent)) return windowsServerIcon();
+  if (isAgentLaptop(agent)) return laptopIcon();
+  return getAgentOsIcon(agent.operatingSystem, agent.isServer);
+}
+
+/**
+ * Fundo do quadrado do ícone, alinhado ao glifo exibido: notebook = accent,
+ * servidor = warning, resto = primary. Sem isso o glifo roxo de notebook ficava
+ * sobre um fundo azul, parecendo erro de tema.
+ */
+export function getAgentDeviceIconBoxClass(agent: AgentOsIdentity & AgentMachineLike): string {
+  if (isAgentWindowsServer(agent)) return 'bg-warning/15';
+  if (isAgentLaptop(agent)) return 'bg-accent/15';
+  return 'bg-primary/15';
+}
+
 export function getAgentOsIcon(os: string | null | undefined, isServer?: boolean | null) {
   if (!os) return <Icon name="desktop_windows" className="h-5 w-5 text-primary" />;
   const lower = os.toLowerCase();
@@ -183,11 +221,11 @@ export function AgentCard({
         </Badge>
       </div>
       <div className="flex items-start gap-3 pr-6">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-          {/* Prefere o campo isServer/productType; cai para o texto se vier null. */}
-          {isAgentWindowsServer(agent)
-            ? windowsServerIcon()
-            : getAgentOsIcon(agent.operatingSystem, agent.isServer)}
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${getAgentDeviceIconBoxClass(agent)}`}
+        >
+          {/* Servidor > notebook/tablet > SO (campos dedicados vencem o texto). */}
+          {getAgentDeviceIcon(agent)}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-foreground transition-colors group-hover:text-primary">{displayName}</p>
@@ -274,14 +312,12 @@ export function AgentCard({
             {relativeTime.text}
           </span>
           {battery && (
-            <span
-              className={`flex items-center gap-1 text-[10px] ${battery.onAc === false && !battery.charging ? 'text-warning' : ''}`}
-              title={`Energia: ${batteryPowerLabel(battery.onAc, battery.charging)}`}
-            >
-              <Icon name={battery.charging ? 'bolt' : 'power_settings_new'} className="h-3 w-3" />
-              {formatBatteryPercent(battery.percent)}
-              <span className="text-muted">{batteryPowerLabel(battery.onAc, battery.charging)}</span>
-            </span>
+            <BatteryGauge
+              percent={battery.percent}
+              onAc={battery.onAc}
+              charging={battery.charging}
+              label={batteryPowerLabel(battery.onAc, battery.charging)}
+            />
           )}
           {agent.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
             const t = agent.heartbeatMetrics.cpuTemperatureCelsius;

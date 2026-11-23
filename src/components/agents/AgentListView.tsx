@@ -1,15 +1,15 @@
 import type { MouseEvent } from 'react';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import { Icon, Badge, MetricBar } from '@/components/ui';
-import { formatRelative, getAgentOsIcon, isAgentWindowsServer, type AgentCardAgent } from './AgentCard';
-import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import {
-  batteryFromMetrics,
-  batteryPowerLabel,
-  formatBatteryPercent,
-  isAgentLaptop,
-  laptopBadgeLabel,
-} from '@/utils/agentPower';
+  formatRelative,
+  getAgentDeviceIcon,
+  getAgentDeviceIconBoxClass,
+  type AgentCardAgent,
+} from './AgentCard';
+import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
+import { batteryFromMetrics, isAgentLaptop, laptopBadgeLabel } from '@/utils/agentPower';
+import { BatteryGauge } from '@/components/ui';
 
 interface AgentListViewProps {
   agents: AgentCardAgent[];
@@ -86,13 +86,11 @@ export function AgentListView({
               >
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-                      {/* Mesma regra do card: campo dedicado primeiro, texto como fallback. */}
-                      {isAgentWindowsServer(a) ? (
-                        <Icon name="storage" className="h-5 w-5 text-warning" />
-                      ) : (
-                        getAgentOsIcon(a.operatingSystem, a.isServer)
-                      )}
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${getAgentDeviceIconBoxClass(a)}`}
+                    >
+                      {/* Mesma regra do card: servidor > notebook/tablet > SO. */}
+                      {getAgentDeviceIcon(a)}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{displayName}</p>
@@ -137,12 +135,12 @@ export function AgentListView({
                 )}
                 <td className="px-4 py-3">
                   {battery && (
-                    <span
-                      className={`mr-1 inline-flex items-center gap-1 text-[10px] ${battery.onAc === false && !battery.charging ? 'text-warning' : 'text-muted'}`}
-                      title={`Energia: ${batteryPowerLabel(battery.onAc, battery.charging)}`}
-                    >
-                      <Icon name={battery.charging ? 'bolt' : 'power_settings_new'} className="h-3 w-3" />
-                      {formatBatteryPercent(battery.percent)}
+                    <span className="mr-1 inline-flex align-middle">
+                      <BatteryGauge
+                        percent={battery.percent}
+                        onAc={battery.onAc}
+                        charging={battery.charging}
+                      />
                     </span>
                   )}
                   {hasPendingReboot(a) && (
