@@ -271,7 +271,7 @@ function FieldInfoButton({ item }: { item: CustomFieldSchemaItem }) {
       <button
         type="button"
         aria-label={summary}
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="-m-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         <Icon name="info" className="h-3.5 w-3.5" />
       </button>

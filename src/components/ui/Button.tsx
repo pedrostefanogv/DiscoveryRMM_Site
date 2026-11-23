@@ -17,9 +17,12 @@ const variants: Record<Variant, string> = {
   ghost: 'border border-transparent bg-transparent text-muted-foreground hover:border-border hover:bg-surface-light hover:text-foreground',
 };
 
+// min-h-11 = 44px: alvo de toque mínimo recomendado em mobile. A partir de sm a
+// altura volta ao valor compacto do desktop, então o layout denso não muda em
+// telas grandes (onde o ponteiro não precisa de 44px).
 const sizes: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2 text-sm',
+  sm: 'px-3 py-1.5 min-h-11 min-w-11 text-xs sm:min-h-0 sm:min-w-0',
+  md: 'px-4 py-2 min-h-11 min-w-11 text-sm sm:min-h-0 sm:min-w-0',
   lg: 'px-6 py-3 text-base',
 };
 

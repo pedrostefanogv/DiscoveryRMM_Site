@@ -129,7 +129,7 @@ export function PinnedNotesCard({ agentId, onViewAll }: PinnedNotesCardProps) {
               {pinnedNotes.map((note) => (
                 <div key={note.id} className="rounded-lg border border-border bg-surface-light p-3">
                   <div className="mb-1 flex items-center gap-2">
-                    <Badge color="warning" className="text-[10px]">
+                    <Badge color="warning" className="text-[11px]">
                       <Icon name="push_pin" className="h-3 w-3" />
                       Fixada
                     </Badge>

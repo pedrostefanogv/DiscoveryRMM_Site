@@ -1,16 +1,19 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * SiteDetail segue o mesmo sistema de abas do ClientDetail, sem a aba Sites
- * (não se aplica a um site). Default: Chamados.
+ * (não se aplica a um site). Default: Info (resumo/notas/informações).
  */
 
 vi.mock('@/api', () => ({
   // Enums de valor consumidos por @/utils/labels e pelos handlers de notificação.
   LogLevel: { Trace: 0, Debug: 1, Info: 2, Warn: 3, Warning: 3, Error: 4, Fatal: 5, Critical: 5 },
   AlertScopeType: { Agent: 0, Site: 1, Client: 2, Label: 3 },
+  // Usados só dentro dos handlers das ações em massa (AgentBulkActionsBar).
+  agentsApi: { refreshData: vi.fn() },
+  agentUpdatesApi: { forceAgentCheck: vi.fn() },
 }));
 
 // O card de campos customizados tem teste próprio e depende de react-query/API.
@@ -62,6 +65,10 @@ vi.mock('@/hooks/useAgents', () => ({
     ],
     isLoading: false,
   }),
+  // Ações em massa da aba Agentes (barra só monta com seleção).
+  useRestartAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useShutdownAgent: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useWakeOnLan: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/hooks/useTickets', () => ({
@@ -93,6 +100,7 @@ vi.mock('@/hooks/useDashboardRealtime', () => ({ useDashboardRealtime: vi.fn() }
 vi.mock('@/hooks/useNowTick', () => ({ useNowTick: () => Date.now() }));
 vi.mock('@/hooks/useAgentAlerts', () => ({
   useSendScopeNotification: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSendAgentNotification: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/auth/authorization', () => ({
   useAuthorization: () => ({ hasAnyPermission: () => true }),
@@ -119,11 +127,20 @@ function renderPage(search = '') {
 afterEach(() => cleanup());
 
 describe('SiteDetail — abas de recursos', () => {
-  it('inicia na aba Chamados e não renderiza agentes', () => {
+  it('inicia na aba Info e não renderiza as demais', () => {
     renderPage();
-    expect(screen.getByText('Chamado Um')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Info/ }).getAttribute('aria-selected')).toBe('true');
+    // Conteúdo da aba Info: card "Informações" (o resumo e as notas são mockados).
+    expect(screen.getByText('Inventário de software')).toBeTruthy();
+    expect(screen.queryByText('Chamado Um')).toBeNull();
     expect(screen.queryByText('HOST-01')).toBeNull();
-    expect(screen.getByRole('tab', { name: /Chamados/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('troca para a aba Chamados ao clicar', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: /Chamados/ }));
+    expect(screen.getByText('Chamado Um')).toBeTruthy();
+    expect(screen.queryByText('Inventário de software')).toBeNull();
   });
 
   it('troca para a aba Agentes ao clicar', () => {
@@ -139,14 +156,31 @@ describe('SiteDetail — abas de recursos', () => {
     expect(screen.getByRole('tab', { name: /Logs/ }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('cai em Chamados quando o ?tab= é inválido', () => {
+  it('cai em Info quando o ?tab= é inválido', () => {
     renderPage('?tab=nao-existe');
-    expect(screen.getByText('Chamado Um')).toBeTruthy();
+    expect(screen.getByText('Inventário de software')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Info/ }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('usa o StatCard de Logs para trocar de aba', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Logs/ }));
     expect(screen.getByText('Log do site')).toBeTruthy();
+  });
+});
+
+describe('SiteDetail — ações em massa na aba Agentes', () => {
+  it('mostra a barra de ações ao selecionar um agente', () => {
+    renderPage('?tab=agentes');
+    expect(screen.queryByRole('region', { name: /Ações em massa/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Selecionar HOST-01' }));
+
+    const bar = screen.getByRole('region', { name: /Ações em massa/ });
+    expect(bar.textContent).toContain('1 selecionado(s)');
+    // Escopo na barra: o cabeçalho da página também tem um botão "Notificar"
+    // (broadcast para o site inteiro).
+    expect(within(bar).getByRole('button', { name: /Notificar/ })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: /Desligar/ })).toBeTruthy();
   });
 });

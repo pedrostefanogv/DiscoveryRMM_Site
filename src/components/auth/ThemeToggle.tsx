@@ -13,7 +13,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleMode}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-light text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+      className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-light text-muted-foreground transition-colors hover:bg-surface-hover sm:h-9 sm:w-9 hover:text-foreground"
       aria-label={mode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
       title={mode === 'dark' ? 'Tema claro' : 'Tema escuro'}
     >

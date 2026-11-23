@@ -236,8 +236,15 @@ export function MainLayout() {
         />
       )}
 
+      {/*
+        min-w-0 é obrigatório aqui: o item flex tem min-width:auto por padrão e,
+        sem ele, a largura mínima da coluna passa a ser o min-content do conteúdo
+        — a barra de abas do detalhe (13 abas "nowrap") tem ~1500px de largura
+        intrínseca e arrastava a página inteira para ~1541px no mobile (o
+        documento ficava com rolagem horizontal em vez de a barra rolar sozinha).
+      */}
       <div
-        className={`sidebar-transition relative z-10 flex min-h-screen flex-1 flex-col ${
+        className={`sidebar-transition relative z-10 flex min-h-screen min-w-0 flex-1 flex-col ${
           isDesktop ? (collapsed ? 'lg:ml-16' : 'lg:ml-60') : ''
         }`}
       >

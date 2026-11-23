@@ -7,6 +7,7 @@ import type {
   AutomationExecutionSourceType,
   AutomationExecutionStatus,
   AutomationScopeTarget,
+  AutomationScriptType,
   AutomationTaskActionType,
   AutomationForceSyncRequest,
   AutomationScriptAudit,
@@ -23,6 +24,8 @@ const KEYS = {
     list: (params: {
       clientId?: string;
       activeOnly?: boolean;
+      search?: string;
+      scriptType?: AutomationScriptType | string | number;
       cursor?: string;
       limit?: number;
     }) => [...KEYS.scripts.all, "list", params] as const,
@@ -53,6 +56,10 @@ const KEYS = {
     detail: (id: string) => [...KEYS.tasks.all, "detail", id] as const,
     audit: (id: string, limit: number) =>
       [...KEYS.tasks.all, "audit", id, limit] as const,
+    executions: (id: string, limit: number) =>
+      [...KEYS.tasks.all, "executions", id, limit] as const,
+    previewTargets: (id: string, limit: number, offset: number) =>
+      [...KEYS.tasks.all, "previewTargets", id, limit, offset] as const,
   },
   executions: {
     all: ["automationExecutions"] as const,
@@ -69,6 +76,8 @@ const KEYS = {
 export function useAutomationScripts(params: {
   clientId?: string;
   activeOnly?: boolean;
+  search?: string;
+  scriptType?: AutomationScriptType | string | number;
   cursor?: string;
   limit?: number;
 }) {
@@ -206,6 +215,27 @@ export function useAutomationTaskAudit(id: string, limit = 50, enabled = true) {
       const obj = raw as unknown as { items?: AutomationTaskAudit[] };
       return Array.isArray(obj?.items) ? obj.items : [];
     },
+    enabled: !!id && enabled,
+  });
+}
+
+export function useAutomationTaskExecutions(id: string, limit = 50, enabled = true) {
+  return useQuery({
+    queryKey: KEYS.tasks.executions(id, limit),
+    queryFn: () => automationApi.getTaskExecutions(id, limit),
+    enabled: !!id && enabled,
+  });
+}
+
+export function useAutomationTaskTargetPreview(
+  id: string,
+  enabled = true,
+  limit = 50,
+  offset = 0,
+) {
+  return useQuery({
+    queryKey: KEYS.tasks.previewTargets(id, limit, offset),
+    queryFn: () => automationApi.previewTaskTargets(id, limit, offset),
     enabled: !!id && enabled,
   });
 }

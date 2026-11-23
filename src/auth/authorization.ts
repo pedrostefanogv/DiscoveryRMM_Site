@@ -238,6 +238,28 @@ export function useAuthorization() {
       "automation.read",
       "admin.*",
     ]),
+    canCreateAutomation: authz.hasAnyPermission([
+      "automation.*",
+      "automation.create",
+      "admin.*",
+    ]),
+    canEditAutomation: authz.hasAnyPermission([
+      "automation.*",
+      "automation.edit",
+      "admin.*",
+    ]),
+    canDeleteAutomation: authz.hasAnyPermission([
+      "automation.*",
+      "automation.delete",
+      "admin.*",
+    ]),
+    canExecuteAutomation: authz.hasAnyPermission([
+      "Automation.Execute",
+      "automation.execute",
+      "Automation.Edit",
+      "automation.*",
+      "admin.*",
+    ]),
     canViewReports: authz.hasAnyPermission([
       "reports.*",
       "reports.read",

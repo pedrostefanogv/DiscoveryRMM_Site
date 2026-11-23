@@ -25,6 +25,16 @@ const { script } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock("@/auth/authorization", () => ({
+  useAuthorization: () => ({
+    canCreateAutomation: true,
+    canEditAutomation: true,
+    canDeleteAutomation: true,
+    canExecuteAutomation: true,
+    hasAnyPermission: () => true,
+  }),
+}));
+
 vi.mock("@/hooks/useClients", () => ({
   useClients: () => ({ data: [{ id: "c1", name: "Cliente A" }] }),
 }));

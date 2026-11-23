@@ -25,7 +25,7 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
         id={inputId}
         aria-invalid={Boolean(error)}
         aria-describedby={error || hint ? helpId : undefined}
-        className={`w-full rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
+        className={`w-full rounded-xl border border-border bg-surface-light px-3 py-2 min-h-11 text-sm text-foreground placeholder-muted outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 sm:min-h-0 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         {...props}
@@ -65,7 +65,7 @@ export function Select({ label, options, className = '', id, hint, error, fullWi
         id={selectId}
         aria-invalid={Boolean(error)}
         aria-describedby={error || hint ? helpId : undefined}
-        className={`${fullWidth ? 'w-full' : 'w-auto'} rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
+        className={`${fullWidth ? 'w-full' : 'w-auto'} rounded-xl border border-input-border bg-input px-3 py-2 min-h-11 text-sm text-foreground outline-none transition-colors sm:min-h-0 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         {...props}

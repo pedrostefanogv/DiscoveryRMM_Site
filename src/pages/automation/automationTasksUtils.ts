@@ -458,3 +458,105 @@ export function wingetDecisionFromMetadata(
     return null;
   }
 }
+
+export interface ExecutionOutputInfo {
+  output: string;
+  truncated: boolean;
+}
+
+export function executionOutputFromMetadata(
+  metadataJson: string | null | undefined,
+): ExecutionOutputInfo | null {
+  if (!metadataJson) return null;
+  try {
+    const parsed = JSON.parse(metadataJson) as {
+      output?: unknown;
+      outputTruncated?: unknown;
+    } | null;
+    if (!parsed || typeof parsed.output !== "string" || !parsed.output.trim()) {
+      return null;
+    }
+    return {
+      output: parsed.output,
+      truncated: parsed.outputTruncated === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export interface ExecutionNoOpInfo {
+  noOp: boolean;
+  reason: string | null;
+}
+
+export function noOpFromMetadata(
+  metadataJson: string | null | undefined,
+): ExecutionNoOpInfo | null {
+  if (!metadataJson) return null;
+  try {
+    const parsed = JSON.parse(metadataJson) as {
+      noOp?: unknown;
+      noOpReason?: unknown;
+    } | null;
+    if (!parsed || parsed.noOp !== true) return null;
+    return {
+      noOp: true,
+      reason: typeof parsed.noOpReason === "string" && parsed.noOpReason.trim()
+        ? parsed.noOpReason.trim()
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export interface CronAssistantState {
+  frequency: "minutes" | "hourly" | "daily" | "weekly" | "monthly";
+  minute: string;
+  hour: string;
+  weekday: string;
+  monthDay: string;
+  step: string;
+}
+
+/**
+ * Hidrata o assistente de cron a partir de uma expressão salva (quando
+ * compatível com os presets do assistente), evitando que o form de edição
+ * sempre reabra em "Diariamente 08:00".
+ */
+export function parseCronAssistantState(expr: string | null | undefined): CronAssistantState {
+  const defaults: CronAssistantState = {
+    frequency: "daily",
+    minute: "0",
+    hour: "8",
+    weekday: "1",
+    monthDay: "1",
+    step: "15",
+  };
+  const raw = String(expr ?? "").trim();
+  if (!raw) return defaults;
+  const parts = raw.split(/\s+/);
+  if (parts.length !== 5) return defaults;
+
+  const [minute, hour, monthDay, month, weekday] = parts;
+  if (month !== "*") return defaults;
+
+  const stepMatch = minute.match(/^\*\/(\d+)$/);
+  if (stepMatch && hour === "*" && monthDay === "*" && weekday === "*") {
+    return { ...defaults, frequency: "minutes", step: stepMatch[1] };
+  }
+  if (/^\d+$/.test(minute) && hour === "*" && monthDay === "*" && weekday === "*") {
+    return { ...defaults, frequency: "hourly", minute };
+  }
+  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && monthDay === "*" && weekday === "*") {
+    return { ...defaults, frequency: "daily", minute, hour };
+  }
+  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && monthDay === "*" && /^\d+$/.test(weekday)) {
+    return { ...defaults, frequency: "weekly", minute, hour, weekday: weekday === "7" ? "0" : weekday };
+  }
+  if (/^\d+$/.test(minute) && /^\d+$/.test(hour) && /^\d+$/.test(monthDay) && weekday === "*") {
+    return { ...defaults, frequency: "monthly", minute, hour, monthDay };
+  }
+  return defaults;
+}

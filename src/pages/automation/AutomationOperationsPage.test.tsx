@@ -362,8 +362,8 @@ describe("AutomationOperationsPage", () => {
   it("não dispara force sync com todas as opções desmarcadas", () => {
     renderPage();
 
-    fireEvent.change(screen.getByLabelText("Policies"), { target: { value: "false" } });
-    fireEvent.change(screen.getByLabelText("Inventory"), { target: { value: "false" } });
+    fireEvent.click(screen.getByLabelText("Policies"));
+    fireEvent.click(screen.getByLabelText("Inventory"));
     fireEvent.click(screen.getByRole("button", { name: "Executar force sync" }));
 
     expect(forceSyncMock).not.toHaveBeenCalled();
@@ -373,9 +373,9 @@ describe("AutomationOperationsPage", () => {
   it("envia as flags de force sync para o backend", () => {
     renderPage();
 
-    fireEvent.change(screen.getByLabelText("Policies"), { target: { value: "false" } });
-    fireEvent.change(screen.getByLabelText("Inventory"), { target: { value: "false" } });
-    fireEvent.change(screen.getByLabelText("Software"), { target: { value: "true" } });
+    fireEvent.click(screen.getByLabelText("Policies"));
+    fireEvent.click(screen.getByLabelText("Inventory"));
+    fireEvent.click(screen.getByLabelText("Software"));
     fireEvent.click(screen.getByRole("button", { name: "Executar force sync" }));
 
     expect(forceSyncMock).toHaveBeenCalledTimes(1);
@@ -388,5 +388,10 @@ describe("AutomationOperationsPage", () => {
         appStore: false,
       },
     });
+  });
+
+  it("pré-seleciona tarefa via query param ?taskId=", () => {
+    renderPage("/automation/operations?agentId=agent-1&taskId=t1");
+    expect((screen.getByLabelText("Tarefa") as HTMLSelectElement).value).toBe("t1");
   });
 });

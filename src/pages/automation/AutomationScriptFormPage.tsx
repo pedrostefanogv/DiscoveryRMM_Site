@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Icon,
   Button,
@@ -116,7 +116,9 @@ function formFromDetail(detail: AutomationScriptDetail): ScriptFormState {
 export default function AutomationScriptFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isEdit = Boolean(id);
+  const duplicateFrom = (location.state as { duplicateFrom?: AutomationScriptDetail } | null)?.duplicateFrom;
   // Em edição sempre revalida na montagem: montar o form a partir do cache e
   // salvar por cima descartaria uma alteração feita por outro usuário.
   const detail = useAutomationScript(id ?? '', { refetchOnMount: 'always' });
@@ -149,11 +151,21 @@ export default function AutomationScriptFormPage() {
     );
   }
 
+  const initialForm: ScriptFormState =
+    isEdit && detail.data
+      ? formFromDetail(detail.data)
+      : duplicateFrom
+        ? {
+            ...formFromDetail(duplicateFrom),
+            name: `${duplicateFrom.name} (cópia)`,
+          }
+        : emptyForm;
+
   return (
     <ScriptForm
-      key={id ?? 'new'}
+      key={id ?? (duplicateFrom ? `dup-${duplicateFrom.id}` : 'new')}
       editId={id ?? null}
-      initial={isEdit && detail.data ? formFromDetail(detail.data) : emptyForm}
+      initial={initialForm}
     />
   );
 }

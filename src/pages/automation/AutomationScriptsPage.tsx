@@ -1,5 +1,5 @@
 import { formatDateTime } from '@/utils/format';
-import { useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Icon,
@@ -12,15 +12,18 @@ import { Icon,
   type Column,
   type ContextMenuItem,
   ErrorDisplay,
+  Input,
   Loading,
   Modal,
   Pagination,
   Select,
   ConfirmDialog,
-PageHeader,
+  PageHeader,
 } from "@/components/ui";
-import { type AutomationScriptSummary } from "@/api";
+import { AutomationScriptType, type AutomationScriptSummary } from "@/api";
+import { useAuthorization } from "@/auth/authorization";
 import { AutomationScriptAuditTrail } from "./AutomationScriptAuditTrail";
+import { AutomationSubnav } from "./AutomationSubnav";
 import { scriptTypeLabel } from "./automationScriptUtils";
 import { useClients } from "@/hooks/useClients";
 import { useAutomationScripts, useDeleteAutomationScript } from "@/hooks/useAutomation";
@@ -35,19 +38,31 @@ interface ScriptContextMenuState {
   y: number;
 }
 
+const SCRIPT_TYPE_FILTERS = [
+  { value: "", label: "Todas as linguagens" },
+  { value: String(AutomationScriptType.PowerShell), label: "PowerShell" },
+  { value: String(AutomationScriptType.Shell), label: "Shell" },
+  { value: String(AutomationScriptType.Python), label: "Python" },
+  { value: String(AutomationScriptType.Batch), label: "Batch" },
+  { value: String(AutomationScriptType.Custom), label: "Custom" },
+];
+
 /**
  * Catálogo de scripts de automação.
  *
- * A lista é enxuta (sem coluna de ações): clicar em um item abre a página de
- * detalhes/consulta (/automation/scripts/:id) e o botão direito abre o menu de
- * ações (abrir, editar, auditoria, excluir). Criar/editar acontece em página
- * dedicada; a auditoria continua em modal para não tirar o usuário da lista.
+ * Clicar em um item abre a página de detalhes/consulta (/automation/scripts/:id)
+ * e o menu de ações (botão ⋮ ou botão direito) oferece abrir, executar, editar,
+ * auditoria e excluir.
  */
 export default function AutomationScriptsPage() {
   const navigate = useNavigate();
+  const { canCreateAutomation, canEditAutomation, canDeleteAutomation, canExecuteAutomation } = useAuthorization();
   const clients = useClients();
   const [activeOnly, setActiveOnly] = useState(true);
   const [clientId, setClientId] = useState("");
+  const [scriptType, setScriptType] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
   const [limit, setLimit] = useState(20);
   const [page, setPage] = useState(1);
   const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
@@ -55,10 +70,19 @@ export default function AutomationScriptsPage() {
   const [auditScriptId, setAuditScriptId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ScriptContextMenuState | null>(null);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const cursor = pageCursors[page - 1];
   const list = useAutomationScripts({
     clientId: clientId || undefined,
     activeOnly,
+    search: searchDebounced || undefined,
+    scriptType: scriptType !== "" ? Number(scriptType) : undefined,
     cursor,
     limit,
   });
@@ -102,42 +126,55 @@ export default function AutomationScriptsPage() {
   const contextMenuItems = useMemo<ContextMenuItem[]>(() => {
     if (!contextMenu) return [];
     const { script } = contextMenu;
-    return [
+    const items: ContextMenuItem[] = [
       {
         key: "view",
         label: "Abrir detalhes",
         icon: <Icon name="visibility" className="h-4 w-4" />,
         onClick: () => navigate(`/automation/scripts/${script.id}`),
       },
-      {
+    ];
+    if (canExecuteAutomation && script.isActive) {
+      items.push({
+        key: "run",
+        label: "Executar agora",
+        icon: <Icon name="play_arrow" className="h-4 w-4" />,
+        onClick: () => navigate(`/automation/operations?scriptId=${script.id}`),
+      });
+    }
+    if (canEditAutomation) {
+      items.push({
         key: "edit",
         label: "Editar",
         icon: <Icon name="edit" className="h-4 w-4" />,
         onClick: () => navigate(`/automation/scripts/${script.id}/edit`),
-      },
-      {
-        key: "audit",
-        label: "Auditoria",
-        icon: <Icon name="history" className="h-4 w-4" />,
-        onClick: () => setAuditScriptId(script.id),
-      },
-      {
+      });
+    }
+    items.push({
+      key: "audit",
+      label: "Auditoria",
+      icon: <Icon name="history" className="h-4 w-4" />,
+      onClick: () => setAuditScriptId(script.id),
+    });
+    if (canDeleteAutomation) {
+      items.push({
         key: "delete",
         label: "Excluir",
         icon: <Icon name="delete" className="h-4 w-4" />,
         danger: true,
         separatorBefore: true,
         onClick: () => setDeleteTarget(script),
-      },
-    ];
-  }, [contextMenu, navigate, deleteMutation]);
+      });
+    }
+    return items;
+  }, [contextMenu, navigate, canExecuteAutomation, canEditAutomation, canDeleteAutomation]);
 
   const columns = useMemo<Column<AutomationScriptSummary>[]>(
     () => [
       {
         key: "name",
         header: "Nome",
-        width: "30%",
+        width: "28%",
         render: (item) => (
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">{item.name}</p>
@@ -174,7 +211,7 @@ export default function AutomationScriptsPage() {
         key: "status",
         header: "Status",
         sortValue: (item) => (item.isActive ? 0 : 1),
-        width: "12%",
+        width: "11%",
         render: (item) => (
           <Badge color={item.isActive ? "success" : "slate"}>
             {item.isActive ? "Ativo" : "Inativo"}
@@ -185,8 +222,30 @@ export default function AutomationScriptsPage() {
         key: "updated",
         header: "Atualizado",
         sortValue: (item) => Date.parse(item.lastUpdatedAt) || 0,
-        width: "18%",
+        width: "16%",
         render: (item) => formatDateTime(item.lastUpdatedAt),
+      },
+      {
+        key: "menu",
+        header: "",
+        width: "5%",
+        render: (item) => (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              aria-label={`Mais ações para ${item.name}`}
+              title="Mais ações"
+              className="rounded-lg p-1 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setContextMenu({ script: item, x: rect.right, y: rect.bottom });
+              }}
+            >
+              <Icon name="more_vert" className="h-4 w-4" />
+            </button>
+          </div>
+        ),
       },
     ],
     [clients.data],
@@ -200,13 +259,35 @@ export default function AutomationScriptsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <PageHeader title="Scripts de Automação" description="Catálogo de scripts reutilizáveis. Clique em um item para consultar; clique com o botão direito para ver as ações." />
-        <Button onClick={() => navigate("/automation/scripts/new")}>Novo script</Button>
+        <PageHeader title="Scripts de Automação" description="Catálogo de scripts reutilizáveis. Clique em um item para consultar; use o menu ⋮ ou o botão direito para ver as ações." />
+        {canCreateAutomation && (
+          <Button onClick={() => navigate("/automation/scripts/new")}>Novo script</Button>
+        )}
       </div>
 
+      <AutomationSubnav />
+
       <Card>
-        <CardHeader title="Filtros" subtitle="Refine por escopo e status" />
-        <div className="grid gap-3 md:grid-cols-4">
+        <CardHeader title="Filtros" subtitle="Refine por busca, linguagem, escopo e status" />
+        <div className="grid gap-3 md:grid-cols-5">
+          <Input
+            label="Busca"
+            placeholder="Nome ou resumo..."
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              resetPagination();
+            }}
+          />
+          <Select
+            label="Linguagem"
+            options={SCRIPT_TYPE_FILTERS}
+            value={scriptType}
+            onChange={(e) => {
+              setScriptType(e.target.value);
+              resetPagination();
+            }}
+          />
           <Select
             label="Cliente"
             options={clientOptions}
@@ -313,7 +394,8 @@ export default function AutomationScriptsPage() {
                 setDeleteTarget(null);
                 toast.success("Script excluido");
               },
-              onError: () => toast.error("Falha ao excluir script"),
+              onError: (error) =>
+                toast.error(error instanceof Error ? error.message : "Falha ao excluir script"),
             },
           );
         }}

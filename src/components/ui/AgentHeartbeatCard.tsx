@@ -87,7 +87,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
           <Icon name="storage" className="h-3.5 w-3.5 text-muted" />
           <span className="text-xs font-medium text-muted">Disco</span>
           {metrics.diskUsedGb != null && metrics.diskTotalGb != null && (
-            <span className="text-[10px] text-muted">
+            <span className="text-[11px] text-muted">
               {Math.round(metrics.diskUsedGb)} / {Math.round(metrics.diskTotalGb)} GB
             </span>
           )}
@@ -132,8 +132,9 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
         </div>
       </div>
 
-      {/* Extra metrics row */}
-      <div className="mt-4 grid grid-cols-5 gap-3 border-t border-border pt-3 text-xs">
+      {/* Extra metrics row — 3 colunas no mobile (rótulos legíveis, ~96px cada);
+          5 em linha a partir de sm, onde há largura sobrando. */}
+      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3 text-xs sm:grid-cols-5">
         <div className="text-center">
           <p className="flex items-center justify-center gap-1 text-muted">
             <Icon name="podcasts" className="h-3 w-3" />

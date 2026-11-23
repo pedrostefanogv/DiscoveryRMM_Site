@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import { Icon, Badge, MetricBar } from '@/components/ui';
 import {
@@ -28,6 +28,11 @@ interface AgentListViewProps {
     label: string;
     valuesByAgentId: Map<string, string>;
   };
+  /** Habilita a coluna de seleção múltipla (ações em massa da aba Agentes). */
+  selectable?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (agent: AgentCardAgent, next: boolean) => void;
+  onToggleSelectAll?: (agents: readonly AgentCardAgent[], next: boolean) => void;
 }
 
 /** Tabela de agentes no mesmo estilo da visualização em lista de /agents. */
@@ -41,12 +46,41 @@ export function AgentListView({
   isApprovingId,
   onApprove,
   customField,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: AgentListViewProps) {
+  const selectedCount = selectable
+    ? agents.filter((agent) => selectedIds?.has(agent.id)).length
+    : 0;
+  const allSelected = selectable && agents.length > 0 && selectedCount === agents.length;
+  const someSelected = selectedCount > 0 && !allSelected;
+
+  // Estado "indeterminado" do checkbox do cabeçalho: só existe no DOM (não é um
+  // atributo HTML), então precisa ser sincronizado à mão a cada render.
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left">
+            {selectable && (
+              <th className="w-10 px-4 py-3">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(event) => onToggleSelectAll?.(agents, event.target.checked)}
+                  aria-label="Selecionar todos os agentes"
+                  className="h-4 w-4 cursor-pointer rounded border-border-strong bg-surface-light text-primary focus:ring-primary/30"
+                />
+              </th>
+            )}
             <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Agente</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted md:table-cell">Sistema Operacional</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">IP</th>
@@ -83,8 +117,28 @@ export function AgentListView({
                 key={a.id}
                 onClick={onOpen ? () => onOpen(a) : undefined}
                 onContextMenu={onContextMenu ? (event) => onContextMenu(event, a) : undefined}
-                className={onOpen ? 'cursor-pointer transition-colors hover:bg-surface-light' : 'transition-colors hover:bg-surface-light'}
+                data-selected={selectable && selectedIds?.has(a.id) ? 'true' : undefined}
+                className={`transition-colors ${onOpen ? 'cursor-pointer' : ''} ${
+                  // Selecionado e hover usam a MESMA propriedade: manter as duas
+                  // classes deixava a de hover vencer e a linha selecionada
+                  // "apagava" ao passar o mouse.
+                  selectable && selectedIds?.has(a.id)
+                    ? 'bg-primary/5 hover:bg-primary/10'
+                    : 'hover:bg-surface-light'
+                }`}
               >
+                {selectable && (
+                  <td className="w-10 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds?.has(a.id) ?? false}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => onToggleSelect?.(a, event.target.checked)}
+                      aria-label={`Selecionar ${displayName}`}
+                      className="h-4 w-4 cursor-pointer rounded border-border-strong bg-surface-light text-primary focus:ring-primary/30"
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div

@@ -12,6 +12,7 @@ import { Icon,
   PageHeader,
 } from "@/components/ui";
 import { type AutomationScriptConsume } from "@/api";
+import { useAuthorization } from "@/auth/authorization";
 import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
 import { ScriptContentEditor } from "@/components/script/ScriptContentEditor";
 import { AutomationScriptAuditTrail } from "./AutomationScriptAuditTrail";
@@ -21,15 +22,11 @@ import { useAutomationScript, useConsumeAutomationScript } from "@/hooks/useAuto
 
 /**
  * Página de detalhes/consulta de um script (/automation/scripts/:id).
- *
- * Antes a consulta era um modal na listagem; com a página dedicada o link é
- * profundo (refresh/deep link preservam o script) e a trilha de auditoria cabe
- * ao lado do conteúdo. Nada é executado nem alterado nesta tela — "Registrar
- * consumo" é a única ação que grava (evento Consumido na auditoria).
  */
 export default function AutomationScriptViewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { canCreateAutomation, canEditAutomation, canExecuteAutomation } = useAuthorization();
   const clients = useClients();
   const script = useAutomationScript(id ?? "");
   const consumeMutation = useConsumeAutomationScript();
@@ -45,8 +42,6 @@ export default function AutomationScriptViewPage() {
     try {
       const data = await consumeMutation.mutateAsync(id);
       setConsumedPayload(data);
-      // O hash vem da API; se faltar, não transformamos um consumo bem-sucedido
-      // em "falha ao consumir" (o antigo slice direto lançava TypeError).
       const hash = (data.contentHashSha256 ?? "").slice(0, 10);
       toast.success(
         hash
@@ -109,9 +104,33 @@ export default function AutomationScriptViewPage() {
         >
           <Icon name="history" className="h-4 w-4" /> Auditoria
         </Button>
-        <Button size="sm" onClick={() => navigate(`/automation/scripts/${detail.id}/edit`)}>
-          <Icon name="edit" className="h-4 w-4" /> Editar
-        </Button>
+        {canCreateAutomation && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              navigate("/automation/scripts/new", {
+                state: { duplicateFrom: detail },
+              })
+            }
+          >
+            <Icon name="content_copy" className="h-4 w-4" /> Duplicar
+          </Button>
+        )}
+        {canExecuteAutomation && detail.isActive && (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => navigate(`/automation/operations?scriptId=${detail.id}`)}
+          >
+            <Icon name="play_arrow" className="h-4 w-4" /> Executar agora
+          </Button>
+        )}
+        {canEditAutomation && (
+          <Button size="sm" onClick={() => navigate(`/automation/scripts/${detail.id}/edit`)}>
+            <Icon name="edit" className="h-4 w-4" /> Editar
+          </Button>
+        )}
       </PageHeader>
 
       <Card>

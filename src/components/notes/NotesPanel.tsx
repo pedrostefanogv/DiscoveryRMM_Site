@@ -274,7 +274,7 @@ export function NotesPanel({
                           <div className="mb-1 flex items-center gap-2">
                             <p className="truncate text-sm font-medium text-foreground">{note.author ?? "Sem autor"}</p>
                             {note.isPinned && (
-                              <Badge color="warning" className="text-[10px]">
+                              <Badge color="warning" className="text-[11px]">
                                 <Icon name="push_pin" className="h-3 w-3" />
                                 Fixada
                               </Badge>

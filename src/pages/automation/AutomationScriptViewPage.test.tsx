@@ -27,6 +27,16 @@ const { detail, mutateAsync } = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
 }));
 
+vi.mock("@/auth/authorization", () => ({
+  useAuthorization: () => ({
+    canCreateAutomation: true,
+    canEditAutomation: true,
+    canDeleteAutomation: true,
+    canExecuteAutomation: true,
+    hasAnyPermission: () => true,
+  }),
+}));
+
 vi.mock("@/components/custom-fields/CustomFieldsUsedByPanel", () => ({
   CustomFieldsUsedByPanel: () => null,
 }));

@@ -13,10 +13,12 @@ import { Icon,
   ErrorDisplay,
   Input,
   Loading,
+  Modal,
   Select,
   StatCard,
 PageHeader,
 } from "@/components/ui";
+import { AutomationSubnav } from "./AutomationSubnav";
 import {
   ApiError,
   AutomationExecutionSourceType,
@@ -58,6 +60,8 @@ import {
 import {
   buildCorrelationId,
   customFieldsFromMetadata,
+  executionOutputFromMetadata,
+  noOpFromMetadata,
   wingetDecisionFromMetadata,
 } from "./automationTasksUtils";
 
@@ -87,10 +91,17 @@ const LIMIT_OPTIONS = [
   { value: "200", label: "200" },
 ];
 
-const BOOL_OPTIONS = [
-  { value: "true", label: "Sim" },
-  { value: "false", label: "Não" },
-];
+function downloadTextFile(filename: string, content: string, mime = "text/plain;charset=utf-8;") {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError) return error.message || fallback;
@@ -127,6 +138,8 @@ const AUTOMATION_EXECUTE_PERMISSIONS = [
 export default function AutomationOperationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlAgentId = searchParams.get("agentId") ?? "";
+  const urlTaskId = searchParams.get("taskId") ?? "";
+  const urlScriptId = searchParams.get("scriptId") ?? "";
   const { hasAnyPermission } = useAuthorization();
   const canExecute = hasAnyPermission(AUTOMATION_EXECUTE_PERMISSIONS);
 
@@ -134,8 +147,8 @@ export default function AutomationOperationsPage() {
   const [siteId, setSiteId] = useState("");
   const [agentId, setAgentId] = useState(urlAgentId);
 
-  const [taskId, setTaskId] = useState("");
-  const [scriptId, setScriptId] = useState("");
+  const [taskId, setTaskId] = useState(urlTaskId);
+  const [scriptId, setScriptId] = useState(urlScriptId);
   // Default histórico do agent: policies + inventory.
   const [syncPolicies, setSyncPolicies] = useState(true);
   const [syncInventory, setSyncInventory] = useState(true);
@@ -152,6 +165,7 @@ export default function AutomationOperationsPage() {
   const [onlyPending, setOnlyPending] = useState(false);
   const [retryTarget, setRetryTarget] = useState<AutomationExecutionReport | null>(null);
   const [cancelTarget, setCancelTarget] = useState<AutomationExecutionReport | null>(null);
+  const [detailExecution, setDetailExecution] = useState<AutomationExecutionReport | null>(null);
 
   // Escopo da operação: agente único (padrão), site inteiro ou cliente inteiro.
   const [scopeMode, setScopeMode] = useState<"agent" | "site" | "client">("agent");
@@ -160,10 +174,18 @@ export default function AutomationOperationsPage() {
   >(null);
   const [bulkResult, setBulkResult] = useState<AutomationScopeDispatchResult | null>(null);
 
-  // Deep link (?agentId=...) → reflete a URL no estado (voltar/avançar do browser).
+  // Deep link (?agentId=..., ?taskId=..., ?scriptId=...) → reflete a URL no estado.
   useEffect(() => {
     setAgentId(urlAgentId);
   }, [urlAgentId]);
+
+  useEffect(() => {
+    if (urlTaskId) setTaskId(urlTaskId);
+  }, [urlTaskId]);
+
+  useEffect(() => {
+    if (urlScriptId) setScriptId(urlScriptId);
+  }, [urlScriptId]);
 
   // Trocar de escopo/alvo invalida o resultado exibido: manter o painel do lote
   // anterior ao lado de um novo contexto confunde.
@@ -205,7 +227,7 @@ export default function AutomationOperationsPage() {
   const sites = useSites(clientId);
   const agents = useAgentsBySite(siteId);
   const tasks = useAutomationTasks({ activeOnly: true, limit: 200 });
-  const scripts = useAutomationScripts({ activeOnly: true, limit: 200 });
+  const scripts = useAutomationScripts({ activeOnly: true, clientId: clientId || undefined, limit: 200 });
 
   const [targetKind, targetId] = targetFilter.split(":");
 
@@ -269,9 +291,22 @@ export default function AutomationOperationsPage() {
       label: `${agent.displayName ?? agent.hostname} (${agent.hostname})`,
     })),
   ];
+  const visibleTasks = useMemo(() => {
+    const items = tasks.data?.items ?? [];
+    if (!clientId) return items;
+    return items.filter(
+      (task) =>
+        task.scopeType === undefined ||
+        task.scopeType === null ||
+        task.scopeType === "Global" ||
+        task.scopeType === 0 ||
+        task.scopeClientId === clientId ||
+        task.scopeId === clientId,
+    );
+  }, [tasks.data?.items, clientId]);
   const taskOptions = [
     { value: "", label: "Selecione" },
-    ...(tasks.data?.items ?? []).map((task) => ({ value: task.id, label: task.name })),
+    ...visibleTasks.map((task) => ({ value: task.id, label: task.name })),
   ];
   const scriptOptions = [
     { value: "", label: "Selecione" },
@@ -607,7 +642,7 @@ export default function AutomationOperationsPage() {
         key: "duration",
         header: "Duração",
         sortable: true,
-        sortKey: "createdAt",
+        sortValue: (item) => executionDurationMs(item) ?? -1,
         render: (item) => {
           const ack = ackLatencyMs(item);
           return (
@@ -635,6 +670,8 @@ export default function AutomationOperationsPage() {
         render: (item) => {
           const decision = wingetDecisionFromMetadata(item.resultMetadataJson);
           const customFields = customFieldsFromMetadata(item.resultMetadataJson);
+          const noOpInfo = noOpFromMetadata(item.resultMetadataJson);
+          const outputInfo = executionOutputFromMetadata(item.resultMetadataJson);
           return (
             <div className="text-xs">
               <p className="text-foreground">ExitCode: {item.exitCode ?? "-"}</p>
@@ -656,6 +693,16 @@ export default function AutomationOperationsPage() {
                   {decision.decidedBy ? ` (${decision.decidedBy})` : ""}
                 </p>
               )}
+              {noOpInfo && !decision?.skip && (
+                <p className="text-warning">
+                  Ignorado (MDZ_SKIP): {noOpInfo.reason ?? "sem alteração no host"}
+                </p>
+              )}
+              {outputInfo && (
+                <p className="mt-0.5 font-mono text-[11px] text-primary">
+                  Saída disponível ({outputInfo.output.split(/\r?\n/).length} linha(s))
+                </p>
+              )}
             </div>
           );
         },
@@ -673,7 +720,10 @@ export default function AutomationOperationsPage() {
               </span>
               <button
                 type="button"
-                onClick={() => void handleCopyCorrelation(item.correlationId!)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleCopyCorrelation(item.correlationId!);
+                }}
                 className="rounded p-0.5 text-muted transition-colors hover:text-foreground"
                 aria-label="Copiar correlation id"
               >
@@ -687,46 +737,50 @@ export default function AutomationOperationsPage() {
       {
         key: "actions",
         header: "Ações",
-        render: (item) =>
-          // Execução em voo: cancelar (o comando vira terminal e sai da
-          // reentrega). Finalizada: reenviar.
-          isExecutionPending(item.status) ? (
+        render: (item) => (
+          <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Button
-              variant="danger"
+              variant="secondary"
               size="sm"
-              onClick={() => setCancelTarget(item)}
-              disabled={!canExecute}
-              title={
-                canExecute
-                  ? "Cancelar esta execução pendente"
-                  : "Sem permissão para executar automações"
-              }
+              onClick={() => setDetailExecution(item)}
+              title="Ver detalhes e saída da execução"
             >
-              <Icon name="block" className="h-3.5 w-3.5" />
-              Cancelar
+              <Icon name="terminal" className="h-3.5 w-3.5" />
+              Saída
             </Button>
-          ) : (
-            <div className="flex items-center gap-1">
-              {canRetryExecution(item) ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setRetryTarget(item)}
-                  disabled={!canExecute}
-                  title={
-                    canExecute
-                      ? "Reenviar esta operação para o agent"
-                      : "Sem permissão para executar automações"
-                  }
-                >
-                  <Icon name="restart_alt" className="h-3.5 w-3.5" />
-                  Reenviar
-                </Button>
-              ) : (
-                <span className="text-xs text-muted">-</span>
-              )}
-            </div>
-          ),
+            {isExecutionPending(item.status) ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setCancelTarget(item)}
+                disabled={!canExecute}
+                title={
+                  canExecute
+                    ? "Cancelar esta execução pendente"
+                    : "Sem permissão para executar automações"
+                }
+              >
+                <Icon name="block" className="h-3.5 w-3.5" />
+                Cancelar
+              </Button>
+            ) : canRetryExecution(item) ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setRetryTarget(item)}
+                disabled={!canExecute}
+                title={
+                  canExecute
+                    ? "Reenviar esta operação para o agent"
+                    : "Sem permissão para executar automações"
+                }
+              >
+                <Icon name="restart_alt" className="h-3.5 w-3.5" />
+                Reenviar
+              </Button>
+            ) : null}
+          </div>
+        ),
       },
     ],
     [canExecute, handleCopyCorrelation],
@@ -748,6 +802,8 @@ export default function AutomationOperationsPage() {
           </Link>
         )}
       </div>
+
+      <AutomationSubnav />
 
       <Card>
         <CardHeader
@@ -945,30 +1001,29 @@ export default function AutomationOperationsPage() {
         <Card>
           <CardHeader title="Force Sync" subtitle="Sincronização técnica sob demanda" />
           <div className="space-y-3">
-            <Select
-              label="Policies"
-              options={BOOL_OPTIONS}
-              value={String(syncPolicies)}
-              onChange={(e) => setSyncPolicies(e.target.value === "true")}
-            />
-            <Select
-              label="Inventory"
-              options={BOOL_OPTIONS}
-              value={String(syncInventory)}
-              onChange={(e) => setSyncInventory(e.target.value === "true")}
-            />
-            <Select
-              label="Software"
-              options={BOOL_OPTIONS}
-              value={String(syncSoftware)}
-              onChange={(e) => setSyncSoftware(e.target.value === "true")}
-            />
-            <Select
-              label="AppStore"
-              options={BOOL_OPTIONS}
-              value={String(syncAppStore)}
-              onChange={(e) => setSyncAppStore(e.target.value === "true")}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { id: "sync-policies", label: "Policies", checked: syncPolicies, onChange: setSyncPolicies },
+                  { id: "sync-inventory", label: "Inventory", checked: syncInventory, onChange: setSyncInventory },
+                  { id: "sync-software", label: "Software", checked: syncSoftware, onChange: setSyncSoftware },
+                  { id: "sync-appstore", label: "AppStore", checked: syncAppStore, onChange: setSyncAppStore },
+                ] as const
+              ).map((opt) => (
+                <label
+                  key={opt.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--primary)]"
+                    checked={opt.checked}
+                    onChange={(e) => opt.onChange(e.target.checked)}
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
             <Button
               className="w-full"
               onClick={() =>
@@ -1205,6 +1260,7 @@ export default function AutomationOperationsPage() {
                 columns={columns}
                 data={visibleReports}
                 keyExtractor={(item) => item.id}
+                onRowClick={(item) => setDetailExecution(item)}
                 emptyMessage={
                   reports.length > 0
                     ? "Nenhuma execução corresponde aos filtros."
@@ -1285,6 +1341,120 @@ export default function AutomationOperationsPage() {
         onConfirm={handleConfirmBulk}
         onClose={() => setPendingBulk(null)}
       />
+
+      <Modal
+        open={detailExecution !== null}
+        onClose={() => setDetailExecution(null)}
+        title="Detalhes da execução"
+        maxWidth="max-w-3xl"
+      >
+        {detailExecution && (() => {
+          const meta = executionStatusMeta(detailExecution.status);
+          const target = executionTargetName(detailExecution);
+          const outputInfo = executionOutputFromMetadata(detailExecution.resultMetadataJson);
+          const noOpInfo = noOpFromMetadata(detailExecution.resultMetadataJson);
+          const decision = wingetDecisionFromMetadata(detailExecution.resultMetadataJson);
+          return (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge color={meta.color}>{meta.label}</Badge>
+                  <Badge color="accent">{executionSourceLabel(detailExecution.sourceType)}</Badge>
+                  <span className="font-mono text-xs text-muted">
+                    ExitCode: {detailExecution.exitCode ?? "-"}
+                  </span>
+                </div>
+                <span className="text-xs text-muted">
+                  Duração: {formatDuration(executionDurationMs(detailExecution))}
+                </span>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 text-xs">
+                <div className="rounded-lg border border-border bg-surface-light p-3 space-y-1">
+                  <p className="text-muted">Alvo</p>
+                  <p className="font-medium text-foreground">
+                    {target.kind === "none" ? "Sincronização técnica" : (target.name ?? target.id)}
+                  </p>
+                  {detailExecution.correlationId && (
+                    <p className="font-mono text-muted break-all">
+                      Correlation: {detailExecution.correlationId}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg border border-border bg-surface-light p-3 space-y-1 text-muted">
+                  <p>Criado: {formatDateTime(detailExecution.createdAt)}</p>
+                  <p>Ack: {detailExecution.acknowledgedAt ? formatDateTime(detailExecution.acknowledgedAt) : "-"}</p>
+                  <p>Resultado: {detailExecution.resultReceivedAt ? formatDateTime(detailExecution.resultReceivedAt) : "-"}</p>
+                </div>
+              </div>
+
+              {detailExecution.errorMessage && (
+                <div className="rounded-lg border border-danger/40 bg-danger/10 p-3 text-xs text-foreground">
+                  <p className="font-medium text-danger">Mensagem de erro</p>
+                  <p className="mt-1 [overflow-wrap:anywhere]">{detailExecution.errorMessage}</p>
+                </div>
+              )}
+
+              {decision?.skip && (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
+                  Sem instalação: {decision.reason ?? "pacote já em estado final"}
+                  {decision.decidedBy ? ` (${decision.decidedBy})` : ""}
+                </div>
+              )}
+
+              {noOpInfo && !decision?.skip && (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
+                  Ignorado (MDZ_SKIP): {noOpInfo.reason ?? "sem alteração no host"}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    Saída do console (stdout / stderr)
+                  </p>
+                  {outputInfo && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void navigator.clipboard.writeText(outputInfo.output).then(() => toast.success("Saída copiada"))}
+                      >
+                        <Icon name="content_copy" className="h-3.5 w-3.5" />
+                        Copiar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => downloadTextFile(`execucao-${detailExecution.id.slice(0, 8)}.log`, outputInfo.output)}
+                      >
+                        <Icon name="download" className="h-3.5 w-3.5" />
+                        Baixar .log
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {outputInfo ? (
+                  <>
+                    {outputInfo.truncated && (
+                      <p className="text-xs text-warning">
+                        Saída truncada nos últimos 8 KB para exibição rápida.
+                      </p>
+                    )}
+                    <pre className="max-h-80 overflow-auto rounded-lg border border-border bg-black/60 p-3 font-mono text-xs text-foreground whitespace-pre-wrap [overflow-wrap:anywhere]">
+                      {outputInfo.output}
+                    </pre>
+                  </>
+                ) : (
+                  <p className="rounded-lg border border-border bg-surface-light p-3 text-xs text-muted">
+                    Nenhuma saída capturada para esta execução.
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
     </div>
   );
 }

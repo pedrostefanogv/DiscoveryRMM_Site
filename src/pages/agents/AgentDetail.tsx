@@ -999,7 +999,7 @@ export default function AgentDetail() {
               >
                 <Icon name="desktop_windows" className="h-4 w-4" />
                 {isOpeningRemoteControl ? 'Abrindo remoto...' : 'Controle remoto'}
-                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[11px] text-muted-foreground">offline</span>}
               </button>
               <button
                 type="button"
@@ -1013,7 +1013,7 @@ export default function AgentDetail() {
               >
                 <Icon name="chat" className="h-4 w-4" />
                 Abrir chat
-                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[11px] text-muted-foreground">offline</span>}
               </button>
               <button
                 type="button"
@@ -1026,7 +1026,7 @@ export default function AgentDetail() {
               >
                 <Icon name="notifications" className="h-4 w-4" />
                 Enviar notificação
-                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">na fila</span>}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[11px] text-muted-foreground">na fila</span>}
               </button>
 
               <div className="border-t border-border" />
@@ -1043,7 +1043,7 @@ export default function AgentDetail() {
               >
                 <Icon name="bug_report" className="h-4 w-4" />
                 {isOpeningRemoteDebug ? 'Abrindo debug...' : 'Ver Debug'}
-                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[11px] text-muted-foreground">offline</span>}
               </button>
               <button
                 type="button"
@@ -1057,7 +1057,7 @@ export default function AgentDetail() {
               >
                 <Icon name="refresh" className="h-4 w-4" />
                 {isTriggeringAgentUpdate ? 'Atualizando...' : 'Atualizar agente'}
-                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">na fila</span>}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[11px] text-muted-foreground">na fila</span>}
               </button>
               <button
                 type="button"
@@ -1383,7 +1383,7 @@ export default function AgentDetail() {
                       <span>{item.label}</span>
                       {item.sourceType === AgentLabelSourceType.Manual ? (
                         <button
-                          className="ml-1.5 inline-flex items-center justify-center rounded-full p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-danger"
+                          className="ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-hover hover:text-danger"
                           title="Remover label manual"
                           onClick={() => void handleRemoveManualLabel(item.id)}
                         >
@@ -1557,7 +1557,7 @@ export default function AgentDetail() {
                   <p className="text-sm text-muted">Sem dados de disco coletados para este agente.</p>
                 ) : (
                   <div className="space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-3">
                       <div className="rounded-lg bg-surface-light px-3 py-2">
                         <p className="text-xs text-muted">Usado</p>
                         <p className="text-sm font-medium text-foreground">{formatBytes(usedDiskBytes)}</p>

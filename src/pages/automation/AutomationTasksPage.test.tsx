@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -30,6 +31,16 @@ const { listCalls, tasks, task } = vi.hoisted(() => {
   return { listCalls: [] as Record<string, unknown>[], task, tasks: [task] };
 });
 
+vi.mock("@/auth/authorization", () => ({
+  useAuthorization: () => ({
+    canCreateAutomation: true,
+    canEditAutomation: true,
+    canDeleteAutomation: true,
+    canExecuteAutomation: true,
+    hasAnyPermission: () => true,
+  }),
+}));
+
 vi.mock("@/hooks/useAutomation", () => ({
   useAutomationTasks: (params: Record<string, unknown>) => {
     listCalls.push(params);
@@ -45,6 +56,8 @@ vi.mock("@/hooks/useAutomation", () => ({
   useAutomationKnownTags: () => ({ data: [], isLoading: false }),
   useAutomationTask: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
   useAutomationTaskAudit: () => ({ data: [], isLoading: false, isError: false, refetch: vi.fn() }),
+  useAutomationTaskExecutions: () => ({ data: [], isLoading: false, isError: false, refetch: vi.fn() }),
+  useAutomationTaskTargetPreview: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
   useCreateAutomationTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateAutomationTask: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteAutomationTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -65,6 +78,10 @@ vi.mock("@/hooks/useAutoKey", () => ({
 }));
 
 import AutomationTasksPage from "./AutomationTasksPage";
+
+function render(ui: React.ReactElement) {
+  return rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 const lastListParams = () => listCalls[listCalls.length - 1];
 

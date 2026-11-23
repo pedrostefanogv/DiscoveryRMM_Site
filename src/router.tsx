@@ -568,7 +568,7 @@ export const routes: RouteObject[] = [
       {
         path: 'automation/scripts/new',
         element: (
-          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+          <PermissionGate anyOf={['automation.*', 'automation.create', 'automation.edit', 'admin.*']}>
             <LazyPage><AutomationScriptFormPage /></LazyPage>
           </PermissionGate>
         ),
@@ -584,7 +584,7 @@ export const routes: RouteObject[] = [
       {
         path: 'automation/scripts/:id/edit',
         element: (
-          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+          <PermissionGate anyOf={['automation.*', 'automation.edit', 'admin.*']}>
             <LazyPage><AutomationScriptFormPage /></LazyPage>
           </PermissionGate>
         ),

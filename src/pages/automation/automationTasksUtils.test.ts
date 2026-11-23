@@ -4,13 +4,16 @@ import { AutomationNotificationMode, AutomationToastTiming } from '@/api/types';
 import {
   customFieldsFromMetadata,
   describeCron,
+  executionOutputFromMetadata,
   isToastNotificationMode,
+  noOpFromMetadata,
   normalizeNotificationMode,
   normalizeToastTiming,
   notificationModeFromTask,
   notificationModeLabel,
   PACKAGE_UNAUTHORIZED_DEFAULT_WARNING,
   packageNoticeFrom,
+  parseCronAssistantState,
   toastTimingLabel,
   wingetDecisionFromMetadata,
 } from './automationTasksUtils';
@@ -206,5 +209,31 @@ describe('packageNoticeFrom', () => {
     expect(packageNoticeFrom({ packageAuthorized: false, packageWarning: '   ' })).toBe(
       PACKAGE_UNAUTHORIZED_DEFAULT_WARNING,
     );
+  });
+});
+
+
+describe('executionOutputFromMetadata / noOpFromMetadata / parseCronAssistantState', () => {
+  it('extrai output e flag truncated do metadata', () => {
+    expect(executionOutputFromMetadata(JSON.stringify({ output: 'ok\nfim', outputTruncated: true }))).toEqual({
+      output: 'ok\nfim',
+      truncated: true,
+    });
+    expect(executionOutputFromMetadata(JSON.stringify({ output: '   ' }))).toBeNull();
+  });
+
+  it('extrai noOp e noOpReason (MDZ_SKIP)', () => {
+    expect(noOpFromMetadata(JSON.stringify({ noOp: true, noOpReason: 'já aplicado' }))).toEqual({
+      noOp: true,
+      reason: 'já aplicado',
+    });
+    expect(noOpFromMetadata(JSON.stringify({ noOp: false }))).toBeNull();
+  });
+
+  it('hidrata assistente de cron a partir de expressão salva', () => {
+    expect(parseCronAssistantState('*/10 * * * *')).toMatchObject({ frequency: 'minutes', step: '10' });
+    expect(parseCronAssistantState('15 * * * *')).toMatchObject({ frequency: 'hourly', minute: '15' });
+    expect(parseCronAssistantState('30 9 * * 1')).toMatchObject({ frequency: 'weekly', minute: '30', hour: '9', weekday: '1' });
+    expect(parseCronAssistantState('0 3 15 * *')).toMatchObject({ frequency: 'monthly', minute: '0', hour: '3', monthDay: '15' });
   });
 });

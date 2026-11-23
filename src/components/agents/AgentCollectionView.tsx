@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { Icon } from "@/components/ui";
 import { AgentCard, type AgentCardAgent } from './AgentCard';
 import { AgentListView } from './AgentListView';
@@ -18,6 +18,11 @@ interface AgentCollectionViewProps {
   onApprove?: (agent: AgentCardAgent) => void;
   /** Exibe busca/status (ativado automaticamente com mais de 1 agente). */
   filterable?: boolean;
+  /** Habilita a seleção múltipla (checkbox por agente + "selecionar todos"). */
+  selectable?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (agent: AgentCardAgent, next: boolean) => void;
+  onToggleSelectAll?: (agents: readonly AgentCardAgent[], next: boolean) => void;
   columnsClassName?: string;
   defaultView?: 'card' | 'list';
 }
@@ -41,6 +46,10 @@ export function AgentCollectionView({
   isApprovingId,
   onApprove,
   filterable,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
   columnsClassName,
   defaultView = 'card',
 }: AgentCollectionViewProps) {
@@ -71,53 +80,82 @@ export function AgentCollectionView({
     });
   }, [agents, now, query, status]);
 
+  // O "selecionar todos" vale para o que está VISÍVEL (filtro de status/busca
+  // aplicados): marcar agentes escondidos pelo filtro surpreenderia o operador.
+  const visibleSelectedCount = selectable
+    ? filtered.filter((agent) => selectedIds?.has(agent.id)).length
+    : 0;
+  const allVisibleSelected = visibleSelectedCount > 0 && visibleSelectedCount === filtered.length;
+
+  // O estado "indeterminado" do checkbox só existe no DOM (não é atributo
+  // HTML), então precisa ser sincronizado à mão.
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = visibleSelectedCount > 0 && !allVisibleSelected;
+    }
+  }, [visibleSelectedCount, allVisibleSelected]);
+
   if (isLoading) return <p className="text-sm text-muted">Carregando...</p>;
   if (agents.length === 0) return <p className="text-sm text-muted">{emptyMessage}</p>;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {showFilters ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar agentes por status">
-              {([
-                { value: 'all', label: `Todos (${agents.length})` },
-                { value: 'online', label: `Online (${onlineCount})` },
-                { value: 'offline', label: `Offline (${offlineCount})` },
-              ] as { value: StatusFilter; label: string }[]).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setStatus(option.value)}
-                  aria-pressed={status === option.value}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                    status === option.value
-                      ? 'border-primary/40 bg-primary/15 text-primary'
-                      : 'border-border text-muted-foreground hover:bg-surface-hover'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <div className="relative sm:w-56">
-              <Icon name="search"
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
-                aria-hidden="true"
-              />
+        <div className="flex flex-wrap items-center gap-2">
+          {selectable && (
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Buscar por nome ou SO"
-                aria-label="Buscar agentes"
-                className="w-full rounded-lg border border-border bg-surface-light py-1.5 pl-8 pr-2 text-xs text-foreground placeholder-muted transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={(event) => onToggleSelectAll?.(filtered, event.target.checked)}
+                aria-label="Selecionar todos os agentes visíveis"
+                className="h-4 w-4 cursor-pointer rounded border-border-strong bg-surface-light text-primary focus:ring-primary/30"
               />
+              Selecionar todos
+            </label>
+          )}
+          {showFilters ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar agentes por status">
+                {([
+                  { value: 'all', label: `Todos (${agents.length})` },
+                  { value: 'online', label: `Online (${onlineCount})` },
+                  { value: 'offline', label: `Offline (${offlineCount})` },
+                ] as { value: StatusFilter; label: string }[]).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setStatus(option.value)}
+                    aria-pressed={status === option.value}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                      status === option.value
+                        ? 'border-primary/40 bg-primary/15 text-primary'
+                        : 'border-border text-muted-foreground hover:bg-surface-hover'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div className="relative sm:w-56">
+                <Icon name="search"
+                  className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar por nome ou SO"
+                  aria-label="Buscar agentes"
+                  className="w-full rounded-lg border border-border bg-surface-light py-1.5 pl-8 pr-2 text-xs text-foreground placeholder-muted transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+              </div>
             </div>
-          </div>
-        ) : (
-          <span />
-        )}
+          ) : null}
+        </div>
 
         <div className="flex overflow-hidden rounded-lg border border-border">
           <button
@@ -153,6 +191,10 @@ export function AgentCollectionView({
           canApprove={canApprove}
           isApprovingId={isApprovingId}
           onApprove={onApprove}
+          selectable={selectable}
+          selectedIds={selectedIds}
+          onToggleSelect={onToggleSelect}
+          onToggleSelectAll={onToggleSelectAll}
         />
       ) : (
         <div className={columnsClassName ?? 'grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'}>
@@ -168,6 +210,9 @@ export function AgentCollectionView({
               canApprove={canApprove}
               isApproving={isApprovingId === agent.id}
               onApprove={onApprove}
+              selectable={selectable}
+              selected={selectedIds?.has(agent.id) ?? false}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </div>

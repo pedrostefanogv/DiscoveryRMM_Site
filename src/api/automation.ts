@@ -6,6 +6,7 @@ import type {
   AutomationExecutionDto,
   AutomationScopeDispatchResult,
   AutomationScopeTarget,
+  AutomationScriptType,
   AutomationTaskActionType,
   AutomationExecutionReport,
   AutomationForceSyncRequest,
@@ -16,6 +17,8 @@ import type {
   AutomationScriptDetail,
   AutomationTaskAudit,
   AutomationTaskDetail,
+  AutomationTaskExecution,
+  AutomationTaskTargetPreviewPage,
   AgentAutomationPolicyPreview,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
@@ -43,6 +46,8 @@ function correlationInit(correlationId?: string): RequestInit | undefined {
 export interface ListAutomationScriptsParams {
   clientId?: string;
   activeOnly?: boolean;
+  search?: string;
+  scriptType?: AutomationScriptType | string | number;
   cursor?: string;
   limit?: number;
 }
@@ -170,15 +175,21 @@ export const automationApi = {
 
   restoreTask: (id: string, reason?: string, correlationId?: string) => {
     const query = reason ? `?reason=${encodeURIComponent(reason)}` : "";
-    return api.post<AutomationTaskDetail>(
+    return api.patch<AutomationTaskDetail>(
       `${TASKS_BASE}/${id}/restore${query}`,
-      undefined,
+      {},
       correlationInit(correlationId),
     );
   },
 
   getTaskAudit: (id: string, limit = 50) =>
     api.get<AutomationTaskAudit[]>(`${TASKS_BASE}/${id}/audit`, { limit }),
+
+  getTaskExecutions: (id: string, limit = 50) =>
+    api.get<AutomationTaskExecution[]>(`${TASKS_BASE}/${id}/executions`, { limit }),
+
+  previewTaskTargets: (id: string, limit = 50, offset = 0) =>
+    api.get<AutomationTaskTargetPreviewPage>(`${TASKS_BASE}/${id}/preview-targets`, { limit, offset }),
 
   runTaskNow: (agentId: string, taskId: string, correlationId?: string) =>
     api.post<AutomationRunNowTaskResponse>(

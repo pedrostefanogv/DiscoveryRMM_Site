@@ -28,7 +28,7 @@ export function PageHeader({
           type="button"
           onClick={onBack}
           aria-label={backLabel}
-          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-surface-light hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-surface-light hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 sm:h-9 sm:w-9"
         >
           <Icon name="arrow_back" className="h-4 w-4" />
         </button>

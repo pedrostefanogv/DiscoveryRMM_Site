@@ -38,17 +38,19 @@ interface PaginationProps {
   className?: string;
 }
 
+// h-11 no mobile = 44px de alvo de toque; em telas maiores volta ao quadrado
+// compacto de 32px do design desktop.
 const navButtonClass =
-  'inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors';
+  'inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors sm:h-8 sm:w-8';
 
 export function Pagination(props: PaginationProps) {
   const { page, totalPages, onPageChange, totalItems, pageSize, itemLabel, showFirstLast = true, cursor, className = '' } = props;
 
   if (cursor) {
     return (
-      <div className={`flex items-center justify-between text-sm ${className}`}>
+      <div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm ${className}`}>
         <p className="text-muted tabular-nums">Página {page}{itemLabel ? ` · ${itemLabel}` : ''}</p>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <button
             type="button"
             onClick={cursor.onPrev}
@@ -89,9 +91,9 @@ export function Pagination(props: PaginationProps) {
     : `Página ${safePage} de ${safeTotalPages}${itemLabel ? ` · ${itemLabel}` : ''}`;
 
   return (
-    <div className={`flex items-center justify-between text-sm ${className}`}>
+    <div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm ${className}`}>
       <p className="text-muted tabular-nums">{summary}</p>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {showFirstLast && (
           <button
             type="button"

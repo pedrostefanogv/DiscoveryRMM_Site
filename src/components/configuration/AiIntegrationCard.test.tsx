@@ -159,7 +159,55 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
     // que truncava o card A2UI. 0 é um valor que o backend entende.
     expect(payload.maxTokensPerRequest).toBe(0);
     expect(typeof payload.temperature).toBe("number");
-    expect(JSON.stringify(payload)).not.toContain("null");
+
+    // Campos numéricos de RUNTIME não podem sair null/NaN: o backend
+    // desserializa para double/int e um null/NaN já resetou as configurações de
+    // IA no servidor (ver comentário do card).
+    const raw = payload as unknown as Record<string, unknown>;
+    for (const key of [
+      "topP",
+      "maxTokensPerRequest",
+      "temperature",
+      "frequencyPenalty",
+      "presencePenalty",
+      "tokenBudgetDaily",
+      "rateLimitPerMinute",
+      "timeoutMs",
+      "maxToolCallIterations",
+    ]) {
+      expect(raw[key], key).not.toBeNull();
+      expect(Number.isFinite(raw[key] as number), key).toBe(true);
+    }
+
+    // Exceção DOCUMENTADA: budgetUsdMonthly é nullable de propósito — null =
+    // "sem limite de orçamento" (o backend só aplica quando > 0,
+    // AiCostControlService). Enviar 0 aqui significaria "orçamento zero", que
+    // bloquearia o uso de IA.
+    expect(raw.budgetUsdMonthly).toBeNull();
+  });
+
+  it("orçamento mensal vazio vira null (sem limite) e preenchido vira número", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<AiIntegrationCard aiSettings={settings} onSave={onSave} />);
+    await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
+
+    const budget = screen.getByPlaceholderText("Sem limite");
+
+    // Vazio → null (sem limite).
+    fireEvent.change(budget, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    let raw = JSON.parse(String(onSave.mock.calls[0][0])) as Record<string, unknown>;
+    expect(raw.budgetUsdMonthly).toBeNull();
+
+    // Preenchido → número positivo (o limite precisa chegar ao backend).
+    onSave.mockClear();
+    fireEvent.change(budget, { target: { value: "25.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    raw = JSON.parse(String(onSave.mock.calls[0][0])) as Record<string, unknown>;
+    expect(raw.budgetUsdMonthly).toBe(25.5);
   });
 
   it("libera as dimensões quando o modelo de embedding não está no catálogo", async () => {

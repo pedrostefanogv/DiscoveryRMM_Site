@@ -853,7 +853,9 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
                   onClick={() => selectView(tab.id)}
                   onKeyDown={(event) => handleViewTabKeyDown(event, tab.id)}
                   className={[
-                    "relative flex-none whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    // min-h-11: 44px de alvo de toque no mobile (a barra é usada
+                    // com o dedo); a partir de sm volta à altura compacta.
+                    "relative flex-none whitespace-nowrap min-h-11 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:min-h-0",
                     isSelected
                       ? "text-primary after:absolute after:inset-x-0 after:bottom-0 after:border-b-2 after:border-primary"
                       : "text-text-secondary hover:text-text-primary",

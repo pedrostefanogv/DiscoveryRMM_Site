@@ -1,11 +1,13 @@
 import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from "react";
+import { useInRouterContext, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Icon,
   Badge,
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   DataTable,
   type Column,
   ErrorDisplay,
@@ -19,6 +21,10 @@ import { Icon,
   type ContextMenuItem,
 PageHeader,
 } from "@/components/ui";
+import { useAuthorization } from "@/auth/authorization";
+import { AutomationSubnav } from "./AutomationSubnav";
+import { AutomationAuditList } from "./AutomationAuditList";
+import { AutomationTaskDetailModal } from "./AutomationTaskDetailModal";
 import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
 import {
   AppApprovalScopeType,
@@ -26,6 +32,8 @@ import {
   AutomationNotificationMode,
   AutomationTaskActionType,
   AutomationToastTiming,
+  automationApi,
+  type AutomationTaskDetail,
   type AutomationTaskSummary,
   type CreateAutomationTaskRequest,
   type UpdateAutomationTaskRequest,
@@ -36,9 +44,9 @@ import {
   normalizeNotificationMode,
   normalizeToastTiming,
   notificationModeFromTask,
-  notificationModeLabel,
-  toastTimingLabel,
   packageNoticeFrom,
+  parseCronAssistantState,
+  toastTimingLabel,
 } from "./automationTasksUtils";
 import {
   TASK_ACTION_FILTERS,
@@ -223,6 +231,7 @@ type TaskFormState = {
   scopeType: string;
   scopeId: string;
   includeTags: string[];
+  excludeTags: string[];
   triggerImmediate: boolean;
   triggerRecurring: boolean;
   triggerOnUserLogin: boolean;
@@ -257,6 +266,7 @@ const defaultForm: TaskFormState = {
   scopeType: String(AppApprovalScopeType.Global),
   scopeId: "",
   includeTags: [],
+  excludeTags: [],
   triggerImmediate: true,
   triggerRecurring: false,
   triggerOnUserLogin: false,
@@ -317,6 +327,14 @@ const CRON_STEP_OPTIONS = [5, 10, 15, 20, 30].map((step) => ({
 }));
 
 export default function AutomationTasksPage() {
+  const inRouter = useInRouterContext();
+  const navigate = useNavigate();
+  const {
+    canCreateAutomation,
+    canEditAutomation,
+    canDeleteAutomation,
+    canExecuteAutomation,
+  } = useAuthorization();
   const [listMode, setListMode] = useState<"default" | "all" | "deleted">("default");
   const [searchFilter, setSearchFilter] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -356,13 +374,8 @@ export default function AutomationTasksPage() {
   const [auditTaskId, setAuditTaskId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [deleteTask, setDeleteTask] = useState<AutomationTaskSummary | null>(null);
-  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [restoreTask, setRestoreTask] = useState<AutomationTaskSummary | null>(null);
-  const [restoreConfirmationText, setRestoreConfirmationText] = useState("");
   const [form, setForm] = useState<TaskFormState>(defaultForm);
-  // Enquanto o usuário não editar a ordem à mão, trocar o ActionType aplica o
-  // default do novo tipo. Depois da primeira edição (ou ao carregar a edição),
-  // o valor digitado é preservado.
   const [executionOrderTouched, setExecutionOrderTouched] = useState(false);
   const [scopeClientId, setScopeClientId] = useState("");
   const [scopeSiteId, setScopeSiteId] = useState("");
@@ -372,6 +385,7 @@ export default function AutomationTasksPage() {
   const [packagePickerOpen, setPackagePickerOpen] = useState(false);
   const [packagePickerView, setPackagePickerView] = useState<"list" | "card">("list");
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [tagPickerTarget, setTagPickerTarget] = useState<"include" | "exclude">("include");
   const [tagSearch, setTagSearch] = useState("");
   const [closeProcessInput, setCloseProcessInput] = useState("");
   const [cronAssistantOpen, setCronAssistantOpen] = useState(true);
@@ -478,6 +492,7 @@ export default function AutomationTasksPage() {
       scopeType: String(normalizedScopeType),
       scopeId: detail.scopeId || "",
       includeTags: detail.includeTags ?? [],
+      excludeTags: detail.excludeTags ?? [],
       triggerImmediate: detail.triggerImmediate,
       triggerRecurring: detail.triggerRecurring,
       triggerOnUserLogin: detail.triggerOnUserLogin,
@@ -497,6 +512,13 @@ export default function AutomationTasksPage() {
       isActive: detail.isActive,
     });
     setExecutionOrderTouched(true);
+    const parsedCron = parseCronAssistantState(detail.scheduleCron);
+    setCronFrequency(parsedCron.frequency);
+    setCronMinute(parsedCron.minute);
+    setCronHour(parsedCron.hour);
+    setCronWeekday(parsedCron.weekday);
+    setCronMonthDay(parsedCron.monthDay);
+    setCronStep(parsedCron.step);
     // Aviso informativo do backend (pacote fora da App Store aprovada).
     setPackageNotice(packageNoticeFrom(detail));
 
@@ -606,21 +628,15 @@ export default function AutomationTasksPage() {
   const closeDeleteModal = () => {
     if (deleteMutation.isPending) return;
     setDeleteTask(null);
-    setDeleteConfirmationText("");
   };
 
   const closeRestoreModal = () => {
     if (restoreMutation.isPending) return;
     setRestoreTask(null);
-    setRestoreConfirmationText("");
   };
 
   const handleConfirmDelete = () => {
     if (!deleteTask) return;
-    if (deleteConfirmationText.trim().toLowerCase() !== "yes") {
-      toast.error('Digite "yes" para confirmar a exclusao');
-      return;
-    }
 
     deleteMutation.mutate(
       {
@@ -643,10 +659,6 @@ export default function AutomationTasksPage() {
 
   const handleConfirmRestore = () => {
     if (!restoreTask) return;
-    if (restoreConfirmationText.trim().toLowerCase() !== "yes") {
-      toast.error('Digite "yes" para confirmar a reativação');
-      return;
-    }
 
     restoreMutation.mutate(
       {
@@ -752,6 +764,63 @@ export default function AutomationTasksPage() {
     setFormOpen(true);
   };
 
+  const openDuplicateFor = async (item: AutomationTaskSummary) => {
+    let source: AutomationTaskSummary | AutomationTaskDetail = item;
+    try {
+      source = await automationApi.getTask(item.id);
+    } catch {
+      // Fallback para o resumo se o GET detalhado falhar.
+    }
+    const detail = source as Partial<AutomationTaskDetail>;
+    const normalizedScopeType = normalizeScopeType(source.scopeType);
+    setEditing(null);
+    setEditingId("");
+    setTouched(false);
+    setForm({
+      ...defaultForm,
+      name: `${source.name} (cópia)`,
+      description: source.description || "",
+      actionType: String(normalizeActionType(source.actionType)),
+      installationType:
+        detail.installationType !== null && detail.installationType !== undefined
+          ? String(normalizeInstallationType(detail.installationType))
+          : String(AppInstallationType.Winget),
+      packageId: detail.packageId || "",
+      scriptId: detail.scriptId || "",
+      commandPayload: detail.commandPayload || "",
+      scopeType: String(normalizedScopeType),
+      scopeId: source.scopeId || "",
+      includeTags: detail.includeTags ?? [],
+      excludeTags: detail.excludeTags ?? [],
+      triggerImmediate: detail.triggerImmediate ?? true,
+      triggerRecurring: detail.triggerRecurring ?? false,
+      triggerOnUserLogin: detail.triggerOnUserLogin ?? false,
+      triggerOnAgentCheckIn: detail.triggerOnAgentCheckIn ?? false,
+      scheduleCron: detail.scheduleCron || "",
+      notificationMode: String(notificationModeFromTask(source.notificationMode, source.requiresApproval)),
+      toastTiming: String(normalizeToastTiming(source.toastTiming)),
+      allowDefer: source.allowDefer ?? true,
+      closeProcesses: source.closeProcesses ?? [],
+      promptTimeoutSeconds: source.promptTimeoutSeconds ?? 60,
+      collectorFieldDefinitionId: source.collectorFieldDefinitionId ?? "",
+      writeOutputToNote: source.writeOutputToNote ?? false,
+      taskRespectMaintenanceWindow: source.taskRespectMaintenanceWindow ?? false,
+      key: "",
+      executionOrder: String(source.executionOrder ?? 50),
+      isActive: source.isActive,
+    });
+    const parsedCron = parseCronAssistantState(detail.scheduleCron);
+    setCronFrequency(parsedCron.frequency);
+    setCronMinute(parsedCron.minute);
+    setCronHour(parsedCron.hour);
+    setCronWeekday(parsedCron.weekday);
+    setCronMonthDay(parsedCron.monthDay);
+    setCronStep(parsedCron.step);
+    setExecutionOrderTouched(true);
+    applyScopeCascade(normalizedScopeType, source);
+    setFormOpen(true);
+  };
+
   const buildRowContextMenuItems = (item: AutomationTaskSummary): ContextMenuItem[] => {
     const deleted = isTaskDeleted(item);
     const items: ContextMenuItem[] = [
@@ -761,41 +830,53 @@ export default function AutomationTasksPage() {
         icon: <Icon name="visibility" className="h-4 w-4" />,
         onClick: () => setDetailTaskId(item.id),
       },
-      {
+    ];
+    if (inRouter && canExecuteAutomation && !deleted && item.isActive) {
+      items.push({
+        key: "run",
+        label: "Executar agora",
+        icon: <Icon name="play_arrow" className="h-4 w-4" />,
+        onClick: () => navigate(`/automation/operations?taskId=${item.id}`),
+      });
+    }
+    if (canEditAutomation) {
+      items.push({
         key: "edit",
         label: "Editar",
         icon: <Icon name="edit" className="h-4 w-4" />,
         disabled: deleted,
         onClick: () => openEditFor(item),
-      },
-      {
-        key: "audit",
-        label: "Auditoria",
-        icon: <Icon name="article" className="h-4 w-4" />,
-        onClick: () => setAuditTaskId(item.id),
-      },
-    ];
-    if (deleted) {
+      });
+    }
+    if (canCreateAutomation && !deleted) {
+      items.push({
+        key: "duplicate",
+        label: "Duplicar",
+        icon: <Icon name="content_copy" className="h-4 w-4" />,
+        onClick: () => void openDuplicateFor(item),
+      });
+    }
+    items.push({
+      key: "audit",
+      label: "Auditoria",
+      icon: <Icon name="article" className="h-4 w-4" />,
+      onClick: () => setAuditTaskId(item.id),
+    });
+    if (deleted && canEditAutomation) {
       items.push({
         key: "restore",
         label: "Reativar",
         icon: <Icon name="restart_alt" className="h-4 w-4" />,
-        onClick: () => {
-          setRestoreTask(item);
-          setRestoreConfirmationText("");
-        },
+        onClick: () => setRestoreTask(item),
       });
-    } else {
+    } else if (!deleted && canDeleteAutomation) {
       items.push({
         key: "delete",
         label: "Excluir",
         icon: <Icon name="delete" className="h-4 w-4" />,
         danger: true,
         separatorBefore: true,
-        onClick: () => {
-          setDeleteTask(item);
-          setDeleteConfirmationText("");
-        },
+        onClick: () => setDeleteTask(item),
       });
     }
     return items;
@@ -894,6 +975,28 @@ export default function AutomationTasksPage() {
         sortValue: (item) => Date.parse(item.lastUpdatedAt) || 0,
         render: (item) => formatDateTime(item.lastUpdatedAt),
       },
+      {
+        key: "menu",
+        header: "",
+        width: "48px",
+        render: (item) => (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              aria-label={`Mais ações para ${item.name}`}
+              title="Mais ações"
+              className="rounded-lg p-1 text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                const rect = e.currentTarget.getBoundingClientRect();
+                setContextMenu({ x: rect.right, y: rect.bottom, item });
+              }}
+            >
+              <Icon name="more_vert" className="h-4 w-4" />
+            </button>
+          </div>
+        ),
+      },
     ],
     [listMode],
   );
@@ -974,6 +1077,24 @@ export default function AutomationTasksPage() {
     setForm((prev) => ({
       ...prev,
       includeTags: prev.includeTags.filter((item) => item !== tag),
+    }));
+  };
+
+  const addExcludeTag = (rawTag: string) => {
+    const nextTag = rawTag.trim();
+    if (!nextTag) return;
+    setForm((prev) => {
+      if (prev.excludeTags.some((item) => item.toLowerCase() === nextTag.toLowerCase())) {
+        return prev;
+      }
+      return { ...prev, excludeTags: [...prev.excludeTags, nextTag] };
+    });
+  };
+
+  const removeExcludeTag = (tag: string) => {
+    setForm((prev) => ({
+      ...prev,
+      excludeTags: prev.excludeTags.filter((item) => item !== tag),
     }));
   };
 
@@ -1144,7 +1265,7 @@ export default function AutomationTasksPage() {
 
     const payload: CreateAutomationTaskRequest = {
       name,
-      description: form.description.trim() || null,
+      description: editing ? (form.description.trim() || "") : (form.description.trim() || null),
       actionType,
       installationType:
         actionType === AutomationTaskActionType.InstallPackage ||
@@ -1168,7 +1289,7 @@ export default function AutomationTasksPage() {
       scopeType,
       scopeId: scopeType === AppApprovalScopeType.Global ? null : form.scopeId.trim(),
       includeTags: form.includeTags,
-      excludeTags: [],
+      excludeTags: form.excludeTags,
       triggerImmediate: form.triggerImmediate,
       triggerRecurring: form.triggerRecurring,
       triggerOnUserLogin: form.triggerOnUserLogin,
@@ -1187,7 +1308,9 @@ export default function AutomationTasksPage() {
       // Coletor só existe em tarefa de script: ao trocar o ActionType, o valor
       // antigo não pode continuar sendo enviado.
       collectorFieldDefinitionId:
-        actionType === AutomationTaskActionType.RunScript ? form.collectorFieldDefinitionId || null : null,
+        actionType === AutomationTaskActionType.RunScript
+          ? form.collectorFieldDefinitionId || (editing ? "00000000-0000-0000-0000-000000000000" : null)
+          : null,
       writeOutputToNote: form.writeOutputToNote,
       // Opt-in por task de pacote: o executor do agent só roda a ação dentro
       // da janela de manutenção efetiva (Configurações → Servidor).
@@ -1247,7 +1370,10 @@ export default function AutomationTasksPage() {
           setPackageNotice(notice);
           if (notice) {
             toast(notice, { icon: "⚠️" });
-            // Mantém o form aberto para o admin ler o aviso e decidir fechar.
+            // Transiciona para modo edição para evitar duplicar POST se o usuário clicar em Salvar novamente.
+            setEditing(result);
+            setEditingId(result.id);
+            setTouched(true);
             return;
           }
           toast.success(
@@ -1276,24 +1402,28 @@ export default function AutomationTasksPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <PageHeader title="Tarefas de Automação" description="Regras operacionais por escopo." />
-        <Button
-          onClick={() => {
-              setEditing(null);
-              setEditingId("");
-              setScopeClientId("");
-              setScopeSiteId("");
-              setScopeAgentId("");
-              setPackageSearch("");
-              setTagSearch("");
-              setExecutionOrderTouched(false);
-              setPackageNotice(null);
-              setForm(defaultForm);
-              setFormOpen(true);
-          }}
-        >
-          Nova tarefa
-        </Button>
+        {canCreateAutomation && (
+          <Button
+            onClick={() => {
+                setEditing(null);
+                setEditingId("");
+                setScopeClientId("");
+                setScopeSiteId("");
+                setScopeAgentId("");
+                setPackageSearch("");
+                setTagSearch("");
+                setExecutionOrderTouched(false);
+                setPackageNotice(null);
+                setForm(defaultForm);
+                setFormOpen(true);
+            }}
+          >
+            Nova tarefa
+          </Button>
+        )}
       </div>
+
+      <AutomationSubnav />
 
       <Card>
         <CardHeader title="Filtros" subtitle="Busca por texto, status e filtros avançados" />
@@ -1536,6 +1666,7 @@ export default function AutomationTasksPage() {
               columns={columns}
               data={list.data?.items ?? []}
               keyExtractor={(item) => item.id}
+              onRowClick={(item) => setDetailTaskId(item.id)}
               showPagination={false}
               defaultSort={{ key: "executionOrder", direction: "asc" }}
               onRowContextMenu={(event, item) => {
@@ -1652,7 +1783,7 @@ export default function AutomationTasksPage() {
             placeholder="ex: coletar_anydesk"
             hint="Identificador padronizado ([a-z0-9_-]) usado por relatórios e automações."
             error={
-              !editing && form.key.trim()
+              form.key.trim()
                 ? fieldKeyError(form.key, { allowHyphen: true }) ?? undefined
                 : undefined
             }
@@ -1836,44 +1967,90 @@ export default function AutomationTasksPage() {
                 : "space-y-2 md:col-span-2"
             }
           >
-            <p className="text-sm font-medium text-muted-foreground">Tags (IncludeTags)</p>
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-muted-foreground">Selecionar tags</label>
-              <div className="flex gap-2">
-                <Input
-                  value={form.includeTags.join(", ")}
-                  readOnly
-                  placeholder="Nenhuma tag selecionada"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setTagPickerOpen(true)}
-                  aria-label="Pesquisar tags"
-                  title="Pesquisar tags"
-                >
-                  <Icon name="search" className="h-4 w-4" />
-                </Button>
+            <p className="text-sm font-medium text-muted-foreground">Tags de filtragem (Include / Exclude)</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-muted-foreground">Incluir tags (IncludeTags)</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={form.includeTags.join(", ")}
+                    readOnly
+                    placeholder="Nenhuma tag incluída"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setTagPickerTarget("include");
+                      setTagPickerOpen(true);
+                    }}
+                    aria-label="Pesquisar tags incluídas"
+                    title="Pesquisar tags incluídas"
+                  >
+                    <Icon name="search" className="h-4 w-4" />
+                  </Button>
+                </div>
+                {!!form.includeTags.length && (
+                  <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface/40 p-2">
+                    {form.includeTags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 text-xs text-foreground">
+                        {tag}
+                        <button
+                          type="button"
+                          className="text-muted hover:text-foreground"
+                          onClick={() => removeIncludeTag(tag)}
+                          aria-label={`Remover tag ${tag}`}
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-muted-foreground">Excluir tags (ExcludeTags)</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={form.excludeTags.join(", ")}
+                    readOnly
+                    placeholder="Nenhuma tag excluída"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setTagPickerTarget("exclude");
+                      setTagPickerOpen(true);
+                    }}
+                    aria-label="Pesquisar tags excluídas"
+                    title="Pesquisar tags excluídas"
+                  >
+                    <Icon name="search" className="h-4 w-4" />
+                  </Button>
+                </div>
+                {!!form.excludeTags.length && (
+                  <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface/40 p-2">
+                    {form.excludeTags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/10 px-2.5 py-0.5 text-xs text-foreground">
+                        {tag}
+                        <button
+                          type="button"
+                          className="text-muted hover:text-foreground"
+                          onClick={() => removeExcludeTag(tag)}
+                          aria-label={`Remover tag excluída ${tag}`}
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-            {!!form.includeTags.length && (
-              <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface/40 p-2">
-                {form.includeTags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground">
-                    {tag}
-                    <button
-                      type="button"
-                      className="text-muted hover:text-foreground"
-                      onClick={() => removeIncludeTag(tag)}
-                      aria-label={`Remover tag ${tag}`}
-                    >
-                      x
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -2416,7 +2593,7 @@ export default function AutomationTasksPage() {
       <Modal
         open={tagPickerOpen}
         onClose={() => setTagPickerOpen(false)}
-        title="Selecionar tags"
+        title={tagPickerTarget === "include" ? "Selecionar tags incluídas" : "Selecionar tags excluídas"}
         maxWidth="max-w-3xl"
       >
         <div className="space-y-3">
@@ -2439,7 +2616,8 @@ export default function AutomationTasksPage() {
                     : tag.toLowerCase().includes(tagSearch.trim().toLowerCase()),
                 )
                 .map((tag) => {
-                  const selected = form.includeTags.some(
+                  const targetTags = tagPickerTarget === "include" ? form.includeTags : form.excludeTags;
+                  const selected = targetTags.some(
                     (item) => item.toLowerCase() === tag.toLowerCase(),
                   );
 
@@ -2455,13 +2633,17 @@ export default function AutomationTasksPage() {
                         variant={selected ? "secondary" : "primary"}
                         onClick={() => {
                           if (selected) {
-                            const existing = form.includeTags.find(
+                            const existing = targetTags.find(
                               (item) => item.toLowerCase() === tag.toLowerCase(),
                             );
-                            if (existing) removeIncludeTag(existing);
+                            if (existing) {
+                              if (tagPickerTarget === "include") removeIncludeTag(existing);
+                              else removeExcludeTag(existing);
+                            }
                             return;
                           }
-                          addIncludeTag(tag);
+                          if (tagPickerTarget === "include") addIncludeTag(tag);
+                          else addExcludeTag(tag);
                         }}
                       >
                         {selected ? "Remover" : "Selecionar"}
@@ -2483,219 +2665,23 @@ export default function AutomationTasksPage() {
         </div>
       </Modal>
 
-      {/* Modal de detalhes da tarefa */}
-      <Modal
-        open={!!detailTaskId}
-        onClose={() => { setDetailTaskId(null); }}
-        title="Detalhes da tarefa"
-        maxWidth="max-w-4xl"
-      >
-        {detailTask.isLoading && <Loading message="Carregando detalhes..." />}
-        {detailTask.isError && <ErrorDisplay onRetry={() => detailTask.refetch()} />}
-        {detailTask.data && !detailTask.isLoading && (() => {
-          const d = detailTask.data;
-          const detailIsDeleted = isTaskDeleted(d);
-          const detailNotificationMode = notificationModeFromTask(d.notificationMode, d.requiresApproval);
-          // Aviso informativo (policy de automação sobrepõe a App Store; não bloqueia).
-          const detailPackageNotice = packageNoticeFrom(d);
-          return (
-            <div className="space-y-4">
-              {/* Cabeçalho */}
-              <div className="flex items-start gap-3">
-                <div className="flex-1 space-y-1">
-                  <h3 className="text-lg font-semibold text-foreground">{d.name}</h3>
-                  {d.description && <p className="text-sm text-muted">{d.description}</p>}
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
-                    {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
-                  </Badge>
-                  <Badge
-                    color={
-                      detailNotificationMode === AutomationNotificationMode.Silent
-                        ? "slate"
-                        : detailNotificationMode === AutomationNotificationMode.Prompt
-                          ? "warning"
-                          : "accent"
-                    }
-                  >
-                    {notificationModeLabel(detailNotificationMode)}
-                  </Badge>
-                  {detailPackageNotice && <Badge color="warning">Fora da App Store</Badge>}
-                </div>
-              </div>
-
-              {detailPackageNotice && (
-                <div
-                  role="alert"
-                  className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground"
-                >
-                  <p className="font-medium">Pacote fora da App Store aprovada</p>
-                  <p className="mt-1 text-muted">{detailPackageNotice}</p>
-                </div>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {/* Ação */}
-                <div className="rounded-lg bg-surface-light border border-border p-3">
-                  <p className="text-xs text-muted mb-1">Ação</p>
-                  <Badge color="primary">{actionLabel(d.actionType)}</Badge>
-                  <p className="text-xs text-muted mt-1">Ordem de execução: {d.executionOrder}</p>
-                  {d.installationType !== null && d.installationType !== undefined && (
-                    <p className="text-xs text-muted mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
-                  )}
-                  {d.packageId && (
-                    <p className="font-mono text-xs text-muted-foreground mt-1 truncate">{d.packageId}</p>
-                  )}
-                </div>
-
-                {/* Escopo */}
-                <div className="rounded-lg bg-surface-light border border-border p-3">
-                  <p className="text-xs text-muted mb-1">Escopo</p>
-                  <p className="text-sm text-foreground">{scopeLabel(d.scopeType)}</p>
-                  <p className="text-xs text-muted truncate" title={d.scopeId || undefined}>
-                    {scopeDisplayName(d)}
-                  </p>
-                  {d.clientName && d.clientName !== scopeDisplayName(d) && (
-                    <p className="text-xs text-muted truncate">Cliente: {d.clientName}</p>
-                  )}
-                  {d.siteName && d.siteName !== scopeDisplayName(d) && (
-                    <p className="text-xs text-muted truncate">Site: {d.siteName}</p>
-                  )}
-                </div>
-
-                {/* Triggers */}
-                <div className="rounded-lg bg-surface-light border border-border p-3">
-                  <p className="text-xs text-muted mb-1">Triggers</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {d.triggerImmediate && <Badge color="accent">Imediato</Badge>}
-                    {d.triggerRecurring && <Badge color="accent">Recorrente</Badge>}
-                    {d.triggerOnUserLogin && <Badge color="accent">Login</Badge>}
-                    {d.triggerOnAgentCheckIn && <Badge color="accent">Check-in</Badge>}
-                  </div>
-                  {d.scheduleCron && <p className="font-mono text-xs text-muted mt-1">{d.scheduleCron}</p>}
-                </div>
-
-                {/* Notificação ao usuário */}
-                <div className="rounded-lg bg-surface-light border border-border p-3">
-                  <p className="text-xs text-muted mb-1">Notificação ao usuário</p>
-                  {detailNotificationMode === AutomationNotificationMode.Prompt ? (
-                    <div className="space-y-1">
-                      <p className="text-sm text-foreground">Prompt nativo (Continuar/Adiar)</p>
-                      <p className="text-xs text-muted">
-                        {d.allowDefer === false ? "Não pode adiar" : "Pode adiar"} · ação padrão em{" "}
-                        {d.promptTimeoutSeconds ?? 60}s
-                      </p>
-                      {!!(d.closeProcesses?.length) && (
-                        <p className="text-xs text-muted truncate" title={(d.closeProcesses ?? []).join(", ")}>
-                          Fecha: {(d.closeProcesses ?? []).join(", ")}
-                        </p>
-                      )}
-                    </div>
-                  ) : detailNotificationMode === AutomationNotificationMode.Toast ? (
-                    <div className="space-y-1">
-                      <p className="text-sm text-foreground">Toast na interface do agent</p>
-                      <p className="text-xs text-muted">
-                        {toastTimingLabel(d.toastTiming)} · sem interação do usuário
-                      </p>
-                    </div>
-                  ) : detailNotificationMode === AutomationNotificationMode.NativeToast ? (
-                    <div className="space-y-1">
-                      <p className="text-sm text-foreground">Toast nativo do app (igual ao Chat IA)</p>
-                      <p className="text-xs text-muted">
-                        {toastTimingLabel(d.toastTiming)} · notificação do Windows/Action Center
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted">Execução silenciosa</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Tags */}
-              {(d.includeTags?.length > 0 || d.excludeTags?.length > 0) && (
-                <div className="rounded-lg bg-surface-light border border-border p-3">
-                  <p className="text-xs text-muted mb-2">Tags de filtragem</p>
-                  {d.includeTags?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      <span className="text-xs text-muted">Include:</span>
-                      {d.includeTags.map((t) => <Badge key={t} color="success">{t}</Badge>)}
-                    </div>
-                  )}
-                  {d.excludeTags?.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      <span className="text-xs text-muted">Exclude:</span>
-                      {d.excludeTags.map((t) => <Badge key={t} color="danger">{t}</Badge>)}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Datas */}
-              <div className="grid grid-cols-2 gap-3 text-xs text-muted">
-                <p>Criado: {formatDateTime(d.createdAt)}</p>
-                <p>Atualizado: {formatDateTime(d.updatedAt)}</p>
-              </div>
-
-              {/* Ações */}
-              <div className="flex justify-end gap-2 pt-2">
-                {detailIsDeleted && (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => {
-                      setDetailTaskId(null);
-
-                      const item = list.data?.items.find((i) => i.id === d.id);
-                      setRestoreTask(
-                        item ?? {
-                          id: d.id,
-                          name: d.name,
-                          description: d.description,
-                          actionType: d.actionType,
-                          scopeType: d.scopeType,
-                          scopeId: d.scopeId,
-                          deletedAt: d.deletedAt,
-                          isDeleted: d.isDeleted,
-                          isActive: d.isActive,
-                          requiresApproval: d.requiresApproval,
-                          notificationMode: d.notificationMode,
-                          toastTiming: d.toastTiming,
-                          executionOrder: d.executionOrder,
-                          lastUpdatedAt: d.lastUpdatedAt,
-                        },
-                      );
-                      setRestoreConfirmationText("");
-                    }}
-                  >
-                    Reativar
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={detailIsDeleted}
-                  onClick={() => {
-                    setDetailTaskId(null);
-
-                    const item = list.data?.items.find((i) => i.id === detailTaskId);
-                    openEditFor(item ?? d);
-                  }}
-                >
-                  Editar
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => { setDetailTaskId(null);  }}
-                >
-                  Fechar
-                </Button>
-              </div>
-            </div>
-          );
-        })()}
-      </Modal>
+      <AutomationTaskDetailModal
+        taskId={detailTaskId}
+        task={detailTask.data}
+        isLoading={detailTask.isLoading}
+        isError={detailTask.isError}
+        onRetry={() => void detailTask.refetch()}
+        onClose={() => setDetailTaskId(null)}
+        onEdit={(d) => {
+          const item = list.data?.items.find((i) => i.id === d.id);
+          openEditFor(item ?? d);
+        }}
+        onRestore={(item) => setRestoreTask(item)}
+        canEdit={canEditAutomation}
+        canExecute={canExecuteAutomation}
+        scopeDisplayName={scopeDisplayName}
+        isTaskDeleted={isTaskDeleted}
+      />
 
       <Modal
         open={!!auditTaskId}
@@ -2703,100 +2689,39 @@ export default function AutomationTasksPage() {
         title="Auditoria da tarefa"
         maxWidth="max-w-3xl"
       >
-        {auditQuery.isLoading && <Loading message="Carregando auditoria..." />}
-        {auditQuery.isError && <ErrorDisplay onRetry={() => auditQuery.refetch()} />}
-        {!auditQuery.isLoading && !auditQuery.isError && (
-          <div className="space-y-3">
-            {(auditQuery.data ?? []).map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <Badge color="accent">{String(entry.changeType)}</Badge>
-                  <p className="text-xs text-muted">{formatDateTime(entry.changedAt)}</p>
-                </div>
-                <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
-                <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
-              </div>
-            ))}
-            {!auditQuery.data?.length && (
-              <p className="text-sm text-muted">Nenhum evento de auditoria encontrado.</p>
-            )}
-          </div>
-        )}
+        <p className="mb-3 text-xs text-muted">
+          Cada evento mostra o tipo de mudança, quem alterou e os snapshots antes/depois.
+        </p>
+        <AutomationAuditList
+          entries={auditQuery.data}
+          isLoading={auditQuery.isLoading}
+          isError={auditQuery.isError}
+          onRetry={() => void auditQuery.refetch()}
+          errorMessage="Não foi possível carregar a trilha de auditoria desta tarefa."
+        />
       </Modal>
 
-      <Modal
-        open={!!deleteTask}
+      <ConfirmDialog
+        open={Boolean(deleteTask)}
+        title="Excluir tarefa"
+        message={deleteTask ? `Excluir a tarefa "${deleteTask.name}"? Ela poderá ser reativada depois na visão de excluídas.` : ""}
+        confirmLabel="Excluir tarefa"
+        tone="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={handleConfirmDelete}
         onClose={closeDeleteModal}
-        title="Confirmar exclusao"
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-            <p>Você está prestes a excluir a tarefa <span className="font-semibold text-foreground">{deleteTask?.name}</span>.</p>
-            <p className="mt-1 text-muted">Digite <span className="font-semibold text-foreground">yes</span> para confirmar.</p>
-          </div>
+      />
 
-          <Input
-            label="Confirmação"
-             value={deleteConfirmationText}
-            onChange={(e) => setDeleteConfirmationText(e.target.value)}
-            placeholder="Digite yes"
-            autoFocus
-            disabled={deleteMutation.isPending}
-          />
-
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={closeDeleteModal} disabled={deleteMutation.isPending}>
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              onClick={handleConfirmDelete}
-              loading={deleteMutation.isPending}
-              disabled={deleteConfirmationText.trim().toLowerCase() !== "yes"}
-            >
-              Excluir tarefa
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={!!restoreTask}
+      <ConfirmDialog
+        open={Boolean(restoreTask)}
+        title="Reativar tarefa"
+        message={restoreTask ? `Reativar a tarefa "${restoreTask.name}"? Ela voltará a ser aplicada ao escopo configurado.` : ""}
+        confirmLabel="Reativar tarefa"
+        tone="primary"
+        isLoading={restoreMutation.isPending}
+        onConfirm={handleConfirmRestore}
         onClose={closeRestoreModal}
-        title="Confirmar reativação"
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
-            <p>Você está prestes a reativar a tarefa <span className="font-semibold text-foreground">{restoreTask?.name}</span>.</p>
-            <p className="mt-1 text-muted">Digite <span className="font-semibold text-foreground">yes</span> para confirmar.</p>
-          </div>
-
-          <Input
-            label="Confirmação"
-             value={restoreConfirmationText}
-            onChange={(e) => setRestoreConfirmationText(e.target.value)}
-            placeholder="Digite yes"
-            autoFocus
-            disabled={restoreMutation.isPending}
-          />
-
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={closeRestoreModal} disabled={restoreMutation.isPending}>
-              Cancelar
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleConfirmRestore}
-              loading={restoreMutation.isPending}
-              disabled={restoreConfirmationText.trim().toLowerCase() !== "yes"}
-            >
-              Reativar tarefa
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      />
     </div>
   );
 }

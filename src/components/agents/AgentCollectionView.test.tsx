@@ -77,3 +77,94 @@ describe('AgentCollectionView', () => {
     expect(onContextMenu.mock.calls[1][1].id).toBe('a1');
   });
 });
+
+/**
+ * Seleção múltipla (ações em massa da aba Agentes). Sem `selectable` nada de
+ * checkbox aparece — é o que mantém a lista geral de /agents inalterada.
+ */
+describe('AgentCollectionView — seleção múltipla', () => {
+  afterEach(() => cleanup());
+
+  function renderSelectable(overrides: {
+    onToggleSelect?: (agent: AgentCardAgent, next: boolean) => void;
+    onToggleSelectAll?: (agents: readonly AgentCardAgent[], next: boolean) => void;
+    onOpen?: () => void;
+    selectedIds?: ReadonlySet<string>;
+  } = {}) {
+    const agents = [buildAgent('a1', 'HOST-01'), buildAgent('a2', 'HOST-02')];
+    render(
+      <AgentCollectionView
+        agents={agents}
+        now={Date.now()}
+        emptyMessage="Nenhum agente"
+        onOpen={overrides.onOpen ?? vi.fn()}
+        selectable
+        selectedIds={overrides.selectedIds ?? new Set<string>()}
+        onToggleSelect={overrides.onToggleSelect}
+        onToggleSelectAll={overrides.onToggleSelectAll}
+        filterable={false}
+      />,
+    );
+    return agents;
+  }
+
+  it('não renderiza checkboxes sem a flag selectable', () => {
+    render(
+      <AgentCollectionView
+        agents={[buildAgent('a1', 'HOST-01')]}
+        now={Date.now()}
+        emptyMessage="Nenhum agente"
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('marca um agente sem abrir o card', () => {
+    const onToggleSelect = vi.fn();
+    const onOpen = vi.fn();
+    renderSelectable({ onToggleSelect, onOpen });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Selecionar HOST-01' }));
+
+    expect(onToggleSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), true);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('Espaço no checkbox não abre o agente (guarda do keydown do card)', () => {
+    const onToggleSelect = vi.fn();
+    const onOpen = vi.fn();
+    renderSelectable({ onToggleSelect, onOpen });
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Selecionar HOST-01' });
+    checkbox.focus();
+    fireEvent.keyDown(checkbox, { key: ' ' });
+
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('"Selecionar todos" envia apenas o que está visível', () => {
+    const onToggleSelectAll = vi.fn();
+    renderSelectable({ onToggleSelectAll });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Selecionar todos os agentes visíveis' }));
+
+    expect(onToggleSelectAll).toHaveBeenCalledTimes(1);
+    expect(onToggleSelectAll.mock.calls[0][0].map((agent: AgentCardAgent) => agent.id)).toEqual(['a1', 'a2']);
+    expect(onToggleSelectAll.mock.calls[0][1]).toBe(true);
+  });
+
+  it('na visão de lista, o cabeçalho também marca todos e a linha respeita o estado', () => {
+    const onToggleSelectAll = vi.fn();
+    const onToggleSelect = vi.fn();
+    renderSelectable({ onToggleSelectAll, onToggleSelect, selectedIds: new Set(['a1']) });
+
+    fireEvent.click(screen.getByTitle('Visualização em lista'));
+
+    expect(screen.getByRole('checkbox', { name: 'Selecionar HOST-01' })).toHaveProperty('checked', true);
+    expect(screen.getByRole('checkbox', { name: 'Selecionar HOST-02' })).toHaveProperty('checked', false);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Selecionar todos os agentes' }));
+    expect(onToggleSelectAll).toHaveBeenCalledTimes(1);
+  });
+});

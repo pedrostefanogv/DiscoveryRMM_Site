@@ -4589,6 +4589,44 @@ export interface AutomationTaskAudit {
   changedAt: string;
 }
 
+export interface AutomationTaskExecution {
+  id: string;
+  commandId?: string | null;
+  agentId: string;
+  sourceType: string;
+  status: string;
+  correlationId?: string | null;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  resultReceivedAt?: string | null;
+  exitCode?: number | null;
+  errorMessage?: string | null;
+  skipReason?: string | null;
+  decidedBy?: string | null;
+}
+
+export interface AutomationTaskTargetPreviewItem {
+  agentId: string;
+  siteId: string;
+  hostname: string;
+  displayName?: string | null;
+  status: number | string;
+  agentTags: string[];
+}
+
+export interface AutomationTaskTargetPreviewPage {
+  taskId: string;
+  taskName: string;
+  scopeType: AppApprovalScopeType | string | number;
+  includeTags: string[];
+  excludeTags: string[];
+  items: AutomationTaskTargetPreviewItem[];
+  count: number;
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 /** Resposta das ações de disparo/cancelamento (backend `AutomationExecutionDto`). */
 export interface AutomationExecutionDto {
   id: string;

@@ -176,6 +176,11 @@ interface AgentCardProps {
   canApprove?: boolean;
   isApproving?: boolean;
   onApprove?: (agent: AgentCardAgent) => void;
+  /** Habilita a seleção múltipla (ações em massa da aba Agentes). */
+  selectable?: boolean;
+  /** Estado da seleção deste agente. */
+  selected?: boolean;
+  onToggleSelect?: (agent: AgentCardAgent, next: boolean) => void;
 }
 
 /**
@@ -192,6 +197,9 @@ export function AgentCard({
   canApprove = false,
   isApproving = false,
   onApprove,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }: AgentCardProps) {
   const online = isAgentOnlineNow(agent, now);
   const lastSeen = getAgentLastSeen(agent);
@@ -212,6 +220,10 @@ export function AgentCard({
       onClick={onOpen ? () => onOpen(agent) : undefined}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (!onOpen) return;
+        // Só o PRÓPRIO card responde a Enter/Espaço. Sem esta guarda, o Espaço
+        // no checkbox de seleção (filho) borbulharia para cá e abriria o agente
+        // em vez de marcar/desmarcar — o preventDefault matava o toggle.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onOpen(agent);
@@ -220,7 +232,12 @@ export function AgentCard({
       onContextMenu={onContextMenu ? (event) => onContextMenu(event, agent) : undefined}
       role={onOpen ? 'button' : undefined}
       tabIndex={onOpen ? 0 : undefined}
-      className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-colors hover:border-primary/30 hover:bg-surface-light"
+      data-selected={selectable && selected ? 'true' : undefined}
+      className={`group relative flex flex-col gap-4 rounded-xl border bg-surface p-5 text-left transition-colors hover:bg-surface-light ${
+        selectable && selected
+          ? 'border-primary/60 ring-1 ring-primary/40'
+          : 'border-border hover:border-primary/30'
+      }`}
     >
       {/* Canto superior direito: status e, logo abaixo, a bateria (percentual +
           ícone de tomada/carregando). O selo textual de notebook saiu — o ícone
@@ -251,6 +268,18 @@ export function AgentCard({
         de CPU/RAM/HDD, que devem ocupar a largura do card até a borda.
       */}
       <div className={`flex items-start gap-3 ${battery ? 'pr-20' : 'pr-6'}`}>
+        {/* Checkbox de seleção em massa. stopPropagation é obrigatório: o card
+            inteiro é um botão (onOpen) e sem isso marcar abriria o agente. */}
+        {selectable && onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => onToggleSelect(agent, event.target.checked)}
+            aria-label={`Selecionar ${displayName}`}
+            className="mt-1.5 h-4 w-4 shrink-0 cursor-pointer rounded border-border-strong bg-surface-light text-primary focus:ring-primary/30"
+          />
+        )}
         <div
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${getAgentDeviceIconBoxClass(agent)}`}
           title={deviceTypeLabel ? `Dispositivo: ${deviceTypeLabel}` : undefined}

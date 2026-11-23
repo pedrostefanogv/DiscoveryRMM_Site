@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import toast from 'react-hot-toast';
 import { ApiError, agentsApi, type AgentSoftwareInventoryItem } from '@/api';
 import { AgentAppInstallModal } from '@/components/agents/AgentAppInstallModal';
@@ -18,6 +18,7 @@ import {
   type ContextMenuItem,
 } from '@/components/ui';
 import { useAgentSoftwarePage, type useAgentSoftwareSnapshot } from '@/hooks/useAgents';
+import { useIsBelowSm } from '@/hooks/useMediaQuery';
 import { formatDate } from '@/pages/agents/agentDetailUtils';
 
 const SOFTWARE_MAX_PAGE_SIZE = 2000;
@@ -52,6 +53,10 @@ export function AgentSoftwareTab({
   canExecute,
   softwareSnapshot,
 }: AgentSoftwareTabProps) {
+  // Abaixo de sm a tabela (3 colunas + ações) não cabe em 360px: a listagem
+  // vira uma lista de cartões. A decisão é de ÁRVORE (não só de CSS) para não
+  // montar as duas versões — o que duplicaria linhas, ids e o menu de contexto.
+  const isCompactLayout = useIsBelowSm();
   const [softwareLimitSelected, setSoftwareLimitSelected] = useState('10');
   const [softwareOrder, setSoftwareOrder] = useState<'asc' | 'desc'>('desc');
   const [softwareSearchInput, setSoftwareSearchInput] = useState('');
@@ -218,6 +223,28 @@ export function AgentSoftwareTab({
     }
   };
 
+  /**
+   * Abre o menu de ações da linha/cartão ancorado no botão.
+   *
+   * O `x` era `rect.right - 200` fixo: em telas estreitas o botão fica perto da
+   * borda direita e o menu nascia com x NEGATIVO (metade fora da tela). Agora o
+   * valor é preso à viewport.
+   */
+  const openSoftwareActionsMenu = useCallback((
+    event: ReactMouseEvent<HTMLButtonElement>,
+    item: AgentSoftwareInventoryItem,
+  ) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 200;
+    const maxX = Math.max(8, window.innerWidth - menuWidth - 8);
+    setSoftwareMenu({
+      x: Math.min(Math.max(8, rect.right - menuWidth), maxX),
+      y: rect.bottom + 4,
+      item,
+    });
+  }, []);
+
   const softwareColumns = useMemo<Column<AgentSoftwareInventoryItem>[]>(
     () => [
       {
@@ -261,18 +288,14 @@ export function AgentSoftwareTab({
             className="px-2"
             aria-label={`Ações para ${item.name}`}
             title="Mais ações"
-            onClick={event => {
-              event.stopPropagation();
-              const rect = event.currentTarget.getBoundingClientRect();
-              setSoftwareMenu({ x: rect.right - 200, y: rect.bottom + 4, item });
-            }}
+            onClick={event => openSoftwareActionsMenu(event, item)}
           >
             <Icon name="more_vert" className="h-4 w-4" />
           </Button>
         ),
       },
     ],
-    [updatingSoftwareId],
+    [updatingSoftwareId, openSoftwareActionsMenu],
   );
 
   const softwareMenuItems: ContextMenuItem[] = softwareMenu
@@ -462,23 +485,80 @@ export function AgentSoftwareTab({
               </Button>
             </form>
 
-            <div style={{ minHeight: '400px' }} className="relative">
-              <DataTable
-                columns={softwareColumns}
-                data={softwareItems}
-                keyExtractor={item => item.inventoryId}
-                onRowContextMenu={(event, item) => {
-                  event.preventDefault();
-                  setSoftwareMenu({ x: event.clientX, y: event.clientY, item });
-                }}
-                emptyMessage={
-                  softwareOnlyUpdates
-                    ? 'Nenhum aplicativo com atualização pendente'
-                    : 'Nenhum aplicativo encontrado para este agente'
-                }
-                showPagination={false}
-                maxHeight="min(640px, 55vh)"
-              />
+            <div style={{ minHeight: isCompactLayout ? undefined : '400px' }} className="relative">
+              {isCompactLayout ? (
+                /* Mobile: a tabela de 3 colunas rolava 487px dentro de 292px e
+                   cortava o cabeçalho. Aqui os mesmos dados viram cartões — nome,
+                   versão e o mesmo menu de ações, tudo dentro da largura da tela. */
+                softwareItems.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-4 py-10 text-center">
+                    <Icon name="inbox" className="h-6 w-6 text-muted" aria-hidden="true" />
+                    <p className="text-sm text-muted">
+                      {softwareOnlyUpdates
+                        ? 'Nenhum aplicativo com atualização pendente'
+                        : 'Nenhum aplicativo encontrado para este agente'}
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="space-y-2">
+                    {softwareItems.map(item => (
+                      <li
+                        key={item.inventoryId}
+                        className="rounded-xl border border-border bg-surface-light p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                              <span className="truncate" title={item.name}>{item.name}</span>
+                              {updatingSoftwareId === item.inventoryId && (
+                                <Icon name="refresh" className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
+                              )}
+                            </p>
+                            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                              <span className="font-mono">{item.version ?? '—'}</span>
+                              {item.updateAvailable && item.availableVersion && (
+                                <Badge color="warning">&rarr; {item.availableVersion}</Badge>
+                              )}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="shrink-0 px-2"
+                            aria-label={`Ações para ${item.name}`}
+                            title="Mais ações"
+                            onClick={event => openSoftwareActionsMenu(event, item)}
+                          >
+                            <Icon name="more_vert" className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <DataTable
+                  columns={softwareColumns}
+                  data={softwareItems}
+                  keyExtractor={item => item.inventoryId}
+                  onRowContextMenu={(event, item) => {
+                    event.preventDefault();
+                    const menuWidth = 200;
+                    setSoftwareMenu({
+                      x: Math.min(Math.max(8, event.clientX), Math.max(8, window.innerWidth - menuWidth - 8)),
+                      y: event.clientY,
+                      item,
+                    });
+                  }}
+                  emptyMessage={
+                    softwareOnlyUpdates
+                      ? 'Nenhum aplicativo com atualização pendente'
+                      : 'Nenhum aplicativo encontrado para este agente'
+                  }
+                  showPagination={false}
+                  maxHeight="min(640px, 55vh)"
+                />
+              )}
             </div>
             {softwareItems.length > 0 && (
               <Pagination

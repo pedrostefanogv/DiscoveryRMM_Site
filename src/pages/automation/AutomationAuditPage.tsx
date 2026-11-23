@@ -1,13 +1,9 @@
-import { formatDateTime } from '@/utils/format';
 import { useMemo, useState } from "react";
 import {
-  Badge,
   Card,
   CardHeader,
-  ErrorDisplay,
-  Loading,
   Select,
-PageHeader,
+  PageHeader,
 } from "@/components/ui";
 import {
   useAutomationScriptAudit,
@@ -15,6 +11,8 @@ import {
   useAutomationTaskAudit,
   useAutomationTasks,
 } from "@/hooks/useAutomation";
+import { AutomationSubnav } from "./AutomationSubnav";
+import { AutomationAuditList } from "./AutomationAuditList";
 
 type AuditEntity = "script" | "task";
 
@@ -24,7 +22,7 @@ export default function AutomationAuditPage() {
   const [limit, setLimit] = useState(50);
 
   const scripts = useAutomationScripts({ activeOnly: false, limit: 200 });
-  const tasks = useAutomationTasks({ activeOnly: false, limit: 200 });
+  const tasks = useAutomationTasks({ activeOnly: false, includeDeleted: true, limit: 200 });
 
   const scriptAudit = useAutomationScriptAudit(entityId, limit, entity === "script" && !!entityId);
   const taskAudit = useAutomationTaskAudit(entityId, limit, entity === "task" && !!entityId);
@@ -45,6 +43,7 @@ export default function AutomationAuditPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Auditoria de Automação" description="Consulte a trilha funcional de scripts e tarefas com correlation id." />
+      <AutomationSubnav />
 
       <Card>
         <CardHeader title="Filtros" subtitle="Escolha entidade e limite de eventos" />
@@ -83,39 +82,14 @@ export default function AutomationAuditPage() {
       <Card>
         <CardHeader title="Eventos" subtitle={entityId ? "Auditoria retornada pela API" : "Selecione uma entidade para consultar"} />
         {!entityId && <p className="text-sm text-muted">Nenhuma entidade selecionada.</p>}
-        {entityId && activeQuery.isLoading && <Loading message="Carregando auditoria..." />}
-        {entityId && activeQuery.isError && <ErrorDisplay onRetry={() => activeQuery.refetch()} />}
-        {entityId && !activeQuery.isLoading && !activeQuery.isError && (
-          <div className="space-y-3">
-            {(activeQuery.data ?? []).map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="flex gap-2">
-                    <Badge color="accent">{String(entry.changeType)}</Badge>
-                    <Badge color="slate">{entity === "script" ? "Script" : "Tarefa"}</Badge>
-                  </div>
-                  <p className="text-xs text-muted">{formatDateTime(entry.changedAt)}</p>
-                </div>
-                <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
-                <p className="text-sm text-muted-foreground">Alterado por: {entry.changedBy || "-"}</p>
-                <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
-                <details className="mt-2 rounded border border-border bg-background/40 p-2">
-                  <summary className="cursor-pointer text-xs text-muted">Snapshot técnico</summary>
-                  <div className="mt-2 grid gap-2 md:grid-cols-2">
-                    <pre className="overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
-{entry.oldValueJson || "null"}
-                    </pre>
-                    <pre className="overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
-{entry.newValueJson || "null"}
-                    </pre>
-                  </div>
-                </details>
-              </div>
-            ))}
-            {!activeQuery.data?.length && (
-              <p className="text-sm text-muted">Nenhum evento de auditoria encontrado.</p>
-            )}
-          </div>
+        {entityId && (
+          <AutomationAuditList
+            entries={activeQuery.data}
+            isLoading={activeQuery.isLoading}
+            isError={activeQuery.isError}
+            onRetry={() => void activeQuery.refetch()}
+            entityBadge={entity === "script" ? "Script" : "Tarefa"}
+          />
         )}
       </Card>
     </div>

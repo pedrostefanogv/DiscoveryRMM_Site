@@ -151,7 +151,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <button
             type="button"
             onClick={onMenuClick}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-light text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-light text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground sm:h-9 sm:w-9 lg:hidden"
             aria-label="Abrir menu lateral"
           >
             <Icon name="menu" className="h-4 w-4" />
@@ -206,9 +206,9 @@ export function Header({ onMenuClick }: HeaderProps) {
               aria-label={`Conta de ${displayName}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-foreground ring-1 ring-border transition hover:ring-border-strong focus:outline-none focus:ring-2 focus:ring-primary/60"
+              className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-foreground ring-1 ring-border transition hover:ring-border-strong focus:outline-none focus:ring-2 focus:ring-primary/60 sm:h-9 sm:w-9"
             >
-              <UserAvatar email={displayEmail} initials={initials} className="flex h-9 w-9 items-center justify-center" />
+              <UserAvatar email={displayEmail} initials={initials} className="flex h-11 w-11 items-center justify-center sm:h-9 sm:w-9" />
             </button>
 
             {menuOpen && (
@@ -234,7 +234,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                     setMenuOpen(false);
                     navigate('/identity/authentication');
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-3 text-left text-sm text-foreground transition-colors hover:bg-surface-hover sm:py-2"
                 >
                   <Icon name="person" className="h-4 w-4" /> Meu perfil
                 </button>
@@ -245,7 +245,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                     setMenuOpen(false);
                     void handleLogout();
                   }}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-danger/20 dark:text-red-200"
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-3 text-left text-sm text-red-700 transition-colors hover:bg-danger/20 sm:py-2 dark:text-red-200"
                 >
                   <Icon name="logout" className="h-4 w-4" /> Sair
                 </button>

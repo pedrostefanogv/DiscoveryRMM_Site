@@ -92,7 +92,7 @@ export const MetricBar = memo(function MetricBar({
         <div className="flex items-center gap-1.5">
           {icon && <span className="text-muted">{icon}</span>}
           <span className="text-xs text-muted">{label}</span>
-          {subtitle && <span className="text-[10px] text-muted">{subtitle}</span>}
+          {subtitle && <span className="text-[11px] text-muted">{subtitle}</span>}
         </div>
         {!hideValue && (
           <span className={`text-xs font-semibold tabular-nums ${styles.text}`}>

@@ -1,5 +1,5 @@
 import { formatDate } from '@/utils/format';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ClientCustomFieldsCard } from '@/components/custom-fields/ClientCustomFieldsCard';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
@@ -19,6 +19,7 @@ import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { SiteFormModal } from '@/components/entity/SiteFormModal';
 import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
 import { AgentContextMenu } from '@/components/agents/AgentContextMenu';
+import { AgentBulkActionsBar } from '@/components/agents/AgentBulkActionsBar';
 import type { AgentCardAgent } from '@/components/agents/AgentCard';
 import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
 import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
@@ -39,9 +40,15 @@ function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-type ClientTab = 'sites' | 'chamados' | 'logs' | 'agentes';
+/**
+ * Abas do cliente. `info` concentra o resumo/notas/informações/campos
+ * customizados e é a aba PADRÃO: era o bloco que ficava acima da barra e
+ * empurrava as abas para baixo da dobra. ?tab=sites/chamados/logs/agentes
+ * continua funcionando como deep link.
+ */
+type ClientTab = 'info' | 'sites' | 'chamados' | 'logs' | 'agentes';
 
-const CLIENT_TAB_IDS: ClientTab[] = ['sites', 'chamados', 'logs', 'agentes'];
+const CLIENT_TAB_IDS: ClientTab[] = ['info', 'sites', 'chamados', 'logs', 'agentes'];
 
 
 export default function ClientDetail() {
@@ -60,6 +67,14 @@ export default function ClientDetail() {
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [agentMenu, setAgentMenu] = useState<{ x: number; y: number; agent: AgentCardAgent } | null>(null);
+  // Seleção múltipla da aba Agentes (ações em massa). Um Set evita duplicatas e
+  // mantém o custo de toggle O(1) com centenas de agentes.
+  const [selectedAgentIds, setSelectedAgentIds] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+  // Seção a rolar DEPOIS que a aba Info montar (ex.: StatCard "Softwares
+  // instalados"). O alvo não existe no DOM enquanto outra aba está ativa.
+  const pendingScrollRef = useRef<string | null>(null);
 
   const client = useClient(id!);
   const sites = useSites(id!);
@@ -91,11 +106,20 @@ export default function ClientDetail() {
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
 
   // Aba ativa lida da querystring (?tab=sites, ?tab=agentes...). Valores
-  // desconhecidos caem em "sites". Fica antes dos early returns (Rules of Hooks).
+  // desconhecidos caem em "info". Fica antes dos early returns (Rules of Hooks).
   const activeTab = useMemo(
-    () => resolveDetailTab(searchParams.get('tab'), CLIENT_TAB_IDS, 'sites'),
+    () => resolveDetailTab(searchParams.get('tab'), CLIENT_TAB_IDS, 'info'),
     [searchParams],
   );
+
+  // Rola até a seção pendente assim que a aba Info entra no DOM. O ref (e não
+  // estado) evita um render extra: o valor só é lido no efeito.
+  useEffect(() => {
+    const sectionId = pendingScrollRef.current;
+    if (!sectionId) return;
+    pendingScrollRef.current = null;
+    scrollToSection(sectionId);
+  }, [activeTab]);
 
   const siteAgentStats = useMemo(() => {
     const map = new Map<string, { total: number; online: number }>();
@@ -110,6 +134,7 @@ export default function ClientDetail() {
 
   const clientTabs = useMemo<DetailTab<ClientTab>[]>(
     () => [
+      { id: 'info', label: 'Info', icon: 'info' },
       { id: 'sites', label: 'Sites', icon: 'apartment', badge: sitesArray.length },
       { id: 'chamados', label: 'Chamados', icon: 'confirmation_number', badge: ticketsArray.length },
       { id: 'logs', label: 'Logs', icon: 'article', badge: logsArray.length },
@@ -128,6 +153,13 @@ export default function ClientDetail() {
         siteName: siteNameMap.get(agent.siteId),
       })),
     [agentsArray, clientName, id, siteNameMap],
+  );
+
+  // Agentes selecionados na aba Agentes (ações em massa). Derivado do Set para
+  // que a barra sempre receba o objeto completo (nome/hostname/status).
+  const selectedAgents = useMemo(
+    () => agentsWithClient.filter((agent) => selectedAgentIds.has(agent.id)),
+    [agentsWithClient, selectedAgentIds],
   );
 
   if (client.isLoading) return <Loading />;
@@ -153,11 +185,12 @@ export default function ClientDetail() {
 
   // Troca de aba usa `replace` para NÃO empilhar entradas no histórico e
   // preserva o `?window=` vigente (updater funcional evita closure obsoleta).
+  // `info` é o padrão: sai da URL, como acontecia com `sites` antes.
   const handleSelectTab = (tab: ClientTab) => {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (tab === 'sites') {
+        if (tab === 'info') {
           next.delete('tab');
         } else {
           next.set('tab', tab);
@@ -168,12 +201,48 @@ export default function ClientDetail() {
     );
   };
 
-  // StatCards levam até a aba correspondente; como a barra fica abaixo do
-  // Resumo/Notas, rolamos até ela para dar feedback visível ao clique.
+  // StatCards levam até a aba correspondente; a barra fica logo abaixo deles,
+  // então rolamos até ela para dar feedback visível ao clique.
   const goToTab = (tab: ClientTab) => {
     handleSelectTab(tab);
     scrollToSection('client-tabs-tablist');
   };
+
+  /**
+   * StatCards que apontam para uma seção DENTRO da aba Info (ex.: inventário de
+   * software). Se a aba já está ativa, rola na hora; senão deixa a seção
+   * pendente para o efeito rolar assim que o painel montar.
+   */
+  const goToInfoSection = (sectionId: string) => {
+    if (activeTab === 'info') {
+      scrollToSection(sectionId);
+      return;
+    }
+    pendingScrollRef.current = sectionId;
+    handleSelectTab('info');
+  };
+
+  const toggleAgentSelection = (agent: AgentCardAgent, next: boolean) => {
+    setSelectedAgentIds((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(agent.id);
+      else copy.delete(agent.id);
+      return copy;
+    });
+  };
+
+  const toggleSelectAllAgents = (list: readonly AgentCardAgent[], next: boolean) => {
+    setSelectedAgentIds((prev) => {
+      const copy = new Set(prev);
+      for (const agent of list) {
+        if (next) copy.add(agent.id);
+        else copy.delete(agent.id);
+      }
+      return copy;
+    });
+  };
+
+  const clearAgentSelection = () => setSelectedAgentIds(new Set<string>());
 
   const handleDelete = () => {
     if (agentsArray.length > 0) {
@@ -341,7 +410,7 @@ export default function ClientDetail() {
           label="Softwares instalados"
           value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
           tone="success"
-          onClick={() => scrollToSection('client-software')}
+          onClick={() => goToInfoSection('client-software')}
         />
         <StatCard
           icon="confirmation_number"
@@ -360,72 +429,7 @@ export default function ClientDetail() {
         />
       </div>
 
-      {/* Mini-dashboard do cliente */}
-      <section id="client-dashboard">
-        {clientDashboard.data ? (
-          <DashboardSummaryCard
-            data={clientDashboard.data}
-            title="Resumo do Cliente"
-            subtitle={`Agregado da janela ${range}`}
-          />
-        ) : clientDashboard.isLoading ? (
-          <Card>
-            <CardHeader title="Resumo do Cliente" subtitle={`Agregado da janela ${range}`} />
-            <p className="text-sm text-muted">Carregando resumo...</p>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader title="Resumo do Cliente" subtitle={`Agregado da janela ${range}`} />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted">Não foi possível carregar o resumo desta janela.</p>
-              <Button size="sm" variant="secondary" onClick={() => void clientDashboard.refetch()}>
-                Tentar novamente
-              </Button>
-            </div>
-          </Card>
-        )}
-      </section>
-
-      {/* Notas + Informações */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <NotesPanel entityType="client" entityId={c.id} title="Notas do Cliente" />
-        </div>
-
-        <Card>
-          <CardHeader title="Informações" />
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-muted">Status</dt>
-              <dd className="mt-0.5 text-foreground">{c.isActive ? 'Ativo' : 'Inativo'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Observações</dt>
-              <dd className="mt-0.5 whitespace-pre-wrap text-foreground">{c.notes ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Criado em</dt>
-              <dd className="mt-0.5 text-foreground">{formatDate(c.createdAt)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Atualizado em</dt>
-              <dd className="mt-0.5 text-foreground">{formatDate(c.updatedAt)}</dd>
-            </div>
-            <div className="border-t border-border pt-3" id="client-software">
-              <dt className="text-muted">Inventário de software</dt>
-              <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading
-                  ? '—'
-                  : `${softwareSnapshot.data?.distinctSoftware ?? 0} softwares distintos em ${softwareSnapshot.data?.distinctAgents ?? 0} agente(s)`}
-              </dd>
-            </div>
-          </dl>
-        </Card>
-      </div>
-
-      <ClientCustomFieldsCard clientId={c.id} canEdit={canEditClient} />
-
-      {/* Abas de recursos: Sites · Chamados · Logs · Agentes */}
+      {/* Abas de recursos: Info · Sites · Chamados · Logs · Agentes */}
       <DetailTabs
         tabs={clientTabs}
         active={activeTab}
@@ -439,6 +443,75 @@ export default function ClientDetail() {
         role="tabpanel"
         aria-labelledby={`client-tabs-tab-${activeTab}`}
       >
+        {activeTab === 'info' && (
+          <div className="space-y-6">
+          {/* Mini-dashboard do cliente */}
+          <section id="client-dashboard">
+            {clientDashboard.data ? (
+              <DashboardSummaryCard
+                data={clientDashboard.data}
+                title="Resumo do Cliente"
+                subtitle={`Agregado da janela ${range}`}
+              />
+            ) : clientDashboard.isLoading ? (
+              <Card>
+                <CardHeader title="Resumo do Cliente" subtitle={`Agregado da janela ${range}`} />
+                <p className="text-sm text-muted">Carregando resumo...</p>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader title="Resumo do Cliente" subtitle={`Agregado da janela ${range}`} />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted">Não foi possível carregar o resumo desta janela.</p>
+                  <Button size="sm" variant="secondary" onClick={() => void clientDashboard.refetch()}>
+                    Tentar novamente
+                  </Button>
+                </div>
+              </Card>
+            )}
+          </section>
+
+          {/* Notas + Informações */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <NotesPanel entityType="client" entityId={c.id} title="Notas do Cliente" />
+            </div>
+
+            <Card>
+              <CardHeader title="Informações" />
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-muted">Status</dt>
+                  <dd className="mt-0.5 text-foreground">{c.isActive ? 'Ativo' : 'Inativo'}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Observações</dt>
+                  <dd className="mt-0.5 whitespace-pre-wrap text-foreground">{c.notes ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Criado em</dt>
+                  <dd className="mt-0.5 text-foreground">{formatDate(c.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted">Atualizado em</dt>
+                  <dd className="mt-0.5 text-foreground">{formatDate(c.updatedAt)}</dd>
+                </div>
+                <div className="border-t border-border pt-3" id="client-software">
+                  <dt className="text-muted">Inventário de software</dt>
+                  <dd className="mt-0.5 text-foreground">
+                    {softwareSnapshot.isLoading
+                      ? '—'
+                      : `${softwareSnapshot.data?.distinctSoftware ?? 0} softwares distintos em ${softwareSnapshot.data?.distinctAgents ?? 0} agente(s)`}
+                  </dd>
+                </div>
+              </dl>
+            </Card>
+          </div>
+
+          <ClientCustomFieldsCard clientId={c.id} canEdit={canEditClient} />
+          </div>
+        )}
+
         {activeTab === 'sites' && (
           <Card>
             <CardHeader
@@ -551,21 +624,33 @@ export default function ClientDetail() {
                 className="py-8"
               />
             ) : (
-              <AgentCollectionView
-                agents={agentsWithClient}
-                now={now}
-                isLoading={agents.isLoading}
-                emptyMessage="Nenhum agente"
-                showClient={false}
-                showSite={false}
-                filterable
-                onOpen={(agent) => navigate(`/agents/${agent.id}`)}
-                onContextMenu={(event, agent) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setAgentMenu({ x: event.clientX, y: event.clientY, agent });
-                }}
-              />
+              <>
+                <AgentBulkActionsBar
+                  agents={selectedAgents}
+                  now={now}
+                  scopeLabel="cliente"
+                  onClear={clearAgentSelection}
+                />
+                <AgentCollectionView
+                  agents={agentsWithClient}
+                  now={now}
+                  isLoading={agents.isLoading}
+                  emptyMessage="Nenhum agente"
+                  showClient={false}
+                  showSite={false}
+                  filterable
+                  selectable
+                  selectedIds={selectedAgentIds}
+                  onToggleSelect={toggleAgentSelection}
+                  onToggleSelectAll={toggleSelectAllAgents}
+                  onOpen={(agent) => navigate(`/agents/${agent.id}`)}
+                  onContextMenu={(event, agent) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setAgentMenu({ x: event.clientX, y: event.clientY, agent });
+                  }}
+                />
+              </>
             )}
           </Card>
         )}
