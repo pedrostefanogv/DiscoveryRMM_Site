@@ -33,18 +33,22 @@ const TONE_TEXT: Record<BatteryTone, string> = {
  */
 const ANDROID_BATTERY_VIEWBOX = '40 -720 880 480';
 
-/** Nível por barras: _0 vazio, _6 cheio (o desenho confirma a escala). */
+/**
+ * Nível por barras na versão VAZADA: _1 (menos carga) a _6 (cheio). Não existe
+ * `battery_android_frame_0` no Material Symbols, então a faixa mais baixa usa _1.
+ */
 const ANDROID_BATTERY_LEVELS = [
-  'battery_android_0',
-  'battery_android_1',
-  'battery_android_2',
-  'battery_android_3',
-  'battery_android_4',
-  'battery_android_5',
-  'battery_android_6',
+  'battery_android_frame_1',
+  'battery_android_frame_2',
+  'battery_android_frame_3',
+  'battery_android_frame_4',
+  'battery_android_frame_5',
+  'battery_android_frame_6',
 ] as const;
 
-type AndroidBatteryGlyph = (typeof ANDROID_BATTERY_LEVELS)[number] | 'battery_android_bolt';
+type AndroidBatteryGlyph =
+  | (typeof ANDROID_BATTERY_LEVELS)[number]
+  | 'battery_android_frame_bolt';
 
 /**
  * Glifo do estado "na bateria" pela faixa do percentual. Percentual desconhecido
@@ -53,15 +57,15 @@ type AndroidBatteryGlyph = (typeof ANDROID_BATTERY_LEVELS)[number] | 'battery_an
  */
 function batteryLevelGlyph(percent: number | null | undefined): AndroidBatteryGlyph {
   if (percent == null || !Number.isFinite(percent) || percent < 0 || percent > 100) {
-    return 'battery_android_3';
+    return 'battery_android_frame_3';
   }
-  if (percent < 10) return 'battery_android_0';
-  if (percent < 25) return 'battery_android_1';
-  if (percent < 42) return 'battery_android_2';
-  if (percent < 58) return 'battery_android_3';
-  if (percent < 75) return 'battery_android_4';
-  if (percent < 90) return 'battery_android_5';
-  return 'battery_android_6';
+  // Faixas naturais da escala: _N corresponde a N/6 da carga.
+  if (percent < 17) return 'battery_android_frame_1';
+  if (percent < 33) return 'battery_android_frame_2';
+  if (percent < 50) return 'battery_android_frame_3';
+  if (percent < 67) return 'battery_android_frame_4';
+  if (percent < 83) return 'battery_android_frame_5';
+  return 'battery_android_frame_6';
 }
 
 /**
@@ -82,10 +86,14 @@ const SIZES = {
  * battery_android_* (Material Symbols Rounded, fill1) — bateria HORIZONTAL, a
  * mesma linguagem visual nos dois estados:
  *
- * - NA BATERIA: battery_android_0..6 conforme a faixa do percentual (barras =
- *   nível, como o preenchimento da versão desenhada);
- * - NA TOMADA: battery_android_bolt (bateria com raio), sem variantes de nível —
- *   o nível continua no percentual ao lado.
+ * - NA BATERIA: battery_android_frame_1..6 conforme a faixa do percentual
+ *   (barrinhas = nível, como o preenchimento da versão desenhada);
+ * - NA TOMADA: battery_android_frame_bolt (moldura + raio), sem variantes de
+ *   nível — o nível continua no percentual ao lado.
+ *
+ * A família `_frame_` é a VAZADA: moldura fina, que acompanha o traço dos outros
+ * ícones (o wifi do selo, por exemplo) — a família maciça ficava pesada e
+ * destoante dentro do badge.
  *
  * Os glifos são de traço cheio (fill1); por isso o tamanho é contido — no badge
  * eles ficavam "gordos" demais no tamanho anterior.
@@ -113,7 +121,9 @@ export function BatteryGauge({
     onAc === true || charging || resolvedLabel === 'Na tomada' || resolvedLabel === 'Carregando';
   const percentLabel = formatBatteryPercent(percent);
   const title = 'Bateria: ' + percentLabel + (resolvedLabel !== '—' ? ' · ' + resolvedLabel : '');
-  const glyph: AndroidBatteryGlyph = plugged ? 'battery_android_bolt' : batteryLevelGlyph(percent);
+  const glyph: AndroidBatteryGlyph = plugged
+    ? 'battery_android_frame_bolt'
+    : batteryLevelGlyph(percent);
 
   return (
     <span
