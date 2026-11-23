@@ -64,10 +64,17 @@ function batteryLevelGlyph(percent: number | null | undefined): AndroidBatteryGl
   return 'battery_android_6';
 }
 
-/** Mesma altura e larguras equivalentes nos dois estados (o indicador não "pula"). */
+/**
+ * Mesma altura e larguras equivalentes nos dois estados (o indicador não
+ * "pula"), agora em escala mais discreta: a família battery_android_* é de
+ * traço cheio (a API do Material só publica a variante fill1 destes glifos), e
+ * no tamanho anterior ela ficava pesada dentro do badge colorido — o ícone
+ * brigava com o texto "41%". Alinhado ao tamanho dos outros ícones do badge
+ * (o wifi do selo de status é h-2.5).
+ */
 const SIZES = {
-  sm: { height: 'h-3.5', width: 'w-[26px]', text: 'text-[10px]' },
-  md: { height: 'h-5', width: 'w-[37px]', text: 'text-xs' },
+  sm: { height: 'h-3', width: 'w-[21px]', text: 'text-[10px]' },
+  md: { height: 'h-4', width: 'w-[29px]', text: 'text-xs' },
 } as const;
 
 /**
@@ -79,6 +86,9 @@ const SIZES = {
  *   nível, como o preenchimento da versão desenhada);
  * - NA TOMADA: battery_android_bolt (bateria com raio), sem variantes de nível —
  *   o nível continua no percentual ao lado.
+ *
+ * Os glifos são de traço cheio (fill1); por isso o tamanho é contido — no badge
+ * eles ficavam "gordos" demais no tamanho anterior.
  *
  * A cor segue a faixa do percentual (verde > 30%, âmbar ≤ 30%, vermelho ≤ 15%),
  * preservando o alerta de bateria baixa. O estado vem de onAc/charging; quando o

@@ -116,8 +116,8 @@ describe('BatteryGauge — tamanho padronizado entre os estados', () => {
     for (const container of [plugado, naBateria]) {
       const svg = container.querySelector('svg');
       expect(svg?.getAttribute('viewBox')).toBe('40 -720 880 480');
-      expect(svg?.getAttribute('class') ?? '').toContain('h-5');
-      expect(svg?.getAttribute('class') ?? '').toContain('w-[37px]');
+      expect(svg?.getAttribute('class') ?? '').toContain('h-4');
+      expect(svg?.getAttribute('class') ?? '').toContain('w-[29px]');
     }
     cleanup();
 
@@ -126,8 +126,8 @@ describe('BatteryGauge — tamanho padronizado entre os estados', () => {
 
     for (const container of [plugadoSm, naBateriaSm]) {
       const svg = container.querySelector('svg');
-      expect(svg?.getAttribute('class') ?? '').toContain('h-3.5');
-      expect(svg?.getAttribute('class') ?? '').toContain('w-[26px]');
+      expect(svg?.getAttribute('class') ?? '').toContain('h-3');
+      expect(svg?.getAttribute('class') ?? '').toContain('w-[21px]');
     }
   });
 });
