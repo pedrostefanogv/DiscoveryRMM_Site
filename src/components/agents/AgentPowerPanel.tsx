@@ -3,12 +3,7 @@ import type { AgentHeartbeatMetrics, BatteryInfo } from '@/api';
 import { BatteryGauge, Icon } from '@/components/ui';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
-import {
-  batteryPowerLabel,
-  isAgentLaptop,
-  machineTypeLabel,
-  resolveBatteryView,
-} from '@/utils/agentPower';
+import { isAgentLaptop, machineTypeLabel, resolveBatteryView } from '@/utils/agentPower';
 
 interface AgentPowerPanelProps {
   agentId: string;
@@ -131,47 +126,13 @@ export function AgentPowerPanel({
         </div>
       </dl>
 
-      {batteries && batteries.length > 0 && (
-        <div className="mt-3 space-y-3 border-t border-border pt-3">
-          {batteries.map((battery, index) => {
-            const health =
-              battery.maxCapacityMAh > 0 && battery.designedCapacityMAh > 0
-                ? Math.round((battery.maxCapacityMAh / battery.designedCapacityMAh) * 100)
-                : null;
-            const title =
-              [battery.manufacturer, battery.model].filter(Boolean).join(' ') || 'Bateria ' + (index + 1);
-            const stateLabel = batteryPowerLabel(battery.onAc ?? null, battery.charging, battery.state);
-            // O rótulo do indicador já mostra o estado; o texto cru do SO só
-            // aparece quando ele é a ÚNICA fonte (rótulo desconhecido).
-            const showRawState = stateLabel === '—' && !!battery.state;
-
-            return (
-              <div key={title + '-' + index}>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate text-foreground">{title}</span>
-                  <BatteryGauge
-                    percent={battery.percentRemaining}
-                    onAc={battery.onAc ?? null}
-                    charging={battery.charging}
-                    state={battery.state}
-                  />
-                </div>
-                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
-                  {showRawState && <span>Estado: {battery.state}</span>}
-                  {battery.designedCapacityMAh > 0 && (
-                    <span>Desenho: {battery.designedCapacityMAh} mAh</span>
-                  )}
-                  {battery.maxCapacityMAh > 0 && <span>Máxima: {battery.maxCapacityMAh} mAh</span>}
-                  {health != null && <span>Saúde: {health}%</span>}
-                  {battery.health && <span>Condição: {battery.health}</span>}
-                  {battery.cycleCount > 0 && <span>Ciclos: {battery.cycleCount}</span>}
-                  {battery.serialNumber && <span>Série: {battery.serialNumber}</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/*
+        O detalhamento por bateria ("Bateria 1", desenho/máxima/saúde/ciclos)
+        saiu deste painel a pedido: a energia fica resumida no indicador acima,
+        que já mostra percentual e o estado (na tomada / na bateria /
+        carregando). A prop `batteries` continua sendo usada como FONTE do
+        resumo quando não há heartbeat ao vivo.
+      */}
     </div>
   );
 }

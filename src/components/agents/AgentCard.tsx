@@ -244,7 +244,13 @@ export function AgentCard({
           </Badge>
         )}
       </div>
-      <div className="flex items-start gap-3 pr-6">
+      {/*
+        O respiro à direita existe por causa da PILHA de badges do canto
+        (Online + bateria). Ele fica AQUI, no cabeçalho (nome/hostname), e não no
+        bloco de informações: aplicar no bloco inteiro encolhia também as barras
+        de CPU/RAM/HDD, que devem ocupar a largura do card até a borda.
+      */}
+      <div className={`flex items-start gap-3 ${battery ? 'pr-20' : 'pr-6'}`}>
         <div
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${getAgentDeviceIconBoxClass(agent)}`}
           title={deviceTypeLabel ? `Dispositivo: ${deviceTypeLabel}` : undefined}
@@ -274,7 +280,7 @@ export function AgentCard({
           )}
         </div>
       </div>
-      <div className={`space-y-1.5 text-xs ${battery ? 'pr-16' : ''}`}>
+      <div className="space-y-1.5 text-xs">
         <div className="flex items-center gap-2 text-muted">
           <Icon name="monitoring" className="h-3.5 w-3.5 shrink-0 text-muted" />
           <span className="truncate">{agent.operatingSystem ?? '—'}{agent.osVersion ? ` · ${agent.osVersion}` : ''}</span>

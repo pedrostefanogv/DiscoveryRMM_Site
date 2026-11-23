@@ -67,11 +67,34 @@ describe('AgentPowerPanel', () => {
     expect(percentuais.length).toBeGreaterThanOrEqual(1);
     // A cor segue a faixa (63% = success).
     expect(percentuais[0].className).toContain('text-success');
-
-    expect(screen.getByText('Saúde: 91%')).toBeTruthy();
-    expect(screen.getByText('Ciclos: 212')).toBeTruthy();
     // Valor vindo do inventário é rotulado — o inventário roda a cada 24 h.
     expect(screen.getByText(/Inventário de/)).toBeTruthy();
+  });
+
+  /**
+   * O detalhamento por bateria ("Bateria 1", desenho/máxima/saúde/ciclos) saiu
+   * do painel a pedido: a energia fica resumida no indicador. Este teste trava a
+   * remoção.
+   */
+  it('não detalha bateria por bateria (só o resumo de energia)', () => {
+    render(
+      <AgentPowerPanel
+        agentId="a1"
+        isLaptop
+        machineType="notebook"
+        batteries={[battery(), battery({ model: 'BAT-2', percentRemaining: 40 })]}
+      />,
+    );
+
+    expect(screen.queryByText(/Bateria 1/)).toBeNull();
+    expect(screen.queryByText(/BAT-2/)).toBeNull();
+    expect(screen.queryByText(/Desenho:/)).toBeNull();
+    expect(screen.queryByText(/Máxima:/)).toBeNull();
+    expect(screen.queryByText(/Saúde:/)).toBeNull();
+    expect(screen.queryByText(/Ciclos:/)).toBeNull();
+    expect(screen.queryByText(/Série:/)).toBeNull();
+    // O resumo continua: usa o PIOR percentual das baterias (40%).
+    expect(screen.getByText('40%')).toBeTruthy();
   });
 
   /**

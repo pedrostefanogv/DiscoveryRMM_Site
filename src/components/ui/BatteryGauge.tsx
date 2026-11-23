@@ -34,8 +34,9 @@ const TONE_TEXT: Record<BatteryTone, string> = {
 };
 
 const SIZES = {
-  sm: { body: 'h-3.5 w-7', nub: 'h-1.5 w-[2px]', glyph: 'h-2.5 w-2.5', text: 'text-[10px]' },
-  md: { body: 'h-5 w-10', nub: 'h-2 w-[3px]', glyph: 'h-3.5 w-3.5', text: 'text-xs' },
+  // glyph = ícone de estado (raio/plugue), exibido FORA do corpo da bateria.
+  sm: { body: 'h-3.5 w-7', nub: 'h-1.5 w-[2px]', glyph: 'h-3 w-3', text: 'text-[10px]' },
+  md: { body: 'h-5 w-10', nub: 'h-2 w-[3px]', glyph: 'h-4 w-4', text: 'text-xs' },
 } as const;
 
 /**
@@ -95,16 +96,21 @@ export function BatteryGauge({
             // inválida em CSS e o valor seria descartado).
             style={{ width: 'max(0px, calc(' + fillPercent + '% - 3px))' }}
           />
-          {plugged && (
-            <Icon
-              name={resolvedLabel === 'Carregando' ? 'bolt' : 'power_settings_new'}
-              className={'relative z-10 ' + s.glyph + ' ' + TONE_TEXT[tone]}
-            />
-          )}
         </span>
         {/* Polo positivo da bateria. */}
         <span className={'shrink-0 rounded-r-[1px] ' + s.nub + ' ' + TONE_FILL[tone]} />
       </span>
+      {/* Estado FORA do corpo da bateria: dentro do preenchimento o glifo ficava
+          pequeno e apagado, e o operador não percebia que a máquina estava
+          carregando. Raio = carregando; plugue = na tomada sem carregar. */}
+      {plugged && (
+        <Icon
+          name={resolvedLabel === 'Carregando' ? 'bolt' : 'power_settings_new'}
+          className={
+            s.glyph + ' shrink-0 ' + (resolvedLabel === 'Carregando' ? 'text-success' : 'text-muted')
+          }
+        />
+      )}
       {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
       <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
     </span>
