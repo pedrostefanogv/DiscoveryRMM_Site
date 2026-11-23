@@ -19,13 +19,6 @@ interface BatteryGaugeProps {
   className?: string;
 }
 
-const TONE_FILL: Record<BatteryTone, string> = {
-  success: 'bg-success',
-  warning: 'bg-warning',
-  danger: 'bg-danger',
-  neutral: 'bg-muted',
-};
-
 const TONE_TEXT: Record<BatteryTone, string> = {
   success: 'text-success',
   warning: 'text-warning',
@@ -34,45 +27,64 @@ const TONE_TEXT: Record<BatteryTone, string> = {
 };
 
 /**
- * Os DOIS estados usam a MESMA altura e larguras equivalentes, para o indicador
- * não "pular de tamanho" ao conectar/desconectar:
- *
- * - height: altura do desenho (corpo da bateria e glifo recortado);
- * - bodyWidth: largura do corpo desenhado (bateria na horizontal + polo);
- * - glyphWidth: largura do glifo recortado (aspecto 1,94 ≈ o do corpo).
+ * Recorte da família battery_android_*: no grid 960 o desenho ocupa x 40..920 e
+ * y -720..-240 (880×480, aspecto 1,83). Recortando, o ícone fica do tamanho do
+ * DESENHO — sem a área vazia do grid — e os dois estados saem iguais.
  */
+const ANDROID_BATTERY_VIEWBOX = '40 -720 880 480';
+
+/** Nível por barras: _0 vazio, _6 cheio (o desenho confirma a escala). */
+const ANDROID_BATTERY_LEVELS = [
+  'battery_android_0',
+  'battery_android_1',
+  'battery_android_2',
+  'battery_android_3',
+  'battery_android_4',
+  'battery_android_5',
+  'battery_android_6',
+] as const;
+
+type AndroidBatteryGlyph = (typeof ANDROID_BATTERY_LEVELS)[number] | 'battery_android_bolt';
+
+/**
+ * Glifo do estado "na bateria" pela faixa do percentual. Percentual desconhecido
+ * usa o MEIO da escala: não afirma vazio nem cheio (o rótulo fica "—" e o
+ * percentual também).
+ */
+function batteryLevelGlyph(percent: number | null | undefined): AndroidBatteryGlyph {
+  if (percent == null || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+    return 'battery_android_3';
+  }
+  if (percent < 10) return 'battery_android_0';
+  if (percent < 25) return 'battery_android_1';
+  if (percent < 42) return 'battery_android_2';
+  if (percent < 58) return 'battery_android_3';
+  if (percent < 75) return 'battery_android_4';
+  if (percent < 90) return 'battery_android_5';
+  return 'battery_android_6';
+}
+
+/** Mesma altura e larguras equivalentes nos dois estados (o indicador não "pula"). */
 const SIZES = {
-  sm: { height: 'h-3.5', bodyWidth: 'w-7', glyphWidth: 'w-[27px]', nub: 'h-1.5 w-[2px]', text: 'text-[10px]' },
-  md: { height: 'h-5', bodyWidth: 'w-10', glyphWidth: 'w-[39px]', nub: 'h-2 w-[3px]', text: 'text-xs' },
+  sm: { height: 'h-3.5', width: 'w-[26px]', text: 'text-[10px]' },
+  md: { height: 'h-5', width: 'w-[37px]', text: 'text-xs' },
 } as const;
 
 /**
- * Recorte do glifo battery_charging_80_2 na CAIXA DESENHADA da bateria.
+ * Indicador de energia do agente, sempre com UM ícone da família
+ * battery_android_* (Material Symbols Rounded, fill1) — bateria HORIZONTAL, a
+ * mesma linguagem visual nos dois estados:
  *
- * O Material Symbols entrega o glifo dentro de um quadrado 960×960 com bastante
- * área vazia; sem o recorte, o ícone de "na tomada" saía visivelmente MENOR que
- * a bateria desenhada do estado "na bateria". A caixa abaixo foi medida do
- * próprio path (x 80..856,5 e y -680..-280 → aspecto ~1,94), então com a mesma
- * altura os dois desenhos ficam do mesmo tamanho.
- */
-const CHARGING_GLYPH_VIEWBOX = '80 -680 776.5 400';
-
-/**
- * Indicador de energia do agente, em duas formas do mesmo tamanho:
+ * - NA BATERIA: battery_android_0..6 conforme a faixa do percentual (barras =
+ *   nível, como o preenchimento da versão desenhada);
+ * - NA TOMADA: battery_android_bolt (bateria com raio), sem variantes de nível —
+ *   o nível continua no percentual ao lado.
  *
- * - NA TOMADA: UM ícone só — a bateria CARREGANDO do Material Symbols
- *   (battery_charging_80_2, variante DEITADA com o raio em pé), recortada pela
- *   caixa desenhada. O glifo não comunica nível (é fixo), então o nível fica no
- *   percentual exibido ao lado; a cor segue a faixa do percentual (verde > 30%,
- *   âmbar ≤ 30%, vermelho ≤ 15%), preservando o alerta de bateria baixa.
- * - NA BATERIA: bateria desenhada em CSS, com o preenchimento proporcional ao
- *   nível real (o glifo fixo não daria essa informação). Contorno de 1,5px em
- *   PRETO no tema claro e BRANCO no escuro — o token `border` (1px) e depois o
- *   `foreground` puro ainda ficavam discretos no card e no badge da listagem.
- *
- * O estado vem de onAc/charging; quando o agente não reportou o booleano (coleta
- * antiga), o texto cru do SO ("On AC") é usado como fallback — senão o painel
- * mostrava "—" para um notebook que estava na tomada.
+ * A cor segue a faixa do percentual (verde > 30%, âmbar ≤ 30%, vermelho ≤ 15%),
+ * preservando o alerta de bateria baixa. O estado vem de onAc/charging; quando o
+ * agente não reportou o booleano (coleta antiga), o texto cru do SO ("On AC") é
+ * usado como fallback — senão o painel mostrava "—" para um notebook que estava
+ * na tomada.
  */
 export function BatteryGauge({
   percent,
@@ -84,8 +96,6 @@ export function BatteryGauge({
   className = '',
 }: BatteryGaugeProps) {
   const tone = batteryTone(percent);
-  const fillPercent =
-    percent == null || !Number.isFinite(percent) ? 0 : Math.min(100, Math.max(0, percent));
   const s = SIZES[size];
   const resolvedLabel = batteryPowerLabel(onAc, charging, state);
   const showResolvedLabel = showLabel && resolvedLabel !== '—';
@@ -93,68 +103,22 @@ export function BatteryGauge({
     onAc === true || charging || resolvedLabel === 'Na tomada' || resolvedLabel === 'Carregando';
   const percentLabel = formatBatteryPercent(percent);
   const title = 'Bateria: ' + percentLabel + (resolvedLabel !== '—' ? ' · ' + resolvedLabel : '');
-
-  // Rótulo + percentual são iguais nos dois estados (mesma tipografia).
-  const caption = (
-    <>
-      {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
-      <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
-    </>
-  );
-
-  if (plugged) {
-    return (
-      <span
-        className={'inline-flex items-center gap-1.5 ' + className}
-        data-state="charging"
-        title={title}
-        aria-label={title}
-      >
-        <Icon
-          name="battery_charging_80_2"
-          viewBox={CHARGING_GLYPH_VIEWBOX}
-          className={s.height + ' ' + s.glyphWidth + ' shrink-0 ' + TONE_TEXT[tone]}
-        />
-        {caption}
-      </span>
-    );
-  }
+  const glyph: AndroidBatteryGlyph = plugged ? 'battery_android_bolt' : batteryLevelGlyph(percent);
 
   return (
     <span
       className={'inline-flex items-center gap-1.5 ' + className}
-      data-state="battery"
+      data-state={plugged ? 'charging' : 'battery'}
       title={title}
       aria-label={title}
     >
-      <span className="inline-flex items-center gap-0.5">
-        <span
-          className={
-            // Contorno em CONTRASTE ABSOLUTO: preto no tema claro e branco no
-            // escuro (o token `foreground`, mesmo puro, ainda ficava discreto
-            // sobre o fundo do badge). Corpo TRANSPARENTE: dentro do badge o
-            // fundo dele já dá o contraste e o desenho fica parecendo um ícone.
-            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border-[1.5px] border-black dark:border-white ' +
-            s.height +
-            ' ' +
-            s.bodyWidth
-          }
-        >
-          <span
-            className={
-              'absolute inset-y-[1px] left-[1px] rounded-[1px] transition-all duration-500 ' +
-              TONE_FILL[tone]
-            }
-            // max(0px, ...) evita calc() negativo em 0% (largura negativa é
-            // inválida em CSS e o valor seria descartado). O -2px mantém o
-            // preenchimento dentro do contorno de 1,5px.
-            style={{ width: 'max(0px, calc(' + fillPercent + '% - 2px))' }}
-          />
-        </span>
-        {/* Polo positivo da bateria. */}
-        <span className={'shrink-0 rounded-r-[1px] ' + s.nub + ' ' + TONE_FILL[tone]} />
-      </span>
-      {caption}
+      <Icon
+        name={glyph}
+        viewBox={ANDROID_BATTERY_VIEWBOX}
+        className={s.height + ' ' + s.width + ' shrink-0 ' + TONE_TEXT[tone]}
+      />
+      {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
+      <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
     </span>
   );
 }
