@@ -6,11 +6,13 @@ export const AGENTS_HARDWARE_SYMBOL_PATHS = {
   "arrow_upward": [
     "M440-647 244-451q-12 12-28 11.5T188-452q-11-12-11.5-28t11.5-28l264-264q6-6 13-8.5t15-2.5q8 0 15 2.5t13 8.5l264 264q11 11 11 27.5T772-452q-12 12-28.5 12T715-452L520-647v447q0 17-11.5 28.5T480-160q-17 0-28.5-11.5T440-200v-447Z",
   ],
-  // Bateria CARREGANDO (Material Symbols Rounded, fill1): substitui a bateria
-  // desenhada quando a máquina está na tomada — assim o estado usa UM ícone só.
-  // O nível continua vindo do percentual exibido ao lado.
-  "battery_charging_80": [
-    "M320-80q-17 0-28.5-11.5T280-120v-640q0-17 11.5-28.5T320-800h80v-40q0-17 11.5-28.5T440-880h80q17 0 28.5 11.5T560-840v40h80q17 0 28.5 11.5T680-760v253q0 11-8 19t-19 10q-42 5-78 22.5T511-410q-32 32-51.5 75.5T440-240q0 30 7 58t21 54q8 17 0 32.5T443-80H320Zm40-480h240v-160H360v160Zm300 360h-62q-12 0-17.5-10.5T582-231l100-143q5-6 11.5-4t6.5 10v88h62q12 0 17.5 10.5T778-249L678-106q-5 6-11.5 4t-6.5-10v-88Z",
+  // Bateria CARREGANDO do Material Symbols Rounded (fill1), na variante DEITADA
+  // (sufixo _2 = paisagem): o corpo fica na horizontal e o raio continua em pé,
+  // que é o visual esperado em card/linha de status. É usada no lugar da bateria
+  // desenhada quando a máquina está na tomada — um ícone só. O nível continua
+  // vindo do percentual exibido ao lado.
+  "battery_charging_80_2": [
+    "M120-280q-17 0-28.5-11.5T80-320v-320q0-17 11.5-28.5T120-680h458q17 0 28.5 11.5T618-640q0 17-11.5 28.5T578-600h-58v240h33q17 0 28.5 11.5T593-320q0 17-11.5 28.5T553-280H120Zm575-160h-93q-13 0-18.5-11t2.5-21l144-181q5-6 11.5-7t12.5 1q6 2 10 8t2 14l-21 117h93q13 0 18.5 11t-2.5 21L710-307q-5 6-11.5 7t-12.5-1q-6-2-10-8t-2-14l21-117Z",
   ],
 
   "bolt": [

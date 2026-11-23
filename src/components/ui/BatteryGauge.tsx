@@ -43,7 +43,8 @@ const SIZES = {
  * Indicador de energia do agente, em duas formas:
  *
  * - NA TOMADA: UM ícone só — a bateria CARREGANDO do Material Symbols
- *   (battery_charging_80), que já traz o raio embutido. O glifo não comunica
+ *   (battery_charging_80_2 — variante DEITADA, com o raio em pé), que já traz o
+ *   símbolo embutido. O glifo não comunica
  *   nível (é fixo), então o nível fica no PERCENTUAL exibido ao lado; a cor
  *   segue a faixa do percentual (verde > 30%, âmbar ≤ 30%, vermelho ≤ 15%),
  *   preservando o alerta de bateria baixa.
@@ -77,7 +78,7 @@ export function BatteryGauge({
   if (plugged) {
     return (
       <span className={'inline-flex items-center gap-1.5 ' + className} title={title} aria-label={title}>
-        <Icon name="battery_charging_80" className={s.box + ' shrink-0 ' + TONE_TEXT[tone]} />
+        <Icon name="battery_charging_80_2" className={s.box + ' shrink-0 ' + TONE_TEXT[tone]} />
         {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
         <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
       </span>

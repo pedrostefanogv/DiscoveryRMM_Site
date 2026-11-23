@@ -6,7 +6,7 @@ import { BatteryGauge } from './BatteryGauge';
 afterEach(() => cleanup());
 
 /** Path do glifo renderizado direto, para comparar sem fixar dados do ícone. */
-function glyphPath(name: 'battery_charging_80'): string | null {
+function glyphPath(name: 'battery_charging_80_2'): string | null {
   const { container, unmount } = render(<Icon name={name} />);
   const d = container.querySelector('svg path')?.getAttribute('d') ?? null;
   unmount();
@@ -25,7 +25,7 @@ describe('BatteryGauge — na tomada (bateria carregando)', () => {
   it('mostra UM ícone só: a bateria carregando do Material', () => {
     const { container } = render(<BatteryGauge percent={80} onAc />);
 
-    const expected = glyphPath('battery_charging_80');
+    const expected = glyphPath('battery_charging_80_2');
     const paths = Array.from(container.querySelectorAll('svg path'));
     expect(paths.some((path) => path.getAttribute('d') === expected)).toBe(true);
 
@@ -38,7 +38,7 @@ describe('BatteryGauge — na tomada (bateria carregando)', () => {
   it('carregando também usa o mesmo glifo único', () => {
     const { container } = render(<BatteryGauge percent={41} onAc charging />);
 
-    const expected = glyphPath('battery_charging_80');
+    const expected = glyphPath('battery_charging_80_2');
     const paths = Array.from(container.querySelectorAll('svg path'));
     expect(paths.some((path) => path.getAttribute('d') === expected)).toBe(true);
     expect(screen.getByText('Carregando')).toBeTruthy();
@@ -47,7 +47,7 @@ describe('BatteryGauge — na tomada (bateria carregando)', () => {
   it('o texto cru do SO (On AC) também vale quando o booleano não veio', () => {
     const { container } = render(<BatteryGauge percent={64} onAc={null} state="On AC" />);
 
-    const expected = glyphPath('battery_charging_80');
+    const expected = glyphPath('battery_charging_80_2');
     const paths = Array.from(container.querySelectorAll('svg path'));
     expect(paths.some((path) => path.getAttribute('d') === expected)).toBe(true);
     expect(screen.getByText('Na tomada')).toBeTruthy();
