@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useInRouterContext } from "react-router-dom";
 import { Badge, Button, ErrorDisplay, Icon, Loading, Modal } from "@/components/ui";
 import {
@@ -10,7 +10,8 @@ import { formatDateTime } from "@/utils/format";
 import { useAutomationTaskExecutions, useAutomationTaskTargetPreview } from "@/hooks/useAutomation";
 import { executionStatusMeta, executionSourceLabel } from "@/modules/automation/executionUtils";
 import {
-  actionLabel,
+  actionDisplayLabel,
+  installationTypeLabel,
   notificationModeFromTask,
   notificationModeLabel,
   packageNoticeFrom,
@@ -52,6 +53,10 @@ export function AutomationTaskDetailModal({
   const inRouter = useInRouterContext();
   const [activeTab, setActiveTab] = useState<DetailTab>("summary");
 
+  useEffect(() => {
+    setActiveTab("summary");
+  }, [taskId]);
+
   const targetsQuery = useAutomationTaskTargetPreview(
     taskId ?? "",
     Boolean(taskId) && activeTab === "targets",
@@ -87,11 +92,14 @@ export function AutomationTaskDetailModal({
             <div className="flex flex-wrap items-start gap-3">
               <div className="flex-1 space-y-1">
                 <h3 className="text-lg font-semibold text-foreground">{d.name}</h3>
+                {d.key && (
+                  <p className="font-mono text-xs text-muted">Chave: {d.key}</p>
+                )}
                 {d.description && <p className="text-sm text-muted">{d.description}</p>}
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
                 <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
-                  {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
+                  {detailIsDeleted ? "Excluída" : d.isActive ? "Ativa" : "Inativa"}
                 </Badge>
                 <Badge
                   color={
@@ -149,13 +157,28 @@ export function AutomationTaskDetailModal({
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="rounded-lg bg-surface-light border border-border p-3">
                     <p className="text-xs text-muted mb-1">Ação</p>
-                    <Badge color="primary">{actionLabel(d.actionType)}</Badge>
+                    <Badge color="primary">{actionDisplayLabel(d.actionType)}</Badge>
                     <p className="text-xs text-muted mt-1">Ordem de execução: {d.executionOrder}</p>
                     {d.installationType !== null && d.installationType !== undefined && (
-                      <p className="text-xs text-muted mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
+                      <p className="text-xs text-muted mt-1">{installationTypeLabel(d.installationType)}</p>
                     )}
                     {d.packageId && (
                       <p className="font-mono text-xs text-muted-foreground mt-1 truncate">{d.packageId}</p>
+                    )}
+                    {d.scriptId && inRouter && (
+                      <Link
+                        to={`/automation/scripts/${d.scriptId}`}
+                        onClick={handleClose}
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Icon name="open_in_new" className="h-3 w-3" />
+                        Abrir script vinculado
+                      </Link>
+                    )}
+                    {d.commandPayload && (
+                      <pre className="mt-1.5 max-h-20 overflow-auto rounded bg-black/20 p-1.5 font-mono text-[11px] text-foreground">
+                        {d.commandPayload}
+                      </pre>
                     )}
                   </div>
 
@@ -217,6 +240,25 @@ export function AutomationTaskDetailModal({
                       <p className="text-sm text-muted">Execução silenciosa</p>
                     )}
                   </div>
+
+                  {(d.taskRespectMaintenanceWindow || d.writeOutputToNote || d.collectorFieldDefinitionId) && (
+                    <div className="rounded-lg bg-surface-light border border-border p-3">
+                      <p className="text-xs text-muted mb-1">Coleta e execução</p>
+                      <div className="space-y-1 text-xs text-foreground">
+                        {d.taskRespectMaintenanceWindow && (
+                          <p>Respeita janela de manutenção</p>
+                        )}
+                        {d.writeOutputToNote && (
+                          <p>Grava saída como nota no agent</p>
+                        )}
+                        {d.collectorFieldDefinitionId && (
+                          <p className="font-mono text-muted truncate" title={d.collectorFieldDefinitionId}>
+                            Campo coletor: {d.collectorFieldDefinitionId}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {(d.includeTags?.length > 0 || d.excludeTags?.length > 0) && (

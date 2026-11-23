@@ -211,7 +211,11 @@ export const routes: RouteObject[] = [
         // Janela DEDICADA do chat de suporte da MÁQUINA (sem chamado), aberta
         // pela lista/detalhe do agent. Mesmo padrão das demais janelas.
         path: 'agents/:id/support-chat',
-        element: <LazyPage><AgentSupportChatWindow /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'agents.*', 'admin.*']}>
+            <LazyPage><AgentSupportChatWindow /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         element: <MainLayout />,

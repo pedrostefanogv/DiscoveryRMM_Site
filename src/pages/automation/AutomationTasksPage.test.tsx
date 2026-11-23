@@ -79,8 +79,8 @@ vi.mock("@/hooks/useAutoKey", () => ({
 
 import AutomationTasksPage from "./AutomationTasksPage";
 
-function render(ui: React.ReactElement) {
-  return rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+function render(ui: React.ReactElement, initialEntries?: string[]) {
+  return rtlRender(<MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>);
 }
 
 const lastListParams = () => listCalls[listCalls.length - 1];
@@ -189,7 +189,7 @@ describe("AutomationTasksPage — filtros por ação, trigger e status", () => {
     render(<AutomationTasksPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "Nova tarefa" }));
-    fireEvent.change(screen.getByLabelText("ActionType"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Tipo de ação"), { target: { value: "0" } });
 
     const field = screen.getByLabelText("Ordem de execução (0–99)") as HTMLInputElement;
     expect(field.value).toBe("10");
@@ -217,13 +217,13 @@ describe("AutomationTasksPage — filtros por ação, trigger e status", () => {
     render(<AutomationTasksPage />);
 
     // Ordem crescente (padrão): RunScript antes de InstallPackage.
-    expect(bodyRows()[0].textContent).toContain("RunScript");
+    expect(bodyRows()[0].textContent).toContain("Executar script");
 
     fireEvent.click(screen.getByText("Ação"));
 
     const ordenados = bodyRows().map((row) => row.textContent ?? "");
-    expect(ordenados[0]).toContain("InstallPackage");
-    expect(ordenados[1]).toContain("RunScript");
+    expect(ordenados[0]).toContain("Executar script");
+    expect(ordenados[1]).toContain("Instalar pacote");
   });
 
   it("mantém só Busca e Status visíveis e abre o resto no filtro avançado", () => {
@@ -259,8 +259,57 @@ describe("AutomationTasksPage — filtros por ação, trigger e status", () => {
     fireEvent.click(screen.getByRole("button", { name: "Nova tarefa" }));
     const field = screen.getByLabelText("Ordem de execução (0–99)") as HTMLInputElement;
     fireEvent.change(field, { target: { value: "55" } });
-    fireEvent.change(screen.getByLabelText("ActionType"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Tipo de ação"), { target: { value: "0" } });
 
     expect(field.value).toBe("55");
+  });
+
+  it("Limpar filtros reseta também visão e itens por página (zera contador avançado)", () => {
+    render(<AutomationTasksPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Filtros avançados/ }));
+    fireEvent.change(screen.getByLabelText("Visão"), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText("Itens por página"), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar filtros avançados" }));
+
+    expect(screen.getByRole("button", { name: "Filtros avançados (2)" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+
+    expect(screen.getByRole("button", { name: "Filtros avançados" })).toBeTruthy();
+    expect(lastListParams().includeDeleted).toBeUndefined();
+    expect(lastListParams().limit).toBe(20);
+  });
+
+  it("expande o guia 'Como funcionam?' inline sem abrir outro modal", () => {
+    render(<AutomationTasksPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Nova tarefa" }));
+    const helpBtn = screen.getByRole("button", { name: /Como funcionam\?/ });
+    expect(helpBtn.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(helpBtn);
+    expect(helpBtn.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/o agent deduplica execuções/i)).toBeTruthy();
+  });
+
+  it("lê ?status=inactive e ?new=1 da URL", () => {
+    render(<AutomationTasksPage />, ["/automation/tasks?status=inactive&new=1"]);
+
+    expect(lastListParams().isActive).toBe(false);
+    expect(screen.getByRole("dialog", { name: "Nova tarefa" })).toBeTruthy();
+  });
+
+  it("valida campos inline ao submeter formulário vazio e ao trocar escopo sem alvo", () => {
+    render(<AutomationTasksPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Nova tarefa" }));
+    fireEvent.change(screen.getByLabelText("Escopo"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Criar tarefa" }));
+
+    expect(screen.getAllByText("Informe o nome da tarefa.").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Selecione o alvo correspondente ao escopo escolhido.").length,
+    ).toBeGreaterThan(0);
   });
 });

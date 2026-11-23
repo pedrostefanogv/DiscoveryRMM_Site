@@ -10,7 +10,9 @@ import {
   useTicketWatchers,
   useTickets,
   useUpdateTicket,
+  useUpdateTicketWorkflow,
 } from '@/hooks/useTickets';
+import { TicketKanbanBoard } from './TicketKanbanBoard';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAgent, useAgentsBySite } from '@/hooks/useAgents';
@@ -363,7 +365,18 @@ export default function TicketList() {
   // Fila "Meu time": liga o filtro pelos departamentos em que o usuário é
   // membro ativo do time (backend: GET /tickets/my-departments).
   const [filterMyDepartments, setFilterMyDepartments] = useState(() => searchParams.get('myTeam') === '1');
+  const [filterDepartment, setFilterDepartment] = useState(() => searchParams.get('department') ?? '');
+  const [filterUnassigned, setFilterUnassigned] = useState(() => searchParams.get('unassigned') === '1');
   const [filterSlaBreached, setFilterSlaBreached] = useState(() => searchParams.get('slaBreached') === '1');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() =>
+    searchParams.get('view') === 'kanban' ? 'kanban' : 'table',
+  );
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkAssignUserId, setBulkAssignUserId] = useState('');
+  const [bulkPriority, setBulkPriority] = useState<TicketPriority | ''>('');
+  const [bulkStateId, setBulkStateId] = useState('');
+  const searchInputRef = useRef<HTMLDivElement | null>(null);
   const [filterAnswerKey, setFilterAnswerKey] = useState('');
   const [filterAnswerValue, setFilterAnswerValue] = useState('');
   const [filterAnswerMatch, setFilterAnswerMatch] = useState<TicketAnswerMatch>(TicketAnswerMatch.Exact);
@@ -410,7 +423,8 @@ export default function TicketList() {
   // filtro no servidor e a paginação por cursor correta; com vários, o filtro
   // preciso é aplicado no cliente sobre a página carregada.
   const myDepartmentsFilterId =
-    filterMyDepartments && myDepartmentIds.length === 1 ? myDepartmentIds[0] : undefined;
+    filterDepartment ||
+    (filterMyDepartments && myDepartmentIds.length === 1 ? myDepartmentIds[0] : undefined);
 
   const cursor = pageCursors[page - 1];
   const tickets = useTickets({
@@ -454,8 +468,10 @@ export default function TicketList() {
   const deleteSavedView = useDeleteTicketSavedView();
   const addTicketWatcher = useAddTicketWatcher();
   const updateTicket = useUpdateTicket();
+  const updateTicketWorkflow = useUpdateTicketWorkflow();
   const states = useWorkflowStates();
   const clients = useClients();
+  const departmentsListQuery = useDepartments({ includeGlobal: true });
   const iamUsersQuery = useIamUsers();
   // Templates (mini questionário) para o filtro por resposta — escopo do
   // cliente filtrado (global + do cliente).
@@ -485,12 +501,31 @@ export default function TicketList() {
   // departmentId por consulta, então a união é aplicada sobre a página já
   // carregada. Com um único vínculo o filtro vai ao servidor (acima) e este
   // passo é um no-op.
+  const departmentMap = useMemo(
+    () => new Map(((departmentsListQuery.data ?? []) as Department[]).map((d) => [d.id, d])),
+    [departmentsListQuery.data],
+  );
+  const departmentFilterOptions = useMemo(
+    () => [
+      { value: '', label: 'Todos os departamentos' },
+      ...((departmentsListQuery.data ?? []) as Department[])
+        .filter((d) => d.isActive !== false)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((d) => ({ value: d.id, label: d.name })),
+    ],
+    [departmentsListQuery.data],
+  );
   const myDepartmentsIdSet = useMemo(() => new Set(myDepartmentIds), [myDepartmentIds]);
   const visibleTickets = useMemo(() => {
-    const items = tickets.data?.items ?? [];
-    if (!filterMyDepartments || myDepartmentsIdSet.size <= 1) return items;
-    return items.filter((ticket) => !!ticket.departmentId && myDepartmentsIdSet.has(ticket.departmentId));
-  }, [tickets.data, filterMyDepartments, myDepartmentsIdSet]);
+    let items = tickets.data?.items ?? [];
+    if (filterMyDepartments && myDepartmentsIdSet.size > 1) {
+      items = items.filter((ticket) => !!ticket.departmentId && myDepartmentsIdSet.has(ticket.departmentId));
+    }
+    if (filterUnassigned) {
+      items = items.filter((ticket) => !ticket.assignedToUserId);
+    }
+    return items;
+  }, [tickets.data, filterMyDepartments, myDepartmentsIdSet, filterUnassigned]);
   const hoverPreviewTicket = useMemo(() => {
     if (!hoverPreviewTicketId) return null;
     if (hoverPreviewTicketQuery.data) return hoverPreviewTicketQuery.data;
@@ -550,7 +585,10 @@ export default function TicketList() {
         if (filterText.trim()) next.set('q', filterText.trim()); else next.delete('q');
         if (filterAssignedToUserId) next.set('assigned', filterAssignedToUserId); else next.delete('assigned');
         if (filterMyDepartments) next.set('myTeam', '1'); else next.delete('myTeam');
+        if (filterDepartment) next.set('department', filterDepartment); else next.delete('department');
+        if (filterUnassigned) next.set('unassigned', '1'); else next.delete('unassigned');
         if (filterSlaBreached) next.set('slaBreached', '1'); else next.delete('slaBreached');
+        if (viewMode === 'kanban') next.set('view', 'kanban'); else next.delete('view');
         return next.toString() === prev.toString() ? prev : next;
       },
       { replace: true },
@@ -563,9 +601,34 @@ export default function TicketList() {
     filterText,
     filterAssignedToUserId,
     filterMyDepartments,
+    filterDepartment,
+    filterUnassigned,
     filterSlaBreached,
+    viewMode,
     setSearchParams,
   ]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditable =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+      if (isEditable || modalOpen || assignModalOpen || savedViewModalOpen) return;
+      if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
+        event.preventDefault();
+        searchInputRef.current?.querySelector('input')?.focus();
+      } else if (event.key === 'c' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setModalOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [modalOpen, assignModalOpen, savedViewModalOpen]);
 
   useEffect(() => {
     if (!hoverPreviewTicketId) return;
@@ -705,7 +768,79 @@ export default function TicketList() {
     (department) => department.id === assignTargetTicket?.departmentId,
   )?.name;
 
+  const toggleSelect = (ticketId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) next.delete(ticketId);
+      else next.add(ticketId);
+      return next;
+    });
+  };
+  const allVisibleSelected =
+    visibleTickets.length > 0 && visibleTickets.every((t) => selectedIds.has(t.id));
+  const toggleSelectAll = () => {
+    if (allVisibleSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleTickets.map((t) => t.id)));
+    }
+  };
+  const runBulkAction = async (
+    label: string,
+    fn: (ticket: Ticket) => Promise<unknown>,
+  ) => {
+    const targets = visibleTickets.filter((t) => selectedIds.has(t.id));
+    if (targets.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const results = await Promise.allSettled(targets.map(fn));
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      const fail = results.length - ok;
+      if (ok > 0) toast.success(`${label}: ${ok} chamado(s) atualizado(s).`);
+      if (fail > 0) toast.error(`${fail} chamado(s) falharam ao ${label.toLowerCase()}.`);
+      setSelectedIds(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const columns: Column<Ticket>[] = [
+    {
+      key: 'select',
+      header: 'Sel.',
+      className: 'w-9',
+      sortable: false,
+      render: (ticket) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            aria-label={`Selecionar chamado ${ticket.title}`}
+            checked={selectedIds.has(ticket.id)}
+            onChange={() => toggleSelect(ticket.id)}
+            className="rounded border-border bg-surface-light"
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'id',
+      header: '#ID',
+      className: 'w-24',
+      render: (ticket) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void navigator.clipboard?.writeText(ticket.id);
+            toast.success('ID copiado');
+          }}
+          title={`Copiar ID completo: ${ticket.id}`}
+          className="font-mono text-xs text-muted hover:text-foreground"
+        >
+          #{ticket.id.slice(0, 8)}
+        </button>
+      ),
+    },
     {
       key: 'title',
       header: 'Título',
@@ -750,6 +885,26 @@ export default function TicketList() {
       ),
     },
     {
+      key: 'department',
+      header: 'Departamento',
+      sortValue: (ticket) => (ticket.departmentId ? departmentMap.get(ticket.departmentId)?.name ?? '' : ''),
+      render: (ticket) => (
+        <span className="text-xs text-muted-foreground">
+          {ticket.departmentId ? departmentMap.get(ticket.departmentId)?.name ?? '-' : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'assignee',
+      header: 'Responsável',
+      sortValue: (ticket) => (ticket.assignedToUserId ? resolveUserDisplayName(iamUsersById, ticket.assignedToUserId) : ''),
+      render: (ticket) => (
+        <span className="text-xs text-muted-foreground">
+          {ticket.assignedToUserId ? resolveUserDisplayName(iamUsersById, ticket.assignedToUserId) : 'Não atribuído'}
+        </span>
+      ),
+    },
+    {
       key: 'closedAt',
       header: 'Status',
       render: (ticket) =>
@@ -774,6 +929,15 @@ export default function TicketList() {
       render: (ticket) => (
         <span className="text-xs text-muted">
           {formatDate(ticket.createdAt)}
+        </span>
+      ),
+    },
+    {
+      key: 'updatedAt',
+      header: 'Atualizado',
+      render: (ticket) => (
+        <span className="text-xs text-muted">
+          {formatDate(ticket.updatedAt || ticket.createdAt)}
         </span>
       ),
     },
@@ -1087,6 +1251,8 @@ export default function TicketList() {
     setFilterTemplate('');
     setFilterAssignedToUserId('');
     setFilterMyDepartments(false);
+    setFilterDepartment('');
+    setFilterUnassigned(false);
     setFilterSlaBreached(false);
     setFilterAnswerKey('');
     setFilterAnswerValue('');
@@ -1098,6 +1264,7 @@ export default function TicketList() {
   const buildCurrentFilter = (): TicketSavedViewFilter => ({
     clientId: filterClient || undefined,
     workflowStateId: filterState || undefined,
+    departmentId: filterDepartment || undefined,
     // Assimetria corrigida: parseSavedViewFilter já LIA assignedToUserId, mas
     // buildCurrentFilter o descartava — salvar uma visão com o filtro de
     // responsável ativo gravava um JSON sem ele e "Aplicar" nunca o restaurava.
@@ -1235,7 +1402,7 @@ export default function TicketList() {
           },
         });
         setActiveSavedViewId(editingSavedView.id);
-        toast.success('Visao atualizada com sucesso.');
+        toast.success('Visão atualizada com sucesso.');
       } else {
         const created = await createSavedView.mutateAsync({
           name: savedViewForm.name.trim(),
@@ -1244,7 +1411,7 @@ export default function TicketList() {
           filterJson: JSON.stringify(buildCurrentFilter()),
         });
         setActiveSavedViewId(created.id);
-        toast.success('Visao salva com sucesso.');
+        toast.success('Visão salva com sucesso.');
       }
 
       setSavedViewModalOpen(false);
@@ -1287,6 +1454,26 @@ export default function TicketList() {
         title="Chamados"
         description={`${visibleTickets.length} chamados na página ${page}`}
       >
+        <div className="inline-flex rounded-lg border border-border bg-surface-light p-0.5" role="group" aria-label="Modo de visualização">
+          <button
+            type="button"
+            onClick={() => setViewMode('table')}
+            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              viewMode === 'table' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
+            }`}
+          >
+            <Icon name="list" className="h-3.5 w-3.5" /> Tabela
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('kanban')}
+            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              viewMode === 'kanban' ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground'
+            }`}
+          >
+            <Icon name="dashboard" className="h-3.5 w-3.5" /> Kanban
+          </button>
+        </div>
         <Button
           variant="secondary"
           onClick={() => {
@@ -1391,14 +1578,14 @@ export default function TicketList() {
 
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-12">
           <div className="md:col-span-2 xl:col-span-4">
-            <div className="relative">
+            <div ref={searchInputRef} className="relative">
               <Input
                 label="Buscar"
                 value={filterText}
                 onChange={(event) => {
                   applyFilterChange(() => setFilterText(event.target.value));
                 }}
-                placeholder="Título, descrição, categoria ou respostas"
+                placeholder="Título, descrição, categoria ou respostas (atalho: /)"
                 className="pr-8"
               />
               {filterText && (
@@ -1494,11 +1681,12 @@ export default function TicketList() {
                 variant={filterAssignedToUserId === currentUserId ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => {
-                  applyFilterChange(() =>
+                  applyFilterChange(() => {
+                    setFilterUnassigned(false);
                     setFilterAssignedToUserId((current) =>
                       current === currentUserId ? '' : (currentUserId ?? ''),
-                    ),
-                  );
+                    );
+                  });
                 }}
                 aria-pressed={filterAssignedToUserId === currentUserId}
                 title="Somente chamados atribuídos a você"
@@ -1507,6 +1695,42 @@ export default function TicketList() {
                 Atribuídos a mim
               </Button>
             )}
+            <Button
+              variant={filterUnassigned ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => {
+                applyFilterChange(() => {
+                  setFilterUnassigned((current) => {
+                    const next = !current;
+                    if (next) setFilterAssignedToUserId('');
+                    return next;
+                  });
+                });
+              }}
+              aria-pressed={filterUnassigned}
+              title="Somente chamados sem responsável"
+            >
+              <Icon name="person" className="h-4 w-4" />
+              Não atribuídos
+            </Button>
+            <Button
+              variant={filterSlaBreached ? 'danger' : 'secondary'}
+              size="sm"
+              onClick={() => {
+                applyFilterChange(() => {
+                  setFilterSlaBreached((current) => {
+                    const next = !current;
+                    if (next) setFilterStatus('false');
+                    return next;
+                  });
+                });
+              }}
+              aria-pressed={filterSlaBreached}
+              title="Somente chamados com SLA violado"
+            >
+              <Icon name="warning" className="h-4 w-4" />
+              SLA violado
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -1536,7 +1760,7 @@ export default function TicketList() {
         )}
 
         {advancedFiltersExpanded && (
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
             <Select
               label="Cliente"
               options={clientOpts}
@@ -1550,6 +1774,15 @@ export default function TicketList() {
                   setFilterAnswerKey('');
                   setFilterAnswerValue('');
                 });
+              }}
+            />
+            <Select
+              label="Departamento"
+              options={departmentFilterOptions}
+              value={filterDepartment}
+              onChange={(event) => {
+                const value = event.target.value;
+                applyFilterChange(() => setFilterDepartment(value));
               }}
             />
             <Select
@@ -1744,22 +1977,117 @@ export default function TicketList() {
         ) : (
           <>
             {renderPaginationBar('top')}
-            <DataTable
-              columns={columns}
-              data={visibleTickets}
-              keyExtractor={(ticket) => ticket.id}
-              onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
-              onRowContextMenu={openTicketContextMenu}
-              rowHoverDelayMs={1260}
-              rowHoverCard={renderTicketHoverCard}
-              onRowHoverCardChange={(ticket) => setHoverPreviewTicketId(ticket?.id ?? null)}
-              showPagination={false}
-              flush
-            />
+            {viewMode === 'kanban' ? (
+              <TicketKanbanBoard
+                tickets={visibleTickets}
+                states={states.data ?? []}
+                clientNames={clientNameMap}
+                userNames={new Map(iamUsersQuery.data?.map((u) => [u.id, resolveUserDisplayName(iamUsersById, u.id)]) ?? [])}
+                onOpenTicket={(id) => navigate(`/tickets/${id}`)}
+                onMoveState={async (ticket, targetStateId) => {
+                  try {
+                    await updateTicketWorkflow.mutateAsync({ id: ticket.id, data: { workflowStateId: targetStateId } });
+                    toast.success('Estado atualizado');
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Não foi possível mover o chamado');
+                  }
+                }}
+              />
+            ) : (
+              <DataTable
+                columns={columns}
+                data={visibleTickets}
+                keyExtractor={(ticket) => ticket.id}
+                onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
+                onRowContextMenu={openTicketContextMenu}
+                rowHoverDelayMs={1260}
+                rowHoverCard={renderTicketHoverCard}
+                onRowHoverCardChange={(ticket) => setHoverPreviewTicketId(ticket?.id ?? null)}
+                showPagination={false}
+                flush
+              />
+            )}
             {renderPaginationBar('bottom')}
           </>
         )}
       </Card>
+
+      {selectedIds.size > 0 && (
+        <div className="sticky bottom-4 z-40 mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-surface/95 px-4 py-3 shadow-xl backdrop-blur">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Badge color="accent">{selectedIds.size}</Badge>
+            <span>selecionado(s)</span>
+            <Button size="sm" variant="ghost" onClick={toggleSelectAll} disabled={bulkBusy}>
+              {allVisibleSelected ? 'Desmarcar página' : 'Selecionar página'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} disabled={bulkBusy}>
+              Limpar
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              aria-label="Atribuir responsável em massa"
+              options={[{ value: '', label: 'Atribuir a...' }, ...assignedToOptions.slice(1)]}
+              value={bulkAssignUserId}
+              onChange={(e) => {
+                const userId = e.target.value;
+                setBulkAssignUserId('');
+                if (!userId) return;
+                void runBulkAction('Atribuir', (t) =>
+                  updateTicket.mutateAsync({
+                    id: t.id,
+                    data: {
+                      title: t.title,
+                      description: t.description,
+                      priority: t.priority,
+                      assignedToUserId: userId,
+                      category: t.category ?? undefined,
+                    },
+                  }),
+                );
+              }}
+              disabled={bulkBusy}
+            />
+            <Select
+              aria-label="Alterar prioridade em massa"
+              options={[{ value: '', label: 'Prioridade...' }, ...PRIORITY_OPTIONS.slice(1)]}
+              value={bulkPriority}
+              onChange={(e) => {
+                const prio = e.target.value as TicketPriority | '';
+                setBulkPriority('');
+                if (!prio) return;
+                void runBulkAction('Alterar prioridade', (t) =>
+                  updateTicket.mutateAsync({
+                    id: t.id,
+                    data: {
+                      title: t.title,
+                      description: t.description,
+                      priority: prio,
+                      assignedToUserId: t.assignedToUserId ?? undefined,
+                      category: t.category ?? undefined,
+                    },
+                  }),
+                );
+              }}
+              disabled={bulkBusy}
+            />
+            <Select
+              aria-label="Alterar estado em massa"
+              options={[{ value: '', label: 'Estado...' }, ...stateOpts.slice(1)]}
+              value={bulkStateId}
+              onChange={(e) => {
+                const stId = e.target.value;
+                setBulkStateId('');
+                if (!stId) return;
+                void runBulkAction('Alterar estado', (t) =>
+                  updateTicketWorkflow.mutateAsync({ id: t.id, data: { workflowStateId: stId } }),
+                );
+              }}
+              disabled={bulkBusy}
+            />
+          </div>
+        </div>
+      )}
 
       {ticketContextMenu && (
         <div
@@ -1822,7 +2150,7 @@ export default function TicketList() {
         </div>
       )}
 
-      <CreateTicketModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      {modalOpen && <CreateTicketModal open={modalOpen} onClose={() => setModalOpen(false)} />}
 
       <Modal open={assignModalOpen} onClose={closeAssignModal} title="Transferir / Atribuir chamado">
         <div className="space-y-4">

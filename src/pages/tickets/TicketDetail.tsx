@@ -1,7 +1,7 @@
 import { formatDateTime, formatDate, formatBytes as formatBytesBase } from '@/utils/format';
 import { useCallback, useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt, getUserNameFromJwt } from '@/auth/jwt';
@@ -137,7 +137,7 @@ export default function TicketDetail() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const ticket   = useTicket(id!);
-  const comments = useTicketComments(id!);
+  const comments = useTicketComments(id!, { cursor: undefined });
   const states   = useWorkflowStates();
 
   // O que ESTE usuário pode fazer neste chamado — decidido pelo backend.
@@ -248,7 +248,11 @@ export default function TicketDetail() {
         {currentState && (
           <TicketStateBadge name={currentState.name} color={currentState.color} />
         )}
-        <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
+        <ReopenButton
+          ticketId={t.id}
+          isClosed={Boolean(t.closedAt) || currentState?.isFinal === true}
+          canReopen={capabilities.canTreat || capabilities.isRequester}
+        />
         <Button
           size="sm"
           variant="secondary"
@@ -325,6 +329,11 @@ export default function TicketDetail() {
               {tab === 'comments' ? (
                 <CommentsPanel
                   ticketId={id!}
+                  clientId={t.clientId}
+                  siteId={t.siteId}
+                  clientName=""
+                  currentUserName={currentUserName}
+                  capabilities={capabilities}
                   draftSeed={commentSeed}
                   currentUserLogin={currentUserLogin}
                   onOpenAttachments={() => setTab('attachments')}
@@ -1162,6 +1171,8 @@ function SlaProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
       ref={trackRef}
       className="h-2 w-full rounded-full bg-surface-hover"
       role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
       aria-label={`SLA: ${Math.round(pct)}% utilizado`}
     >
       <div ref={fillRef} className={`h-2 rounded-full transition-all ${barColor}`} />
@@ -1169,26 +1180,76 @@ function SlaProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
   );
 }
 
-function ReopenButton({ ticketId, isClosed }: { ticketId: string; isClosed: boolean }) {
+function ReopenButton({
+  ticketId,
+  isClosed,
+  canReopen = true,
+}: {
+  ticketId: string;
+  isClosed: boolean;
+  canReopen?: boolean;
+}) {
   const reopen = useReopenTicket();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [reason, setReason] = useState('');
 
-  if (!isClosed) return null;
+  if (!isClosed || !canReopen) return null;
 
-  const handleReopen = () => {
-    const reason = window.prompt('Motivo da reabertura (opcional):') ?? undefined;
+  const handleConfirmReopen = () => {
     reopen.mutate(
-      { id: ticketId, data: { reason: reason?.trim() || null } },
+      { id: ticketId, data: { reason: reason.trim() || null } },
       {
-        onSuccess: () => toast.success('Chamado reaberto'),
+        onSuccess: () => {
+          setModalOpen(false);
+          setReason('');
+          toast.success('Chamado reaberto');
+        },
         onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao reabrir o chamado'),
       },
     );
   };
 
   return (
-    <Button size="sm" variant="secondary" onClick={handleReopen} loading={reopen.isPending}>
-      <Icon name="restart_alt" className="h-4 w-4" /> Reabrir
-    </Button>
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setModalOpen(true)} loading={reopen.isPending}>
+        <Icon name="restart_alt" className="h-4 w-4" /> Reabrir
+      </Button>
+      <Modal
+        open={modalOpen}
+        onClose={() => {
+          if (!reopen.isPending) {
+            setModalOpen(false);
+            setReason('');
+          }
+        }}
+        title="Reabrir chamado"
+      >
+        <div className="space-y-4">
+          <TextArea
+            label="Motivo da reabertura (opcional)"
+            placeholder="Descreva o motivo..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setModalOpen(false);
+                setReason('');
+              }}
+              disabled={reopen.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmReopen} loading={reopen.isPending}>
+              Reabrir chamado
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 
@@ -1378,6 +1439,22 @@ function TicketSummaryPanel({
   const [requesterModalOpen, setRequesterModalOpen] = useState(false);
   const [agentModalOpen, setAgentModalOpen] = useState(false);
   const [departmentModalOpen, setDepartmentModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(false);
+  const [categoryDraft, setCategoryDraft] = useState(category ?? '');
+  const [editingPriority, setEditingPriority] = useState(false);
+  const [editingAssignee, setEditingAssignee] = useState(false);
+
+  const assigneeOptions = useMemo(() => {
+    const users = (iamUsers.data ?? []) as UserDto[];
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return [
+      { value: '', label: 'Não atribuído' },
+      ...users
+        .filter((u) => u.isActive !== false)
+        .map((u) => ({ value: u.id, label: resolveUserDisplayName(byId, u.id) }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    ];
+  }, [iamUsers.data]);
 
   // Máquinas do escopo do chamado: site quando houver, senão o cliente.
   const siteAgents = useAgentsBySite(siteId ?? '');
@@ -1709,11 +1786,108 @@ function TicketSummaryPanel({
         )}
         <div>
           <dt className="text-muted">Categoria</dt>
-          <dd className="text-foreground">{category ?? '\u2014'}</dd>
+          <dd className="text-foreground">
+            {editingCategory ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <Input
+                  value={categoryDraft}
+                  onChange={(e) => setCategoryDraft(e.target.value)}
+                  placeholder="Ex: Rede, Hardware..."
+                  className="h-8 text-xs"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    updateRequester.mutate(
+                      { id: ticketId, data: { category: categoryDraft.trim() || undefined } },
+                      {
+                        onSuccess: () => {
+                          setEditingCategory(false);
+                          toast.success('Categoria atualizada');
+                        },
+                        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao atualizar categoria'),
+                      },
+                    );
+                  }}
+                  loading={updateRequester.isPending}
+                >
+                  Salvar
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditingCategory(false)}>
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span>{category ?? '\u2014'}</span>
+                {capabilities.canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryDraft(category ?? '');
+                      setEditingCategory(true);
+                    }}
+                    aria-label="Editar categoria"
+                    title="Editar categoria"
+                    className="rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                  >
+                    <Icon name="edit" className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+          </dd>
         </div>
         <div>
           <dt className="text-muted">Prioridade</dt>
-          <dd><Badge color={priorityColor}>{priorityLabel}</Badge></dd>
+          <dd>
+            {editingPriority ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <Select
+                  aria-label="Selecionar prioridade"
+                  options={[
+                    { value: 'Low', label: 'Baixa' },
+                    { value: 'Medium', label: 'Média' },
+                    { value: 'High', label: 'Alta' },
+                    { value: 'Critical', label: 'Crítica' },
+                  ]}
+                  value=""
+                  onChange={(e) => {
+                    const val = e.target.value as TicketPriority;
+                    if (!val) return;
+                    updateRequester.mutate(
+                      { id: ticketId, data: { priority: val } },
+                      {
+                        onSuccess: () => {
+                          setEditingPriority(false);
+                          toast.success('Prioridade atualizada');
+                        },
+                        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao atualizar prioridade'),
+                      },
+                    );
+                  }}
+                />
+                <Button size="sm" variant="ghost" onClick={() => setEditingPriority(false)}>
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <Badge color={priorityColor}>{priorityLabel}</Badge>
+                {capabilities.canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingPriority(true)}
+                    aria-label="Editar prioridade"
+                    title="Editar prioridade"
+                    className="rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                  >
+                    <Icon name="edit" className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+          </dd>
         </div>
         <div className="sm:col-span-2">
           <dt className="text-muted">Solicitado por</dt>
@@ -1727,15 +1901,17 @@ function TicketSummaryPanel({
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setRequesterModalOpen(true)}
-                aria-label={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
-                title={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
-                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
-              >
-                <Icon name="manage_accounts" className="h-4 w-4" />
-              </button>
+              {capabilities.canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setRequesterModalOpen(true)}
+                  aria-label={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
+                  title={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
+                  className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                >
+                  <Icon name="manage_accounts" className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </dd>
         </div>
@@ -1745,22 +1921,33 @@ function TicketSummaryPanel({
           <dd className="text-foreground">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="break-words">{agentDisplayName ?? 'Não vinculado'}</p>
+                {agentId ? (
+                  <Link
+                    to={`/agents/${agentId}`}
+                    className="break-words font-medium text-primary hover:underline"
+                  >
+                    {agentDisplayName ?? 'Agent vinculado'}
+                  </Link>
+                ) : (
+                  <p className="break-words">Não vinculado</p>
+                )}
                 {!agentId && (
                   <p className="mt-1 text-xs text-muted">
                     Vincule a máquina relacionada a este chamado.
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setAgentModalOpen(true)}
-                aria-label={agentId ? 'Alterar agent' : 'Vincular agent'}
-                title={agentId ? 'Alterar agent' : 'Vincular agent'}
-                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
-              >
-                <Icon name="desktop_windows" className="h-4 w-4" />
-              </button>
+              {capabilities.canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setAgentModalOpen(true)}
+                  aria-label={agentId ? 'Alterar agent' : 'Vincular agent'}
+                  title={agentId ? 'Alterar agent' : 'Vincular agent'}
+                  className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                >
+                  <Icon name="desktop_windows" className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </dd>
         </div>
@@ -1777,15 +1964,17 @@ function TicketSummaryPanel({
                   Transferir altera o perfil de workflow e o SLA do chamado.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setDepartmentModalOpen(true)}
-                aria-label="Alterar departamento"
-                title="Alterar departamento"
-                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
-              >
-                <Icon name="apartment" className="h-4 w-4" />
-              </button>
+              {capabilities.canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setDepartmentModalOpen(true)}
+                  aria-label="Alterar departamento"
+                  title="Alterar departamento"
+                  className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                >
+                  <Icon name="apartment" className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </dd>
         </div>
@@ -1793,27 +1982,66 @@ function TicketSummaryPanel({
         <div className="sm:col-span-2">
           <dt className="text-muted">Responsável</dt>
           <dd className="text-foreground">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-1.5 break-words">
-                  {assignedDisplayName}
-                  {assignedToUserId && assignedToUserId === currentUserId && <Badge color="accent">você</Badge>}
-                </p>
-                {assignedEmail && <p className="text-xs text-muted">{assignedEmail}</p>}
+            {editingAssignee ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <Select
+                  aria-label="Alterar responsável"
+                  options={assigneeOptions}
+                  value={assignedToUserId ?? ''}
+                  onChange={(e) => {
+                    const nextUserId = e.target.value || null;
+                    updateRequester.mutate(
+                      { id: ticketId, data: { assignedToUserId: nextUserId } },
+                      {
+                        onSuccess: () => {
+                          setEditingAssignee(false);
+                          toast.success(nextUserId ? 'Responsável atualizado' : 'Responsável removido');
+                        },
+                        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao atualizar responsável'),
+                      },
+                    );
+                  }}
+                />
+                <Button size="sm" variant="ghost" onClick={() => setEditingAssignee(false)}>
+                  <Icon name="close" className="h-3.5 w-3.5" />
+                </Button>
               </div>
-              {!assignedToUserId && currentUserId && (
-                <button
-                  type="button"
-                  onClick={assumeTicket}
-                  disabled={updateRequester.isPending}
-                  aria-label="Assumir chamado"
-                  title="Assumir este chamado"
-                  className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground disabled:opacity-50"
-                >
-                  <Icon name="how_to_reg" className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+            ) : (
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-1.5 break-words">
+                    {assignedDisplayName}
+                    {assignedToUserId && assignedToUserId === currentUserId && <Badge color="accent">você</Badge>}
+                  </p>
+                  {assignedEmail && <p className="text-xs text-muted">{assignedEmail}</p>}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {!assignedToUserId && currentUserId && capabilities.canAssign && (
+                    <button
+                      type="button"
+                      onClick={assumeTicket}
+                      disabled={updateRequester.isPending}
+                      aria-label="Assumir chamado"
+                      title="Assumir este chamado"
+                      className="rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground disabled:opacity-50"
+                    >
+                      <Icon name="how_to_reg" className="h-4 w-4" />
+                    </button>
+                  )}
+                  {capabilities.canAssign && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingAssignee(true)}
+                      aria-label="Transferir ou remover responsável"
+                      title="Transferir ou remover responsável"
+                      className="rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+                    >
+                      <Icon name="edit" className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </dd>
         </div>
         <div>
@@ -2056,13 +2284,45 @@ function compareCommentsAsc(a: CommentItem, b: CommentItem) {
   return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
 }
 
+function renderCommentWithLinks(text: string, own: boolean) {
+  const urlRe = /(https?:\/\/[^\s<>"')]+)/g;
+  const parts = text.split(urlRe);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={own ? 'underline text-white' : 'underline text-primary'}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 function CommentsPanel({
   ticketId,
+  clientId,
+  siteId,
+  clientName,
+  currentUserName,
+  capabilities,
   draftSeed,
   currentUserLogin,
   onOpenAttachments,
 }: {
   ticketId: string;
+  clientId?: string | null;
+  siteId?: string | null;
+  clientName?: string;
+  currentUserName?: string;
+  capabilities?: { canExecuteRunbook?: boolean; canSeeInternalNotes?: boolean };
   draftSeed?: CommentSeed | null;
   /** Login do usuário logado já em minúsculas; vazio quando não resolvido. */
   currentUserLogin: string;
@@ -2215,7 +2475,7 @@ function CommentsPanel({
           ))}
         </div>
       )}
-      <div ref={commentsListRef} className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
+      <div ref={commentsListRef} className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
         {comments.isLoading && <Loading />}
         {comments.isError && !comments.isLoading && (
           <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
@@ -2257,6 +2517,7 @@ function CommentsPanel({
             return (
               <div
                 key={c.id}
+                id={`comment-${c.id}`}
                 data-comment-id={c.id}
                 className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}
               >
@@ -2264,7 +2525,11 @@ function CommentsPanel({
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${bubbleTone}`}
                 >
                   {/* Excluído continua LEGÍVEL: o conteúdo não é apagado, só marcado. */}
-                  {deleted ? <em className="opacity-80">{c.content}</em> : c.content}
+                  {deleted ? (
+                    <em className="opacity-80">{c.content}</em>
+                  ) : (
+                    renderCommentWithLinks(c.content, own)
+                  )}
 
                   {commentAttachments.length > 0 && (
                     <div className={`mt-2 flex flex-wrap gap-2 ${deleted ? 'opacity-60' : ''}`}>
@@ -2311,6 +2576,11 @@ function CommentsPanel({
       <TicketAttachmentsStrip ticketId={ticketId} />
       <CommentForm
         ticketId={ticketId}
+        clientId={clientId}
+        siteId={siteId}
+        clientName={clientName}
+        currentUserName={currentUserName}
+        capabilities={capabilities}
         draftSeed={draftSeed}
         onOpenAttachments={onOpenAttachments}
         onAdded={() => {
@@ -2506,11 +2776,21 @@ function TimelinePanel({
 
 function CommentForm({
   ticketId,
+  clientId,
+  siteId,
+  clientName,
+  currentUserName,
+  capabilities,
   draftSeed,
   onAdded,
   onOpenAttachments,
 }: {
   ticketId: string;
+  clientId?: string | null;
+  siteId?: string | null;
+  clientName?: string;
+  currentUserName?: string;
+  capabilities?: { canExecuteRunbook?: boolean; canSeeInternalNotes?: boolean };
   draftSeed?: CommentSeed | null;
   onAdded?: () => void;
   /** Atalho para a aba Anexos quando o arquivo excede o limite da conversa. */
@@ -2518,20 +2798,27 @@ function CommentForm({
 }) {
   const addComment = useAddComment();
   const macrosQuery = useTicketMacros({ includeGlobal: true });
-  const [content, setContent] = useState('');
+  const draftStorageKey = `ticket_comment_draft:${ticketId}`;
+  const [content, setContent] = useState(() => {
+    try {
+      return sessionStorage.getItem(draftStorageKey) ?? '';
+    } catch {
+      return '';
+    }
+  });
+  useEffect(() => {
+    try {
+      if (content) sessionStorage.setItem(draftStorageKey, content);
+      else sessionStorage.removeItem(draftStorageKey);
+    } catch {
+      // ignore storage errors
+    }
+  }, [content, draftStorageKey]);
   const [isInternal, setIsInternal] = useState(false);
 
-  // Anexos do comentário = nível CONVERSA (EntityType "TicketComment"): o
-  // arquivo pertence ao COMENTÁRIO e usa o TicketAttachmentSettings UNIFICADO
-  // (mesma allowlist de todos os contextos) com o limite de conversas
-  // (maxFileSizeBytes, 10 MB por padrão). O repositório do chamado (aba Anexos)
-  // é outra família e continua sendo o destino de arquivos grandes/resumíveis.
-  //
-  // O comentário precisa existir antes do anexo (o pai é o comentário), então o
-  // envio acontece depois do POST do comentário, com o id devolvido.
   const prepareCommentUpload = usePrepareCommentUpload();
   const completeCommentUpload = useCompleteCommentUpload();
-  const attachmentSettingsQuery = useTicketAttachmentSettings();
+  const attachmentSettingsQuery = useEffectiveTicketAttachmentSettings(siteId ?? null, clientId ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
   type PendingFile = {
     key: string;
@@ -2651,12 +2938,14 @@ function CommentForm({
     if (!id) return;
     const macro = (macrosQuery.data ?? []).find((m) => m.id === id);
     if (!macro) return;
-    setContent(
-      macro.content
-        .split('{ticket_id}').join(ticketId)
-        .split('{cliente}').join('')
-        .split('{tecnico}').join(''),
-    );
+    const resolved = macro.content
+      .split('{ticket_id}').join(ticketId)
+      .split('{cliente}').join(clientName || '')
+      .split('{tecnico}').join(currentUserName || '');
+    setContent((prev) => {
+      const base = prev.trimEnd();
+      return base ? `${base}\n\n${resolved}` : resolved;
+    });
   };
 
   useEffect(() => {
@@ -2666,17 +2955,22 @@ function CommentForm({
     setIsInternal(false);
   }, [draftSeed?.nonce]);
 
+  const hasQueuedAttachments = pending.some((item) => item.status === 'queued');
+  const canSubmit = !uploading && (content.trim().length >= 1 || hasQueuedAttachments);
+
   const handleSubmit = () => {
     const trimmed = content.trim();
-    if (trimmed.length < 3) return;
+    const queued = pending.filter((item) => item.status === 'queued');
+    if (trimmed.length === 0 && queued.length === 0) return;
     if (uploading) {
       toast.error('Aguarde o envio dos anexos terminar.');
       return;
     }
-    const queued = pending.filter((item) => item.status === 'queued');
+    const payloadContent = trimmed.length > 0 ? trimmed : 'Anexo enviado';
+    const sendInternal = Boolean(capabilities?.canSeeInternalNotes) && isInternal;
     addComment.mutate(
       // Autoria é derivada do token no backend — não enviar author.
-      { id: ticketId, data: { content: trimmed, isInternal } },
+      { id: ticketId, data: { content: payloadContent, isInternal: sendInternal } },
       {
         onSuccess: (created) => {
           setContent('');
@@ -2724,7 +3018,9 @@ function CommentForm({
           onChange={(event) => applyMacro(event.target.value)}
         />
       )}
-      <TicketRunbookPanel ticketId={ticketId} macros={macrosQuery.data ?? []} />
+      {(capabilities?.canExecuteRunbook ?? false) && (
+        <TicketRunbookPanel ticketId={ticketId} macros={macrosQuery.data ?? []} />
+      )}
       {/* O print colado (Ctrl+V) da ferramenta de captura entra como anexo. */}
       <div
         onPaste={(event) => {
@@ -2801,16 +3097,20 @@ function CommentForm({
           >
             <Icon name="attach_file" className="h-4 w-4" /> Anexar
           </Button>
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
-            {isInternal ? <Icon name="lock" className="h-3.5 w-3.5" /> : <Icon name="lock_open" className="h-3.5 w-3.5" />}
-            Nota interna
-          </label>
-          {isInternal && (
-            <Badge color="warning">Visível apenas para a equipe</Badge>
+          {(capabilities?.canSeeInternalNotes ?? false) && (
+            <>
+              <label className="flex items-center gap-2 text-sm text-muted">
+                <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
+                {isInternal ? <Icon name="lock" className="h-3.5 w-3.5" /> : <Icon name="lock_open" className="h-3.5 w-3.5" />}
+                Nota interna
+              </label>
+              {isInternal && (
+                <Badge color="warning">Visível apenas para a equipe</Badge>
+              )}
+            </>
           )}
         </div>
-        <Button size="sm" onClick={handleSubmit} loading={addComment.isPending} disabled={content.trim().length < 3 || uploading}>
+        <Button size="sm" onClick={handleSubmit} loading={addComment.isPending} disabled={!canSubmit}>
           <Icon name="send" className="h-4 w-4" /> Enviar
         </Button>
       </div>

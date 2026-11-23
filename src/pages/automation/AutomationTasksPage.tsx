@@ -1,51 +1,44 @@
-import { formatDateTime } from '@/utils/format';
 import { useEffect, useMemo, useState } from "react";
-import { useInRouterContext, useNavigate } from "react-router-dom";
+import { useInRouterContext, useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Icon,
+import {
   Badge,
   Button,
   Card,
   CardHeader,
   ConfirmDialog,
+  ContextMenu,
+  type ContextMenuItem,
   DataTable,
   type Column,
   ErrorDisplay,
+  Icon,
   Input,
   Loading,
   Modal,
+  PageHeader,
   Pagination,
   Select,
-  TextArea,
-  ContextMenu,
-  type ContextMenuItem,
-PageHeader,
 } from "@/components/ui";
 import { useAuthorization } from "@/auth/authorization";
 import { AutomationSubnav } from "./AutomationSubnav";
 import { AutomationAuditList } from "./AutomationAuditList";
 import { AutomationTaskDetailModal } from "./AutomationTaskDetailModal";
-import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
+import { TaskFormModal } from "./components/TaskFormModal";
 import {
   AppApprovalScopeType,
-  AppInstallationType,
   AutomationNotificationMode,
-  AutomationTaskActionType,
-  AutomationToastTiming,
   automationApi,
   type AutomationTaskDetail,
   type AutomationTaskSummary,
-  type CreateAutomationTaskRequest,
-  type UpdateAutomationTaskRequest,
 } from "@/api";
 import {
-  describeCron,
-  isToastNotificationMode,
-  normalizeNotificationMode,
-  normalizeToastTiming,
+  actionDisplayLabel,
+  buildCorrelationId,
+  normalizeActionType,
+  normalizeScopeType,
   notificationModeFromTask,
-  packageNoticeFrom,
-  parseCronAssistantState,
+  scopeLabel,
   toastTimingLabel,
 } from "./automationTasksUtils";
 import {
@@ -58,19 +51,10 @@ import {
   type TaskStatusFilterValue,
 } from "./automationTaskFilters";
 import {
-  DEFAULT_EXECUTION_ORDER_BY_ACTION,
-  MAX_EXECUTION_ORDER,
-  MIN_EXECUTION_ORDER,
-  defaultExecutionOrderForAction,
-  executionOrderError,
-} from "./automationTaskExecutionOrder";
-import {
   useAutomationKnownTags,
-  useAutomationScripts,
   useAutomationTask,
   useAutomationTaskAudit,
   useAutomationTasks,
-  useCreateAutomationTask,
   useDeleteAutomationTask,
   useRestoreAutomationTask,
   useUpdateAutomationTask,
@@ -78,45 +62,7 @@ import {
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
-import { useAppStoreCatalog } from "@/hooks/useAppStore";
-import { useAgentCustomFieldMap } from "@/hooks/useCustomFields";
-import { useAutoKey } from "@/hooks/useAutoKey";
-import { fieldKeyError } from "@/utils/fieldKey";
-
-
-function buildCorrelationId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-}
-
-function HighlightText({ text, highlight }: { text: string; highlight: string }) {
-  const safeText = String(text ?? "");
-  if (!highlight.trim() || !safeText) return <>{safeText}</>;
-  const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = safeText.split(new RegExp(`(${escaped})`, "gi"));
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 !== 0 ? (
-          <mark key={i} className="bg-yellow-400/30 text-yellow-900 dark:text-yellow-200 rounded-sm px-0.5">
-            {part}
-          </mark>
-        ) : part ? (
-          <span key={i}>{part}</span>
-        ) : null,
-      )}
-    </>
-  );
-}
-
-function actionLabel(value: unknown): string {
-  if (value === AutomationTaskActionType.InstallPackage || value === "InstallPackage") return "InstallPackage";
-  if (value === AutomationTaskActionType.UpdatePackage || value === "UpdatePackage") return "UpdatePackage";
-  if (value === AutomationTaskActionType.RunScript || value === "RunScript") return "RunScript";
-  if (value === AutomationTaskActionType.CustomCommand || value === "CustomCommand") return "CustomCommand";
-  if (value === AutomationTaskActionType.RemovePackage || value === "RemovePackage") return "RemovePackage";
-  if (value === AutomationTaskActionType.UpdateOrInstallPackage || value === "UpdateOrInstallPackage") return "UpdateOrInstallPackage";
-  return String(value ?? "-");
-}
+import { formatDateTime } from "@/utils/format";
 
 /** Texto usado para ordenar a coluna Notificação (igual ao badge renderizado). */
 function notificationSortLabel(item: AutomationTaskSummary): string {
@@ -166,188 +112,43 @@ function FilterChipGroup({
   );
 }
 
-function scopeDisplayName(item: Pick<AutomationTaskSummary, "scopeType" | "scopeId" | "scopeName" | "clientName" | "siteName" | "agentName">): string {
+function scopeDisplayName(
+  item: Pick<
+    AutomationTaskSummary,
+    "scopeType" | "scopeId" | "scopeName" | "clientName" | "siteName" | "agentName"
+  >,
+): string {
   const scope = normalizeScopeType(item.scopeType);
   if (scope === AppApprovalScopeType.Global) return "Global";
   return item.scopeName || item.clientName || item.siteName || item.agentName || item.scopeId || "-";
 }
 
-function scopeLabel(value: unknown): string {
-  if (value === AppApprovalScopeType.Global || value === "Global") return "Global";
-  if (value === AppApprovalScopeType.Client || value === "Client") return "Client";
-  if (value === AppApprovalScopeType.Site || value === "Site") return "Site";
-  if (value === AppApprovalScopeType.Agent || value === "Agent") return "Agent";
-  return String(value ?? "-");
-}
-
-function normalizeActionType(value: unknown): AutomationTaskActionType {
-  if (typeof value === "number") return value as AutomationTaskActionType;
-  if (typeof value === "string") {
-    const numeric = Number(value);
-    if (!Number.isNaN(numeric)) return numeric as AutomationTaskActionType;
-    if (value === "InstallPackage") return AutomationTaskActionType.InstallPackage;
-    if (value === "UpdatePackage") return AutomationTaskActionType.UpdatePackage;
-    if (value === "RunScript") return AutomationTaskActionType.RunScript;
-    if (value === "CustomCommand") return AutomationTaskActionType.CustomCommand;
-    if (value === "RemovePackage") return AutomationTaskActionType.RemovePackage;
-    if (value === "UpdateOrInstallPackage") return AutomationTaskActionType.UpdateOrInstallPackage;
-  }
-  return AutomationTaskActionType.RunScript;
-}
-
-function normalizeScopeType(value: unknown): AppApprovalScopeType {
-  if (typeof value === "number") return value as AppApprovalScopeType;
-  if (typeof value === "string") {
-    const numeric = Number(value);
-    if (!Number.isNaN(numeric)) return numeric as AppApprovalScopeType;
-    if (value === "Global") return AppApprovalScopeType.Global;
-    if (value === "Client") return AppApprovalScopeType.Client;
-    if (value === "Site") return AppApprovalScopeType.Site;
-    if (value === "Agent") return AppApprovalScopeType.Agent;
-  }
-  return AppApprovalScopeType.Global;
-}
-
-function normalizeInstallationType(value: unknown): AppInstallationType {
-  if (typeof value === "number") return value as AppInstallationType;
-  if (typeof value === "string") {
-    const numeric = Number(value);
-    if (!Number.isNaN(numeric)) return numeric as AppInstallationType;
-    if (value === "Winget") return AppInstallationType.Winget;
-    if (value === "Chocolatey") return AppInstallationType.Chocolatey;
-    if (value === "Custom") return AppInstallationType.Custom;
-  }
-  return AppInstallationType.Winget;
-}
-
-type TaskFormState = {
-  name: string;
-  description: string;
-  actionType: string;
-  installationType: string;
-  packageId: string;
-  scriptId: string;
-  commandPayload: string;
-  scopeType: string;
-  scopeId: string;
-  includeTags: string[];
-  excludeTags: string[];
-  triggerImmediate: boolean;
-  triggerRecurring: boolean;
-  triggerOnUserLogin: boolean;
-  triggerOnAgentCheckIn: boolean;
-  scheduleCron: string;
-  notificationMode: string;
-  toastTiming: string;
-  allowDefer: boolean;
-  closeProcesses: string[];
-  promptTimeoutSeconds: number;
-  /** Campo customizado que recebe a saída da execução (tarefa coletora). */
-  collectorFieldDefinitionId: string;
-  /** Grava a saída da execução como nota no agent. */
-  writeOutputToNote: boolean;
-  /** Opt-in: respeitar a janela de manutenção do agent nas ações de pacote. */
-  taskRespectMaintenanceWindow: boolean;
-  /** Chave padronizada derivada do nome. */
-  key: string;
-  /** Ordem de execução (0-99) como string para casar com os Input do form. */
-  executionOrder: string;
-  isActive: boolean;
-};
-
-const defaultForm: TaskFormState = {
-  name: "",
-  description: "",
-  actionType: String(AutomationTaskActionType.RunScript),
-  installationType: String(AppInstallationType.Winget),
-  packageId: "",
-  scriptId: "",
-  commandPayload: "",
-  scopeType: String(AppApprovalScopeType.Global),
-  scopeId: "",
-  includeTags: [],
-  excludeTags: [],
-  triggerImmediate: true,
-  triggerRecurring: false,
-  triggerOnUserLogin: false,
-  triggerOnAgentCheckIn: false,
-  scheduleCron: "",
-  notificationMode: String(AutomationNotificationMode.Silent),
-  toastTiming: String(AutomationToastTiming.After),
-  allowDefer: true,
-  closeProcesses: [],
-  promptTimeoutSeconds: 60,
-  collectorFieldDefinitionId: "",
-  writeOutputToNote: false,
-  taskRespectMaintenanceWindow: false,
-  key: "",
-  // O form começa em RunScript: a ordem inicial é o default desse tipo (40).
-  executionOrder: String(DEFAULT_EXECUTION_ORDER_BY_ACTION.RunScript ?? 50),
-  isActive: true,
-};
-
-// Atalhos e opções do assistente de agendamento (cron de 5 campos).
-const CRON_PRESETS = [
-  { label: "A cada hora", value: "0 * * * *" },
-  { label: "A cada 15 min", value: "*/15 * * * *" },
-  { label: "Todo dia 08:00", value: "0 8 * * *" },
-  { label: "Dias úteis 07:30", value: "30 7 * * 1-5" },
-  { label: "Toda segunda 08:00", value: "0 8 * * 1" },
-  { label: "Todo dia 1º 03:00", value: "0 3 1 * *" },
-];
-
-const CRON_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
-  value: String(hour),
-  label: `${String(hour).padStart(2, "0")}h`,
-}));
-
-const CRON_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => ({
-  value: String(minute),
-  label: `${String(minute).padStart(2, "0")} min`,
-}));
-
-const CRON_WEEKDAY_OPTIONS = [
-  { value: "1", label: "Segunda-feira" },
-  { value: "2", label: "Terça-feira" },
-  { value: "3", label: "Quarta-feira" },
-  { value: "4", label: "Quinta-feira" },
-  { value: "5", label: "Sexta-feira" },
-  { value: "6", label: "Sábado" },
-  { value: "0", label: "Domingo" },
-];
-
-const CRON_MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, index) => ({
-  value: String(index + 1),
-  label: `Dia ${index + 1}`,
-}));
-
-const CRON_STEP_OPTIONS = [5, 10, 15, 20, 30].map((step) => ({
-  value: String(step),
-  label: `A cada ${step} minutos`,
-}));
-
 export default function AutomationTasksPage() {
   const inRouter = useInRouterContext();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     canCreateAutomation,
     canEditAutomation,
     canDeleteAutomation,
     canExecuteAutomation,
   } = useAuthorization();
+
+  const initialStatusParam = searchParams.get("status");
+  const initialStatus: TaskStatusFilterValue =
+    initialStatusParam === "active" || initialStatusParam === "inactive" ? initialStatusParam : "";
+  const initialScopeParam = searchParams.get("scopeType") ?? "";
+
   const [listMode, setListMode] = useState<"default" | "all" | "deleted">("default");
   const [searchFilter, setSearchFilter] = useState("");
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [scopeTypeFilter, setScopeTypeFilter] = useState("");
-  // Um ÚNICO conjunto de selects de cliente/site/agente: o "Tipo de escopo"
-  // decide qual id dele vira o ScopeId da consulta (antes existiam dois blocos
-  // duplicados + um campo read-only repetindo o GUID já escolhido).
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(Boolean(initialScopeParam));
+  const [scopeTypeFilter, setScopeTypeFilter] = useState(initialScopeParam);
   const [filterClientId, setFilterClientId] = useState("");
   const [filterSiteId, setFilterSiteId] = useState("");
   const [filterAgentId, setFilterAgentId] = useState("");
   const [filterActionTypes, setFilterActionTypes] = useState<string[]>([]);
   const [filterTriggers, setFilterTriggers] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<TaskStatusFilterValue>("");
+  const [filterStatus, setFilterStatus] = useState<TaskStatusFilterValue>(initialStatus);
   const [filterLabels, setFilterLabels] = useState<string[]>([]);
   const [filterLabelSearch, setFilterLabelSearch] = useState("");
   const [limit, setLimit] = useState(20);
@@ -357,58 +158,34 @@ export default function AutomationTasksPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AutomationTaskSummary | null>(null);
   const [editingId, setEditingId] = useState("");
-  // Campos de agente que podem receber a saída (tarefa coletora). O mapa só é
-  // buscado com o formulário aberto.
-  // Chave padronizada: derivada do nome até ser editada à mão (padrão dos campos customizados).
-  const { keyForTitle, markTouched, setTouched } = useAutoKey(editing !== null);
-  const agentFieldMap = useAgentCustomFieldMap(formOpen);
-  const collectorFieldOptions = useMemo(
-    () => [
-      { value: "", label: "Não coletar (tarefa comum)" },
-      ...(agentFieldMap.data?.definitions ?? [])
-        .filter(definition => definition.allowAgentWrite)
-        .map(definition => ({ value: definition.definitionId, label: definition.label })),
-    ],
-    [agentFieldMap.data],
-  );
+  const [duplicateSource, setDuplicateSource] = useState<
+    AutomationTaskSummary | AutomationTaskDetail | null
+  >(null);
+
   const [auditTaskId, setAuditTaskId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [deleteTask, setDeleteTask] = useState<AutomationTaskSummary | null>(null);
   const [restoreTask, setRestoreTask] = useState<AutomationTaskSummary | null>(null);
-  const [form, setForm] = useState<TaskFormState>(defaultForm);
-  const [executionOrderTouched, setExecutionOrderTouched] = useState(false);
-  const [scopeClientId, setScopeClientId] = useState("");
-  const [scopeSiteId, setScopeSiteId] = useState("");
-  const [scopeAgentId, setScopeAgentId] = useState("");
-  const [packageSearch, setPackageSearch] = useState("");
-  const [packageSearchDebounced, setPackageSearchDebounced] = useState("");
-  const [packagePickerOpen, setPackagePickerOpen] = useState(false);
-  const [packagePickerView, setPackagePickerView] = useState<"list" | "card">("list");
-  const [tagPickerOpen, setTagPickerOpen] = useState(false);
-  const [tagPickerTarget, setTagPickerTarget] = useState<"include" | "exclude">("include");
-  const [tagSearch, setTagSearch] = useState("");
-  const [closeProcessInput, setCloseProcessInput] = useState("");
-  const [cronAssistantOpen, setCronAssistantOpen] = useState(true);
-  const [cronFrequency, setCronFrequency] = useState("daily");
-  const [cronMinute, setCronMinute] = useState("0");
-  const [cronHour, setCronHour] = useState("8");
-  const [cronWeekday, setCronWeekday] = useState("1");
-  const [cronMonthDay, setCronMonthDay] = useState("1");
-  const [cronStep, setCronStep] = useState("15");
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: AutomationTaskSummary } | null>(null);
-  const [triggersHelpOpen, setTriggersHelpOpen] = useState(false);
-  /** Aviso de pacote fora da App Store (create/update/GET); informativo, não bloqueia. */
-  const [packageNotice, setPackageNotice] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    item: AutomationTaskSummary;
+  } | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setPackageSearchDebounced(packageSearch), 400);
-    return () => clearTimeout(timer);
-  }, [packageSearch]);
+    if (searchParams.get("new") === "1" && canCreateAutomation) {
+      setEditing(null);
+      setEditingId("");
+      setDuplicateSource(null);
+      setFormOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, canCreateAutomation, setSearchParams]);
 
   const cursor = pageCursors[page - 1];
 
-  // O "Tipo de escopo" escolhe o id do escopo entre os selecionados no bloco
-  // único Cliente/Site/Agent (ver buildTaskScopeFilter).
   const scopeFilter = buildTaskScopeFilter(
     scopeTypeFilter,
     filterClientId,
@@ -434,7 +211,6 @@ export default function AutomationTasksPage() {
     limit,
   });
 
-  const scripts = useAutomationScripts({ activeOnly: true, limit: 200 });
   const knownTags = useAutomationKnownTags();
   const availableKnownFilterLabels = useMemo(
     () =>
@@ -448,122 +224,11 @@ export default function AutomationTasksPage() {
   const clients = useClients();
   const advancedSites = useSites(filterClientId);
   const advancedAgents = useAgentsBySite(filterSiteId);
-  const sites = useSites(scopeClientId);
-  const agents = useAgentsBySite(scopeSiteId);
-  const selectedActionType = normalizeActionType(form.actionType);
-  const selectedScopeType = normalizeScopeType(form.scopeType);
-  const formNotificationMode = normalizeNotificationMode(form.notificationMode);
-  const formIsToast = isToastNotificationMode(formNotificationMode);
-  const isPackageAction =
-    selectedActionType === AutomationTaskActionType.InstallPackage ||
-    selectedActionType === AutomationTaskActionType.UpdatePackage ||
-    selectedActionType === AutomationTaskActionType.RemovePackage ||
-    selectedActionType === AutomationTaskActionType.UpdateOrInstallPackage;
-  const packageCatalog = useAppStoreCatalog({
-    installationType: Number(form.installationType) as AppInstallationType,
-    search: isPackageAction ? packageSearchDebounced : undefined,
-    limit: 50,
-  });
-  const createMutation = useCreateAutomationTask();
   const updateMutation = useUpdateAutomationTask();
   const deleteMutation = useDeleteAutomationTask();
   const restoreMutation = useRestoreAutomationTask();
   const auditQuery = useAutomationTaskAudit(auditTaskId ?? "", 50, !!auditTaskId);
-  const taskDetail = useAutomationTask(editingId);
   const detailTask = useAutomationTask(detailTaskId ?? "");
-
-  useEffect(() => {
-    if (!editingId || !taskDetail.data) return;
-    const detail = taskDetail.data;
-    const normalizedActionType = normalizeActionType(detail.actionType);
-    const normalizedScopeType = normalizeScopeType(detail.scopeType);
-    const normalizedInstallationType =
-      detail.installationType !== null
-        ? normalizeInstallationType(detail.installationType)
-        : AppInstallationType.Winget;
-    setForm({
-      name: detail.name,
-      description: detail.description || "",
-      actionType: String(normalizedActionType),
-      installationType: String(normalizedInstallationType),
-      packageId: detail.packageId || "",
-      scriptId: detail.scriptId || "",
-      commandPayload: detail.commandPayload || "",
-      scopeType: String(normalizedScopeType),
-      scopeId: detail.scopeId || "",
-      includeTags: detail.includeTags ?? [],
-      excludeTags: detail.excludeTags ?? [],
-      triggerImmediate: detail.triggerImmediate,
-      triggerRecurring: detail.triggerRecurring,
-      triggerOnUserLogin: detail.triggerOnUserLogin,
-      triggerOnAgentCheckIn: detail.triggerOnAgentCheckIn,
-      scheduleCron: detail.scheduleCron || "",
-      notificationMode: String(notificationModeFromTask(detail.notificationMode, detail.requiresApproval)),
-      toastTiming: String(normalizeToastTiming(detail.toastTiming)),
-      allowDefer: detail.allowDefer ?? true,
-      closeProcesses: detail.closeProcesses ?? [],
-      promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
-      collectorFieldDefinitionId: detail.collectorFieldDefinitionId ?? "",
-      writeOutputToNote: detail.writeOutputToNote ?? false,
-      taskRespectMaintenanceWindow: detail.taskRespectMaintenanceWindow ?? false,
-      key: detail.key ?? "",
-      // A ordem já existe: ao trocar o ActionType não pode ser sobrescrita.
-      executionOrder: String(detail.executionOrder ?? 50),
-      isActive: detail.isActive,
-    });
-    setExecutionOrderTouched(true);
-    const parsedCron = parseCronAssistantState(detail.scheduleCron);
-    setCronFrequency(parsedCron.frequency);
-    setCronMinute(parsedCron.minute);
-    setCronHour(parsedCron.hour);
-    setCronWeekday(parsedCron.weekday);
-    setCronMonthDay(parsedCron.monthDay);
-    setCronStep(parsedCron.step);
-    // Aviso informativo do backend (pacote fora da App Store aprovada).
-    setPackageNotice(packageNoticeFrom(detail));
-
-    applyScopeCascade(normalizedScopeType, detail);
-  }, [editingId, taskDetail.data]);
-
-  useEffect(() => {
-    const currentScopeType = normalizeScopeType(form.scopeType);
-    if (currentScopeType === AppApprovalScopeType.Client) {
-      if (scopeClientId) {
-        setForm((prev) => ({ ...prev, scopeId: scopeClientId }));
-      }
-      return;
-    }
-    if (currentScopeType === AppApprovalScopeType.Site) {
-      if (scopeSiteId) {
-        setForm((prev) => ({ ...prev, scopeId: scopeSiteId }));
-      }
-      return;
-    }
-    if (currentScopeType === AppApprovalScopeType.Agent) {
-      if (scopeAgentId) {
-        setForm((prev) => ({ ...prev, scopeId: scopeAgentId }));
-      }
-      return;
-    }
-    if (currentScopeType === AppApprovalScopeType.Global) {
-      setForm((prev) => ({ ...prev, scopeId: "" }));
-    }
-  }, [form.scopeType, scopeAgentId, scopeClientId, scopeSiteId]);
-
-  const closeFormModal = () => {
-    setFormOpen(false);
-    setEditing(null);
-    setEditingId("");
-    setScopeClientId("");
-    setScopeSiteId("");
-    setScopeAgentId("");
-    setPackageSearch("");
-    setTagSearch("");
-    setCloseProcessInput("");
-    setExecutionOrderTouched(false);
-    setPackageNotice(null);
-    setForm(defaultForm);
-  };
 
   const canPrev = page > 1 && !list.isFetching;
   const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
@@ -588,6 +253,8 @@ export default function AutomationTasksPage() {
   };
 
   const clearFilters = () => {
+    setListMode("default");
+    setLimit(20);
     setSearchFilter("");
     setScopeTypeFilter("");
     setFilterClientId("");
@@ -602,7 +269,9 @@ export default function AutomationTasksPage() {
   };
 
   const hasActiveFilters = Boolean(
-    searchFilter.trim() ||
+    listMode !== "default" ||
+      limit !== 20 ||
+      searchFilter.trim() ||
       scopeTypeFilter ||
       filterClientId ||
       filterSiteId ||
@@ -613,8 +282,6 @@ export default function AutomationTasksPage() {
       filterLabels.length,
   );
 
-  // Filtros que vivem no painel avançado: o contador avisa que há algo ativo
-  // mesmo com o painel recolhido.
   const advancedFilterCount = [
     listMode !== "default",
     Boolean(scopeTypeFilter),
@@ -646,7 +313,7 @@ export default function AutomationTasksPage() {
       },
       {
         onSuccess: () => {
-          toast.success("Tarefa excluida");
+          toast.success("Tarefa excluída");
           closeDeleteModal();
         },
         onError: (error) => {
@@ -700,67 +367,17 @@ export default function AutomationTasksPage() {
     setFilterLabels((prev) => prev.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
   };
 
-  /**
-   * Preenche a cascata de selects de escopo (Cliente → Site → Agent) ao abrir a edição,
-   * usando os IDs resolvidos pelo backend (scopeClientId/scopeSiteId).
-   */
-  const applyScopeCascade = (
-    scopeType: AppApprovalScopeType,
-    item: Pick<AutomationTaskSummary, "scopeId" | "scopeClientId" | "scopeSiteId">,
-  ) => {
-    const clientId = item.scopeClientId || "";
-    const siteId = item.scopeSiteId || "";
-    const scopeId = item.scopeId || "";
-    switch (scopeType) {
-      case AppApprovalScopeType.Client:
-        setScopeClientId(scopeId || clientId);
-        setScopeSiteId("");
-        setScopeAgentId("");
-        break;
-      case AppApprovalScopeType.Site:
-        setScopeClientId(clientId);
-        setScopeSiteId(scopeId || siteId);
-        setScopeAgentId("");
-        break;
-      case AppApprovalScopeType.Agent:
-        setScopeClientId(clientId);
-        setScopeSiteId(siteId);
-        setScopeAgentId(scopeId);
-        break;
-      default:
-        setScopeClientId("");
-        setScopeSiteId("");
-        setScopeAgentId("");
-    }
+  const openNewModal = () => {
+    setEditing(null);
+    setEditingId("");
+    setDuplicateSource(null);
+    setFormOpen(true);
   };
 
   const openEditFor = (item: AutomationTaskSummary) => {
-    const normalizedScopeType = normalizeScopeType(item.scopeType);
+    setDuplicateSource(null);
     setEditing(item);
     setEditingId(item.id);
-    // Em edição a chave já existe: não deve ser redigerada a partir do nome.
-    setTouched(true);
-    setForm({
-      ...defaultForm,
-      name: item.name,
-      description: item.description || "",
-      actionType: String(normalizeActionType(item.actionType)),
-      scopeType: String(normalizedScopeType),
-      scopeId: item.scopeId || "",
-      notificationMode: String(notificationModeFromTask(item.notificationMode, item.requiresApproval)),
-      toastTiming: String(normalizeToastTiming(item.toastTiming)),
-      allowDefer: item.allowDefer ?? true,
-      closeProcesses: item.closeProcesses ?? [],
-      promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
-      collectorFieldDefinitionId: item.collectorFieldDefinitionId ?? "",
-      writeOutputToNote: item.writeOutputToNote ?? false,
-      taskRespectMaintenanceWindow: item.taskRespectMaintenanceWindow ?? false,
-      key: item.key ?? "",
-      executionOrder: String(item.executionOrder ?? 50),
-      isActive: item.isActive,
-    });
-    setExecutionOrderTouched(true);
-    applyScopeCascade(normalizedScopeType, item);
     setFormOpen(true);
   };
 
@@ -771,54 +388,57 @@ export default function AutomationTasksPage() {
     } catch {
       // Fallback para o resumo se o GET detalhado falhar.
     }
-    const detail = source as Partial<AutomationTaskDetail>;
-    const normalizedScopeType = normalizeScopeType(source.scopeType);
     setEditing(null);
     setEditingId("");
-    setTouched(false);
-    setForm({
-      ...defaultForm,
-      name: `${source.name} (cópia)`,
-      description: source.description || "",
-      actionType: String(normalizeActionType(source.actionType)),
-      installationType:
-        detail.installationType !== null && detail.installationType !== undefined
-          ? String(normalizeInstallationType(detail.installationType))
-          : String(AppInstallationType.Winget),
-      packageId: detail.packageId || "",
-      scriptId: detail.scriptId || "",
-      commandPayload: detail.commandPayload || "",
-      scopeType: String(normalizedScopeType),
-      scopeId: source.scopeId || "",
-      includeTags: detail.includeTags ?? [],
-      excludeTags: detail.excludeTags ?? [],
-      triggerImmediate: detail.triggerImmediate ?? true,
-      triggerRecurring: detail.triggerRecurring ?? false,
-      triggerOnUserLogin: detail.triggerOnUserLogin ?? false,
-      triggerOnAgentCheckIn: detail.triggerOnAgentCheckIn ?? false,
-      scheduleCron: detail.scheduleCron || "",
-      notificationMode: String(notificationModeFromTask(source.notificationMode, source.requiresApproval)),
-      toastTiming: String(normalizeToastTiming(source.toastTiming)),
-      allowDefer: source.allowDefer ?? true,
-      closeProcesses: source.closeProcesses ?? [],
-      promptTimeoutSeconds: source.promptTimeoutSeconds ?? 60,
-      collectorFieldDefinitionId: source.collectorFieldDefinitionId ?? "",
-      writeOutputToNote: source.writeOutputToNote ?? false,
-      taskRespectMaintenanceWindow: source.taskRespectMaintenanceWindow ?? false,
-      key: "",
-      executionOrder: String(source.executionOrder ?? 50),
-      isActive: source.isActive,
-    });
-    const parsedCron = parseCronAssistantState(detail.scheduleCron);
-    setCronFrequency(parsedCron.frequency);
-    setCronMinute(parsedCron.minute);
-    setCronHour(parsedCron.hour);
-    setCronWeekday(parsedCron.weekday);
-    setCronMonthDay(parsedCron.monthDay);
-    setCronStep(parsedCron.step);
-    setExecutionOrderTouched(true);
-    applyScopeCascade(normalizedScopeType, source);
+    setDuplicateSource(source);
     setFormOpen(true);
+  };
+
+  const toggleActiveQuick = async (item: AutomationTaskSummary) => {
+    const nextActive = !item.isActive;
+    try {
+      const detail = await automationApi.getTask(item.id);
+      updateMutation.mutate(
+        {
+          id: item.id,
+          data: {
+            name: detail.name,
+            description: detail.description ?? "",
+            actionType: normalizeActionType(detail.actionType),
+            installationType: detail.installationType as never,
+            packageId: detail.packageId,
+            scriptId: detail.scriptId,
+            commandPayload: detail.commandPayload,
+            scopeType: normalizeScopeType(detail.scopeType),
+            scopeId: detail.scopeId,
+            includeTags: detail.includeTags,
+            excludeTags: detail.excludeTags,
+            triggerImmediate: detail.triggerImmediate,
+            triggerRecurring: detail.triggerRecurring,
+            triggerOnUserLogin: detail.triggerOnUserLogin,
+            triggerOnAgentCheckIn: detail.triggerOnAgentCheckIn,
+            scheduleCron: detail.scheduleCron,
+            requiresApproval: detail.requiresApproval,
+            isActive: nextActive,
+          },
+          correlationId: buildCorrelationId("task-toggle"),
+        },
+        {
+          onSuccess: () => {
+            toast.success(nextActive ? "Tarefa ativada" : "Tarefa desativada");
+          },
+          onError: (error) => {
+            const message =
+              error instanceof Error ? error.message : "Falha ao alterar status da tarefa";
+            toast.error(message);
+          },
+        },
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Falha ao carregar tarefa para alterar status";
+      toast.error(message);
+    }
   };
 
   const buildRowContextMenuItems = (item: AutomationTaskSummary): ContextMenuItem[] => {
@@ -847,6 +467,14 @@ export default function AutomationTasksPage() {
         disabled: deleted,
         onClick: () => openEditFor(item),
       });
+      if (!deleted) {
+        items.push({
+          key: "toggle-active",
+          label: item.isActive ? "Desativar" : "Ativar",
+          icon: <Icon name={item.isActive ? "close" : "play_circle"} className="h-4 w-4" />,
+          onClick: () => void toggleActiveQuick(item),
+        });
+      }
     }
     if (canCreateAutomation && !deleted) {
       items.push({
@@ -891,15 +519,20 @@ export default function AutomationTasksPage() {
         render: (item) => (
           <div>
             <p className="font-medium text-foreground">{item.name}</p>
-            <p className="text-xs text-muted">{item.description || "Sem descrição"}</p>
+            <p className="text-xs text-muted">
+              {item.description || "Sem descrição"}
+              {item.key ? (
+                <span className="ml-1.5 font-mono text-[11px] opacity-75">· {item.key}</span>
+              ) : null}
+            </p>
           </div>
         ),
       },
       {
         key: "action",
         header: "Ação",
-        sortValue: (item) => actionLabel(item.actionType),
-        render: (item) => <Badge color="primary">{actionLabel(item.actionType)}</Badge>,
+        sortValue: (item) => actionDisplayLabel(item.actionType),
+        render: (item) => <Badge color="primary">{actionDisplayLabel(item.actionType)}</Badge>,
       },
       {
         key: "executionOrder",
@@ -931,7 +564,8 @@ export default function AutomationTasksPage() {
               <div className="space-y-0.5">
                 <Badge color="warning">Prompt nativo</Badge>
                 <p className="text-xs text-muted">
-                  {item.allowDefer === false ? "sem adiar" : "pode adiar"} · {item.promptTimeoutSeconds ?? 60}s
+                  {item.allowDefer === false ? "sem adiar" : "pode adiar"} ·{" "}
+                  {item.promptTimeoutSeconds ?? 60}s
                 </p>
               </div>
             );
@@ -958,13 +592,12 @@ export default function AutomationTasksPage() {
       {
         key: "status",
         header: "Status",
-        // Ativa (0) < Inativa (1) < Excluída (2), em vez de ordem alfabética.
         sortValue: (item) => (isTaskDeleted(item) ? 2 : item.isActive ? 0 : 1),
         render: (item) => {
           const deleted = isTaskDeleted(item);
           return (
             <Badge color={deleted ? "danger" : item.isActive ? "success" : "slate"}>
-              {deleted ? "Excluida" : item.isActive ? "Ativa" : "Inativa"}
+              {deleted ? "Excluída" : item.isActive ? "Ativa" : "Inativa"}
             </Badge>
           );
         },
@@ -998,33 +631,9 @@ export default function AutomationTasksPage() {
         ),
       },
     ],
-    [listMode],
+    [],
   );
 
-  const scriptOptions = [
-    { value: "", label: "Selecione" },
-    ...(scripts.data?.items ?? []).map((item) => ({ value: item.id, label: item.name })),
-  ];
-
-  const scopeClientOptions = [
-    { value: "", label: "Selecione" },
-    ...(Array.isArray(clients.data) ? clients.data : []).map((item) => ({ value: item.id, label: item.name })),
-  ];
-
-  const scopeSiteOptions = [
-    { value: "", label: "Selecione" },
-    ...(Array.isArray(sites.data) ? sites.data : []).map((item) => ({ value: item.id, label: item.name })),
-  ];
-
-  const scopeAgentOptions = [
-    { value: "", label: "Selecione" },
-    ...(Array.isArray(agents.data) ? agents.data : []).map((item) => ({
-      value: item.id,
-      label: item.displayName ?? item.hostname,
-    })),
-  ];
-
-  // Opções do bloco único de escopo dos FILTROS (Cliente → Site → Agente).
   const filterClientOptions = [
     { value: "", label: "Selecione" },
     ...(Array.isArray(clients.data) ? clients.data : []).map((item) => ({
@@ -1049,376 +658,13 @@ export default function AutomationTasksPage() {
     })),
   ];
 
-  const packageOptions = [
-    { value: "", label: "Selecione" },
-    ...((packageCatalog.data?.items ?? []).map((pkg) => ({
-      value: pkg.packageId,
-      label: `${pkg.packageId}${pkg.name ? ` - ${pkg.name}` : ""}`,
-    }))),
-  ];
-
-  const selectedPackageLabel =
-    packageOptions.find((item) => item.value === form.packageId)?.label ||
-    form.packageId ||
-    "";
-
-  const addIncludeTag = (rawTag: string) => {
-    const nextTag = rawTag.trim();
-    if (!nextTag) return;
-    setForm((prev) => {
-      if (prev.includeTags.some((item) => item.toLowerCase() === nextTag.toLowerCase())) {
-        return prev;
-      }
-      return { ...prev, includeTags: [...prev.includeTags, nextTag] };
-    });
-  };
-
-  const removeIncludeTag = (tag: string) => {
-    setForm((prev) => ({
-      ...prev,
-      includeTags: prev.includeTags.filter((item) => item !== tag),
-    }));
-  };
-
-  const addExcludeTag = (rawTag: string) => {
-    const nextTag = rawTag.trim();
-    if (!nextTag) return;
-    setForm((prev) => {
-      if (prev.excludeTags.some((item) => item.toLowerCase() === nextTag.toLowerCase())) {
-        return prev;
-      }
-      return { ...prev, excludeTags: [...prev.excludeTags, nextTag] };
-    });
-  };
-
-  const removeExcludeTag = (tag: string) => {
-    setForm((prev) => ({
-      ...prev,
-      excludeTags: prev.excludeTags.filter((item) => item !== tag),
-    }));
-  };
-
-  // Aceita vírgula como separador (o campo também adiciona no Enter/comma):
-  // "winword, excel" insere os dois processos em vez de um item inválido.
-  const addCloseProcess = (rawValue: string) => {
-    const candidates = rawValue
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (!candidates.length) return;
-    setForm((prev) => {
-      const next = [...prev.closeProcesses];
-      for (const candidate of candidates) {
-        if (!next.some((item) => item.toLowerCase() === candidate.toLowerCase())) {
-          next.push(candidate);
-        }
-      }
-      return { ...prev, closeProcesses: next };
-    });
-    setCloseProcessInput("");
-  };
-
-  const removeCloseProcess = (processName: string) => {
-    setForm((prev) => ({
-      ...prev,
-      closeProcesses: prev.closeProcesses.filter((item) => item !== processName),
-    }));
-  };
-
-  // Valida cron de 5 campos (dialeto do agent: robfig/cron padrão).
-  const isValidCron = (expr: string): boolean => {
-    const fields = expr.trim().split(/\s+/);
-    if (fields.length !== 5) return false;
-    const ranges: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
-    return fields.every((field, i) =>
-      field.split(",").every((part) => {
-        const rangePart = part.split("/")[0];
-        if (rangePart === "*" || rangePart === "?") return true;
-        const step = part.split("/")[1];
-        if (step !== undefined && (!/^\d+$/.test(step) || parseInt(step, 10) < 1)) return false;
-        const m = rangePart.match(/^(\d+)(-(\d+))?$/);
-        if (!m) return false;
-        const start = parseInt(m[1], 10);
-        const end = m[3] ? parseInt(m[3], 10) : start;
-        const max = i === 4 ? 7 : ranges[i][1];
-        return start >= ranges[i][0] && end <= max && start <= end;
-      })
-    );
-  };
-
-  // Monta a expressão cron a partir das opções do assistente. Os overrides
-  // evitam ler estado defasado quando o próprio select alterado dispara o rebuild.
-  const buildCronFromAssistant = (
-    overrides: Partial<{
-      frequency: string;
-      minute: string;
-      hour: string;
-      weekday: string;
-      monthDay: string;
-      step: string;
-    }> = {},
-  ): string => {
-    const frequency = overrides.frequency ?? cronFrequency;
-    const minute = overrides.minute ?? cronMinute;
-    const hour = overrides.hour ?? cronHour;
-    const weekday = overrides.weekday ?? cronWeekday;
-    const monthDay = overrides.monthDay ?? cronMonthDay;
-    const step = overrides.step ?? cronStep;
-    switch (frequency) {
-      case "minutes":
-        return `*/${step} * * * *`;
-      case "hourly":
-        return `${minute} * * * *`;
-      case "monthly":
-        return `${minute} ${hour} ${monthDay} * *`;
-      case "weekly":
-        return `${minute} ${hour} * * ${weekday}`;
-      default:
-        return `${minute} ${hour} * * *`;
-    }
-  };
-
-  const applyCronFromAssistant = (
-    overrides: Partial<{
-      frequency: string;
-      minute: string;
-      hour: string;
-      weekday: string;
-      monthDay: string;
-      step: string;
-    }> = {},
-  ) => {
-    setForm((prev) => ({ ...prev, scheduleCron: buildCronFromAssistant(overrides) }));
-  };
-
-  const handleSubmit = () => {
-    const name = form.name.trim();
-    if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no máximo 200 caracteres");
-
-    const triggerCount = [
-      form.triggerImmediate,
-      form.triggerRecurring,
-      form.triggerOnUserLogin,
-      form.triggerOnAgentCheckIn,
-    ].filter(Boolean).length;
-
-    if (!triggerCount) return toast.error("Ative pelo menos um trigger");
-
-    const actionType = normalizeActionType(form.actionType);
-    const scopeType = normalizeScopeType(form.scopeType);
-
-    if (form.triggerRecurring && !form.scheduleCron.trim()) {
-      return toast.error("ScheduleCron obrigatorio quando trigger recorrente esta ativo");
-    }
-    if (form.triggerRecurring && form.scheduleCron.trim() && !isValidCron(form.scheduleCron)) {
-      return toast.error("ScheduleCron invalida — use 5 campos: minuto hora dia mes dia-semana (ex.: 0 8 * * 1)");
-    }
-
-    if (scopeType !== AppApprovalScopeType.Global && !form.scopeId.trim()) {
-      return toast.error("ScopeId obrigatório para escopos não globais");
-    }
-
-    const promptTimeoutSeconds = Number.isFinite(form.promptTimeoutSeconds)
-      ? Math.trunc(form.promptTimeoutSeconds)
-      : 60;
-    const closeProcesses = form.closeProcesses.map((item) => item.trim()).filter(Boolean);
-
-    // Campos de notificação só são relevantes quando o usuário será notificado:
-    // valores antigos não devem bloquear o salvamento de uma tarefa silenciosa.
-    const notificationMode = normalizeNotificationMode(form.notificationMode);
-    const promptMode = notificationMode === AutomationNotificationMode.Prompt;
-    if (promptMode) {
-      if (promptTimeoutSeconds < 5 || promptTimeoutSeconds > 3600) {
-        return toast.error("Tempo para ação padrão deve ficar entre 5 e 3600 segundos");
-      }
-      if (closeProcesses.length > 20) {
-        return toast.error("Informe no máximo 20 processos para fechar");
-      }
-      const invalidProcess = closeProcesses.find((item) => !/^[A-Za-z0-9._ -]+$/.test(item));
-      if (invalidProcess) {
-        return toast.error(`Processo inválido: "${invalidProcess}" (use letras, números, ponto, hífen ou underscore)`);
-      }
-    }
-
-    if (
-      (actionType === AutomationTaskActionType.InstallPackage ||
-        actionType === AutomationTaskActionType.UpdatePackage ||
-        actionType === AutomationTaskActionType.RemovePackage ||
-        actionType === AutomationTaskActionType.UpdateOrInstallPackage) &&
-      !form.packageId.trim()
-    ) {
-      return toast.error("PackageId obrigatorio para esta ação");
-    }
-
-    if (actionType === AutomationTaskActionType.RunScript && !form.scriptId) {
-      return toast.error("ScriptId obrigatorio para RunScript");
-    }
-
-    if (actionType === AutomationTaskActionType.CustomCommand && !form.commandPayload.trim()) {
-      return toast.error("CommandPayload obrigatorio para CustomCommand");
-    }
-
-    const executionOrderMessage = executionOrderError(form.executionOrder);
-    if (executionOrderMessage) return toast.error(executionOrderMessage);
-    const executionOrder = Number(form.executionOrder);
-
-    const payload: CreateAutomationTaskRequest = {
-      name,
-      description: editing ? (form.description.trim() || "") : (form.description.trim() || null),
-      actionType,
-      installationType:
-        actionType === AutomationTaskActionType.InstallPackage ||
-        actionType === AutomationTaskActionType.UpdatePackage ||
-        actionType === AutomationTaskActionType.RemovePackage ||
-        actionType === AutomationTaskActionType.UpdateOrInstallPackage
-          ? (Number(form.installationType) as AppInstallationType)
-          : null,
-      packageId:
-        actionType === AutomationTaskActionType.InstallPackage ||
-        actionType === AutomationTaskActionType.UpdatePackage ||
-        actionType === AutomationTaskActionType.RemovePackage ||
-        actionType === AutomationTaskActionType.UpdateOrInstallPackage
-          ? form.packageId.trim()
-          : null,
-      scriptId: actionType === AutomationTaskActionType.RunScript ? form.scriptId : null,
-      commandPayload:
-        actionType === AutomationTaskActionType.CustomCommand
-          ? form.commandPayload.trim()
-          : null,
-      scopeType,
-      scopeId: scopeType === AppApprovalScopeType.Global ? null : form.scopeId.trim(),
-      includeTags: form.includeTags,
-      excludeTags: form.excludeTags,
-      triggerImmediate: form.triggerImmediate,
-      triggerRecurring: form.triggerRecurring,
-      triggerOnUserLogin: form.triggerOnUserLogin,
-      triggerOnAgentCheckIn: form.triggerOnAgentCheckIn,
-      scheduleCron: form.triggerRecurring ? form.scheduleCron.trim() : null,
-      // requiresApproval continua no payload por compatibilidade com APIs
-      // antigas; notificationMode é a fonte de verdade.
-      requiresApproval: promptMode,
-      notificationMode,
-      toastTiming: normalizeToastTiming(form.toastTiming),
-      // Campos do Prompt não se aplicam a Silencioso/Toast: evita reenviar uma
-      // lista oculta que poderia reprovar na validação do servidor.
-      allowDefer: promptMode ? form.allowDefer : true,
-      closeProcesses: promptMode ? closeProcesses : [],
-      promptTimeoutSeconds: promptMode ? promptTimeoutSeconds : 60,
-      // Coletor só existe em tarefa de script: ao trocar o ActionType, o valor
-      // antigo não pode continuar sendo enviado.
-      collectorFieldDefinitionId:
-        actionType === AutomationTaskActionType.RunScript
-          ? form.collectorFieldDefinitionId || (editing ? "00000000-0000-0000-0000-000000000000" : null)
-          : null,
-      writeOutputToNote: form.writeOutputToNote,
-      // Opt-in por task de pacote: o executor do agent só roda a ação dentro
-      // da janela de manutenção efetiva (Configurações → Servidor).
-      taskRespectMaintenanceWindow: form.taskRespectMaintenanceWindow,
-      key: form.key.trim() || null,
-      executionOrder,
-      isActive: form.isActive,
-    };
-
-    if (editing) {
-      const updatePayload: UpdateAutomationTaskRequest = payload;
-      updateMutation.mutate(
-        {
-          id: editing.id,
-          data: updatePayload,
-          correlationId: buildCorrelationId("task-update"),
-        },
-        {
-          onSuccess: (result) => {
-            // Aviso informativo: policy de automação sobrepõe a App Store e NÃO bloqueia.
-            const notice = packageNoticeFrom(result);
-            setPackageNotice(notice);
-            if (notice) {
-              toast(notice, { icon: "⚠️" });
-              // Mantém o form aberto para o admin ler o aviso e decidir fechar.
-              return;
-            }
-            toast.success("Tarefa atualizada");
-            setFormOpen(false);
-            setEditing(null);
-            setEditingId("");
-            setScopeClientId("");
-            setScopeSiteId("");
-            setScopeAgentId("");
-            setPackageSearch("");
-            setTagSearch("");
-            setForm(defaultForm);
-          },
-          onError: (error) => {
-            const message = error instanceof Error ? error.message : "Falha ao atualizar tarefa";
-            toast.error(message);
-          },
-        },
-      );
-      return;
-    }
-
-    createMutation.mutate(
-      {
-        data: payload,
-        correlationId: buildCorrelationId("task-create"),
-      },
-      {
-        onSuccess: (result) => {
-          // Aviso informativo: policy de automação sobrepõe a App Store e NÃO bloqueia.
-          const notice = packageNoticeFrom(result);
-          setPackageNotice(notice);
-          if (notice) {
-            toast(notice, { icon: "⚠️" });
-            // Transiciona para modo edição para evitar duplicar POST se o usuário clicar em Salvar novamente.
-            setEditing(result);
-            setEditingId(result.id);
-            setTouched(true);
-            return;
-          }
-          toast.success(
-            payload.triggerImmediate
-              ? "Tarefa criada — execução imediata será disparada nos agents do escopo em segundos"
-              : "Tarefa criada",
-          );
-          setFormOpen(false);
-          setEditingId("");
-          setScopeClientId("");
-          setScopeSiteId("");
-          setScopeAgentId("");
-          setPackageSearch("");
-          setTagSearch("");
-          setForm(defaultForm);
-        },
-        onError: (error) => {
-          const message = error instanceof Error ? error.message : "Falha ao criar tarefa";
-          toast.error(message);
-        },
-      },
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <PageHeader title="Tarefas de Automação" description="Regras operacionais por escopo." />
         {canCreateAutomation && (
-          <Button
-            onClick={() => {
-                setEditing(null);
-                setEditingId("");
-                setScopeClientId("");
-                setScopeSiteId("");
-                setScopeAgentId("");
-                setPackageSearch("");
-                setTagSearch("");
-                setExecutionOrderTouched(false);
-                setPackageNotice(null);
-                setForm(defaultForm);
-                setFormOpen(true);
-            }}
-          >
-            Nova tarefa
+          <Button onClick={openNewModal}>
+            <Icon name="add" className="h-4 w-4" /> Nova tarefa
           </Button>
         )}
       </div>
@@ -1523,8 +769,6 @@ export default function AutomationTasksPage() {
                 ]}
                 value={scopeTypeFilter}
                 onChange={(e) => {
-                  // Troca só o tipo: os selects Cliente/Site/Agente continuam
-                  // preenchidos e o id do escopo é derivado deles.
                   setScopeTypeFilter(e.target.value);
                   resetPagination();
                 }}
@@ -1544,9 +788,6 @@ export default function AutomationTasksPage() {
               />
             </div>
 
-            {/* Um só conjunto de selects: o "Tipo de escopo" usa o id escolhido
-                aqui (Cliente/Site/Agente) em vez de pedir as mesmas entidades de
-                novo em outro bloco. */}
             <div className="mt-3 grid gap-3 md:grid-cols-3">
               <Select
                 label="Cliente"
@@ -1610,20 +851,22 @@ export default function AutomationTasksPage() {
                         resetPagination();
                       }}
                     >
-                      {tag} x
+                      {tag} ×
                     </button>
                   ))}
                 </div>
               )}
 
-              <div className="max-h-36 overflow-y-auto space-y-1">
+              <div className="max-h-36 space-y-1 overflow-y-auto">
                 {knownTags.isLoading && <p className="text-xs text-muted">Carregando labels...</p>}
                 {!knownTags.isLoading && availableKnownFilterLabels.length === 0 && (
                   <p className="text-xs text-muted">Nenhuma label encontrada.</p>
                 )}
                 {!knownTags.isLoading &&
                   availableKnownFilterLabels.map((tag) => {
-                    const selected = filterLabels.some((item) => item.toLowerCase() === tag.toLowerCase());
+                    const selected = filterLabels.some(
+                      (item) => item.toLowerCase() === tag.toLowerCase(),
+                    );
                     return (
                       <button
                         key={tag}
@@ -1656,7 +899,7 @@ export default function AutomationTasksPage() {
       <Card>
         <CardHeader
           title="Tarefas"
-          subtitle={`${list.data?.items?.length ?? 0} itens retornados`}
+          subtitle={`${list.data?.items?.length ?? 0}${list.data?.hasMore ? "+" : ""} itens retornados`}
         />
         {list.isLoading && <Loading message="Carregando tarefas..." />}
         {list.isError && <ErrorDisplay onRetry={() => list.refetch()} />}
@@ -1679,7 +922,13 @@ export default function AutomationTasksPage() {
               page={page}
               totalPages={1}
               onPageChange={() => {}}
-              cursor={{ hasPrev: canPrev, hasNext: canNext, onPrev: goToPrevPage, onNext: goToNextPage, loading: list.isFetching }}
+              cursor={{
+                hasPrev: canPrev,
+                hasNext: canNext,
+                onPrev: goToPrevPage,
+                onNext: goToNextPage,
+                loading: list.isFetching,
+              }}
             />
           </>
         )}
@@ -1693,977 +942,23 @@ export default function AutomationTasksPage() {
         />
       )}
 
-      <Modal
-        open={triggersHelpOpen}
-        onClose={() => setTriggersHelpOpen(false)}
-        title="Como funcionam os triggers"
-        maxWidth="max-w-2xl"
-      >
-        <div className="space-y-3 text-sm">
-          <p className="text-muted">
-            Os triggers definem <span className="text-foreground font-medium">quando</span> a tarefa é entregue/executada nos agents do escopo. Você pode combinar mais de um — a tarefa roda em qualquer evento ativado.
-          </p>
-          <div className="space-y-2">
-            <div className="rounded-lg border border-border bg-surface-light p-3">
-              <p className="font-medium text-foreground">Imediato</p>
-              <p className="mt-1 text-muted">Dispara assim que a tarefa é criada/alterada e os agents do escopo sincronizam a policy (em segundos). Use para instalações pontuais ou correções que devem valer para todos já.</p>
-              <p className="mt-1 text-xs text-muted">Quando usar: rollout único — ex. instalar o Chrome agora em todos os agents do escopo.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-surface-light p-3">
-              <p className="font-medium text-foreground">Recorrente</p>
-              <p className="mt-1 text-muted">Executa repetidamente conforme a expressão cron (5 campos: min hora dia mês dia-semana), no fuso horário local do agent. Exige preencher o ScheduleCron.</p>
-              <p className="mt-1 text-xs text-muted">Quando usar: manutenção periódica — ex. atualizar pacotes toda segunda 08:00 (<span className="font-mono">0 8 * * 1</span>).</p>
-            </div>
-            <div className="rounded-lg border border-border bg-surface-light p-3">
-              <p className="font-medium text-foreground">Login do usuário</p>
-              <p className="mt-1 text-muted">Dispara a cada logon de usuário no Windows. Só faz sentido para ações por usuário/sessão interativa.</p>
-              <p className="mt-1 text-xs text-muted">Quando usar: configurar algo que depende de perfil do usuário — ex. mapear drives, atalhos, scripts de boas-vindas.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-surface-light p-3">
-              <p className="font-medium text-foreground">Check-in do agent</p>
-              <p className="mt-1 text-muted">Executa quando o agent faz check-in/aplica nova policy (ex. após ligar a máquina). Garante que o estado desejado seja reaplicado sempre que o agent volta a se comunicar.</p>
-              <p className="mt-1 text-xs text-muted">Quando usar: garantir conformidade contínua — ex. garantir que um pacote esteja instalado mesmo se desinstalado.</p>
-            </div>
-            <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
-              <p className="font-medium text-foreground">Combinações comuns</p>
-              <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">
-                <li><span className="text-foreground">Imediato + Check-in:</span> instala agora e mantém garantido em novos agents/reinstalações.</li>
-                <li><span className="text-foreground">Imediato + Recorrente:</span> aplica já e mantém atualizado em horário fixo (ex. atualizações de segurança).</li>
-                <li><span className="text-foreground">Recorrente + Check-in:</span> janela programada + reaplicação ao ligar — bom para scripts de limpeza/conformidade.</li>
-                <li><span className="text-foreground">Login do usuário</span> sozinho: apenas ações por usuário; combine com Imediato se também precisar valer para sessões já abertas.</li>
-              </ul>
-              <p className="mt-2 text-xs text-muted">Nota: o agent deduplica execuções — combinar triggers não causa execução duplicada no mesmo evento.</p>
-            </div>
-          </div>
-          <div className="flex justify-end pt-1">
-            <Button variant="secondary" onClick={() => setTriggersHelpOpen(false)}>Entendi</Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
+      <TaskFormModal
         open={formOpen}
-        onClose={closeFormModal}
-        title={editing ? "Editar tarefa" : "Nova tarefa"}
-        maxWidth="max-w-5xl"
-      >
-        {editing && taskDetail.isLoading && (
-          <div className="mb-3">
-            <Loading message="Carregando detalhes da tarefa..." />
-          </div>
-        )}
-        {editing && taskDetail.isError && (
-          <div className="mb-3">
-            <ErrorDisplay onRetry={() => taskDetail.refetch()} />
-          </div>
-        )}
-        {packageNotice && (
-          <div
-            role="alert"
-            className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground"
-          >
-            <p className="font-medium">Pacote fora da App Store aprovada</p>
-            <p className="mt-1 text-muted">{packageNotice}</p>
-          </div>
-        )}
-        <div className="grid gap-3 md:grid-cols-2">
-          <Input
-            label="Nome *"
-            value={form.name}
-            hint="Título exibido nas listagens."
-            onChange={(e) => {
-              const name = e.target.value;
-              // Enquanto a chave não for editada à mão, ela acompanha o nome.
-              setForm((p) => ({ ...p, name, key: keyForTitle(name, p.key) }));
-            }}
-          />
-          <Input
-            label="Chave *"
-            value={form.key}
-            placeholder="ex: coletar_anydesk"
-            hint="Identificador padronizado ([a-z0-9_-]) usado por relatórios e automações."
-            error={
-              form.key.trim()
-                ? fieldKeyError(form.key, { allowHyphen: true }) ?? undefined
-                : undefined
-            }
-            onChange={(e) => {
-              markTouched();
-              setForm((p) => ({ ...p, key: e.target.value.toLowerCase() }));
-            }}
-          />
-          <div className="md:col-span-2">
-            <TextArea
-              label="Observação geral"
-              rows={3}
-              value={form.description}
-              placeholder="Descreva o objetivo da tarefa, o que ela coleta e qualquer observação relevante."
-              hint="Texto livre para documentar a tarefa (aparece no detalhe e na auditoria)."
-              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            />
-          </div>
-          <Select
-            label="ActionType"
-            options={[
-              { value: String(AutomationTaskActionType.InstallPackage), label: "Instalar pacote" },
-              { value: String(AutomationTaskActionType.UpdatePackage), label: "Atualizar pacote" },
-              { value: String(AutomationTaskActionType.RemovePackage), label: "Remover pacote" },
-              { value: String(AutomationTaskActionType.UpdateOrInstallPackage), label: "Atualizar/Instalar pacote" },
-              { value: String(AutomationTaskActionType.RunScript), label: "Executar script" },
-              { value: String(AutomationTaskActionType.CustomCommand), label: "Comando personalizado" },
-            ]}
-            value={form.actionType}
-            onChange={(e) => {
-              const nextActionType = e.target.value;
-              setForm((p) => ({
-                ...p,
-                actionType: nextActionType,
-                // Só acompanha o default do tipo se o usuário não editou à mão.
-                executionOrder: executionOrderTouched
-                  ? p.executionOrder
-                  : String(defaultExecutionOrderForAction(nextActionType)),
-              }));
-            }}
-          />
-          <Input
-            label="Ordem de execução (0–99)"
-            type="number"
-            min={MIN_EXECUTION_ORDER}
-            max={MAX_EXECUTION_ORDER}
-            step={1}
-            value={form.executionOrder}
-            error={executionOrderError(form.executionOrder) ?? undefined}
-            hint="O agent executa as tarefas da menor ordem para a maior. Em empate, roda primeiro a tarefa atualizada há mais tempo."
-            onChange={(e) => {
-              setExecutionOrderTouched(true);
-              setForm((p) => ({ ...p, executionOrder: e.target.value }));
-            }}
-          />
-          <Select
-            label="Escopo"
-            options={[
-              { value: String(AppApprovalScopeType.Global), label: "Global" },
-              { value: String(AppApprovalScopeType.Client), label: "Client" },
-              { value: String(AppApprovalScopeType.Site), label: "Site" },
-              { value: String(AppApprovalScopeType.Agent), label: "Agent" },
-            ]}
-            value={form.scopeType}
-            onChange={(e) => {
-              const nextScopeType = e.target.value;
-              setForm((p) => ({ ...p, scopeType: nextScopeType }));
-              if (Number(nextScopeType) === AppApprovalScopeType.Global) {
-                setScopeClientId("");
-                setScopeSiteId("");
-                setScopeAgentId("");
-              }
-            }}
-          />
-          {/* Escopo em cascata única: o nível escolhido em "Escopo" define até onde
-              a cadeia aparece (Cliente → Site → Agent), sem repetir os selects. */}
-          {selectedScopeType !== AppApprovalScopeType.Global && (
-            <>
-              <Select
-                label="Cliente alvo"
-                options={scopeClientOptions}
-                value={scopeClientId}
-                onChange={(e) => {
-                  setScopeClientId(e.target.value);
-                  setScopeSiteId("");
-                  setScopeAgentId("");
-                }}
-              />
-              {selectedScopeType !== AppApprovalScopeType.Client && (
-                <Select
-                  label="Site alvo"
-                  options={scopeSiteOptions}
-                  value={scopeSiteId}
-                  disabled={!scopeClientId}
-                  onChange={(e) => {
-                    setScopeSiteId(e.target.value);
-                    setScopeAgentId("");
-                  }}
-                />
-              )}
-              {selectedScopeType === AppApprovalScopeType.Agent && (
-                <Select
-                  label="Agent alvo"
-                  options={scopeAgentOptions}
-                  value={scopeAgentId}
-                  disabled={!scopeSiteId}
-                  onChange={(e) => setScopeAgentId(e.target.value)}
-                />
-              )}
-            </>
-          )}
-        </div>
-
-        {selectedActionType === AutomationTaskActionType.CustomCommand && (
-          <div className="mt-3">
-            <TextArea
-              label="CommandPayload"
-              className="min-h-28 font-mono"
-              value={form.commandPayload}
-              onChange={(e) => setForm((p) => ({ ...p, commandPayload: e.target.value }))}
-            />
-          </div>
-        )}
-
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          {isPackageAction && (
-            <div className="space-y-1">
-              <label className="block text-sm font-medium text-muted-foreground">Nome do pacote</label>
-              <div className="flex gap-2">
-                <Input
-                  value={selectedPackageLabel}
-                  readOnly
-                  placeholder="Nenhum pacote selecionado"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setPackagePickerOpen(true)}
-                  aria-label="Pesquisar pacote"
-                  title="Pesquisar pacote"
-                >
-                  <Icon name="search" className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted">PackageId: {form.packageId || "-"}</p>
-            </div>
-          )}
-          {isPackageAction && (
-            <div className="space-y-1">
-              <label className="flex cursor-pointer items-start gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
-                  checked={form.taskRespectMaintenanceWindow}
-                  onChange={(e) => setForm((p) => ({ ...p, taskRespectMaintenanceWindow: e.target.checked }))}
-                />
-                <span>
-                  Respeitar janela de manutenção (Configurações → Servidor)
-                  <span className="block text-xs text-muted">
-                    O agent só instala/atualiza/remove o pacote DENTRO da janela de
-                    manutenção efetiva; fora dela a execução fica adiada ("deferred")
-                    e não conta como falha.
-                  </span>
-                </span>
-              </label>
-            </div>
-          )}
-          {selectedActionType === AutomationTaskActionType.RunScript && (
-            <Select
-              label="ScriptId"
-              options={scriptOptions}
-              value={form.scriptId}
-              onChange={(e) => setForm((p) => ({ ...p, scriptId: e.target.value }))}
-            />
-          )}
-          <div
-            className={
-              isPackageAction || selectedActionType === AutomationTaskActionType.RunScript
-                ? "space-y-2"
-                : "space-y-2 md:col-span-2"
-            }
-          >
-            <p className="text-sm font-medium text-muted-foreground">Tags de filtragem (Include / Exclude)</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-muted-foreground">Incluir tags (IncludeTags)</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={form.includeTags.join(", ")}
-                    readOnly
-                    placeholder="Nenhuma tag incluída"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setTagPickerTarget("include");
-                      setTagPickerOpen(true);
-                    }}
-                    aria-label="Pesquisar tags incluídas"
-                    title="Pesquisar tags incluídas"
-                  >
-                    <Icon name="search" className="h-4 w-4" />
-                  </Button>
-                </div>
-                {!!form.includeTags.length && (
-                  <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface/40 p-2">
-                    {form.includeTags.map((tag) => (
-                      <span key={tag} className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 text-xs text-foreground">
-                        {tag}
-                        <button
-                          type="button"
-                          className="text-muted hover:text-foreground"
-                          onClick={() => removeIncludeTag(tag)}
-                          aria-label={`Remover tag ${tag}`}
-                        >
-                          x
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-muted-foreground">Excluir tags (ExcludeTags)</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={form.excludeTags.join(", ")}
-                    readOnly
-                    placeholder="Nenhuma tag excluída"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setTagPickerTarget("exclude");
-                      setTagPickerOpen(true);
-                    }}
-                    aria-label="Pesquisar tags excluídas"
-                    title="Pesquisar tags excluídas"
-                  >
-                    <Icon name="search" className="h-4 w-4" />
-                  </Button>
-                </div>
-                {!!form.excludeTags.length && (
-                  <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface/40 p-2">
-                    {form.excludeTags.map((tag) => (
-                      <span key={tag} className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/10 px-2.5 py-0.5 text-xs text-foreground">
-                        {tag}
-                        <button
-                          type="button"
-                          className="text-muted hover:text-foreground"
-                          onClick={() => removeExcludeTag(tag)}
-                          aria-label={`Remover tag excluída ${tag}`}
-                        >
-                          x
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 space-y-1">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-muted-foreground">Triggers (selecione pelo menos um)</p>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-light px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
-              onClick={() => setTriggersHelpOpen(true)}
-              title="Como funcionam os triggers?"
-            >
-              <Icon name="info" className="h-3.5 w-3.5" />
-              Como funcionam?
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            {([
-              { key: "triggerImmediate", label: "Imediato", hint: "Executa ao aplicar a policy" },
-              { key: "triggerRecurring", label: "Recorrente", hint: "Agendada por cron" },
-              { key: "triggerOnUserLogin", label: "Login do usuário", hint: "Por logon no Windows" },
-              { key: "triggerOnAgentCheckIn", label: "Check-in do agent", hint: "Ao aplicar nova policy" },
-            ] as const).map((t) => (
-              <label key={t.key} className="flex cursor-pointer items-start gap-2 rounded-xl border border-border bg-surface-light px-3 py-2 text-sm transition-colors hover:bg-surface-hover">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
-                  checked={form[t.key]}
-                  onChange={(e) => setForm((p) => ({ ...p, [t.key]: e.target.checked }))}
-                />
-                <span>
-                  <span className="block font-medium text-foreground">{t.label}</span>
-                  <span className="block text-xs text-muted">{t.hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {form.triggerRecurring && (
-          <div className="mt-3 space-y-3 rounded-xl border border-border bg-surface-light p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Agendamento recorrente (cron)</p>
-                <p className="text-xs text-muted">
-                  Expressão de 5 campos: minuto hora dia do mês mês dia da semana — no fuso local do agent.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
-                onClick={() => setCronAssistantOpen((v) => !v)}
-              >
-                <Icon name="event" className="h-3.5 w-3.5" />
-                {cronAssistantOpen ? "Ocultar assistente" : "Assistente de agendamento"}
-              </button>
-            </div>
-
-            <div className="space-y-1">
-              <Input
-                label="ScheduleCron (5 campos: min hora dia mes dia-semana)"
-                value={form.scheduleCron}
-                onChange={(e) => setForm((p) => ({ ...p, scheduleCron: e.target.value }))}
-                placeholder="Ex.: 0 8 * * 1 (toda segunda 08:00)"
-              />
-              {form.scheduleCron.trim() ? (
-                <p className={`text-xs ${isValidCron(form.scheduleCron) ? "text-muted" : "text-danger"}`}>
-                  {describeCron(form.scheduleCron)}
-                </p>
-              ) : (
-                <p className="text-xs text-muted">Informe a expressão cron ou use o assistente para montá-la.</p>
-              )}
-            </div>
-
-            {cronAssistantOpen && (
-              <div className="space-y-3 rounded-lg border border-border bg-surface/40 p-3">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">Atalhos</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CRON_PRESETS.map((preset) => (
-                      <button
-                        key={preset.value}
-                        type="button"
-                        className="rounded-full border border-border bg-surface-light px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-surface-hover"
-                        onClick={() => setForm((p) => ({ ...p, scheduleCron: preset.value }))}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-4">
-                  <Select
-                    label="Frequência"
-                    options={[
-                      { value: "minutes", label: "A cada N minutos" },
-                      { value: "hourly", label: "A cada hora" },
-                      { value: "daily", label: "Diariamente" },
-                      { value: "weekly", label: "Semanalmente" },
-                      { value: "monthly", label: "Mensalmente" },
-                    ]}
-                    value={cronFrequency}
-                    onChange={(e) => {
-                      setCronFrequency(e.target.value);
-                      applyCronFromAssistant({ frequency: e.target.value });
-                    }}
-                  />
-                  {cronFrequency === "minutes" && (
-                    <Select
-                      label="Intervalo"
-                      options={CRON_STEP_OPTIONS}
-                      value={cronStep}
-                      onChange={(e) => {
-                        setCronStep(e.target.value);
-                        applyCronFromAssistant({ step: e.target.value });
-                      }}
-                    />
-                  )}
-                  {(cronFrequency === "daily" ||
-                    cronFrequency === "weekly" ||
-                    cronFrequency === "monthly") && (
-                    <Select
-                      label="Hora"
-                      options={CRON_HOUR_OPTIONS}
-                      value={cronHour}
-                      onChange={(e) => {
-                        setCronHour(e.target.value);
-                        applyCronFromAssistant({ hour: e.target.value });
-                      }}
-                    />
-                  )}
-                  {cronFrequency !== "minutes" && (
-                    <Select
-                      label="Minuto"
-                      options={CRON_MINUTE_OPTIONS}
-                      value={cronMinute}
-                      onChange={(e) => {
-                        setCronMinute(e.target.value);
-                        applyCronFromAssistant({ minute: e.target.value });
-                      }}
-                    />
-                  )}
-                  {cronFrequency === "weekly" && (
-                    <Select
-                      label="Dia da semana"
-                      options={CRON_WEEKDAY_OPTIONS}
-                      value={cronWeekday}
-                      onChange={(e) => {
-                        setCronWeekday(e.target.value);
-                        applyCronFromAssistant({ weekday: e.target.value });
-                      }}
-                    />
-                  )}
-                  {cronFrequency === "monthly" && (
-                    <Select
-                      label="Dia do mês"
-                      options={CRON_MONTH_DAY_OPTIONS}
-                      value={cronMonthDay}
-                      onChange={(e) => {
-                        setCronMonthDay(e.target.value);
-                        applyCronFromAssistant({ monthDay: e.target.value });
-                      }}
-                    />
-                  )}
-                </div>
-
-                <p className="text-xs text-muted">
-                  O assistente apenas monta a expressão — você pode refiná-la manualmente no campo acima.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">Coleta de dados (opcional)</p>
-            <p className="text-xs text-muted">
-              Guarde o resultado da execução no cadastro do agente: em um campo customizado e/ou como
-              nota no histórico dele.
-            </p>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            {form.actionType === String(AutomationTaskActionType.RunScript) && (
-              <div className="space-y-1">
-                <Select
-                  label="Gravar saída em campo (tarefa coletora)"
-                  options={collectorFieldOptions}
-                  value={form.collectorFieldDefinitionId}
-                  onChange={(e) => setForm((p) => ({ ...p, collectorFieldDefinitionId: e.target.value }))}
-                  hint="Última linha da saída. Só campos que permitem gravação pelo agente; não use o mesmo campo via MDZ_COLLECT."
-                />
-              </div>
-            )}
-            {form.actionType !== String(AutomationTaskActionType.RunScript) && (
-              <p className="text-xs text-muted">
-                O coletor em campo está disponível apenas para tarefas de{" "}
-                <span className="font-medium">Executar script</span>. Nos outros tipos, use a nota no
-                agent para guardar a saída.
-              </p>
-            )}
-            <div className="space-y-1">
-              <label className="flex items-start gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-border"
-                  checked={form.writeOutputToNote}
-                  onChange={(e) => setForm((p) => ({ ...p, writeOutputToNote: e.target.checked }))}
-                />
-                <span>
-                  Gravar saída como nota no agent
-                  <span className="block text-xs text-muted">
-                    Nota no histórico do agente (tarefa, resultado e saída até 4000 caracteres).
-                  </span>
-                </span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">Notificação ao usuário</p>
-            <p className="text-xs text-muted">
-              Como o usuário da máquina é avisado durante a execução.
-            </p>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <Select
-              label="Como notificar"
-              options={[
-                { value: String(AutomationNotificationMode.Silent), label: "Silencioso (sem notificação)" },
-                { value: String(AutomationNotificationMode.Prompt), label: "Prompt nativo do agent (Continuar / Adiar)" },
-                { value: String(AutomationNotificationMode.Toast), label: "Toast na interface do agent (sem interação)" },
-                { value: String(AutomationNotificationMode.NativeToast), label: "Toast nativo do app (igual ao Chat IA)" },
-              ]}
-              value={form.notificationMode}
-              onChange={(e) => setForm((p) => ({ ...p, notificationMode: e.target.value }))}
-            />
-            {formIsToast && (
-              <Select
-                label="Quando notificar"
-                options={[
-                  { value: String(AutomationToastTiming.Before), label: "Antes de executar" },
-                  { value: String(AutomationToastTiming.After), label: "Após a conclusão" },
-                ]}
-                value={form.toastTiming}
-                onChange={(e) => setForm((p) => ({ ...p, toastTiming: e.target.value }))}
-              />
-            )}
-            <Select
-              label="Status"
-              options={[{ value: "true", label: "Ativa" }, { value: "false", label: "Inativa" }]}
-              value={String(form.isActive)}
-              onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === "true" }))}
-            />
-          </div>
-
-          {formNotificationMode === AutomationNotificationMode.Toast && (
-            <p className="text-xs text-muted">
-              O toast aparece na interface do agent e não exige autorização do usuário: ele apenas
-              informa{" "}
-              {form.toastTiming === String(AutomationToastTiming.Before)
-                ? "antes de iniciar a execução"
-                : "após a conclusão da tarefa"}
-              . Se o agent estiver rodando como serviço sem interface, o aviso sai como toast do
-              Windows.
-            </p>
-          )}
-
-          {formNotificationMode === AutomationNotificationMode.NativeToast && (
-            <p className="text-xs text-muted">
-              O toast é uma notificação nativa do sistema (Windows/Action Center), enviada pelo
-              próprio app — o mesmo caminho do Chat IA. Não exige autorização do usuário e informa{" "}
-              {form.toastTiming === String(AutomationToastTiming.Before)
-                ? "antes de iniciar a execução"
-                : "após a conclusão da tarefa"}
-              .
-            </p>
-          )}
-
-          {formNotificationMode === AutomationNotificationMode.Silent && (
-            <p className="text-xs text-muted">A tarefa executa sem exibir nada ao usuário.</p>
-          )}
-
-          {formNotificationMode === AutomationNotificationMode.Prompt && (
-            <p className="text-xs text-muted">
-              Prompt nativo do agent (Continuar / Adiar), sem ser aprovação: sem resposta, a ação padrão é continuar.
-              Os processos listados em "Processos a fechar" são encerrados automaticamente quando o contador expira.
-            </p>
-          )}
-
-          {formNotificationMode === AutomationNotificationMode.Prompt && (
-            <>
-              <div className="grid gap-3 md:grid-cols-3">
-                <Select
-                  label="Usuário pode adiar"
-                  options={[{ value: "true", label: "Sim" }, { value: "false", label: "Não" }]}
-                  value={String(form.allowDefer)}
-                  onChange={(e) => setForm((p) => ({ ...p, allowDefer: e.target.value === "true" }))}
-                />
-                <Input
-                  label="Tempo para ação padrão (segundos)"
-                  type="number"
-                  min={5}
-                  max={3600}
-                  value={String(form.promptTimeoutSeconds)}
-                  onChange={(e) => setForm((p) => ({ ...p, promptTimeoutSeconds: Number(e.target.value) }))}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-muted-foreground">
-                  Processos a fechar antes de executar
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={closeProcessInput}
-                    placeholder="Ex.: WINWORD (Enter para adicionar)"
-                    onChange={(e) => setCloseProcessInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") {
-                        e.preventDefault();
-                        addCloseProcess(closeProcessInput);
-                      }
-                    }}
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={!closeProcessInput.trim()}
-                    onClick={() => addCloseProcess(closeProcessInput)}
-                  >
-                    Adicionar
-                  </Button>
-                </div>
-                <p className="text-xs text-muted">
-                  Lista entregue ao <span className="font-mono">CloseProcesses</span> do Welcome (máx. 20). Sem
-                  processos, o prompt apenas pergunta antes de continuar.
-                </p>
-                {!!form.closeProcesses.length && (
-                  <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface/40 p-2">
-                    {form.closeProcesses.map((processName) => (
-                      <span
-                        key={processName}
-                        className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground"
-                      >
-                        {processName}
-                        <button
-                          type="button"
-                          className="text-muted hover:text-foreground"
-                          onClick={() => removeCloseProcess(processName)}
-                          aria-label={`Remover processo ${processName}`}
-                        >
-                          x
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-        </div>
-
-        {editing && editingId ? <CustomFieldsUsedByPanel taskId={editingId} /> : null}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={closeFormModal}>Cancelar</Button>
-          <Button
-            onClick={handleSubmit}
-            loading={createMutation.isPending || updateMutation.isPending}
-            disabled={editing ? taskDetail.isLoading || taskDetail.isError : false}
-            title={
-              editing && (taskDetail.isLoading || taskDetail.isError)
-                ? "Aguarde o carregamento dos detalhes da tarefa para não sobrescrever campos com valores vazios"
-                : undefined
-            }
-          >
-            {editing ? "Salvar" : "Criar"}
-          </Button>
-        </div>
-      </Modal>
-
-      <Modal
-        open={packagePickerOpen}
-        onClose={() => setPackagePickerOpen(false)}
-        title="Selecionar pacote"
-        maxWidth="max-w-4xl"
-      >
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-0">
-              <Select
-                label="InstallationType"
-                options={[
-                  { value: String(AppInstallationType.Winget), label: "Winget" },
-                  { value: String(AppInstallationType.Chocolatey), label: "Chocolatey" },
-                  { value: String(AppInstallationType.Custom), label: "Custom" },
-                ]}
-                value={form.installationType}
-                onChange={(e) => {
-                  setForm((p) => ({ ...p, installationType: e.target.value, packageId: "" }));
-                  setPackageSearch("");
-                }}
-              />
-            </div>
-            <div className="flex-[2] min-w-0">
-              <Input
-                label="Pesquisar"
-                placeholder="Digite nome ou package id"
-                value={packageSearch}
-                onChange={(e) => setPackageSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-1 pb-0.5">
-              <button
-                type="button"
-                onClick={() => setPackagePickerView("list")}
-                className={`rounded p-1.5 transition-colors ${
-                  packagePickerView === "list"
-                    ? "bg-primary-600 text-foreground"
-                    : "text-muted hover:text-foreground hover:bg-surface-hover"
-                }`}
-                title="Visualização em lista"
-              >
-                <Icon name="list" className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setPackagePickerView("card")}
-                className={`rounded p-1.5 transition-colors ${
-                  packagePickerView === "card"
-                    ? "bg-primary-600 text-foreground"
-                    : "text-muted hover:text-foreground hover:bg-surface-hover"
-                }`}
-                title="Visualização em cards"
-              >
-                <Icon name="grid_view" className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {packageCatalog.isLoading && <Loading message="Carregando catálogo..." />}
-          {packageCatalog.isError && <ErrorDisplay onRetry={() => packageCatalog.refetch()} />}
-
-          {!packageCatalog.isLoading && !packageCatalog.isError && (
-            <div className="max-h-[55vh] overflow-y-auto">
-              {packagePickerView === "list" ? (
-                <div className="space-y-1.5">
-                  {(packageCatalog.data?.items ?? []).map((pkg) => (
-                    <div
-                      key={pkg.packageId}
-                      className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2 hover:bg-surface-hover transition-colors cursor-pointer"
-                      onClick={() => {
-                        setForm((prev) => ({ ...prev, packageId: pkg.packageId }));
-                        setPackagePickerOpen(false);
-                      }}
-                    >
-                      <div className="shrink-0">
-                        {pkg.icon ? (
-                          <img src={pkg.icon} alt="" className="h-8 w-8 rounded object-contain bg-surface-light" />
-                        ) : (
-                          <div className="h-8 w-8 rounded bg-slate-700 flex items-center justify-center text-xs font-bold text-muted-foreground">
-                            {(pkg.name || pkg.packageId).charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-foreground font-medium truncate">
-                          <HighlightText text={pkg.name || pkg.packageId} highlight={packageSearchDebounced} />
-                        </p>
-                        <p className="font-mono text-xs text-muted truncate">
-                          <HighlightText text={pkg.packageId} highlight={packageSearchDebounced} />
-                        </p>
-                      </div>
-                      <p className="text-xs text-muted shrink-0 max-w-[120px] truncate">
-                        {pkg.publisher || ""}
-                      </p>
-                      <Button type="button" size="sm" onClick={(e) => { e.stopPropagation(); setForm((prev) => ({ ...prev, packageId: pkg.packageId })); setPackagePickerOpen(false); }}>
-                        Selecionar
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {(packageCatalog.data?.items ?? []).map((pkg) => (
-                    <div
-                      key={pkg.packageId}
-                      className="flex flex-col gap-2 rounded-lg border border-border bg-surface-light p-3 hover:bg-surface-hover transition-colors cursor-pointer"
-                      onClick={() => {
-                        setForm((prev) => ({ ...prev, packageId: pkg.packageId }));
-                        setPackagePickerOpen(false);
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        {pkg.icon ? (
-                          <img src={pkg.icon} alt="" className="h-9 w-9 rounded object-contain bg-surface-light shrink-0" />
-                        ) : (
-                          <div className="h-9 w-9 rounded bg-slate-700 flex items-center justify-center text-sm font-bold text-muted-foreground shrink-0">
-                            {(pkg.name || pkg.packageId).charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <p className="text-sm text-foreground font-medium leading-tight line-clamp-2">
-                          <HighlightText text={pkg.name || pkg.packageId} highlight={packageSearchDebounced} />
-                        </p>
-                      </div>
-                      <p className="font-mono text-xs text-muted truncate">
-                        <HighlightText text={pkg.packageId} highlight={packageSearchDebounced} />
-                      </p>
-                      {pkg.publisher && (
-                        <p className="text-xs text-muted truncate">{pkg.publisher}</p>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="mt-auto w-full"
-                        onClick={(e) => { e.stopPropagation(); setForm((prev) => ({ ...prev, packageId: pkg.packageId })); setPackagePickerOpen(false); }}
-                      >
-                        Selecionar
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {!packageCatalog.data?.items?.length && (
-                <p className="text-sm text-muted py-4 text-center">Nenhum pacote encontrado.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </Modal>
-
-      <Modal
-        open={tagPickerOpen}
-        onClose={() => setTagPickerOpen(false)}
-        title={tagPickerTarget === "include" ? "Selecionar tags incluídas" : "Selecionar tags excluídas"}
-        maxWidth="max-w-3xl"
-      >
-        <div className="space-y-3">
-          <Input
-            label="Pesquisar tag"
-            placeholder="Digite para filtrar tags"
-            value={tagSearch}
-            onChange={(e) => setTagSearch(e.target.value)}
-          />
-
-          <div className="max-h-[50vh] space-y-2 overflow-y-auto">
-            {knownTags.isLoading && <Loading message="Carregando tags..." />}
-            {knownTags.isError && <ErrorDisplay onRetry={() => knownTags.refetch()} />}
-
-            {!knownTags.isLoading && !knownTags.isError &&
-              (knownTags.data ?? [])
-                .filter((tag) =>
-                  !tagSearch.trim()
-                    ? true
-                    : tag.toLowerCase().includes(tagSearch.trim().toLowerCase()),
-                )
-                .map((tag) => {
-                  const targetTags = tagPickerTarget === "include" ? form.includeTags : form.excludeTags;
-                  const selected = targetTags.some(
-                    (item) => item.toLowerCase() === tag.toLowerCase(),
-                  );
-
-                  return (
-                    <div
-                      key={tag}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-light p-3"
-                    >
-                      <p className="text-sm text-foreground">{tag}</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={selected ? "secondary" : "primary"}
-                        onClick={() => {
-                          if (selected) {
-                            const existing = targetTags.find(
-                              (item) => item.toLowerCase() === tag.toLowerCase(),
-                            );
-                            if (existing) {
-                              if (tagPickerTarget === "include") removeIncludeTag(existing);
-                              else removeExcludeTag(existing);
-                            }
-                            return;
-                          }
-                          if (tagPickerTarget === "include") addIncludeTag(tag);
-                          else addExcludeTag(tag);
-                        }}
-                      >
-                        {selected ? "Remover" : "Selecionar"}
-                      </Button>
-                    </div>
-                  );
-                })}
-
-            {!knownTags.isLoading && !knownTags.isError &&
-              (knownTags.data ?? []).filter((tag) =>
-                !tagSearch.trim()
-                  ? true
-                  : tag.toLowerCase().includes(tagSearch.trim().toLowerCase()),
-              ).length === 0 && (
-                <p className="text-sm text-muted">Nenhuma tag encontrada.</p>
-              )}
-          </div>
-
-        </div>
-      </Modal>
+        editing={editing}
+        editingId={editingId}
+        duplicateSource={duplicateSource}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+          setEditingId("");
+          setDuplicateSource(null);
+        }}
+        onTransitionToEdit={(saved) => {
+          setEditing(saved);
+          setEditingId(saved.id);
+          setDuplicateSource(null);
+        }}
+      />
 
       <AutomationTaskDetailModal
         taskId={detailTaskId}
@@ -2704,7 +999,11 @@ export default function AutomationTasksPage() {
       <ConfirmDialog
         open={Boolean(deleteTask)}
         title="Excluir tarefa"
-        message={deleteTask ? `Excluir a tarefa "${deleteTask.name}"? Ela poderá ser reativada depois na visão de excluídas.` : ""}
+        message={
+          deleteTask
+            ? `Excluir a tarefa "${deleteTask.name}"? Ela poderá ser reativada depois na visão de excluídas.`
+            : ""
+        }
         confirmLabel="Excluir tarefa"
         tone="danger"
         isLoading={deleteMutation.isPending}
@@ -2715,7 +1014,11 @@ export default function AutomationTasksPage() {
       <ConfirmDialog
         open={Boolean(restoreTask)}
         title="Reativar tarefa"
-        message={restoreTask ? `Reativar a tarefa "${restoreTask.name}"? Ela voltará a ser aplicada ao escopo configurado.` : ""}
+        message={
+          restoreTask
+            ? `Reativar a tarefa "${restoreTask.name}"? Ela voltará a ser aplicada ao escopo configurado.`
+            : ""
+        }
         confirmLabel="Reativar tarefa"
         tone="primary"
         isLoading={restoreMutation.isPending}

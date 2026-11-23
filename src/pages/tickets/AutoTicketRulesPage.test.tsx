@@ -21,6 +21,19 @@ const { listMock, statsMock, simulateMock, seedMock, enableMock, disableMock, de
     deleteMock: vi.fn(),
   }));
 
+vi.mock('@/hooks/useClients', () => ({
+  useClients: () => ({ data: [{ id: '11111111-1111-1111-1111-111111111111', name: 'Cliente Teste' }] }),
+}));
+vi.mock('@/hooks/useSites', () => ({
+  useAllSites: () => ({ data: [] }),
+}));
+vi.mock('@/hooks/useDepartments', () => ({
+  useDepartments: () => ({ data: [] }),
+}));
+vi.mock('@/hooks/useWorkflowProfiles', () => ({
+  useWorkflowProfiles: () => ({ data: [] }),
+}));
+
 vi.mock('@/api', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@/api');
   return {
@@ -145,7 +158,7 @@ describe('AutoTicketRulesPage', () => {
     renderPage();
     await screen.findByText('Disco cheio abre chamado');
 
-    fireEvent.change(screen.getByLabelText('Cliente (GUID)'), {
+    fireEvent.change(screen.getByLabelText('Cliente'), {
       target: { value: '11111111-1111-1111-1111-111111111111' },
     });
     fireEvent.change(screen.getByLabelText('Código do alerta'), {

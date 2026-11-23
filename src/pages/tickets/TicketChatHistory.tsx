@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { apiFetchResponse } from "@/api/client";
 import { ticketChatApi, type TicketChatAttachment, type TicketChatMessage, type TicketChatSession } from "@/api/ticket-chat";
-import { Icon, Button } from "@/components/ui";
+import { Icon, Button, ConfirmDialog, ImageLightbox } from "@/components/ui";
 import {
   useCurrentTicketChat,
   useEndTicketChat,
@@ -84,6 +84,7 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
   const end = useEndTicketChat(ticketId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [endSessionId, setEndSessionId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ url: string; fileName: string; blob: Blob } | null>(null);
   // Dona do object URL do lightbox: revogado ao trocar de imagem, ao fechar e no
   // unmount — antes o blob ficava vivo ao abrir outra imagem ou sair da aba.
@@ -243,9 +244,7 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
             </Button>
           )}
           {currentSession?.status === "Active" && canManage && (
-            // Botão de verdade (sólido, vermelho): o Button ghost com ícone de
-            // quadrado vazio parecia um checkbox desmarcado.
-            <Button size="sm" variant="danger" onClick={() => handleEnd(currentSession.id)} disabled={end.isPending}>
+            <Button size="sm" variant="danger" onClick={() => setEndSessionId(currentSession.id)} disabled={end.isPending}>
               <Icon name="close" className="h-4 w-4" /> Encerrar
             </Button>
           )}
@@ -425,38 +424,34 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
         </div>
       </div>
 
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
-          onClick={closeLightbox}
-          role="presentation"
-        >
-          <div className="relative">
-            <button
-              type="button"
-              onClick={closeLightbox}
-              className="absolute -right-2 -top-2 rounded-full bg-surface p-1 text-foreground shadow"
-              aria-label="Fechar"
-            >
-              <Icon name="close" className="h-4 w-4" />
-            </button>
-            <img
-              src={lightbox.url}
-              alt={lightbox.fileName}
-              className="max-h-[85vh] max-w-[90vw] rounded-lg border border-border bg-surface"
-              onError={() => {
-                // Arquivo que se diz imagem mas não renderiza (corrompido ou
-                // formato sem suporte): entrega o arquivo em vez de deixar a
-                // tela em branco, como acontecia com o PDF.
-                const pending = lightbox;
-                toast.error("Não foi possível exibir o anexo. Baixando o arquivo…");
-                triggerBlobDownload(pending.blob, pending.fileName);
-                closeLightbox();
-              }}
-            />
-          </div>
-        </div>
-      )}
+      <ImageLightbox
+        open={Boolean(lightbox)}
+        src={lightbox?.url}
+        alt={lightbox?.fileName}
+        onClose={closeLightbox}
+        onError={() => {
+          if (!lightbox) return;
+          const pending = lightbox;
+          toast.error("Não foi possível exibir o anexo. Baixando o arquivo…");
+          triggerBlobDownload(pending.blob, pending.fileName);
+          closeLightbox();
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(endSessionId)}
+        title="Encerrar conversa"
+        message="Tem certeza que deseja encerrar esta conversa de suporte?"
+        confirmLabel="Encerrar"
+        tone="danger"
+        isLoading={end.isPending}
+        onConfirm={() => {
+          if (!endSessionId) return;
+          const idToEnd = endSessionId;
+          setEndSessionId(null);
+          void handleEnd(idToEnd);
+        }}
+        onClose={() => setEndSessionId(null)}
+      />
     </div>
   );
 }

@@ -41,6 +41,38 @@ export function actionLabel(value: unknown): string {
   return String(value ?? "-");
 }
 
+export function actionDisplayLabel(value: unknown): string {
+  switch (normalizeActionType(value)) {
+    case AutomationTaskActionType.InstallPackage:
+      return "Instalar pacote";
+    case AutomationTaskActionType.UpdatePackage:
+      return "Atualizar pacote";
+    case AutomationTaskActionType.RemovePackage:
+      return "Remover pacote";
+    case AutomationTaskActionType.UpdateOrInstallPackage:
+      return "Atualizar/Instalar pacote";
+    case AutomationTaskActionType.RunScript:
+      return "Executar script";
+    case AutomationTaskActionType.CustomCommand:
+      return "Comando personalizado";
+    default:
+      return String(value ?? "-");
+  }
+}
+
+export function installationTypeLabel(value: unknown): string {
+  switch (normalizeInstallationType(value)) {
+    case AppInstallationType.Winget:
+      return "Winget";
+    case AppInstallationType.Chocolatey:
+      return "Chocolatey";
+    case AppInstallationType.Custom:
+      return "Custom";
+    default:
+      return String(value ?? "-");
+  }
+}
+
 export function scopeLabel(value: unknown): string {
   if (value === AppApprovalScopeType.Global || value === "Global")
     return "Global";
@@ -329,6 +361,47 @@ function describeCronTime(minute: string, hour: string): string | null {
 }
 
 /**
+ * Valida expressão cron de 5 campos (minuto hora dia-do-mês mês dia-da-semana).
+ */
+export function isValidCron(expr: string): boolean {
+  const raw = String(expr ?? "").trim();
+  if (!raw) return false;
+  const fields = raw.split(/\s+/);
+  if (fields.length !== 5) return false;
+  const ranges: Array<[number, number]> = [
+    [0, 59],
+    [0, 23],
+    [1, 31],
+    [1, 12],
+    [0, 7],
+  ];
+  return fields.every((field, i) =>
+    field.split(",").every((part) => {
+      if (!part) return false;
+      const segments = part.split("/");
+      if (segments.length > 2) return false;
+      const [rangePart, step] = segments;
+      const [min, max] = ranges[i];
+
+      if (step !== undefined) {
+        if (!/^\d+$/.test(step)) return false;
+        const stepNum = parseInt(step, 10);
+        if (stepNum < 1 || stepNum > max) return false;
+      }
+
+      if (rangePart === "?") return false;
+      if (rangePart === "*") return true;
+
+      const m = rangePart.match(/^(\d+)(-(\d+))?$/);
+      if (!m) return false;
+      const start = parseInt(m[1], 10);
+      const end = m[3] ? parseInt(m[3], 10) : start;
+      return start >= min && end <= max && start <= end;
+    }),
+  );
+}
+
+/**
  * Traduz uma expressão cron de 5 campos (minuto hora dia-do-mês mês
  * dia-da-semana) para uma frase em português. Serve de feedback ao usuário
  * enquanto ele monta o agendamento. Retorna uma mensagem de erro amigável
@@ -344,16 +417,32 @@ export function describeCron(expr: string): string {
   const [minute, hour, monthDay, month, weekday] = fields;
 
   const time = describeCronTime(minute, hour);
-  if (!time) return "Expressão inválida — confira minuto (0-59) e hora (0-23).";
+  if (!time) {
+    return isValidCron(raw)
+      ? "Expressão cron personalizada válida."
+      : "Expressão inválida — confira minuto (0-59) e hora (0-23).";
+  }
 
   const dateParts: string[] = [];
   const weekdays = weekday === "*" ? null : describeCronWeekdays(weekday);
   const monthDays = monthDay === "*" ? null : describeCronMonthDays(monthDay);
-  if (weekday !== "*" && !weekdays) return "Expressão inválida — confira o dia da semana (0-6).";
-  if (monthDay !== "*" && !monthDays) return "Expressão inválida — confira o dia do mês (1-31).";
+  if (weekday !== "*" && !weekdays) {
+    return isValidCron(raw)
+      ? "Expressão cron personalizada válida."
+      : "Expressão inválida — confira o dia da semana (0-6).";
+  }
+  if (monthDay !== "*" && !monthDays) {
+    return isValidCron(raw)
+      ? "Expressão cron personalizada válida."
+      : "Expressão inválida — confira o dia do mês (1-31).";
+  }
 
   const months = month === "*" ? null : describeCronMonths(month);
-  if (month !== "*" && !months) return "Expressão inválida — confira o mês (1-12).";
+  if (month !== "*" && !months) {
+    return isValidCron(raw)
+      ? "Expressão cron personalizada válida."
+      : "Expressão inválida — confira o mês (1-12).";
+  }
 
   if (!weekdays && !monthDays) {
     dateParts.push(months ? `todos os dias de ${months}` : "todos os dias");

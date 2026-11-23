@@ -26,6 +26,10 @@ import type {
 } from '@/api/auto-ticket-rules';
 import { TICKET_PRIORITY_META } from '@/utils/labels';
 import type { TicketPriority } from '@/api';
+import { useClients } from '@/hooks/useClients';
+import { useAllSites } from '@/hooks/useSites';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useWorkflowProfiles } from '@/hooks/useWorkflowProfiles';
 
 const SCOPE_LEVELS = ['Global', 'Client', 'Site'] as const;
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'] as const;
@@ -119,6 +123,28 @@ export default function AutoTicketRulesPage({
     queryKey: ['auto-ticket-rules'],
     queryFn: () => autoTicketRulesApi.list(),
   });
+
+  const clientsQuery = useClients();
+  const sitesQuery = useAllSites();
+  const departmentsQuery = useDepartments();
+  const profilesQuery = useWorkflowProfiles();
+
+  const clientOptions = [
+    { value: '', label: 'Selecione um cliente...' },
+    ...(clientsQuery.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+  ];
+  const siteOptions = [
+    { value: '', label: 'Selecione um site...' },
+    ...(sitesQuery.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+  ];
+  const departmentOptions = [
+    { value: '', label: 'Padrão / Opcional' },
+    ...(departmentsQuery.data ?? []).map((d) => ({ value: d.id, label: d.name })),
+  ];
+  const profileOptions = [
+    { value: '', label: 'Padrão / Opcional' },
+    ...(profilesQuery.data ?? []).map((p) => ({ value: p.id, label: p.name })),
+  ];
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['auto-ticket-rules', 'stats', statsFor?.id],
@@ -301,15 +327,23 @@ export default function AutoTicketRulesPage({
               <Select
                 label="Nível de escopo"
                 value={form.scopeLevel}
-                onChange={(e) => setForm({ ...form, scopeLevel: e.target.value })}
+                onChange={(e) => setForm({ ...form, scopeLevel: e.target.value, scopeId: '' })}
                 options={SCOPE_LEVELS.map((level) => ({ value: level, label: level }))}
               />
-              {form.scopeLevel !== 'Global' && (
-                <Input
-                  label={`ID do ${form.scopeLevel === 'Site' ? 'site' : 'cliente'} (GUID)`}
+              {form.scopeLevel === 'Client' && (
+                <Select
+                  label="Cliente"
                   value={form.scopeId}
                   onChange={(e) => setForm({ ...form, scopeId: e.target.value })}
-                  placeholder="00000000-0000-0000-0000-000000000000"
+                  options={clientOptions}
+                />
+              )}
+              {form.scopeLevel === 'Site' && (
+                <Select
+                  label="Site"
+                  value={form.scopeId}
+                  onChange={(e) => setForm({ ...form, scopeId: e.target.value })}
+                  options={siteOptions}
                 />
               )}
             </div>
@@ -344,17 +378,17 @@ export default function AutoTicketRulesPage({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Input
-                label="Departamento (GUID)"
+              <Select
+                label="Departamento"
                 value={form.targetDepartmentId}
                 onChange={(e) => setForm({ ...form, targetDepartmentId: e.target.value })}
-                placeholder="Opcional"
+                options={departmentOptions}
               />
-              <Input
-                label="Workflow Profile (GUID)"
+              <Select
+                label="Workflow Profile"
                 value={form.targetWorkflowProfileId}
                 onChange={(e) => setForm({ ...form, targetWorkflowProfileId: e.target.value })}
-                placeholder="Opcional"
+                options={profileOptions}
               />
             </div>
 
@@ -403,11 +437,11 @@ export default function AutoTicketRulesPage({
             avaliador de sinal, e mostra o que aconteceria.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
-            <Input
-              label="Cliente (GUID)"
+            <Select
+              label="Cliente"
               value={simulateClientId}
               onChange={(e) => setSimulateClientId(e.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
+              options={clientOptions}
             />
             <Input
               label="Código do alerta"
@@ -570,9 +604,6 @@ export default function AutoTicketRulesPage({
         onConfirm={() => {
           if (!deleteTarget) return;
           deleteMutation.mutate(deleteTarget.id, {
-            onSuccess: () => toast.success('Regra excluída.'),
-            onError: (err) =>
-              toast.error(err instanceof Error ? err.message : 'Não foi possível excluir a regra.'),
             onSettled: () => setDeleteTarget(null),
           });
         }}

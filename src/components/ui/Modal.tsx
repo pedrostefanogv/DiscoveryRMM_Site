@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { Icon } from "@/components/ui";
 import { createPortal } from 'react-dom';
 
@@ -50,13 +50,17 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const [stackDepth, setStackDepth] = useState(0);
 
   useEffect(() => {
     if (!open) return;
+    const depth = openModalCount;
     openModalCount += 1;
+    setStackDepth(depth);
     document.body.style.overflow = 'hidden';
     return () => {
       openModalCount = Math.max(0, openModalCount - 1);
+      setStackDepth(0);
       if (openModalCount === 0) document.body.style.overflow = '';
     };
   }, [open]);
@@ -115,7 +119,8 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   const modalContent = (
     <div
       ref={overlayRef}
-      className="animate-backdrop-in fixed inset-0 z-[100] flex items-center justify-center bg-overlay p-4 backdrop-blur-sm"
+      style={{ zIndex: 100 + stackDepth * 10 }}
+      className="animate-backdrop-in fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-sm"
       onClick={e => { if (e.target === overlayRef.current) onClose(); }}
       onKeyDown={handleKeyDown}
     >

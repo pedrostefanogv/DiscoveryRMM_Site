@@ -21,8 +21,11 @@ import type {
 
 const KEYS = {
   all: ["tickets"] as const,
+  lists: () => [...KEYS.all, "list"] as const,
   list: (params: TicketsQuery) => [...KEYS.all, "list", params] as const,
-  byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
+  byClients: () => [...KEYS.all, "byClient"] as const,
+  byClient: (clientId: string, workflowStateId?: string) =>
+    [...KEYS.all, "byClient", clientId, workflowStateId] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   comments: (id: string) => [...KEYS.all, "comments", id] as const,
   watchers: (id: string) => [...KEYS.all, "watchers", id] as const,
@@ -51,7 +54,7 @@ export function useTickets(params: TicketsQuery = {}, options?: { enabled?: bool
 
 export function useTicketsByClient(clientId: string, workflowStateId?: string) {
   return useQuery({
-    queryKey: KEYS.byClient(clientId),
+    queryKey: KEYS.byClient(clientId, workflowStateId),
     queryFn: () => ticketsApi.listByClient(clientId, workflowStateId),
     enabled: !!clientId,
   });
@@ -131,7 +134,11 @@ export function useCreateTicket() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateTicketRequest) => ticketsApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
+      qc.invalidateQueries({ queryKey: ["ticketKpi"] });
+    },
   });
 }
 
@@ -140,15 +147,19 @@ export function useUpdateTicket() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTicketRequest }) =>
       ticketsApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_result, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.timeline(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.slaDetails(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
+      qc.invalidateQueries({ queryKey: ["ticketKpi"] });
+    },
   });
 }
 
 /**
  * Mescla chamados de origem no chamado destino.
- *
- * A autorização vem de capabilities.canMerge (backend) — este hook não decide
- * nada; só executa quando a UI já confirmou que a ação é permitida.
  */
 export function useMergeTickets() {
   const qc = useQueryClient();
@@ -161,10 +172,14 @@ export function useMergeTickets() {
       data: MergeTicketsRequest;
     }) => ticketsApi.merge(targetTicketId, data),
     onSuccess: (_result, vars) => {
-      // O destino muda (comentários/anexos absorvidos) e cada origem vira
-      // duplicata encerrada — as duas listas e as timelines ficam stale.
-      qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(vars.targetTicketId) });
+      qc.invalidateQueries({ queryKey: KEYS.comments(vars.targetTicketId) });
+      qc.invalidateQueries({ queryKey: KEYS.attachments(vars.targetTicketId) });
+      qc.invalidateQueries({ queryKey: KEYS.timeline(vars.targetTicketId) });
+      qc.invalidateQueries({ queryKey: KEYS.relations(vars.targetTicketId) });
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
+      qc.invalidateQueries({ queryKey: ["ticketKpi"] });
     },
   });
 }
@@ -179,7 +194,14 @@ export function useUpdateTicketWorkflow() {
       id: string;
       data: UpdateWorkflowStateRequest;
     }) => ticketsApi.updateWorkflowState(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_result, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.timeline(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.slaDetails(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
+      qc.invalidateQueries({ queryKey: ["ticketKpi"] });
+    },
   });
 }
 
@@ -248,8 +270,10 @@ export function useCompleteCommentUpload() {
       commentId: string;
       data: CompleteUploadRequest;
     }) => ticketsApi.completeCommentUpload(ticketId, commentId, data),
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: KEYS.comments(vars.ticketId) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.comments(vars.ticketId) });
+      qc.invalidateQueries({ queryKey: KEYS.attachments(vars.ticketId) });
+    },
   });
 }
 
@@ -357,7 +381,11 @@ export function useReopenTicket() {
       ticketsApi.reopen(id, data),
     onSuccess: (_result, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
-      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.timeline(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.slaDetails(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
+      qc.invalidateQueries({ queryKey: ["ticketKpi"] });
     },
   });
 }
@@ -369,7 +397,8 @@ export function useRateTicket() {
       ticketsApi.rate(id, data),
     onSuccess: (_result, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
-      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
     },
   });
 }
@@ -383,8 +412,10 @@ export function useDeleteTicket() {
   return useMutation({
     mutationFn: (id: string) => ticketsApi.delete(id),
     onSuccess: (_result, id) => {
-      qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: KEYS.lists() });
+      qc.invalidateQueries({ queryKey: KEYS.byClients() });
+      qc.invalidateQueries({ queryKey: ["ticketKpi"] });
     },
   });
 }

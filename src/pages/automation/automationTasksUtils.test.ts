@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { AutomationNotificationMode, AutomationToastTiming } from '@/api/types';
 import {
+  actionDisplayLabel,
   customFieldsFromMetadata,
   describeCron,
   executionOutputFromMetadata,
+  installationTypeLabel,
   isToastNotificationMode,
+  isValidCron,
   noOpFromMetadata,
   normalizeNotificationMode,
   normalizeToastTiming,
@@ -235,5 +238,33 @@ describe('executionOutputFromMetadata / noOpFromMetadata / parseCronAssistantSta
     expect(parseCronAssistantState('15 * * * *')).toMatchObject({ frequency: 'hourly', minute: '15' });
     expect(parseCronAssistantState('30 9 * * 1')).toMatchObject({ frequency: 'weekly', minute: '30', hour: '9', weekday: '1' });
     expect(parseCronAssistantState('0 3 15 * *')).toMatchObject({ frequency: 'monthly', minute: '0', hour: '3', monthDay: '15' });
+  });
+});
+
+describe('isValidCron / actionDisplayLabel / installationTypeLabel', () => {
+  it('rejeita steps inválidos mesmo com curinga * e rejeita ?', () => {
+    expect(isValidCron('*/0 * * * *')).toBe(false);
+    expect(isValidCron('*/abc * * * *')).toBe(false);
+    expect(isValidCron('0 8 ? * *')).toBe(false);
+    expect(isValidCron('')).toBe(false);
+    expect(isValidCron('0 8 * *')).toBe(false);
+    expect(isValidCron('*/15 * * * *')).toBe(true);
+    expect(isValidCron('0,30 8-18 * * 1-5')).toBe(true);
+    expect(describeCron('0,30 8-18 * * 1-5')).toBe('Expressão cron personalizada válida.');
+  });
+
+  it('traduz ações para rótulos amigáveis em português', () => {
+    expect(actionDisplayLabel('InstallPackage')).toBe('Instalar pacote');
+    expect(actionDisplayLabel('RunScript')).toBe('Executar script');
+    expect(actionDisplayLabel('CustomCommand')).toBe('Comando personalizado');
+  });
+
+  it('normaliza installationType numérico e string', () => {
+    expect(installationTypeLabel(0)).toBe('Winget');
+    expect(installationTypeLabel('Winget')).toBe('Winget');
+    expect(installationTypeLabel(1)).toBe('Chocolatey');
+    expect(installationTypeLabel('Chocolatey')).toBe('Chocolatey');
+    expect(installationTypeLabel(2)).toBe('Custom');
+    expect(installationTypeLabel('Custom')).toBe('Custom');
   });
 });

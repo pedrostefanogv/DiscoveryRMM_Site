@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { apiFetchResponse } from "@/api/client";
 import type { TicketChatAttachment, TicketChatMessage, TicketChatSession } from "@/api/ticket-chat";
-import { Icon, Button } from "@/components/ui";
+import { Icon, Button, ConfirmDialog, ImageLightbox } from "@/components/ui";
 import {
   useEndSupportChat,
   useRetrySupportChatInvite,
@@ -144,6 +144,15 @@ export default function SupportChatPanel({
   const [pendingUploads, setPendingUploads] = useState<
     Array<{ key: string; fileName: string; attachmentId?: string; previewUrl?: string }>
   >([]);
+  const pendingUploadsRef = useRef(pendingUploads);
+  pendingUploadsRef.current = pendingUploads;
+  useEffect(() => {
+    return () => {
+      for (const item of pendingUploadsRef.current) {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      }
+    };
+  }, []);
   // Só IMAGEM abre no lightbox: um PDF dentro de <img> não renderiza e o
   // navegador mostra apenas o texto do alt no meio da tela.
   const [lightbox, setLightbox] = useState<{ url: string; fileName: string; blob: Blob } | null>(null);
@@ -176,19 +185,13 @@ export default function SupportChatPanel({
   // reconexão). Com o realtime de pé o sinal continua sendo o caminho rápido —
   // isto é rede de segurança, não substituição.
   const realtime = useRealtimeStatus();
-  const messagesIntervalMs = realtime.natsConnected ? 5_000 : 3_000;
+  const messagesIntervalMs = realtime.natsConnected ? 30_000 : 3_000;
 
-  // Intermitência da consulta de estado. Com o convite PENDENTE ela é curta: o
-  // atendente está esperando o usuário responder na máquina e o resultado
-  // (aceite/recusa) chega pelo sinal NATS — quando o sinal se perde (reconexão
-  // do navegador, subject fora da allow-list do token) o painel ficava
-  // "Aguardando confirmação" para sempre: o sintoma "cliquei em Agora não e não
-  // aparece para o suporte". Nas demais fases volta ao ritmo lento (rede de
-  // segurança, não polling de verdade).
   const [pendingDecision, setPendingDecision] = useState(false);
+  const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const sessionPollMs = pendingDecision
-    ? (realtime.natsConnected ? 3_000 : 2_000)
-    : (realtime.natsConnected ? 10_000 : 5_000);
+    ? (realtime.natsConnected ? 5_000 : 2_000)
+    : (realtime.natsConnected ? 30_000 : 5_000);
 
   const current = useSupportChatCurrent(client, true, sessionPollMs);
   const activeSession = current.data?.session ?? null;
@@ -541,7 +544,7 @@ export default function SupportChatPanel({
           {sessionForUi?.status === "Active" && canManage && (
             // Botão de verdade (sólido, vermelho): antes era um Button ghost com
             // ícone de quadrado vazio e parecia um checkbox desmarcado.
-            <Button size="sm" variant="danger" onClick={handleEnd} disabled={end.isPending}>
+            <Button size="sm" variant="danger" onClick={() => setEndConfirmOpen(true)} disabled={end.isPending}>
               <Icon name="close" className="h-4 w-4" /> Encerrar
             </Button>
           )}
@@ -650,6 +653,17 @@ export default function SupportChatPanel({
                     )}
                     <span className="max-w-[180px] truncate">{item.fileName}</span>
                     {!item.attachmentId ? <span className="text-muted">enviando…</span> : null}
+                    <button
+                      type="button"
+                      aria-label={`Remover ${item.fileName}`}
+                      onClick={() => {
+                        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+                        setPendingUploads((prev) => prev.filter((p) => p.key !== item.key));
+                      }}
+                      className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                    >
+                      <Icon name="close" className="h-3 w-3" />
+                    </button>
                   </span>
                 ))}
               </div>
@@ -685,6 +699,13 @@ export default function SupportChatPanel({
                 value={draft}
                 disabled={!canSend}
                 onChange={(event) => setDraft(event.target.value)}
+                onPaste={(event) => {
+                  const files = event.clipboardData?.files;
+                  if (files && files.length > 0 && canSend) {
+                    event.preventDefault();
+                    void handleFiles(files);
+                  }
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
@@ -733,29 +754,32 @@ export default function SupportChatPanel({
       )}
 
 
-      {/* Lightbox de imagem */}
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
-          onClick={closeLightbox}
-          role="presentation"
-        >
-          <img
-            src={lightbox.url}
-            alt={lightbox.fileName}
-            className="max-h-[85vh] max-w-[90vw] rounded-lg border border-border bg-surface"
-            onError={() => {
-              // Última rede: um arquivo que se diz imagem mas não renderiza
-              // (corrompido ou formato sem suporte) cairia no MESMO vazio do PDF.
-              // Nesse caso entrega o arquivo em vez de deixar a tela em branco.
-              const pending = lightbox;
-              toast.error("Não foi possível exibir o anexo. Baixando o arquivo…");
-              triggerBlobDownload(pending.blob, pending.fileName);
-              closeLightbox();
-            }}
-          />
-        </div>
-      )}
+      <ImageLightbox
+        open={Boolean(lightbox)}
+        src={lightbox?.url}
+        alt={lightbox?.fileName}
+        onClose={closeLightbox}
+        onError={() => {
+          if (!lightbox) return;
+          const pending = lightbox;
+          toast.error("Não foi possível exibir o anexo. Baixando o arquivo…");
+          triggerBlobDownload(pending.blob, pending.fileName);
+          closeLightbox();
+        }}
+      />
+      <ConfirmDialog
+        open={endConfirmOpen}
+        title="Encerrar conversa"
+        message="Tem certeza que deseja encerrar este atendimento ao vivo?"
+        confirmLabel="Encerrar"
+        tone="danger"
+        isLoading={end.isPending}
+        onConfirm={() => {
+          setEndConfirmOpen(false);
+          void handleEnd();
+        }}
+        onClose={() => setEndConfirmOpen(false)}
+      />
     </div>
   );
 }
