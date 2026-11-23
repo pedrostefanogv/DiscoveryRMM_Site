@@ -14,25 +14,41 @@ function glyphPath(name: 'battery_charging_80_2'): string | null {
 }
 
 /**
- * Duas formas, um ícone cada:
+ * Ajustes finos travados aqui:
  *
- * - NA TOMADA: um único glifo de bateria CARREGANDO (Material), que já tem o
- *   raio embutido. O nível vai no percentual ao lado — por isso não precisamos
- *   de várias variantes de nível nem de dois ícones.
- * - NA BATERIA: a bateria desenhada, com preenchimento proporcional ao nível.
+ * 1. NA BATERIA a borda precisa APARECER nos dois temas — antes usava o token
+ *    \'border\' (quase invisível), agora usa foreground/60 + fundo leve.
+ * 2. Os DOIS estados têm o MESMO tamanho: o glifo de "na tomada" é recortado na
+ *    caixa desenhada (viewBox medido do path) e ambos usam a mesma classe de
+ *    altura, então o indicador não "pula" ao conectar/desconectar.
  */
-describe('BatteryGauge — na tomada (bateria carregando)', () => {
-  it('mostra UM ícone só: a bateria carregando do Material', () => {
-    const { container } = render(<BatteryGauge percent={80} onAc />);
+describe('BatteryGauge — na tomada (um ícone, mesmo tamanho)', () => {
+  it('usa só o glifo de bateria carregando, recortado na caixa desenhada', () => {
+    const { container } = render(<BatteryGauge percent={80} onAc size="md" />);
+
+    const root = container.querySelector('[data-state="charging"]');
+    expect(root).toBeTruthy();
+    // Nenhuma bateria desenhada em CSS junto: é um ícone só.
+    expect(container.querySelector('[data-state="battery"]')).toBeNull();
+
+    const svg = root?.querySelector('svg');
+    expect(svg?.getAttribute('viewBox')).toBe('80 -680 776.5 400');
 
     const expected = glyphPath('battery_charging_80_2');
     const paths = Array.from(container.querySelectorAll('svg path'));
     expect(paths.some((path) => path.getAttribute('d') === expected)).toBe(true);
 
-    // Nada de bateria desenhada em CSS junto: é um ícone só.
-    expect(container.querySelector('.border-border')).toBeNull();
     expect(screen.getByText('Na tomada')).toBeTruthy();
     expect(screen.getByText('80%')).toBeTruthy();
+  });
+
+  it('mantém a MESMA altura do corpo desenhado (md e sm)', () => {
+    const { container: md } = render(<BatteryGauge percent={80} onAc size="md" />);
+    expect(md.querySelector('svg')?.getAttribute('class') ?? '').toContain('h-5');
+    cleanup();
+
+    const { container: sm } = render(<BatteryGauge percent={80} onAc size="sm" />);
+    expect(sm.querySelector('svg')?.getAttribute('class') ?? '').toContain('h-3.5');
   });
 
   it('carregando também usa o mesmo glifo único', () => {
@@ -47,13 +63,10 @@ describe('BatteryGauge — na tomada (bateria carregando)', () => {
   it('o texto cru do SO (On AC) também vale quando o booleano não veio', () => {
     const { container } = render(<BatteryGauge percent={64} onAc={null} state="On AC" />);
 
-    const expected = glyphPath('battery_charging_80_2');
-    const paths = Array.from(container.querySelectorAll('svg path'));
-    expect(paths.some((path) => path.getAttribute('d') === expected)).toBe(true);
+    expect(container.querySelector('[data-state="charging"]')).toBeTruthy();
     expect(screen.getByText('Na tomada')).toBeTruthy();
   });
 
-  /** A cor segue a faixa do percentual: mantém o alerta de bateria baixa. */
   it('colore o glifo pela faixa do percentual', () => {
     const { container: ok } = render(<BatteryGauge percent={80} onAc />);
     expect(ok.querySelector('svg')?.getAttribute('class') ?? '').toContain('text-success');
@@ -69,14 +82,20 @@ describe('BatteryGauge — na tomada (bateria carregando)', () => {
 });
 
 describe('BatteryGauge — na bateria (bateria desenhada)', () => {
-  it('desenha a bateria com preenchimento e sem glifo de carregando', () => {
-    const { container } = render(<BatteryGauge percent={63} onAc={false} />);
+  it('borda reforçada + fundo leve, na mesma altura do estado plugado', () => {
+    const { container } = render(<BatteryGauge percent={63} onAc={false} size="md" />);
+
+    const root = container.querySelector('[data-state="battery"]');
+    expect(root).toBeTruthy();
+    expect(root?.querySelector('svg')).toBeNull();
+
+    const body = root?.querySelector('.border-foreground\\/60');
+    expect(body).toBeTruthy();
+    expect(body?.className ?? '').toContain('bg-surface-light');
+    expect(body?.className ?? '').toContain('h-5');
 
     expect(screen.getByText('Na bateria')).toBeTruthy();
     expect(screen.getByText('63%')).toBeTruthy();
-    // Bateria desenhada presente e nenhum glifo Material.
-    expect(container.querySelector('.border-border')).toBeTruthy();
-    expect(container.querySelector('svg')).toBeNull();
   });
 
   it('pinta o percentual pela faixa', () => {

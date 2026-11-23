@@ -33,23 +33,42 @@ const TONE_TEXT: Record<BatteryTone, string> = {
   neutral: 'text-muted',
 };
 
+/**
+ * Os DOIS estados usam a MESMA altura e larguras equivalentes, para o indicador
+ * não "pular de tamanho" ao conectar/desconectar:
+ *
+ * - height: altura do desenho (corpo da bateria e glifo recortado);
+ * - bodyWidth: largura do corpo desenhado (bateria na horizontal + polo);
+ * - glyphWidth: largura do glifo recortado (aspecto 1,94 ≈ o do corpo).
+ */
 const SIZES = {
-  // box = tamanho do glifo Material (bateria carregando) usado quando plugado.
-  sm: { body: 'h-3.5 w-7', nub: 'h-1.5 w-[2px]', box: 'h-4 w-4', text: 'text-[10px]' },
-  md: { body: 'h-5 w-10', nub: 'h-2 w-[3px]', box: 'h-5 w-5', text: 'text-xs' },
+  sm: { height: 'h-3.5', bodyWidth: 'w-7', glyphWidth: 'w-[27px]', nub: 'h-1.5 w-[2px]', text: 'text-[10px]' },
+  md: { height: 'h-5', bodyWidth: 'w-10', glyphWidth: 'w-[39px]', nub: 'h-2 w-[3px]', text: 'text-xs' },
 } as const;
 
 /**
- * Indicador de energia do agente, em duas formas:
+ * Recorte do glifo battery_charging_80_2 na CAIXA DESENHADA da bateria.
+ *
+ * O Material Symbols entrega o glifo dentro de um quadrado 960×960 com bastante
+ * área vazia; sem o recorte, o ícone de "na tomada" saía visivelmente MENOR que
+ * a bateria desenhada do estado "na bateria". A caixa abaixo foi medida do
+ * próprio path (x 80..856,5 e y -680..-280 → aspecto ~1,94), então com a mesma
+ * altura os dois desenhos ficam do mesmo tamanho.
+ */
+const CHARGING_GLYPH_VIEWBOX = '80 -680 776.5 400';
+
+/**
+ * Indicador de energia do agente, em duas formas do mesmo tamanho:
  *
  * - NA TOMADA: UM ícone só — a bateria CARREGANDO do Material Symbols
- *   (battery_charging_80_2 — variante DEITADA, com o raio em pé), que já traz o
- *   símbolo embutido. O glifo não comunica
- *   nível (é fixo), então o nível fica no PERCENTUAL exibido ao lado; a cor
- *   segue a faixa do percentual (verde > 30%, âmbar ≤ 30%, vermelho ≤ 15%),
- *   preservando o alerta de bateria baixa.
+ *   (battery_charging_80_2, variante DEITADA com o raio em pé), recortada pela
+ *   caixa desenhada. O glifo não comunica nível (é fixo), então o nível fica no
+ *   percentual exibido ao lado; a cor segue a faixa do percentual (verde > 30%,
+ *   âmbar ≤ 30%, vermelho ≤ 15%), preservando o alerta de bateria baixa.
  * - NA BATERIA: bateria desenhada em CSS, com o preenchimento proporcional ao
- *   nível real (o glifo fixo não daria essa informação).
+ *   nível real (o glifo fixo não daria essa informação). Borda reforçada para
+ *   aparecer nos temas claro e escuro — antes usava o token `border`, que ficava
+ *   quase invisível.
  *
  * O estado vem de onAc/charging; quando o agente não reportou o booleano (coleta
  * antiga), o texto cru do SO ("On AC") é usado como fallback — senão o painel
@@ -75,23 +94,48 @@ export function BatteryGauge({
   const percentLabel = formatBatteryPercent(percent);
   const title = 'Bateria: ' + percentLabel + (resolvedLabel !== '—' ? ' · ' + resolvedLabel : '');
 
+  // Rótulo + percentual são iguais nos dois estados (mesma tipografia).
+  const caption = (
+    <>
+      {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
+      <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
+    </>
+  );
+
   if (plugged) {
     return (
-      <span className={'inline-flex items-center gap-1.5 ' + className} title={title} aria-label={title}>
-        <Icon name="battery_charging_80_2" className={s.box + ' shrink-0 ' + TONE_TEXT[tone]} />
-        {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
-        <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
+      <span
+        className={'inline-flex items-center gap-1.5 ' + className}
+        data-state="charging"
+        title={title}
+        aria-label={title}
+      >
+        <Icon
+          name="battery_charging_80_2"
+          viewBox={CHARGING_GLYPH_VIEWBOX}
+          className={s.height + ' ' + s.glyphWidth + ' shrink-0 ' + TONE_TEXT[tone]}
+        />
+        {caption}
       </span>
     );
   }
 
   return (
-    <span className={'inline-flex items-center gap-1.5 ' + className} title={title} aria-label={title}>
+    <span
+      className={'inline-flex items-center gap-1.5 ' + className}
+      data-state="battery"
+      title={title}
+      aria-label={title}
+    >
       <span className="inline-flex items-center gap-0.5">
         <span
           className={
-            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-border ' +
-            s.body
+            // Borda reforçada (foreground/60 em vez do token \'border\', quase
+            // invisível) + fundo leve: a bateria precisa aparecer nos DOIS temas.
+            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-foreground/60 bg-surface-light ' +
+            s.height +
+            ' ' +
+            s.bodyWidth
           }
         >
           <span
@@ -107,8 +151,7 @@ export function BatteryGauge({
         {/* Polo positivo da bateria. */}
         <span className={'shrink-0 rounded-r-[1px] ' + s.nub + ' ' + TONE_FILL[tone]} />
       </span>
-      {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
-      <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
+      {caption}
     </span>
   );
 }
