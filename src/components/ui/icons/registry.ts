@@ -45,6 +45,7 @@ export const ICON_CHUNK_MAP: Record<LazySymbolName, IconChunkId> = {
   // agentsHardware (32)
   arrow_downward: "agentsHardware",
   arrow_upward: "agentsHardware",
+  battery_charging_80: "agentsHardware",
   bolt: "agentsHardware",
   bug_report: "agentsHardware",
   cable: "agentsHardware",
