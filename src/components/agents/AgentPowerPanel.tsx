@@ -3,7 +3,12 @@ import type { AgentHeartbeatMetrics, BatteryInfo } from '@/api';
 import { BatteryGauge, Icon } from '@/components/ui';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
-import { batteryPowerLabel, machineTypeLabel, resolveBatteryView } from '@/utils/agentPower';
+import {
+  batteryPowerLabel,
+  isAgentLaptop,
+  machineTypeLabel,
+  resolveBatteryView,
+} from '@/utils/agentPower';
 
 interface AgentPowerPanelProps {
   agentId: string;
@@ -21,17 +26,19 @@ interface AgentPowerPanelProps {
 }
 
 /**
- * Painel de dispositivo/energia exibido DENTRO do card "Informações" do detalhe
- * do agente (não é um card próprio — o card isolado anterior ficou solto na
- * página e desperdiçava a metade vazia do card de informações).
+ * Coluna de dispositivo/energia do card "Informações" do detalhe do agente.
+ *
+ * Não é um card: fica na mesma superfície do card de informações, separada
+ * apenas por uma divisão lateral, e usa a MESMA tipografia dos dados
+ * cadastrais (dt muted / dd foreground) para não parecer um bloco estranho.
  *
  * Isola a assinatura do heartbeat ao vivo (mesmo padrão do
  * LiveAgentHeartbeatCard) para que ticks de CPU/RAM/disco não re-renderizem a
  * página inteira de detalhe.
  *
- * Precedência explícita e rotulada: heartbeat AO VIVO → inventário ("última
- * coleta") → nada. O inventário roda a cada 24 h; mostrar aquele valor como se
- * fosse atual diria "na tomada" para um notebook já desplugado.
+ * Precedência explícita: heartbeat AO VIVO → inventário (rotulado) → nada. O
+ * inventário roda a cada 24 h; mostrar aquele valor como se fosse atual diria
+ * "na tomada" para um notebook já desplugado.
  */
 export function AgentPowerPanel({
   agentId,
@@ -80,79 +87,77 @@ export function AgentPowerPanel({
 
   const resolved = resolveBatteryView(liveMetrics, batteries);
   const machineLabel = machineTypeLabel({ machineType, isLaptop });
-  const isLaptopDevice = isLaptop === true || machineType?.trim().toLowerCase() === 'notebook';
+  // Mesma regra do card/listagem: booleano explícito OU o vocabulário canônico
+  // (notebook/tablet) — senão o ícone sumia para um tablet.
+  const isLaptopDevice = isAgentLaptop({ isLaptop, machineType });
 
-  // Sem nada a dizer (agente antigo, sem inventário e sem bateria) o painel não
+  // Sem nada a dizer (agente antigo, sem inventário e sem bateria) a coluna não
   // aparece: melhor vazio do que afirmando "desconhecido" em toda a frota.
   if (!machineLabel && !resolved) return null;
 
   const isInventoryOnly = resolved?.source === 'inventory';
-  const inventoryHint = isInventoryOnly && inventoryCollectedAt
-    ? 'Inventário de ' + formatCollectedAt(inventoryCollectedAt)
-    : null;
+  const inventoryHint =
+    isInventoryOnly && inventoryCollectedAt
+      ? 'Inventário de ' + formatCollectedAt(inventoryCollectedAt)
+      : null;
 
   return (
-    <div className="space-y-4 rounded-xl border border-border bg-surface-light/60 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Dispositivo e energia</p>
-        {inventoryHint && <span className="text-[10px] text-muted">{inventoryHint}</span>}
-      </div>
-
-      <div className="space-y-3">
+    <div className="border-t border-border pt-4 sm:border-t-0 sm:border-l sm:border-border sm:pl-6 sm:pt-0">
+      <dl className="space-y-3 text-sm">
         <div>
-          <p className="text-xs text-muted">Tipo de máquina</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
-            {isLaptopDevice && <Icon name="laptop_mac" className="h-4 w-4 text-accent" />}
+          <dt className="text-muted">Tipo de máquina</dt>
+          <dd className="mt-0.5 flex items-center gap-1.5 text-foreground">
+            {isLaptopDevice && <Icon name="laptop_mac" className="h-4 w-4 shrink-0 text-accent" />}
             {machineLabel ?? '—'}
-          </p>
+          </dd>
         </div>
 
         <div>
-          <p className="text-xs text-muted">Energia</p>
-          <div className="mt-0.5">
+          <dt className="text-muted">Energia</dt>
+          <dd className="mt-0.5 flex flex-wrap items-center gap-2 text-foreground">
             {resolved ? (
               <BatteryGauge
                 size="md"
                 percent={resolved.view.percent}
                 onAc={resolved.view.onAc}
                 charging={resolved.view.charging}
-                label={batteryPowerLabel(resolved.view.onAc, resolved.view.charging)}
+                state={resolved.view.state}
               />
             ) : (
-              <span className="text-sm text-muted">—</span>
+              <span>—</span>
             )}
-          </div>
+            {inventoryHint && <span className="text-xs text-muted">{inventoryHint}</span>}
+          </dd>
         </div>
-      </div>
+      </dl>
 
       {batteries && batteries.length > 0 && (
-        <div className="space-y-2 border-t border-border pt-3">
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
           {batteries.map((battery, index) => {
             const health =
               battery.maxCapacityMAh > 0 && battery.designedCapacityMAh > 0
                 ? Math.round((battery.maxCapacityMAh / battery.designedCapacityMAh) * 100)
                 : null;
-            const title = [battery.manufacturer, battery.model].filter(Boolean).join(' ') || 'Bateria ' + (index + 1);
-            const stateLabel = batteryPowerLabel(battery.onAc ?? null, battery.charging);
+            const title =
+              [battery.manufacturer, battery.model].filter(Boolean).join(' ') || 'Bateria ' + (index + 1);
+            const stateLabel = batteryPowerLabel(battery.onAc ?? null, battery.charging, battery.state);
+            // O rótulo do indicador já mostra o estado; o texto cru do SO só
+            // aparece quando ele é a ÚNICA fonte (rótulo desconhecido).
+            const showRawState = stateLabel === '—' && !!battery.state;
+
             return (
-              <div key={title + '-' + index} className="rounded-lg bg-surface px-3 py-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">{title}</p>
+              <div key={title + '-' + index}>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-foreground">{title}</span>
                   <BatteryGauge
                     percent={battery.percentRemaining}
                     onAc={battery.onAc ?? null}
                     charging={battery.charging}
+                    state={battery.state}
                   />
                 </div>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted">
-                  {/* Estado NORMALIZADO (onAc/charging do SO) em vez do texto
-                      cru do WMI: as duas fontes podem divergir e o onAc é a que
-                      decide "na tomada"; o texto cru fica só como diagnóstico
-                      quando não há leitura normalizada. */}
-                  <span>
-                    Estado:{' '}
-                    {stateLabel === '—' && battery.state ? battery.state : stateLabel}
-                  </span>
+                <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                  {showRawState && <span>Estado: {battery.state}</span>}
                   {battery.designedCapacityMAh > 0 && (
                     <span>Desenho: {battery.designedCapacityMAh} mAh</span>
                   )}
@@ -171,7 +176,7 @@ export function AgentPowerPanel({
   );
 }
 
-/** Data compacta (pt-BR) da coleta de inventário, sem depender do util de página. */
+/** Data curta (pt-BR) da coleta de inventário, sem depender de util de página. */
 function formatCollectedAt(value: string): string {
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return value;

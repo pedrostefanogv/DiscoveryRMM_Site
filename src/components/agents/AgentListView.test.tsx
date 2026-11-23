@@ -88,7 +88,7 @@ describe('AgentListView — colunas CPU/RAM/Leitura', () => {
 describe('AgentListView — notebook e energia', () => {
   afterEach(() => cleanup());
 
-  it('mostra o selo Notebook na coluna do agente', () => {
+  it('distingue notebook pelo ÍCONE, sem selo textual', () => {
     render(
       <AgentListView
         agents={[buildAgent({ isLaptop: true, machineType: 'notebook' })]}
@@ -96,13 +96,16 @@ describe('AgentListView — notebook e energia', () => {
       />,
     );
 
-    expect(screen.getByText('Notebook')).toBeTruthy();
+    // O selo textual saiu (o ícone já distingue); o tipo fica no title.
+    expect(screen.queryByText('Notebook')).toBeNull();
+    expect(screen.getByTitle('Dispositivo: Notebook')).toBeTruthy();
   });
 
-  it('não mostra selo quando não reportado (null)', () => {
+  it('não mostra title de tipo quando não reportado (null)', () => {
     render(<AgentListView agents={[buildAgent({ isLaptop: null, machineType: null })]} now={Date.now()} />);
 
     expect(screen.queryByText('Notebook')).toBeNull();
+    expect(screen.queryByTitle(/^Dispositivo:/)).toBeNull();
   });
 
   it('mostra percentual de bateria do heartbeat ao vivo', () => {

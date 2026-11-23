@@ -63,15 +63,6 @@ export function machineTypeLabel(agent: AgentMachineLike): string | null {
   return MACHINE_TYPE_LABELS[raw] ?? null;
 }
 
-/** Rótulo do selo: prefere o tipo específico e cai para "Notebook". */
-export function laptopBadgeLabel(agent: AgentMachineLike): string {
-  const label = machineTypeLabel(agent);
-  // "Desktop"/"Servidor" no selo seria contraditório (o selo só aparece com
-  // isLaptop === true); aceita apenas a família móvel.
-  if (label === 'Tablet') return 'Tablet';
-  return 'Notebook';
-}
-
 /**
  * Estado de energia derivado de uma leitura (heartbeat ou inventário).
  * `onAc`/`percent` null = desconhecido — a UI mostra "—" em vez de afirmar.
@@ -81,13 +72,46 @@ export interface BatteryView {
   percent: number | null;
   onAc: boolean | null;
   charging: boolean;
+  /** Texto cru do SO ("On AC", "Discharging"...): fallback do rótulo. */
+  state: string | null;
 }
 
-/** Texto do estado de energia. Desconhecido rende "—". */
-export function batteryPowerLabel(onAc: boolean | null, charging = false): string {
+/**
+ * Deriva o estado de energia do TEXTO cru do SO/WMI ("On AC", "Fully Charged",
+ * "Charging and High", "Discharging", "Low", "Critical"...).
+ *
+ * Usado apenas quando o agente não reportou o campo `onAc` (agente/coleta
+ * antigos): o inventário já trazia esse texto, e sem ele o painel mostrava "—"
+ * para um notebook que estava claramente na tomada.
+ */
+export function powerLabelFromState(state: string | null | undefined): string | null {
+  const raw = state?.trim().toLowerCase();
+  if (!raw) return null;
+  // ORDEM IMPORTA: "discharging" contém "charging". Sem checar a descarga
+  // primeiro, um notebook na bateria apareceria como "Carregando".
+  if (raw.includes('discharg')) return 'Na bateria';
+  if (raw.includes('charging')) return 'Carregando';
+  if (raw.includes('on ac') || raw.includes('fully charged')) return 'Na tomada';
+  if (raw.includes('low') || raw.includes('critical') || raw.includes('partially')) {
+    return 'Na bateria';
+  }
+  return null;
+}
+
+/**
+ * Texto do estado de energia. Desconhecido rende "—".
+ *
+ * Precedência: `onAc` (campo dedicado, ao vivo) → texto cru do SO (`state`).
+ */
+export function batteryPowerLabel(
+  onAc: boolean | null,
+  charging = false,
+  state?: string | null,
+): string {
   if (onAc === false) return charging ? 'Carregando' : 'Na bateria';
   if (onAc === true) return charging ? 'Carregando' : 'Na tomada';
-  return charging ? 'Carregando' : '—';
+  if (charging) return 'Carregando';
+  return powerLabelFromState(state) ?? '—';
 }
 
 /** Percentual formatado; null/fora da faixa rende "—". */
@@ -115,6 +139,8 @@ export function batteryFromMetrics(
         : null,
     onAc: metrics.batteryOnAc ?? null,
     charging: metrics.batteryCharging === true,
+    // O heartbeat não carrega o texto cru do SO: aqui não há fallback.
+    state: null,
   };
 }
 
@@ -138,11 +164,16 @@ export function aggregateBatteries(
     .map((battery) => battery.onAc)
     .filter((value): value is boolean => typeof value === 'boolean');
 
+  // Texto cru de qualquer bateria: é o que permite dizer "Na tomada" em
+  // inventário antigo, que não trazia o booleano onAc.
+  const state = batteries.map((battery) => battery.state?.trim()).find((value) => !!value) ?? null;
+
   return {
     hasBattery: true,
     percent: percents.length > 0 ? Math.min(...percents) : null,
     onAc: onAcValues.length > 0 ? onAcValues.some(Boolean) : null,
     charging: batteries.some((battery) => battery.charging === true),
+    state,
   };
 }
 

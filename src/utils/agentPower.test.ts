@@ -6,8 +6,8 @@ import {
   batteryPowerLabel,
   formatBatteryPercent,
   isAgentLaptop,
-  laptopBadgeLabel,
   machineTypeLabel,
+  powerLabelFromState,
   resolveBatteryView,
 } from './agentPower';
 
@@ -63,13 +63,6 @@ describe('rótulos de tipo de máquina', () => {
     expect(machineTypeLabel({ machineType: null })).toBeNull();
     expect(machineTypeLabel({})).toBeNull();
   });
-
-  it('selo usa Notebook e distingue Tablet', () => {
-    expect(laptopBadgeLabel({ machineType: 'notebook' })).toBe('Notebook');
-    expect(laptopBadgeLabel({ machineType: 'tablet' })).toBe('Tablet');
-    // Sem machineType específico, o selo continua "Notebook".
-    expect(laptopBadgeLabel({ isLaptop: true })).toBe('Notebook');
-  });
 });
 
 describe('batteryPowerLabel', () => {
@@ -79,6 +72,33 @@ describe('batteryPowerLabel', () => {
     expect(batteryPowerLabel(false, true)).toBe('Carregando');
     expect(batteryPowerLabel(true, true)).toBe('Carregando');
     expect(batteryPowerLabel(null)).toBe('—');
+  });
+
+  /**
+   * Caso real de campo: inventário ANTIGO não tinha o booleano `onAc`, só o
+   * texto cru do WMI. Sem esse fallback o painel mostrava "—" para um notebook
+   * que estava na tomada.
+   */
+  it('cai para o texto cru do SO quando onAc não foi reportado', () => {
+    expect(batteryPowerLabel(null, false, 'On AC')).toBe('Na tomada');
+    expect(batteryPowerLabel(null, false, 'Fully Charged')).toBe('Na tomada');
+    expect(batteryPowerLabel(null, false, 'Discharging')).toBe('Na bateria');
+    expect(batteryPowerLabel(null, false, 'Low')).toBe('Na bateria');
+    expect(batteryPowerLabel(null, false, 'Charging and High')).toBe('Carregando');
+    expect(batteryPowerLabel(null, false, 'Undefined')).toBe('—');
+  });
+
+  it('o campo dedicado vence o texto cru', () => {
+    // onAc=false (na bateria) com texto antigo "On AC" não pode enganar.
+    expect(batteryPowerLabel(false, false, 'On AC')).toBe('Na bateria');
+    expect(batteryPowerLabel(true, false, 'Discharging')).toBe('Na tomada');
+  });
+
+  it('powerLabelFromState entende o vocabulário do WMI', () => {
+    expect(powerLabelFromState('On AC')).toBe('Na tomada');
+    expect(powerLabelFromState('discharging')).toBe('Na bateria');
+    expect(powerLabelFromState('')).toBeNull();
+    expect(powerLabelFromState(null)).toBeNull();
   });
 });
 
@@ -116,6 +136,8 @@ describe('batteryFromMetrics', () => {
       percent: 63,
       onAc: false,
       charging: false,
+      // O heartbeat não carrega o texto cru do SO.
+      state: null,
     });
   });
 
@@ -139,6 +161,14 @@ describe('aggregateBatteries — multi-bateria', () => {
   it('sem bateria ou lista vazia rende null', () => {
     expect(aggregateBatteries([])).toBeNull();
     expect(aggregateBatteries(null)).toBeNull();
+  });
+
+  it('preserva o texto cru quando onAc não veio (inventário antigo)', () => {
+    const view = aggregateBatteries([battery({ onAc: null, state: 'On AC' })]);
+
+    expect(view?.onAc).toBeNull();
+    expect(view?.state).toBe('On AC');
+    expect(batteryPowerLabel(view!.onAc, view!.charging, view!.state)).toBe('Na tomada');
   });
 });
 

@@ -1,17 +1,25 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { Icon, Badge, MetricBar } from '@/components/ui';
+import { Icon, Badge, MetricBar, BatteryGauge } from '@/components/ui';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { formatDateCompact } from '@/utils/format';
 import {
   batteryFromMetrics,
-  batteryPowerLabel,
+  batteryTone,
   isAgentLaptop,
-  laptopBadgeLabel,
+  machineTypeLabel,
   type AgentMachineLike,
+  type BatteryTone,
 } from '@/utils/agentPower';
-import { BatteryGauge } from '@/components/ui';
+
+/** Cor do badge de bateria conforme a faixa do percentual. */
+const BATTERY_BADGE_TONE: Record<BatteryTone, 'success' | 'warning' | 'danger' | 'slate'> = {
+  success: 'success',
+  warning: 'warning',
+  danger: 'danger',
+  neutral: 'slate',
+};
 
 /** Agente com cliente/site já resolvidos para exibição. */
 export type AgentCardAgent = Agent & { clientName: string; clientId: string; siteName?: string };
@@ -190,8 +198,10 @@ export function AgentCard({
   const displayName = agent.displayName ?? agent.hostname;
   const isZeroTouchPending = agent.zeroTouchPending === true;
   const relativeTime = formatRelative(lastSeen, now);
-  // Notebook: só `true` explícito (null = não reportado, nunca "desktop").
-  const isLaptop = isAgentLaptop(agent);
+  // Tipo da máquina (notebook/tablet/servidor/desktop) para o tooltip do ícone:
+  // o selo textual saiu porque o ÍCONE já distingue o notebook; o rótulo fica no
+  // title para não perder a informação.
+  const deviceTypeLabel = machineTypeLabel(agent);
   // Bateria ao vivo do heartbeat. O merge de frescor já foi feito por quem
   // monta a coleção (AgentList/LiveAgentHeartbeatCard), então aqui não há
   // risco de mostrar leitura velha como se fosse atual.
@@ -212,17 +222,32 @@ export function AgentCard({
       tabIndex={onOpen ? 0 : undefined}
       className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-colors hover:border-primary/30 hover:bg-surface-light"
     >
-      <div className="absolute right-4 top-4">
+      {/* Canto superior direito: status e, logo abaixo, a bateria (percentual +
+          ícone de tomada/carregando). O selo textual de notebook saiu — o ícone
+          do dispositivo já o distingue. */}
+      <div className="absolute right-4 top-4 flex flex-col items-end gap-1.5">
         <Badge color={online ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
             {online ? <Icon name="wifi" className="h-2.5 w-2.5" /> : <Icon name="wifi_off" className="h-2.5 w-2.5" />}
             {online ? 'Online' : 'Offline'}
           </span>
         </Badge>
+        {battery && (
+          <Badge color={BATTERY_BADGE_TONE[batteryTone(battery.percent)]}>
+            {/* O title do próprio indicador descreve percentual + estado. */}
+            <BatteryGauge
+              percent={battery.percent}
+              onAc={battery.onAc}
+              charging={battery.charging}
+              showLabel={false}
+            />
+          </Badge>
+        )}
       </div>
       <div className="flex items-start gap-3 pr-6">
         <div
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${getAgentDeviceIconBoxClass(agent)}`}
+          title={deviceTypeLabel ? `Dispositivo: ${deviceTypeLabel}` : undefined}
         >
           {/* Servidor > notebook/tablet > SO (campos dedicados vencem o texto). */}
           {getAgentDeviceIcon(agent)}
@@ -247,19 +272,9 @@ export function AgentCard({
               </Badge>
             </div>
           )}
-          {isLaptop && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5" title="Máquina móvel (bateria/chassis reportados pelo agente)">
-              <Badge color="accent">
-                <span className="flex items-center gap-1">
-                  <Icon name="laptop_mac" className="h-2.5 w-2.5" />
-                  {laptopBadgeLabel(agent)}
-                </span>
-              </Badge>
-            </div>
-          )}
         </div>
       </div>
-      <div className="space-y-1.5 text-xs">
+      <div className={`space-y-1.5 text-xs ${battery ? 'pr-16' : ''}`}>
         <div className="flex items-center gap-2 text-muted">
           <Icon name="monitoring" className="h-3.5 w-3.5 shrink-0 text-muted" />
           <span className="truncate">{agent.operatingSystem ?? '—'}{agent.osVersion ? ` · ${agent.osVersion}` : ''}</span>
@@ -311,14 +326,6 @@ export function AgentCard({
             <Icon name="schedule" className="h-3 w-3" />
             {relativeTime.text}
           </span>
-          {battery && (
-            <BatteryGauge
-              percent={battery.percent}
-              onAc={battery.onAc}
-              charging={battery.charging}
-              label={batteryPowerLabel(battery.onAc, battery.charging)}
-            />
-          )}
           {agent.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
             const t = agent.heartbeatMetrics.cpuTemperatureCelsius;
             const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : '';

@@ -409,33 +409,8 @@ describe('AgentCard — ícone de dispositivo (notebook)', () => {
  * selo de uma máquina real; e ausência de dado de bateria não pode virar
  * "sem bateria" nem "0%".
  */
-describe('AgentCard — notebook e energia', () => {
-  it('mostra o selo Notebook quando o agente reporta isLaptop', () => {
-    render(<AgentCard agent={buildAgent({ isLaptop: true, machineType: 'notebook' })} now={Date.now()} />);
-
-    expect(screen.getByText('Notebook')).toBeTruthy();
-  });
-
-  it('usa o rótulo Tablet para tablet/convertível', () => {
-    render(<AgentCard agent={buildAgent({ isLaptop: true, machineType: 'tablet' })} now={Date.now()} />);
-
-    expect(screen.getByText('Tablet')).toBeTruthy();
-  });
-
-  it('NÃO mostra selo quando o campo não foi reportado (null)', () => {
-    render(<AgentCard agent={buildAgent({ isLaptop: null, machineType: null })} now={Date.now()} />);
-
-    expect(screen.queryByText('Notebook')).toBeNull();
-    expect(screen.queryByText('Desktop')).toBeNull();
-  });
-
-  it('NÃO mostra selo em desktop confirmado (isLaptop=false)', () => {
-    render(<AgentCard agent={buildAgent({ isLaptop: false, machineType: 'desktop' })} now={Date.now()} />);
-
-    expect(screen.queryByText('Notebook')).toBeNull();
-  });
-
-  it('mostra percentual e estado da tomada a partir do heartbeat', () => {
+describe('AgentCard — energia (badge abaixo do Online)', () => {
+  it('mostra o badge de bateria com o percentual do heartbeat', () => {
     render(
       <AgentCard
         agent={buildAgent({
@@ -447,10 +422,11 @@ describe('AgentCard — notebook e energia', () => {
     );
 
     expect(screen.getByText('63%')).toBeTruthy();
-    expect(screen.getByText('Na bateria')).toBeTruthy();
+    // O rótulo textual não cabe no badge; ele fica no title (acessível no hover).
+    expect(screen.getByTitle('Bateria: 63% · Na bateria')).toBeTruthy();
   });
 
-  it('mostra "Na tomada" e "Carregando" quando plugado', () => {
+  it('mostra o estado de carregando no title quando plugado', () => {
     render(
       <AgentCard
         agent={buildAgent({
@@ -462,17 +438,16 @@ describe('AgentCard — notebook e energia', () => {
     );
 
     expect(screen.getByText('41%')).toBeTruthy();
-    expect(screen.getByText('Carregando')).toBeTruthy();
+    expect(screen.getByTitle('Bateria: 41% · Carregando')).toBeTruthy();
   });
 
-  it('sem dado de bateria não renderiza bloco de energia', () => {
+  it('sem dado de bateria não renderiza o badge', () => {
     render(<AgentCard agent={buildAgent({ heartbeatMetrics: undefined })} now={Date.now()} />);
 
-    expect(screen.queryByText('Na tomada')).toBeNull();
-    expect(screen.queryByText('Na bateria')).toBeNull();
+    expect(screen.queryByTitle(/^Bateria:/)).toBeNull();
   });
 
-  it('desktop (hasBattery=false) também não renderiza bloco de energia', () => {
+  it('desktop (hasBattery=false) também não renderiza o badge', () => {
     render(
       <AgentCard
         agent={buildAgent({ isLaptop: false, heartbeatMetrics: { hasBattery: false, batteryOnAc: true } })}
@@ -480,6 +455,30 @@ describe('AgentCard — notebook e energia', () => {
       />,
     );
 
-    expect(screen.queryByText('Na tomada')).toBeNull();
+    expect(screen.queryByTitle(/^Bateria:/)).toBeNull();
+  });
+});
+
+/**
+ * O selo textual de notebook FOI REMOVIDO: o ícone do dispositivo já distingue a
+ * máquina móvel, e o tipo continua acessível no title do ícone.
+ */
+describe('AgentCard — sem selo textual de notebook', () => {
+  it('não escreve Notebook/Tablet no card', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: true, machineType: 'notebook' })} now={Date.now()} />);
+
+    expect(screen.queryByText('Notebook')).toBeNull();
+  });
+
+  it('mantém o tipo da máquina no title do ícone', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: true, machineType: 'notebook' })} now={Date.now()} />);
+
+    expect(screen.getByTitle('Dispositivo: Notebook')).toBeTruthy();
+  });
+
+  it('não inventa title quando o tipo não foi reportado', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: null, machineType: null })} now={Date.now()} />);
+
+    expect(screen.queryByTitle(/^Dispositivo:/)).toBeNull();
   });
 });

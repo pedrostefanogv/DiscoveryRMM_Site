@@ -40,11 +40,13 @@ function battery(overrides: Partial<BatteryInfo> = {}): BatteryInfo {
 afterEach(() => cleanup());
 
 /**
- * Painel de dispositivo/energia que vive DENTRO do card "Informações" do
- * detalhe do agente (antes era um card próprio, solto na página).
+ * Coluna de dispositivo/energia do card "Informações" do detalhe.
+ *
+ * Ela NÃO é um card: não tem título/uppercase nem fundo próprio — usa a mesma
+ * tipografia dos dados cadastrais (dl/dt/dd) e só uma divisão lateral.
  */
 describe('AgentPowerPanel', () => {
-  it('mostra tipo de máquina, energia e saúde da bateria do inventário', () => {
+  it('usa a tipografia do card (dt/dd) e mostra energia + saúde da bateria', () => {
     render(
       <AgentPowerPanel
         agentId="a1"
@@ -55,22 +57,44 @@ describe('AgentPowerPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Dispositivo e energia')).toBeTruthy();
+    expect(screen.getByText('Tipo de máquina')).toBeTruthy();
+    expect(screen.getByText('Energia')).toBeTruthy();
     expect(screen.getByText('Notebook')).toBeTruthy();
-    expect(screen.getByText('Na bateria')).toBeTruthy();
-    // O percentual aparece no resumo e na bateria detalhada; a cor segue a faixa
-    // (63% = success).
+    // Rótulo aparece no resumo e na bateria detalhada.
+    expect(screen.getAllByText('Na bateria').length).toBeGreaterThanOrEqual(1);
+
     const percentuais = screen.getAllByText('63%');
     expect(percentuais.length).toBeGreaterThanOrEqual(1);
+    // A cor segue a faixa (63% = success).
     expect(percentuais[0].className).toContain('text-success');
-    // Saúde = máxima/desenho (41000/45000 ≈ 91%).
+
     expect(screen.getByText('Saúde: 91%')).toBeTruthy();
     expect(screen.getByText('Ciclos: 212')).toBeTruthy();
     // Valor vindo do inventário é rotulado — o inventário roda a cada 24 h.
     expect(screen.getByText(/Inventário de/)).toBeTruthy();
   });
 
-  it('mostra "Carregando" na tomada', () => {
+  /**
+   * Regressão do teste de campo: o inventário antigo não trazia o booleano de
+   * tomada, só o texto cru do WMI (On AC). O painel mostrava "—" para um
+   * notebook que estava na tomada.
+   */
+  it('diz Na tomada quando o booleano não veio, mas o texto do SO diz On AC', () => {
+    render(
+      <AgentPowerPanel
+        agentId="a1"
+        isLaptop
+        machineType="notebook"
+        batteries={[battery({ onAc: null, state: 'On AC' })]}
+      />,
+    );
+
+    expect(screen.getAllByText('Na tomada').length).toBeGreaterThanOrEqual(1);
+    // O texto cru só aparece quando é a ÚNICA fonte — aqui o rótulo já resolveu.
+    expect(screen.queryByText('Estado: On AC')).toBeNull();
+  });
+
+  it('mostra Carregando na tomada', () => {
     render(
       <AgentPowerPanel
         agentId="a1"
@@ -80,13 +104,15 @@ describe('AgentPowerPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Carregando')).toBeTruthy();
+    expect(screen.getAllByText('Carregando').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('mostra Desktop sem detalhes de bateria', () => {
+  it('mostra Desktop sem detalhes de bateria (e energia desconhecida)', () => {
     render(<AgentPowerPanel agentId="a1" isLaptop={false} machineType="desktop" batteries={[]} />);
 
     expect(screen.getByText('Desktop')).toBeTruthy();
+    expect(screen.getByText('Energia')).toBeTruthy();
+    expect(screen.getByText('—')).toBeTruthy();
     expect(screen.queryByText(/Desenho:/)).toBeNull();
     expect(screen.queryByText(/Ciclos:/)).toBeNull();
   });

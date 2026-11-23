@@ -8,7 +8,7 @@ import {
   type AgentCardAgent,
 } from './AgentCard';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
-import { batteryFromMetrics, isAgentLaptop, laptopBadgeLabel } from '@/utils/agentPower';
+import { batteryFromMetrics, machineTypeLabel } from '@/utils/agentPower';
 import { BatteryGauge } from '@/components/ui';
 
 interface AgentListViewProps {
@@ -73,9 +73,10 @@ export function AgentListView({
             const displayName = a.displayName ?? a.hostname;
             const isZeroTouchPending = a.zeroTouchPending === true;
             const relativeTime = formatRelative(lastSeen, now);
-            // Mesma regra do card: selo só com `true` explícito e energia só
-            // quando o heartbeat reportou presença de bateria.
-            const isLaptop = isAgentLaptop(a);
+            // Mesma regra do card: o notebook é distinguido pelo ÍCONE (o selo
+            // textual saiu) e a energia só aparece quando o heartbeat reportou
+            // presença de bateria.
+            const deviceTypeLabel = machineTypeLabel(a);
             const battery = batteryFromMetrics(a.heartbeatMetrics);
             return (
               <tr
@@ -88,6 +89,7 @@ export function AgentListView({
                   <div className="flex items-center gap-3">
                     <div
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${getAgentDeviceIconBoxClass(a)}`}
+                      title={deviceTypeLabel ? `Dispositivo: ${deviceTypeLabel}` : undefined}
                     >
                       {/* Mesma regra do card: servidor > notebook/tablet > SO. */}
                       {getAgentDeviceIcon(a)}
@@ -96,16 +98,6 @@ export function AgentListView({
                       <p className="truncate font-medium text-foreground">{displayName}</p>
                       {a.displayName && a.displayName !== a.hostname && (
                         <p className="truncate font-mono text-xs text-muted">{a.hostname}</p>
-                      )}
-                      {isLaptop && (
-                        <span className="mt-1 inline-flex" title="Máquina móvel (bateria/chassis reportados pelo agente)">
-                          <Badge color="accent">
-                            <span className="flex items-center gap-1">
-                              <Icon name="laptop_mac" className="h-2.5 w-2.5" />
-                              {laptopBadgeLabel(a)}
-                            </span>
-                          </Badge>
-                        </span>
                       )}
                     </div>
                   </div>

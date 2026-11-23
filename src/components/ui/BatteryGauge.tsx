@@ -4,11 +4,17 @@ import { batteryPowerLabel, batteryTone, formatBatteryPercent, type BatteryTone 
 interface BatteryGaugeProps {
   /** Percentual 0-100; null = não reportado. */
   percent: number | null;
-  /** Na tomada? null = não reportado. */
+  /** Na tomada? null = não reportado (cai para o texto cru do SO). */
   onAc?: boolean | null;
   charging?: boolean;
-  /** Rótulo textual opcional ao lado do percentual (ex.: "Na tomada"). */
-  label?: string | null;
+  /** Texto cru do SO/WMI ("On AC", "Discharging"): fallback do rótulo. */
+  state?: string | null;
+  /**
+   * Mostra o rótulo textual ("Na tomada"/"Na bateria") ao lado do percentual.
+   * Desligado onde o espaço é curto (badge do canto do card); o estado continua
+   * visível pelo ícone de plugue/raio e pelo title.
+   */
+  showLabel?: boolean;
   size?: 'sm' | 'md';
   className?: string;
 }
@@ -41,13 +47,18 @@ const SIZES = {
  * com polo, o preenchimento é a carga real e a COR muda por faixa (verde acima
  * de 30%, âmbar até 30%, vermelho até 15%). Quando a máquina está na
  * tomada/carregando, o raio (bolt) ou o plugue (power_settings_new) indicam o
- * estado sem depender do nível.
+ * estado.
+ *
+ * O estado vem de onAc/charging; quando o agente não reportou o booleano (coleta
+ * antiga), o texto cru do SO ("On AC") é usado como fallback — senão o painel
+ * mostrava "—" para um notebook que estava na tomada.
  */
 export function BatteryGauge({
   percent,
   onAc = null,
   charging = false,
-  label = null,
+  state = null,
+  showLabel = true,
   size = 'sm',
   className = '',
 }: BatteryGaugeProps) {
@@ -55,10 +66,14 @@ export function BatteryGauge({
   const fillPercent =
     percent == null || !Number.isFinite(percent) ? 0 : Math.min(100, Math.max(0, percent));
   const s = SIZES[size];
-  const plugged = onAc === true || charging;
-  const powerLabel = batteryPowerLabel(onAc, charging);
+  const resolvedLabel = batteryPowerLabel(onAc, charging, state);
+  const showResolvedLabel = showLabel && resolvedLabel !== '—';
+  // "Plugado" também quando só o TEXTO CRU diz que está na tomada: o ícone
+  // precisa aparecer mesmo sem o booleano onAc.
+  const plugged =
+    onAc === true || charging || resolvedLabel === 'Na tomada' || resolvedLabel === 'Carregando';
   const percentLabel = formatBatteryPercent(percent);
-  const title = 'Bateria: ' + percentLabel + (powerLabel !== '—' ? ' · ' + powerLabel : '');
+  const title = 'Bateria: ' + percentLabel + (resolvedLabel !== '—' ? ' · ' + resolvedLabel : '');
 
   return (
     <span className={'inline-flex items-center gap-1.5 ' + className} title={title} aria-label={title}>
@@ -76,11 +91,13 @@ export function BatteryGauge({
               'absolute inset-y-[1.5px] left-[1.5px] rounded-[1px] transition-all duration-500 ' +
               TONE_FILL[tone]
             }
-            style={{ width: 'calc(' + fillPercent + '% - 3px)' }}
+            // max(0px, ...) evita calc() negativo em 0% (largura negativa é
+            // inválida em CSS e o valor seria descartado).
+            style={{ width: 'max(0px, calc(' + fillPercent + '% - 3px))' }}
           />
           {plugged && (
             <Icon
-              name={charging ? 'bolt' : 'power_settings_new'}
+              name={resolvedLabel === 'Carregando' ? 'bolt' : 'power_settings_new'}
               className={'relative z-10 ' + s.glyph + ' ' + TONE_TEXT[tone]}
             />
           )}
@@ -88,7 +105,7 @@ export function BatteryGauge({
         {/* Polo positivo da bateria. */}
         <span className={'shrink-0 rounded-r-[1px] ' + s.nub + ' ' + TONE_FILL[tone]} />
       </span>
-      {label ? <span className={s.text + ' text-muted'}>{label}</span> : null}
+      {showResolvedLabel && <span className={s.text + ' text-muted'}>{resolvedLabel}</span>}
       <span className={s.text + ' font-semibold tabular-nums ' + TONE_TEXT[tone]}>{percentLabel}</span>
     </span>
   );

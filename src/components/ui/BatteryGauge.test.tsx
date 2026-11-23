@@ -32,7 +32,7 @@ describe('BatteryGauge', () => {
   });
 
   it('marca carregando com o raio e o rótulo', () => {
-    const { container } = render(<BatteryGauge percent={41} onAc charging label="Carregando" />);
+    const { container } = render(<BatteryGauge percent={41} onAc charging />);
     expect(screen.getByText('Carregando')).toBeTruthy();
     // O glifo do raio é o bolt (dois paths no registry).
     expect(container.querySelectorAll('svg path').length).toBeGreaterThan(0);
@@ -40,7 +40,7 @@ describe('BatteryGauge', () => {
   });
 
   it('na tomada sem carregar mostra o plugue e a borda destacada', () => {
-    const { container } = render(<BatteryGauge percent={90} onAc label="Na tomada" />);
+    const { container } = render(<BatteryGauge percent={90} onAc />);
     expect(screen.getByText('Na tomada')).toBeTruthy();
     expect(container.querySelector('.border-success\\/60')).toBeTruthy();
   });
