@@ -17,7 +17,7 @@ function glyphPath(name: 'battery_charging_80_2'): string | null {
  * Ajustes finos travados aqui:
  *
  * 1. NA BATERIA a borda precisa APARECER nos dois temas — antes usava o token
- *    \'border\' (quase invisível), agora usa foreground/60 + fundo leve.
+ *    \'border\' (1px, quase invisível), agora 1,5px de foreground puro.
  * 2. Os DOIS estados têm o MESMO tamanho: o glifo de "na tomada" é recortado na
  *    caixa desenhada (viewBox medido do path) e ambos usam a mesma classe de
  *    altura, então o indicador não "pula" ao conectar/desconectar.
@@ -89,9 +89,12 @@ describe('BatteryGauge — na bateria (bateria desenhada)', () => {
     expect(root).toBeTruthy();
     expect(root?.querySelector('svg')).toBeNull();
 
-    const body = root?.querySelector('.border-foreground\\/60');
+    // Contorno em contraste máximo (1,5px de foreground, sem opacidade) e sem
+    // fundo próprio: é o que faz a bateria aparecer no card E dentro do badge.
+    const body = root?.querySelector('.border-foreground');
     expect(body).toBeTruthy();
-    expect(body?.className ?? '').toContain('bg-surface-light');
+    expect(body?.className ?? '').toContain('border-[1.5px]');
+    expect(body?.className ?? '').not.toContain('bg-surface-light');
     expect(body?.className ?? '').toContain('h-5');
 
     expect(screen.getByText('Na bateria')).toBeTruthy();

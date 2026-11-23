@@ -66,9 +66,9 @@ const CHARGING_GLYPH_VIEWBOX = '80 -680 776.5 400';
  *   percentual exibido ao lado; a cor segue a faixa do percentual (verde > 30%,
  *   âmbar ≤ 30%, vermelho ≤ 15%), preservando o alerta de bateria baixa.
  * - NA BATERIA: bateria desenhada em CSS, com o preenchimento proporcional ao
- *   nível real (o glifo fixo não daria essa informação). Borda reforçada para
- *   aparecer nos temas claro e escuro — antes usava o token `border`, que ficava
- *   quase invisível.
+ *   nível real (o glifo fixo não daria essa informação). Contorno de 1,5px em
+ *   `foreground` puro para aparecer nos temas claro e escuro — o token `border`
+ *   (1px, quase sem contraste) deixava a bateria invisível no card e no badge.
  *
  * O estado vem de onAc/charging; quando o agente não reportou o booleano (coleta
  * antiga), o texto cru do SO ("On AC") é usado como fallback — senão o painel
@@ -130,9 +130,12 @@ export function BatteryGauge({
       <span className="inline-flex items-center gap-0.5">
         <span
           className={
-            // Borda reforçada (foreground/60 em vez do token \'border\', quase
-            // invisível) + fundo leve: a bateria precisa aparecer nos DOIS temas.
-            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-foreground/60 bg-surface-light ' +
+            // Contorno em CONTRASTE MÁXIMO: 1,5px de `foreground` puro (o token
+            // adapta-se aos dois temas) em vez do `border` sutil de antes — a
+            // bateria aparecia quase invisível, principalmente dentro do badge
+            // colorido da listagem. Corpo TRANSPARENTE: dentro do badge o fundo
+            // dele já dá o contraste e o desenho fica parecendo um ícone.
+            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border-[1.5px] border-foreground ' +
             s.height +
             ' ' +
             s.bodyWidth
@@ -140,12 +143,13 @@ export function BatteryGauge({
         >
           <span
             className={
-              'absolute inset-y-[1.5px] left-[1.5px] rounded-[1px] transition-all duration-500 ' +
+              'absolute inset-y-[1px] left-[1px] rounded-[1px] transition-all duration-500 ' +
               TONE_FILL[tone]
             }
             // max(0px, ...) evita calc() negativo em 0% (largura negativa é
-            // inválida em CSS e o valor seria descartado).
-            style={{ width: 'max(0px, calc(' + fillPercent + '% - 3px))' }}
+            // inválida em CSS e o valor seria descartado). O -2px mantém o
+            // preenchimento dentro do contorno de 1,5px.
+            style={{ width: 'max(0px, calc(' + fillPercent + '% - 2px))' }}
           />
         </span>
         {/* Polo positivo da bateria. */}
