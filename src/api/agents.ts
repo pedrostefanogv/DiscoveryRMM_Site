@@ -10,6 +10,7 @@ import type {
   ScheduledTaskActionRequest,
   NetworkAdapterInfo,
   MemoryModuleInfo,
+  BatteryInfo,
   ListeningPortInfo,
   OpenSocketInfo,
   AgentListeningPortsPage,
@@ -71,6 +72,8 @@ export interface HardwareComponentsResponse {
   startupItems: StartupItemInfo[];
   scheduledTasks: ScheduledTaskInfo[];
   collectedAt: string;
+  /** Baterias: pequenas e independentes de IncludeNetwork. */
+  batteries?: BatteryInfo[];
 }
 
 export interface HardwareReport {
@@ -82,6 +85,11 @@ export interface HardwareReport {
   inventoryRaw?: unknown;
   listeningPorts?: ListeningPortInfo[];
   openSockets?: OpenSocketInfo[];
+  /**
+   * Baterias (notebook). Vazio/ausente em desktop, VM e agente antigo que ainda
+   * não envia a lista — o detalhe simplesmente não renderiza o card.
+   */
+  batteries?: BatteryInfo[];
 }
 
 interface StartRemoteDebugSessionWireResponse extends Omit<

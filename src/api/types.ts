@@ -159,6 +159,13 @@ export interface AgentHeartbeatMetrics {
   commitHash?: string;
   timestampUtc?: string;
   receivedAtUtc?: string;
+  // ── Energia (bateria × tomada), ao vivo pelo heartbeat ──
+  // undefined = não reportado (agente antigo/leitura incerta). NUNCA tratar
+  // ausência como false: o bloco de bateria seria escondido num notebook real.
+  hasBattery?: boolean;
+  batteryPercent?: number;
+  batteryOnAc?: boolean;
+  batteryCharging?: boolean;
 }
 
 export interface Agent {
@@ -209,6 +216,18 @@ export interface Agent {
    * null/ausente nos mesmos casos de isServer.
    */
   productType?: string | null;
+  /**
+   * Notebook/tablet? Coluna is_laptop do inventário (migração M294).
+   * null/ausente = NÃO REPORTADO (agente antigo, VM sem WMI ou coleta
+   * inconclusiva) — nunca "não é notebook". A UI só mostra o selo com `true`
+   * explícito e NUNCA infere desktop a partir de null.
+   */
+  isLaptop?: boolean | null;
+  /**
+   * Vocabulário fechado: 'notebook' | 'desktop' | 'tablet' | 'server' |
+   * 'unknown'. null/ausente = não reportado.
+   */
+  machineType?: string | null;
 }
 
 /** Página da lixeira de agentes (GET /agents/deleted). */
@@ -255,8 +274,49 @@ export interface AgentHardwareInfo {
   domain?: string | null;
   workgroup?: string | null;
   partOfDomain?: boolean | null;
+  /**
+   * Formato físico da máquina (M294). Mesma convenção nullable de isServer:
+   * null = não reportado, nunca "não é notebook".
+   */
+  isLaptop?: boolean | null;
+  machineType?: string | null;
+  /** SMBIOS chassis type quando o agente conseguir ler (hoje não envia). */
+  chassisType?: number | null;
+  /** Win32_ComputerSystem.PCSystemType(Ex) usado na classificação. */
+  pcSystemType?: number | null;
   collectedAt: string;
   updatedAt: string;
+}
+
+/**
+ * Bateria individual do agente (Win32_Battery + estado de energia do SO).
+ *
+ * `onAc` e `present` são nullable: null = não reportado (agente antigo ou
+ * leitura incerta), NUNCA "falso". A UI não pode afirmar "na bateria" a partir
+ * de um valor ausente.
+ */
+export interface BatteryInfo {
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  chemistry: string | null;
+  /** Rótulo do estado reportado ("Charging", "On AC", "Discharging"...). */
+  state: string | null;
+  present?: boolean | null;
+  onAc?: boolean | null;
+  charging: boolean;
+  charged: boolean;
+  /** Carga atual em % (0-100). */
+  percentRemaining: number;
+  /** Capacidade de projeto em mAh (0 = não reportada). */
+  designedCapacityMAh: number;
+  /** Capacidade máxima atual em mAh — saúde ≈ máxima/desenho. */
+  maxCapacityMAh: number;
+  currentCapacityMAh: number;
+  health: string | null;
+  cycleCount: number;
+  minutesUntilEmpty: number;
+  minutesToCharge: number;
 }
 
 export interface DiskInfo {

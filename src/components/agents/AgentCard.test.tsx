@@ -317,3 +317,86 @@ describe('AgentCard — ícone de Windows Server', () => {
     expect(d).not.toBe(renderOsIconPath('Windows Server 2022 Standard'));
   });
 });
+
+/**
+ * Selo de notebook e energia no card da listagem.
+ *
+ * Regra que estes testes travam: o selo aparece só com `isLaptop === true`.
+ * `null` (agente antigo/VM sem WMI) NÃO pode virar "Desktop" nem esconder o
+ * selo de uma máquina real; e ausência de dado de bateria não pode virar
+ * "sem bateria" nem "0%".
+ */
+describe('AgentCard — notebook e energia', () => {
+  it('mostra o selo Notebook quando o agente reporta isLaptop', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: true, machineType: 'notebook' })} now={Date.now()} />);
+
+    expect(screen.getByText('Notebook')).toBeTruthy();
+  });
+
+  it('usa o rótulo Tablet para tablet/convertível', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: true, machineType: 'tablet' })} now={Date.now()} />);
+
+    expect(screen.getByText('Tablet')).toBeTruthy();
+  });
+
+  it('NÃO mostra selo quando o campo não foi reportado (null)', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: null, machineType: null })} now={Date.now()} />);
+
+    expect(screen.queryByText('Notebook')).toBeNull();
+    expect(screen.queryByText('Desktop')).toBeNull();
+  });
+
+  it('NÃO mostra selo em desktop confirmado (isLaptop=false)', () => {
+    render(<AgentCard agent={buildAgent({ isLaptop: false, machineType: 'desktop' })} now={Date.now()} />);
+
+    expect(screen.queryByText('Notebook')).toBeNull();
+  });
+
+  it('mostra percentual e estado da tomada a partir do heartbeat', () => {
+    render(
+      <AgentCard
+        agent={buildAgent({
+          isLaptop: true,
+          heartbeatMetrics: { hasBattery: true, batteryPercent: 63, batteryOnAc: false, batteryCharging: false },
+        })}
+        now={Date.now()}
+      />,
+    );
+
+    expect(screen.getByText('63%')).toBeTruthy();
+    expect(screen.getByText('Na bateria')).toBeTruthy();
+  });
+
+  it('mostra "Na tomada" e "Carregando" quando plugado', () => {
+    render(
+      <AgentCard
+        agent={buildAgent({
+          isLaptop: true,
+          heartbeatMetrics: { hasBattery: true, batteryPercent: 41, batteryOnAc: true, batteryCharging: true },
+        })}
+        now={Date.now()}
+      />,
+    );
+
+    expect(screen.getByText('41%')).toBeTruthy();
+    expect(screen.getByText('Carregando')).toBeTruthy();
+  });
+
+  it('sem dado de bateria não renderiza bloco de energia', () => {
+    render(<AgentCard agent={buildAgent({ heartbeatMetrics: undefined })} now={Date.now()} />);
+
+    expect(screen.queryByText('Na tomada')).toBeNull();
+    expect(screen.queryByText('Na bateria')).toBeNull();
+  });
+
+  it('desktop (hasBattery=false) também não renderiza bloco de energia', () => {
+    render(
+      <AgentCard
+        agent={buildAgent({ isLaptop: false, heartbeatMetrics: { hasBattery: false, batteryOnAc: true } })}
+        now={Date.now()}
+      />,
+    );
+
+    expect(screen.queryByText('Na tomada')).toBeNull();
+  });
+});

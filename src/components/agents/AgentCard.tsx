@@ -4,6 +4,13 @@ import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { formatDateCompact } from '@/utils/format';
+import {
+  batteryFromMetrics,
+  batteryPowerLabel,
+  formatBatteryPercent,
+  isAgentLaptop,
+  laptopBadgeLabel,
+} from '@/utils/agentPower';
 
 /** Agente com cliente/site já resolvidos para exibição. */
 export type AgentCardAgent = Agent & { clientName: string; clientId: string; siteName?: string };
@@ -145,6 +152,12 @@ export function AgentCard({
   const displayName = agent.displayName ?? agent.hostname;
   const isZeroTouchPending = agent.zeroTouchPending === true;
   const relativeTime = formatRelative(lastSeen, now);
+  // Notebook: só `true` explícito (null = não reportado, nunca "desktop").
+  const isLaptop = isAgentLaptop(agent);
+  // Bateria ao vivo do heartbeat. O merge de frescor já foi feito por quem
+  // monta a coleção (AgentList/LiveAgentHeartbeatCard), então aqui não há
+  // risco de mostrar leitura velha como se fosse atual.
+  const battery = batteryFromMetrics(agent.heartbeatMetrics);
 
   return (
     <div
@@ -192,6 +205,16 @@ export function AgentCard({
                 <span className="flex items-center gap-1">
                   <Icon name="restart_alt" className="h-2.5 w-2.5" />
                   Reinício pendente
+                </span>
+              </Badge>
+            </div>
+          )}
+          {isLaptop && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5" title="Máquina móvel (bateria/chassis reportados pelo agente)">
+              <Badge color="accent">
+                <span className="flex items-center gap-1">
+                  <Icon name="laptop_mac" className="h-2.5 w-2.5" />
+                  {laptopBadgeLabel(agent)}
                 </span>
               </Badge>
             </div>
@@ -250,6 +273,16 @@ export function AgentCard({
             <Icon name="schedule" className="h-3 w-3" />
             {relativeTime.text}
           </span>
+          {battery && (
+            <span
+              className={`flex items-center gap-1 text-[10px] ${battery.onAc === false && !battery.charging ? 'text-warning' : ''}`}
+              title={`Energia: ${batteryPowerLabel(battery.onAc, battery.charging)}`}
+            >
+              <Icon name={battery.charging ? 'bolt' : 'power_settings_new'} className="h-3 w-3" />
+              {formatBatteryPercent(battery.percent)}
+              <span className="text-muted">{batteryPowerLabel(battery.onAc, battery.charging)}</span>
+            </span>
+          )}
           {agent.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
             const t = agent.heartbeatMetrics.cpuTemperatureCelsius;
             const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : '';

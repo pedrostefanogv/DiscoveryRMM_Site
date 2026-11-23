@@ -346,3 +346,48 @@ describe("toHeartbeatPayload — usuário logado", () => {
     expect(payload?.loggedUserSince).toBe("2026-01-02T03:04:05Z");
   });
 });
+
+describe("toHeartbeatPayload — energia (bateria × tomada)", () => {
+  it("extrai os campos de energia do heartbeat ao vivo", () => {
+    const payload = toHeartbeatPayload({
+      agentId: "agent-1",
+      status: "Online",
+      hasBattery: true,
+      batteryPercent: 63,
+      batteryOnAc: false,
+      batteryCharging: false,
+    });
+
+    expect(payload?.hasBattery).toBe(true);
+    expect(payload?.batteryPercent).toBe(63);
+    expect(payload?.batteryOnAc).toBe(false);
+    expect(payload?.batteryCharging).toBe(false);
+  });
+
+  it("não transforma ausência em false (agente antigo)", () => {
+    // Distinção obrigatória: undefined = não reportado. Virar false esconderia
+    // o bloco de bateria de um notebook real.
+    const payload = toHeartbeatPayload({ agentId: "agent-1", status: "Online" });
+
+    expect(payload?.hasBattery).toBeUndefined();
+    expect(payload?.batteryOnAc).toBeUndefined();
+    expect(payload?.batteryCharging).toBeUndefined();
+    expect(payload?.batteryPercent).toBeUndefined();
+  });
+
+  it("aceita variações snake_case vindas do transporte", () => {
+    const payload = toHeartbeatPayload({
+      agentId: "agent-1",
+      status: "Online",
+      has_battery: true,
+      battery_percent: 12,
+      battery_on_ac: true,
+      battery_charging: "true",
+    });
+
+    expect(payload?.hasBattery).toBe(true);
+    expect(payload?.batteryPercent).toBe(12);
+    expect(payload?.batteryOnAc).toBe(true);
+    expect(payload?.batteryCharging).toBe(true);
+  });
+});

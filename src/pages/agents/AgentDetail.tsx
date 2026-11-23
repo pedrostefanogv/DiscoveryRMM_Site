@@ -28,6 +28,7 @@ import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import { LiveAgentHeartbeatCard } from '@/components/agents/LiveAgentHeartbeatCard';
+import { AgentPowerCard } from '@/components/agents/AgentPowerCard';
 import { AgentLabelsHistoryTab } from '@/components/agents/AgentLabelsHistoryTab';
 import { AgentAutostartTab } from '@/components/agents/AgentAutostartTab';
 import { AgentNetworkTab } from '@/components/agents/AgentNetworkTab';
@@ -1175,6 +1176,17 @@ export default function AgentDetail() {
 
       {/* Live Heartbeat Metrics */}
       <LiveAgentHeartbeatCard agentId={a.id} fallbackMetrics={a.heartbeatMetrics} />
+
+      {/* Energia e bateria: tipo de máquina (notebook × desktop), % de bateria e
+          estado da tomada ao vivo, com a saúde das baterias do inventário. */}
+      <AgentPowerCard
+        agentId={a.id}
+        fallbackMetrics={a.heartbeatMetrics}
+        batteries={hw.data?.batteries}
+        isLaptop={a.isLaptop ?? hw.data?.hardware?.isLaptop}
+        machineType={a.machineType ?? hw.data?.hardware?.machineType}
+        inventoryCollectedAt={hw.data?.hardware?.inventoryCollectedAt ?? null}
+      />
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

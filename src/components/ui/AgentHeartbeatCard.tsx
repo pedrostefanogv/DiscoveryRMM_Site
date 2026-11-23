@@ -1,6 +1,7 @@
 
 import type { AgentHeartbeatMetrics } from '@/api';
 import { Icon } from "@/components/ui";
+import { batteryPowerLabel } from '@/utils/agentPower';
 import { MetricBar } from './MetricBar';
 import { Card, CardHeader } from './Card';
 
@@ -75,6 +76,30 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
           }
         />
       </div>
+
+      {/* Bateria: só quando o agente reporta que existe bateria. Desktop/VM e
+          agente antigo não renderizam nada — nada de "0%" inventado. */}
+      {metrics.hasBattery === true && (
+        <div className="mt-3">
+          <MetricBar
+            icon={<Icon name={metrics.batteryCharging ? 'bolt' : 'power_settings_new'} className="h-3.5 w-3.5" />}
+            label="Bateria"
+            value={metrics.batteryPercent}
+            suffix="%"
+            // Cor INVERTIDA em relação a CPU/RAM: aqui valor alto é bom.
+            color={
+              metrics.batteryPercent == null
+                ? 'primary'
+                : metrics.batteryPercent <= 15
+                  ? 'danger'
+                  : metrics.batteryPercent <= 30
+                    ? 'warning'
+                    : 'success'
+            }
+            subtitle={batteryPowerLabel(metrics.batteryOnAc ?? null, metrics.batteryCharging === true)}
+          />
+        </div>
+      )}
 
       {/* Disk I/O */} 
       <div className="mt-3">

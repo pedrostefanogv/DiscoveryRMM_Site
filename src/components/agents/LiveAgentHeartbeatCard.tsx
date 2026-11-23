@@ -43,6 +43,11 @@ export function LiveAgentHeartbeatCard({ agentId, fallbackMetrics }: LiveAgentHe
         uptimeSeconds: liveHeartbeat.uptimeSeconds,
         processCount: liveHeartbeat.processCount,
         cpuTemperatureCelsius: liveHeartbeat.cpuTemperatureCelsius,
+        // Energia: repassada como veio (undefined = não reportado).
+        hasBattery: liveHeartbeat.hasBattery,
+        batteryPercent: liveHeartbeat.batteryPercent,
+        batteryOnAc: liveHeartbeat.batteryOnAc,
+        batteryCharging: liveHeartbeat.batteryCharging,
         ipAddress: liveHeartbeat.ipAddress,
         hostname: liveHeartbeat.hostname,
         agentVersion: liveHeartbeat.agentVersion,

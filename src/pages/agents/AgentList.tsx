@@ -841,6 +841,13 @@ export default function AgentList() {
           uptimeSeconds: live.uptimeSeconds,
           processCount: live.processCount,
           cpuTemperatureCelsius: live.cpuTemperatureCelsius,
+          // Energia (bateria × tomada) acompanha o heartbeat ao vivo: é o
+          // único jeito de a listagem mostrar "na tomada" sem esperar o
+          // inventário de 24 h.
+          hasBattery: live.hasBattery,
+          batteryPercent: live.batteryPercent,
+          batteryOnAc: live.batteryOnAc,
+          batteryCharging: live.batteryCharging,
           ipAddress: live.ipAddress,
           hostname: live.hostname,
           agentVersion: live.agentVersion,

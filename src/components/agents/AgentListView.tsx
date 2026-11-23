@@ -3,6 +3,13 @@ import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import { Icon, Badge, MetricBar } from '@/components/ui';
 import { formatRelative, getAgentOsIcon, isAgentWindowsServer, type AgentCardAgent } from './AgentCard';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
+import {
+  batteryFromMetrics,
+  batteryPowerLabel,
+  formatBatteryPercent,
+  isAgentLaptop,
+  laptopBadgeLabel,
+} from '@/utils/agentPower';
 
 interface AgentListViewProps {
   agents: AgentCardAgent[];
@@ -66,6 +73,10 @@ export function AgentListView({
             const displayName = a.displayName ?? a.hostname;
             const isZeroTouchPending = a.zeroTouchPending === true;
             const relativeTime = formatRelative(lastSeen, now);
+            // Mesma regra do card: selo só com `true` explícito e energia só
+            // quando o heartbeat reportou presença de bateria.
+            const isLaptop = isAgentLaptop(a);
+            const battery = batteryFromMetrics(a.heartbeatMetrics);
             return (
               <tr
                 key={a.id}
@@ -87,6 +98,16 @@ export function AgentListView({
                       <p className="truncate font-medium text-foreground">{displayName}</p>
                       {a.displayName && a.displayName !== a.hostname && (
                         <p className="truncate font-mono text-xs text-muted">{a.hostname}</p>
+                      )}
+                      {isLaptop && (
+                        <span className="mt-1 inline-flex" title="Máquina móvel (bateria/chassis reportados pelo agente)">
+                          <Badge color="accent">
+                            <span className="flex items-center gap-1">
+                              <Icon name="laptop_mac" className="h-2.5 w-2.5" />
+                              {laptopBadgeLabel(a)}
+                            </span>
+                          </Badge>
+                        </span>
                       )}
                     </div>
                   </div>
@@ -115,6 +136,15 @@ export function AgentListView({
                   </td>
                 )}
                 <td className="px-4 py-3">
+                  {battery && (
+                    <span
+                      className={`mr-1 inline-flex items-center gap-1 text-[10px] ${battery.onAc === false && !battery.charging ? 'text-warning' : 'text-muted'}`}
+                      title={`Energia: ${batteryPowerLabel(battery.onAc, battery.charging)}`}
+                    >
+                      <Icon name={battery.charging ? 'bolt' : 'power_settings_new'} className="h-3 w-3" />
+                      {formatBatteryPercent(battery.percent)}
+                    </span>
+                  )}
                   {hasPendingReboot(a) && (
                     <span className="mr-1 inline-flex" title={agentRebootTooltip(a.pendingRebootReasons)}>
                       <Badge color="warning">

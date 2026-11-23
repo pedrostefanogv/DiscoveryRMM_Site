@@ -65,6 +65,12 @@ export function extractHeartbeatMetrics(
     agentVersion: data.agentVersion,
     timestampUtc: data.timestampUtc,
     receivedAtUtc: new Date().toISOString(),
+    // Energia (bateria × tomada): repassada como veio — undefined continua
+    // "não reportado" e a UI esconde o bloco em vez de mostrar "sem bateria".
+    hasBattery: data.hasBattery,
+    batteryPercent: data.batteryPercent,
+    batteryOnAc: data.batteryOnAc,
+    batteryCharging: data.batteryCharging,
   };
 }
 

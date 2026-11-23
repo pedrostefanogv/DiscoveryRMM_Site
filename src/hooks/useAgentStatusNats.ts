@@ -133,6 +133,35 @@ function getNumberField(
   return undefined;
 }
 
+/**
+ * Lê um booleano tolerando as formas que o backend/agente podem enviar
+ * (true/false nativos, "true"/"1"/"sim"). Devolve undefined quando o campo
+ * está AUSENTE — distinção obrigatória para energia: ausente = não reportado,
+ * e não pode virar `false` (esconderia a bateria de um notebook real).
+ */
+function getBoolField(
+  data: Record<string, unknown>,
+  keys: string[],
+): boolean | undefined {
+  for (const key of keys) {
+    for (const [candidateKey, candidateValue] of Object.entries(data)) {
+      if (candidateKey.toLowerCase() !== key.toLowerCase()) continue;
+
+      if (typeof candidateValue === "boolean") return candidateValue;
+      if (typeof candidateValue === "number") {
+        if (candidateValue === 1) return true;
+        if (candidateValue === 0) return false;
+      }
+      if (typeof candidateValue === "string") {
+        const normalized = candidateValue.trim().toLowerCase();
+        if (normalized === "true" || normalized === "1" || normalized === "sim") return true;
+        if (normalized === "false" || normalized === "0" || normalized === "nao" || normalized === "não") return false;
+      }
+    }
+  }
+  return undefined;
+}
+
 function getRecordField(
   data: Record<string, unknown>,
   keys: string[],
@@ -441,6 +470,13 @@ export function toHeartbeatPayload(
     uptimeSeconds: getMetric(["uptimeSeconds", "uptime_seconds"]),
     processCount: getMetric(["processCount", "process_count"]),
     cpuTemperatureCelsius: getMetric(["cpuTemperatureCelsius", "cpu_temperature_celsius", "cpuTemp"]),
+    // Energia (bateria × tomada). Booleans são lidos com distinção entre
+    // ausente e false — o contrário esconderia o bloco de bateria de um
+    // notebook real quando o agente ainda não reporta o campo.
+    hasBattery: getBoolField(source, ["hasBattery", "has_battery"]),
+    batteryPercent: getMetric(["batteryPercent", "battery_percent"]),
+    batteryOnAc: getBoolField(source, ["batteryOnAc", "battery_on_ac", "onAc", "on_ac"]),
+    batteryCharging: getBoolField(source, ["batteryCharging", "battery_charging", "charging"]),
     timestampUtc: timestampUtc ?? undefined,
   };
 }

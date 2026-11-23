@@ -43,6 +43,14 @@ export interface AgentHeartbeat {
   uptimeSeconds?: number;
   processCount?: number;
   cpuTemperatureCelsius?: number;
+
+  // ── Energia (bateria × tomada) ──
+  // Canal frequente (≈15 s). Ausente = agente antigo/leitura incerta — a UI
+  // esconde o bloco em vez de afirmar "sem bateria" ou "na bateria".
+  hasBattery?: boolean;
+  batteryPercent?: number;
+  batteryOnAc?: boolean;
+  batteryCharging?: boolean;
 }
 
 export interface RealtimeStatsResponse {

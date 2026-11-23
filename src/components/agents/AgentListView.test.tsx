@@ -77,3 +77,58 @@ describe('AgentListView — colunas CPU/RAM/Leitura', () => {
     expect(reservados).toHaveLength(0);
   });
 });
+
+/**
+ * Selo de notebook e chip de energia na visão em tabela.
+ *
+ * Mesma regra do card: selo só com `isLaptop === true`; energia só quando o
+ * heartbeat reporta presença de bateria (ausência de dado não vira "sem
+ * bateria" nem "0%").
+ */
+describe('AgentListView — notebook e energia', () => {
+  afterEach(() => cleanup());
+
+  it('mostra o selo Notebook na coluna do agente', () => {
+    render(
+      <AgentListView
+        agents={[buildAgent({ isLaptop: true, machineType: 'notebook' })]}
+        now={Date.now()}
+      />,
+    );
+
+    expect(screen.getByText('Notebook')).toBeTruthy();
+  });
+
+  it('não mostra selo quando não reportado (null)', () => {
+    render(<AgentListView agents={[buildAgent({ isLaptop: null, machineType: null })]} now={Date.now()} />);
+
+    expect(screen.queryByText('Notebook')).toBeNull();
+  });
+
+  it('mostra percentual de bateria do heartbeat ao vivo', () => {
+    render(
+      <AgentListView
+        agents={[
+          buildAgent({
+            isLaptop: true,
+            heartbeatMetrics: { hasBattery: true, batteryPercent: 63, batteryOnAc: false, batteryCharging: false },
+          }),
+        ]}
+        now={Date.now()}
+      />,
+    );
+
+    expect(screen.getByText('63%')).toBeTruthy();
+  });
+
+  it('desktop (hasBattery=false) não mostra chip de energia', () => {
+    render(
+      <AgentListView
+        agents={[buildAgent({ isLaptop: false, heartbeatMetrics: { hasBattery: false, batteryOnAc: true } })]}
+        now={Date.now()}
+      />,
+    );
+
+    expect(screen.queryByText('63%')).toBeNull();
+  });
+});
