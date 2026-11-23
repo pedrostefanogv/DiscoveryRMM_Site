@@ -67,8 +67,8 @@ const CHARGING_GLYPH_VIEWBOX = '80 -680 776.5 400';
  *   âmbar ≤ 30%, vermelho ≤ 15%), preservando o alerta de bateria baixa.
  * - NA BATERIA: bateria desenhada em CSS, com o preenchimento proporcional ao
  *   nível real (o glifo fixo não daria essa informação). Contorno de 1,5px em
- *   `foreground` puro para aparecer nos temas claro e escuro — o token `border`
- *   (1px, quase sem contraste) deixava a bateria invisível no card e no badge.
+ *   PRETO no tema claro e BRANCO no escuro — o token `border` (1px) e depois o
+ *   `foreground` puro ainda ficavam discretos no card e no badge da listagem.
  *
  * O estado vem de onAc/charging; quando o agente não reportou o booleano (coleta
  * antiga), o texto cru do SO ("On AC") é usado como fallback — senão o painel
@@ -130,12 +130,11 @@ export function BatteryGauge({
       <span className="inline-flex items-center gap-0.5">
         <span
           className={
-            // Contorno em CONTRASTE MÁXIMO: 1,5px de `foreground` puro (o token
-            // adapta-se aos dois temas) em vez do `border` sutil de antes — a
-            // bateria aparecia quase invisível, principalmente dentro do badge
-            // colorido da listagem. Corpo TRANSPARENTE: dentro do badge o fundo
-            // dele já dá o contraste e o desenho fica parecendo um ícone.
-            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border-[1.5px] border-foreground ' +
+            // Contorno em CONTRASTE ABSOLUTO: preto no tema claro e branco no
+            // escuro (o token `foreground`, mesmo puro, ainda ficava discreto
+            // sobre o fundo do badge). Corpo TRANSPARENTE: dentro do badge o
+            // fundo dele já dá o contraste e o desenho fica parecendo um ícone.
+            'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[3px] border-[1.5px] border-black dark:border-white ' +
             s.height +
             ' ' +
             s.bodyWidth
