@@ -63,6 +63,13 @@ export interface RegistryListPage {
     valueCount: number;
 }
 
+export interface RegistrySubkeyPageResult {
+    subkeys: string[];
+    hasMore: boolean;
+    nextToken?: string;
+    subkeyCount?: number;
+}
+
 export interface RegistryKeyInfo {
     hive: string;
     path: string;
@@ -161,4 +168,40 @@ export function joinPath(parent: string, child: string): string {
     if (!parent) return child;
     if (!child) return parent;
     return `${parent}\\${child}`;
+}
+
+const HIVE_ALIASES: Record<string, RegistryHive> = {
+    HKLM: 'HKLM',
+    HKEY_LOCAL_MACHINE: 'HKLM',
+    HKCU: 'HKCU',
+    HKEY_CURRENT_USER: 'HKCU',
+    HKCR: 'HKCR',
+    HKEY_CLASSES_ROOT: 'HKCR',
+    HKU: 'HKU',
+    HKEY_USERS: 'HKU',
+    HKCC: 'HKCC',
+    HKEY_CURRENT_CONFIG: 'HKCC',
+};
+
+/**
+ * Faz o parse de um caminho digitado ou colado pelo operador
+ * (ex.: "Computador\\HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft" ou "HKLM/SOFTWARE").
+ */
+export function parseUserRegistryPath(raw: string): { hive: RegistryHive; path: string } | null {
+    let cleaned = raw.trim().replace(/\//g, '\\').replace(/\\+/g, '\\');
+    cleaned = cleaned.replace(/^\\+/, '').replace(/\\+$/, '');
+    if (!cleaned) return null;
+
+    // Remove prefixos opcionais do regedit ("Computer\" ou "Computador\").
+    cleaned = cleaned.replace(/^(?:Computer|Computador)\\/i, '');
+    cleaned = cleaned.replace(/^\\+/, '').replace(/\\+$/, '');
+    if (!cleaned) return null;
+
+    const idx = cleaned.indexOf('\\');
+    const rawHive = (idx < 0 ? cleaned : cleaned.slice(0, idx)).toUpperCase();
+    const hive = HIVE_ALIASES[rawHive];
+    if (!hive) return null;
+
+    const rest = idx < 0 ? '' : cleaned.slice(idx + 1).replace(/^\\+/, '').replace(/\\+$/, '');
+    return { hive, path: rest };
 }

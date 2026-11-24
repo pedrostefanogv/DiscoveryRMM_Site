@@ -193,7 +193,9 @@ export default function ReportTemplateList() {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 10_000);
   };
 
   const handleImportClick = () => {
@@ -290,10 +292,39 @@ export default function ReportTemplateList() {
   };
 
   const handleContextMenuEdit = () => {
-    if (!templateContextMenu) return;
+    if (!templateContextMenu || templateContextMenu.template.isBuiltIn) return;
     navigate(
-      buildTemplatePath(`/reports/templates/${templateContextMenu.template.id}/edit`),
+      buildTemplatePath(`/reports/templates/${templateContextMenu.template.id}/edit/wizard`),
     );
+    closeTemplateContextMenu();
+  };
+
+  const handleContextMenuDuplicate = () => {
+    if (!templateContextMenu) return;
+    const t = templateContextMenu.template;
+    closeTemplateContextMenu();
+    createMutation.mutate(
+      {
+        name: `${t.name} (Cópia)`,
+        description: t.description ?? undefined,
+        datasetType: t.datasetType as any,
+        defaultFormat: t.defaultFormat as any,
+        layoutJson: t.layoutJson,
+        filtersJson: t.filtersJson ?? undefined,
+        isActive: true,
+        clientId: t.clientId ?? clientId,
+      } as any,
+      {
+        onSuccess: (created: ReportTemplate) => {
+          toast.success(`Template duplicado: "${created.name}"`);
+        },
+      },
+    );
+  };
+
+  const handleContextMenuSchedule = () => {
+    if (!templateContextMenu) return;
+    navigate(buildTemplatePath(`/reports/schedules?templateId=${templateContextMenu.template.id}`));
     closeTemplateContextMenu();
   };
 
@@ -435,7 +466,7 @@ export default function ReportTemplateList() {
       key: "actions",
       header: "",
       render: (t) => (
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button
             variant="secondary"
             size="sm"
@@ -443,10 +474,32 @@ export default function ReportTemplateList() {
               navigate(buildRunReportPath(t.id, clientId))
             }
             title="Gerar relatório"
-            aria-label="Gerar relatório"
+            aria-label={`Gerar relatório ${t.name}`}
           >
             <Icon name="play_arrow" className="h-4 w-4" />
             <span className="hidden xl:inline">Gerar</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Mais ações para ${t.name}`}
+            aria-haspopup="menu"
+            title="Mais ações"
+            onClick={(e) => {
+              e.stopPropagation();
+              const pageElement = pageRef.current;
+              const btnRect = e.currentTarget.getBoundingClientRect();
+              if (!pageElement) {
+                setTemplateContextMenu({ template: t, x: btnRect.left - 180, y: btnRect.bottom + 4 });
+                return;
+              }
+              const pageRect = pageElement.getBoundingClientRect();
+              const x = Math.max(8, Math.min(btnRect.right - pageRect.left - 240, pageRect.width - 256));
+              const y = Math.max(8, btnRect.bottom - pageRect.top + 4);
+              setTemplateContextMenu({ template: t, x, y });
+            }}
+          >
+            <Icon name="more_vert" className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -592,12 +645,31 @@ export default function ReportTemplateList() {
         >
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+            disabled={templateContextMenu.template.isBuiltIn}
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-45"
             onClick={handleContextMenuEdit}
             role="menuitem"
           >
-            <span>Editar template</span>
+            <span>{templateContextMenu.template.isBuiltIn ? "Embutido (somente leitura)" : "Editar template"}</span>
             <Icon name="edit" className="h-4 w-4 text-muted" />
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+            onClick={handleContextMenuDuplicate}
+            role="menuitem"
+          >
+            <span>Duplicar / Personalizar</span>
+            <Icon name="content_copy" className="h-4 w-4 text-muted" />
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+            onClick={handleContextMenuSchedule}
+            role="menuitem"
+          >
+            <span>Agendar geração</span>
+            <Icon name="schedule" className="h-4 w-4 text-muted" />
           </button>
           <button
             type="button"
@@ -619,7 +691,8 @@ export default function ReportTemplateList() {
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-red-500/15"
+            disabled={templateContextMenu.template.isBuiltIn}
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-45"
             onClick={handleContextMenuDelete}
             role="menuitem"
           >

@@ -44,7 +44,21 @@ export function parseNavigationTarget(
     const clientId = readText(parsed, "clientId", "client_id");
     const ticketTitle = readText(parsed, "ticketTitle", "ticket_title");
     const sessionId = readText(parsed, "sessionId", "session_id");
+    const executionId = readText(parsed, "executionId", "execution_id");
+    const templateId = readText(parsed, "templateId", "template_id");
 
+    if (executionId) {
+      return {
+        path: clientId ? `/reports/executions?clientId=${clientId}` : "/reports/executions",
+        label: "execução de relatório",
+      };
+    }
+    if (templateId && !ticketId) {
+      return {
+        path: clientId ? `/reports/run?templateId=${templateId}&clientId=${clientId}` : `/reports/run?templateId=${templateId}`,
+        label: "relatório",
+      };
+    }
     if (ticketId) {
       return { path: `/tickets/${ticketId}`, label: "chamado", ticketId, ticketTitle, sessionId };
     }

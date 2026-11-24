@@ -265,6 +265,26 @@ export function useAuthorization() {
       "reports.read",
       "admin.*",
     ]),
+    canCreateReports: authz.hasAnyPermission([
+      "reports.*",
+      "reports.create",
+      "admin.*",
+    ]),
+    canEditReports: authz.hasAnyPermission([
+      "reports.*",
+      "reports.edit",
+      "admin.*",
+    ]),
+    canDeleteReports: authz.hasAnyPermission([
+      "reports.*",
+      "reports.delete",
+      "admin.*",
+    ]),
+    canExecuteReports: authz.hasAnyPermission([
+      "reports.*",
+      "reports.execute",
+      "admin.*",
+    ]),
     canViewSettings: authz.hasAnyPermission([
       "settings.*",
       "settings.read",

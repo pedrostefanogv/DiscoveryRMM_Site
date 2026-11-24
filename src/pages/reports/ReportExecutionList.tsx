@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useReportExecutions, useReportDownload, useReportTemplates } from "@/hooks";
-import { Icon, Button, Card, DataTable, Badge, Loading,
-PageHeader,
+import {
+  Icon,
+  Button,
+  Card,
+  DataTable,
+  Badge,
+  Loading,
+  PageHeader,
 } from "@/components/ui";
 import type { ReportExecution } from "@/api/types";
 import type { Column } from "@/components/ui";
@@ -74,13 +80,16 @@ function normalizeReportFormat(
 }
 
 export default function ReportExecutionList() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get("clientId") || undefined;
   const [limit, setLimit] = useState(50);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [templateFilter, setTemplateFilter] = useState<string>("all");
 
-  const executions = useReportExecutions({ 
-    clientId, 
-    limit 
+  const executions = useReportExecutions({
+    clientId,
+    limit,
   });
   const templates = useReportTemplates();
 
@@ -113,7 +122,9 @@ export default function ReportExecutionList() {
   };
 
   const formatBytes = (bytes: number | null | undefined) => {
-    if (!bytes) return "\u2014";
+    if (bytes == null) return "\u2014";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     const mb = bytes / 1024 / 1024;
     return `${mb.toFixed(2)} MB`;
   };
@@ -154,7 +165,7 @@ export default function ReportExecutionList() {
           </p>
           <p>
             <span className="text-muted">Duração:</span>{" "}
-            {e.executionTimeMs ? `${(e.executionTimeMs / 1000).toFixed(1)}s` : "\u2014"}
+            {e.executionTimeMs != null ? `${(e.executionTimeMs / 1000).toFixed(1)}s` : "\u2014"}
           </p>
           <p className="truncate max-w-48">
             <span className="text-muted">Por:</span> {e.createdBy || "\u2014"}
@@ -190,11 +201,18 @@ export default function ReportExecutionList() {
         if (!config) {
           return <Badge color="slate">Desconhecido</Badge>;
         }
-                return (
-          <Badge color={config.color}>
-            <Icon name={config.icon} className="h-3 w-3" />
-            {config.label}
-          </Badge>
+        return (
+          <div className="space-y-1">
+            <Badge color={config.color}>
+              <Icon name={config.icon} className="h-3 w-3" />
+              {config.label}
+            </Badge>
+            {normalizedStatus === ReportExecutionStatus.Failed && e.errorMessage && (
+              <p className="max-w-xs truncate text-xs text-danger" title={e.errorMessage}>
+                {e.errorMessage}
+              </p>
+            )}
+          </div>
         );
       },
     },
@@ -203,7 +221,7 @@ export default function ReportExecutionList() {
       header: "Linhas",
       render: (e) => (
         <span className="text-muted-foreground">
-          {e.rowCount ? e.rowCount.toLocaleString() : "\u2014"}
+          {e.rowCount != null ? e.rowCount.toLocaleString() : "\u2014"}
         </span>
       ),
     },
@@ -261,6 +279,23 @@ export default function ReportExecutionList() {
           );
         }
 
+        if (normalizedStatus === ReportExecutionStatus.Failed) {
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Tentar novamente"
+              title="Abrir template para tentar novamente"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/reports/run?templateId=${e.templateId}${e.clientId ? `&clientId=${e.clientId}` : ""}`);
+              }}
+            >
+              <Icon name="refresh" className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          );
+        }
+
         return normalizedStatus === ReportExecutionStatus.Completed ? (
           <Button
             variant="ghost"
@@ -279,6 +314,17 @@ export default function ReportExecutionList() {
     },
   ];
 
+  const filteredExecutions = useMemo(() => {
+    return (executions.data ?? []).filter((e) => {
+      if (templateFilter !== "all" && e.templateId !== templateFilter) return false;
+      if (statusFilter !== "all") {
+        const s = normalizeExecutionStatus(e.status as ReportExecution["status"] | string | number);
+        if (String(s) !== statusFilter) return false;
+      }
+      return true;
+    });
+  }, [executions.data, statusFilter, templateFilter]);
+
   if (executions.isLoading) return <Loading />;
 
   if (executions.isError) {
@@ -288,7 +334,7 @@ export default function ReportExecutionList() {
         <Card>
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
             <p className="text-sm text-danger">
-              Erro ao carregar execuções de relatórios. Por favor, selecione um cliente ou tente novamente.
+              Erro ao carregar execuções de relatórios. Tente novamente.
             </p>
           </div>
         </Card>
@@ -299,10 +345,15 @@ export default function ReportExecutionList() {
   if (!executions.data || executions.data.length === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Histórico de Execuções" />
+        <PageHeader title="Histórico de Execuções">
+          <Button variant="secondary" size="sm" onClick={() => executions.refetch()}>
+            <Icon name="refresh" className="h-4 w-4" />
+            Atualizar
+          </Button>
+        </PageHeader>
         <Card>
           <p className="text-center text-muted">
-            Nenhuma execução de relatório encontrada.{!clientId && " Selecione um cliente para ver o histórico."}
+            Nenhuma execução de relatório encontrada.
           </p>
         </Card>
       </div>
@@ -313,9 +364,34 @@ export default function ReportExecutionList() {
     <div className="space-y-6">
       <PageHeader
         title="Histórico de Execuções"
-        description={`${executions.data?.length ?? 0} execuções recentes`}
+        description={`${filteredExecutions.length} de ${executions.data.length} execuções recentes`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
+            aria-label="Filtrar por status"
+          >
+            <option value="all">Todos os status</option>
+            <option value={String(ReportExecutionStatus.Pending)}>Pendente</option>
+            <option value={String(ReportExecutionStatus.Running)}>Processando</option>
+            <option value={String(ReportExecutionStatus.Completed)}>Concluído</option>
+            <option value={String(ReportExecutionStatus.Failed)}>Falhou</option>
+          </select>
+          <select
+            value={templateFilter}
+            onChange={(e) => setTemplateFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground max-w-52"
+            aria-label="Filtrar por template"
+          >
+            <option value="all">Todos os templates</option>
+            {(templates.data ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
@@ -326,13 +402,22 @@ export default function ReportExecutionList() {
             <option value={50}>50 itens</option>
             <option value={100}>100 itens</option>
           </select>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => executions.refetch()}
+            disabled={executions.isFetching}
+          >
+            <Icon name="refresh" className={`h-4 w-4 ${executions.isFetching ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
         </div>
       </PageHeader>
 
       <Card padding={false}>
         <DataTable
           columns={columns}
-          data={executions.data ?? []}
+          data={filteredExecutions}
           keyExtractor={(e) => e.id}
           pageSize={limit}
         />

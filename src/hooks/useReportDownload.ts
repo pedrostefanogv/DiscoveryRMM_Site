@@ -111,7 +111,25 @@ export function useReportDownload() {
           throw new Error("Timeout aguardando conclusão do relatório");
         };
 
-        const execution = await pollForCompletion();
+        const execution = await (async (): Promise<ReportExecution> => {
+          const initial = await reportsApi.getReportExecution(
+            executionId,
+            options?.clientId,
+          );
+          const initialStatus = normalizeExecutionStatus(
+            initial.status as ReportExecution["status"] | string | number,
+          );
+          if (initialStatus === ReportExecutionStatus.Completed) {
+            return initial;
+          }
+          if (initialStatus === ReportExecutionStatus.Failed) {
+            throw new Error(
+              initial.errorMessage ||
+                "Erro desconhecido na geração do relatório",
+            );
+          }
+          return pollForCompletion();
+        })();
 
         setDownloads((prev) => ({
           ...prev,

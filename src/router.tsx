@@ -881,7 +881,7 @@ export const routes: RouteObject[] = [
       {
         path: 'reports/templates/new',
         element: (
-          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+          <PermissionGate anyOf={['reports.*', 'reports.create', 'admin.*']}>
             <LazyPage><ReportTemplateWizard /></LazyPage>
           </PermissionGate>
         ),
@@ -889,7 +889,7 @@ export const routes: RouteObject[] = [
       {
         path: 'reports/templates/:id/edit',
         element: (
-          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+          <PermissionGate anyOf={['reports.*', 'reports.edit', 'admin.*']}>
             <LazyPage><ReportTemplateForm /></LazyPage>
           </PermissionGate>
         ),
@@ -897,7 +897,7 @@ export const routes: RouteObject[] = [
       {
         path: 'reports/templates/:id/edit/wizard',
         element: (
-          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+          <PermissionGate anyOf={['reports.*', 'reports.edit', 'admin.*']}>
             <LazyPage><ReportTemplateWizardEdit /></LazyPage>
           </PermissionGate>
         ),
@@ -905,7 +905,7 @@ export const routes: RouteObject[] = [
       {
         path: 'reports/run',
         element: (
-          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+          <PermissionGate anyOf={['reports.*', 'reports.execute', 'admin.*']}>
             <LazyPage><RunReport /></LazyPage>
           </PermissionGate>
         ),

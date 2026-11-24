@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loading, ErrorDisplay, EmptyState } from "@/components/ui";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Loading, ErrorDisplay, EmptyState, Button, Icon } from "@/components/ui";
+import toast from "react-hot-toast";
 import { useReportDatasets } from "@/hooks/useReportDatasets";
 import { useCreateReportTemplate, useUpdateReportTemplate } from "@/hooks/useReportTemplates";
 import {
@@ -26,15 +27,21 @@ interface Props {
    * catalogo, que so chega depois, entao ela roda em um efeito abaixo.
    */
   initialLayout?: HydratableLayout | null;
+  /** DatasetType do template salvo (para reidratar templates de fonte única). */
+  initialDatasetType?: number | string | null;
 }
 
 export function ReportTemplateWizard({
   initialTemplate,
   templateId,
   initialLayout,
+  initialDatasetType,
 }: Props) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const starterState = (location.state as { starter?: { name?: string; description?: string; datasets?: string[] } } | null)?.starter;
+  const starterAppliedRef = useRef(false);
   const clientIdParam = searchParams.get("clientId");
   const clientId =
     clientIdParam && clientIdParam !== "undefined" && clientIdParam !== "null"
@@ -71,22 +78,32 @@ export function ReportTemplateWizard({
   const { hydrateFromLayout } = wizard;
   const hydratedLayoutRef = useRef<HydratableLayout | null>(null);
   useEffect(() => {
-    if (!initialLayout || datasets.length === 0) return;
-    if (hydratedLayoutRef.current === initialLayout) return;
-    hydratedLayoutRef.current = initialLayout;
-    hydrateFromLayout(initialLayout, datasets);
-  }, [initialLayout, datasets, hydrateFromLayout]);
+    if (!starterState || templateId || datasets.length === 0 || starterAppliedRef.current) return;
+    starterAppliedRef.current = true;
+    if (starterState.name) wizard.setField("name", starterState.name);
+    if (starterState.description) wizard.setField("description", starterState.description);
+    for (const dsKey of starterState.datasets ?? []) {
+      const found = datasets.find((d) => d.key?.toLowerCase() === dsKey.toLowerCase());
+      if (found) wizard.addDataset(found);
+    }
+  }, [starterState, templateId, datasets, wizard]);
+
+  useEffect(() => {
+    if ((!initialLayout && (initialDatasetType === undefined || initialDatasetType === null)) || datasets.length === 0) return;
+    const layoutKey = initialLayout ?? ({} as HydratableLayout);
+    if (hydratedLayoutRef.current === layoutKey) return;
+    hydratedLayoutRef.current = layoutKey;
+    hydrateFromLayout(layoutKey, datasets, initialDatasetType);
+  }, [initialLayout, initialDatasetType, datasets, hydrateFromLayout]);
 
   const handleCreate = useCallback(async () => {
     const request = wizard.buildRequest();
-    // Limpa erros anteriores: sem isso uma tentativa antiga continuaria na tela
-    // mesmo depois de o usuario corrigir o problema.
     setSubmitErrors([]);
 
     try {
-      // Edicao: atualiza o template existente. Novo: mantem o create.
       if (templateId) {
         await updateMutation.mutateAsync({ id: templateId, data: request as any });
+        toast.success("Template atualizado com sucesso.");
         const params = new URLSearchParams();
         if (clientId) params.set("clientId", clientId);
         const query = params.toString();
@@ -95,6 +112,7 @@ export function ReportTemplateWizard({
       }
 
       const result = await createMutation.mutateAsync(request as any);
+      toast.success("Template criado com sucesso!");
       const basePath = `/reports/templates/${result.id}/edit/wizard`;
       if (clientId) {
         const params = new URLSearchParams();
@@ -153,22 +171,57 @@ export function ReportTemplateWizard({
     { title: "Metadados", subtitle: "Nome, formato e aparência" },
   ];
 
+  const hasUnresolvedJoin = wizard.state.selectedDatasets
+    .slice(1)
+    .some((d) => !d.joinToAlias || !d.joinSourceKey);
+  const canLeaveStep0 = wizard.state.selectedDatasets.length > 0 && !hasUnresolvedJoin;
+
   return (
     <div className="space-y-6">
+      {templateId && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate(buildRunReportPath(templateId, clientId))}
+          >
+            <Icon name="play_arrow" className="h-4 w-4" />
+            Gerar Relatório Agora
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/reports/schedules?templateId=${templateId}${clientId ? `&clientId=${clientId}` : ""}`)}
+          >
+            <Icon name="schedule" className="h-4 w-4" />
+            Agendar
+          </Button>
+        </div>
+      )}
+
       {/* Step indicators */}
       <div className="flex items-center gap-2">
-        {steps.map((s, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <button
-              onClick={() => setStep(i)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                i === step
-                  ? "bg-primary text-white"
-                  : i < step
-                    ? "bg-primary/20 text-primary"
-                    : "bg-surface-light text-muted"
-              }`}
-            >
+        {steps.map((s, i) => {
+          const disabled = i > 0 && !canLeaveStep0;
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                aria-current={i === step ? "step" : undefined}
+                onClick={() => {
+                  if (!disabled) setStep(i);
+                }}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  i === step
+                    ? "bg-primary text-white"
+                    : i < step
+                      ? "bg-primary/20 text-primary"
+                      : "bg-surface-light text-muted"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                   i === step
@@ -191,7 +244,8 @@ export function ReportTemplateWizard({
               />
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Step content */}

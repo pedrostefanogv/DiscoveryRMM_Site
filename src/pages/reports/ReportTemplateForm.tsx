@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   useAgentsByClient,
+  useAgentsBySite,
   useClients,
   useCreateReportTemplate,
   useReportAutocomplete,
@@ -93,7 +94,9 @@ export default function ReportTemplateForm() {
 
   const filterClientsQuery = useClients();
   const filterSitesQuery = useSites(filterClientId);
-  const filterAgentsQuery = useAgentsByClient(filterSiteId || filterClientId);
+  const agentsBySiteQuery = useAgentsBySite(filterSiteId || "");
+  const agentsByClientQuery = useAgentsByClient(filterSiteId ? "" : filterClientId);
+  const filterAgentsQuery = filterSiteId ? agentsBySiteQuery : agentsByClientQuery;
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string>("");
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);

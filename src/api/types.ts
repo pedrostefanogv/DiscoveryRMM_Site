@@ -3622,6 +3622,8 @@ export interface PreviewReportRequest {
   template?: ReportTemplateContractInput;
   format?: ReportFormatValue;
   filtersJson?: string | null;
+  clientId?: string | null;
+  siteId?: string | null;
   fileName?: string;
   responseDisposition?: ResponseDisposition;
   previewMode?: PreviewMode;
@@ -3699,6 +3701,7 @@ export interface ReportTemplate {
   layoutJson: string;
   filtersJson: string | null;
   isActive: boolean;
+  isBuiltIn?: boolean;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -3760,8 +3763,10 @@ export interface RunReportRequest {
   templateId: string;
   format?: ReportFormat;
   filtersJson?: string | null;
+  clientId?: string | null;
+  siteId?: string | null;
   createdBy?: string | null;
-  runAsync: boolean;
+  runAsync?: boolean;
 }
 
 export interface RunReportResponse {

@@ -88,18 +88,7 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
           required
           hint="Nome exibido na listagem de templates e no cabeçalho do relatório gerado."
         />
-        <Input
-          label="Usuario de auditoria"
-          value={draft.auditUser}
-          onChange={(event) =>
-            setDraft((prev) => ({
-              ...prev,
-              auditUser: event.target.value,
-            }))
-          }
-          placeholder="usuario@empresa.local"
-          hint="Registrado nos logs de criação e atualização. Não afeta permissões de acesso."
-        />
+        
       </div>
       <div className="mt-4">
         <TextArea
@@ -767,7 +756,7 @@ export function LayoutBuilderTopSection({
                           }))
                         }
                       
-                        aria-label="Remover condição do filtro"
+                        aria-label="Remover fonte de dados"
                       >
                         <Icon name="delete" className="h-4 w-4 text-danger" />
                       </Button>
@@ -1030,9 +1019,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                   
-                        aria-label="Remover coluna"
-                      >
-                    <Icon name="delete" className="h-4 w-4 text-danger" />
+                        aria-label="Remover seção">`r`n                    <Icon name="delete" className="h-4 w-4 text-danger" />
                   </Button>
                 </td>
               </tr>
@@ -1118,7 +1105,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     
-                        aria-label="Remover opção"
+                        aria-label="Remover detalhe de grupo"
                       >
                       <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
@@ -1407,9 +1394,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                   
-                        aria-label="Remover coluna"
-                      >
-                    <Icon name="delete" className="h-4 w-4 text-danger" />
+                        aria-label="Remover seção">`r`n                    <Icon name="delete" className="h-4 w-4 text-danger" />
                   </Button>
                 </div>
               </div>
@@ -1533,7 +1518,7 @@ export function LayoutBuilderDetailsSection({
                               }))
                             }
                           
-                        aria-label="Remover opção"
+                        aria-label="Remover detalhe de grupo"
                       >
                             <Icon name="delete" className="h-4 w-4 text-danger" />
                           </Button>

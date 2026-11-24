@@ -82,7 +82,7 @@ export function StepMetadata({
             <h3 className="mb-3 text-sm font-semibold text-foreground">
               Identificação
             </h3>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">
                   Nome do template *
@@ -97,28 +97,16 @@ export function StepMetadata({
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">
-                  Usuário de auditoria
+                  Descrição
                 </label>
-                <input
-                  type="text"
-                  value={state.createdBy}
-                  onChange={(e) => setField("createdBy", e.target.value)}
-                  placeholder="usuario@empresa.local"
+                <textarea
+                  value={state.description}
+                  onChange={(e) => setField("description", e.target.value)}
+                  rows={2}
+                  placeholder="Descrição opcional do template"
                   className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
                 />
               </div>
-            </div>
-            <div className="mt-3">
-              <label className="mb-1 block text-xs font-medium text-muted">
-                Descrição
-              </label>
-              <textarea
-                value={state.description}
-                onChange={(e) => setField("description", e.target.value)}
-                rows={2}
-                placeholder="Descrição opcional do template"
-                className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
-              />
             </div>
           </div>
 

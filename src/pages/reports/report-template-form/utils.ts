@@ -875,17 +875,15 @@ export function buildLayoutJson(state: LayoutEditorState): {
       : undefined,
     groupTitlePrefix: state.groupTitlePrefix.trim() || undefined,
     hideGroupColumn: state.hideGroupColumn || undefined,
-    columns: hasSections
-      ? undefined
-      : state.columns
-        .filter((col) => col.field.trim() && col.label.trim())
-        .map((col) => ({
-          field: normalizeSingleSourceField(col.field),
-          header: col.label,
-          format: col.format,
-          width: col.width,
-          align: col.align,
-        })),
+    columns: state.columns
+      .filter((col) => col.field.trim() && col.label.trim())
+      .map((col) => ({
+        field: normalizeSingleSourceField(col.field),
+        header: col.label,
+        format: col.format,
+        width: col.width,
+        align: col.align,
+      })),
     groupDetails: state.groupDetails
       .filter((detail) => detail.field.trim() && detail.label.trim())
       .map((detail) => ({

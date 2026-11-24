@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { RegistryValueEntry } from './registryTypes';
+import type { RegistryValueEntry, RegistryValueType } from './registryTypes';
 import {
     base64ByteLength,
     base64ToHexPreview,
@@ -13,15 +13,6 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GRADE DE VALORES — a coluna da direita do editor, como no regedit.
-//
-// Problema de layout da versão anterior: a coluna "Dado" ficava espremida e o
-// valor longo era cortado, então o operador não conseguia LER o registro
-// completo. Aqui a grade usa largura total com colunas de tamanho definido e
-// altura fixa por linha, e o valor tem o espaço restante com quebra.
-//
-// Referência de apresentação (MeshCentral, win-registry-remote.js:81): o valor
-// sem nome é exibido como "(Default)". O nome cru vazio continua sendo o que
-// trafega no protocolo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RegistryValueGridProps {
@@ -31,12 +22,32 @@ export interface RegistryValueGridProps {
     denyReason: string;
     onEdit: (entry: RegistryValueEntry) => void;
     onDelete: (name: string) => void;
+    onCopy?: (entry: RegistryValueEntry) => void;
     busy?: boolean;
 }
 
 /** Largura das colunas fixas. A coluna "Dado" ocupa o resto. */
 const COL_NAME = 'min-w-[180px] w-[22%]';
-const COL_TYPE = 'min-w-[150px] w-[13%]';
+const COL_TYPE = 'min-w-[140px] w-[14%]';
+
+function typeBadgeClass(type: RegistryValueType): string {
+    switch (type) {
+        case 'REG_SZ':
+        case 'REG_EXPAND_SZ':
+        case 'REG_LINK':
+            return 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400';
+        case 'REG_DWORD':
+        case 'REG_QWORD':
+        case 'REG_DWORD_BIG_ENDIAN':
+            return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+        case 'REG_BINARY':
+            return 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400';
+        case 'REG_MULTI_SZ':
+            return 'border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400';
+        default:
+            return 'border-border bg-surface-light text-muted';
+    }
+}
 
 export function RegistryValueGrid({
     values,
@@ -45,58 +56,72 @@ export function RegistryValueGrid({
     denyReason,
     onEdit,
     onDelete,
+    onCopy,
     busy = false,
 }: RegistryValueGridProps) {
     const hasUnreadable = useMemo(() => values.some((v) => !!v.readError), [values]);
 
     if (loading && values.length === 0) {
-        return <p className="px-3 py-3 text-xs text-muted">Carregando…</p>;
+        return (
+            <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-xs text-muted">
+                Carregando…
+            </div>
+        );
     }
     if (values.length === 0) {
         return (
-            <p className="px-3 py-3 text-xs text-muted">
-                Esta chave não tem valores. Use <strong>Novo valor</strong> para criar um.
-            </p>
+            <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center text-xs text-muted">
+                <p>
+                    Esta chave não tem valores. Use <strong>Novo valor</strong> para criar um.
+                </p>
+            </div>
         );
     }
 
     return (
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="relative min-h-0 flex-1 overflow-auto">
+            {loading && (
+                <div className="sticky top-0 z-20 h-0.5 w-full overflow-hidden bg-primary/20">
+                    <div className="h-full w-1/3 animate-pulse bg-primary" />
+                </div>
+            )}
             {hasUnreadable && (
                 <p className="border-b border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-[11px] text-yellow-500">
                     Alguns valores não puderam ser lidos. Eles aparecem marcados abaixo —
                     o conteúdo existe, mas o agente não tem permissão para lê-lo.
                 </p>
             )}
-            <table className="w-full table-fixed border-collapse text-xs leading-tight">
+            <table className={`w-full table-fixed border-collapse text-xs leading-tight transition-opacity ${loading ? 'opacity-60' : ''}`}>
                 <thead className="sticky top-0 z-10 bg-surface">
                     <tr className="border-b border-border text-left text-[10px] uppercase tracking-wide text-muted">
-                        <th className={`py-1 pl-2 pr-1 text-left font-medium ${COL_NAME}`}>Nome</th>
-                        <th className={`px-1 py-1 text-left font-medium ${COL_TYPE}`}>Tipo</th>
-                        <th className="px-1 py-1 text-left font-medium">Dado</th>
-                        <th className="w-[130px] py-1 pl-1 pr-2 text-right font-medium">Ações</th>
+                        <th className={`py-1.5 pl-3 pr-1 text-left font-medium ${COL_NAME}`}>Nome</th>
+                        <th className={`px-1.5 py-1.5 text-left font-medium ${COL_TYPE}`}>Tipo</th>
+                        <th className="px-1.5 py-1.5 text-left font-medium">Dado</th>
+                        <th className="w-[165px] py-1.5 pl-1 pr-3 text-right font-medium">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {values.map((v) => {
                         const rowKey = v.name === '' ? '__default__' : v.name;
                         const editable = isEditableType(v.type);
+                        const canEdit = writable && editable && !busy;
                         return (
                             <tr
                                 key={rowKey}
-                                className="border-b border-border/40 align-top hover:bg-background"
+                                className={`border-b border-border/40 align-top transition-colors hover:bg-surface-hover/50 ${canEdit ? 'cursor-pointer' : ''}`}
                                 data-testid={`registry-value-${rowKey}`}
+                                onDoubleClick={() => { if (canEdit) onEdit(v); }}
                             >
-                                <td className="py-1 pl-2 pr-1 font-mono break-all align-top">
+                                <td className="py-1.5 pl-3 pr-1 font-mono break-all align-top">
                                     {displayValueName(v.name)}
                                 </td>
-                                <td className="py-1 px-1 align-top text-muted" title={typeLabel(v.type)}>
-                                    {v.type}
+                                <td className="py-1.5 px-1.5 align-top" title={typeLabel(v.type)}>
+                                    <span className={`inline-block rounded border px-1.5 py-0.5 font-mono text-[10px] ${typeBadgeClass(v.type)}`}>
+                                        {v.type}
+                                    </span>
                                 </td>
-                                <td className="py-1 px-1 font-mono break-all align-top">
+                                <td className="py-1.5 px-1.5 font-mono break-all align-top">
                                     {v.readError ? (
-                                        // Nunca mostrar como vazio: o operador
-                                        // concluiria que o valor está limpo.
                                         <span className="text-yellow-500">
                                             (não foi possível ler: {v.readError})
                                         </span>
@@ -104,12 +129,24 @@ export function RegistryValueGrid({
                                         <ValueCell entry={v} />
                                     )}
                                 </td>
-                                <td className="whitespace-nowrap py-1 pl-1 pr-2 text-right align-top">
+                                <td className="whitespace-nowrap py-1.5 pl-1 pr-3 text-right align-top">
+                                    {onCopy && !v.readError && (
+                                        <button
+                                            type="button"
+                                            className="mr-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface hover:text-foreground disabled:opacity-40"
+                                            onClick={() => onCopy(v)}
+                                            disabled={busy}
+                                            title="Copiar dado"
+                                            aria-label={`Copiar ${displayValueName(v.name)}`}
+                                        >
+                                            Copiar
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         className="rounded border border-border px-1.5 py-0.5 text-[11px] hover:bg-surface disabled:opacity-40"
                                         onClick={() => onEdit(v)}
-                                        disabled={!writable || !editable || busy}
+                                        disabled={!canEdit}
                                         title={
                                             !editable
                                                 ? 'Este tipo não pode ser editado como texto.'
@@ -122,7 +159,7 @@ export function RegistryValueGrid({
                                     </button>
                                     <button
                                         type="button"
-                                        className="ml-1 rounded border border-border px-1.5 py-0.5 text-[11px] hover:bg-surface disabled:opacity-40"
+                                        className="ml-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-danger hover:bg-danger/10 disabled:opacity-40"
                                         onClick={() => onDelete(v.name)}
                                         disabled={!writable || busy}
                                         title={!writable ? denyReason : undefined}
@@ -141,10 +178,6 @@ export function RegistryValueGrid({
 
 /**
  * Célula do dado, com a representação auxiliar por tipo.
- *
- * O valor principal vem primeiro; a forma alternativa (hex de DWORD/QWORD,
- * prévia hex de binário, contagem de bytes) vem em seguida, discreta. Sem isto
- * o operador não consegue conferir o valor contra o regedit, que mostra as duas.
  */
 function ValueCell({ entry }: { entry: RegistryValueEntry }) {
     const isNumeric = entry.type === 'REG_DWORD' || entry.type === 'REG_QWORD';

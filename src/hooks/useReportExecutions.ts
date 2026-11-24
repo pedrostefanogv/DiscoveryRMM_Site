@@ -30,6 +30,15 @@ export function useReportExecutions(params?: {
       normalizeArray(
         data as CursorPageDto<ReportExecution> | ReportExecution[],
       ),
+    refetchInterval: (query) => {
+      const raw = query.state.data as CursorPageDto<ReportExecution> | ReportExecution[] | undefined;
+      const items = Array.isArray(raw) ? raw : (raw?.items ?? []);
+      const hasActive = items.some((e) => {
+        const s = typeof e.status === "number" ? e.status : String(e.status).toLowerCase();
+        return s === 0 || s === 1 || s === "pending" || s === "running" || s === "processing";
+      });
+      return hasActive ? 3000 : false;
+    },
   });
 }
 

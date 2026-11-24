@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button,
 PageHeader,
 } from "@/components/ui";
-import { buildRunReportPath, resolveBuiltInTemplateId } from "./builtInTemplates";
+
 
 const DATASET_ICONS: Record<string, string> = {
   softwareInventory: "💿",
@@ -185,7 +185,7 @@ export function ReportTemplateCatalog() {
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
-          placeholder="🔍 Buscar templates..."
+          aria-label="Buscar templates prontos" placeholder="🔍 Buscar templates..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="flex-1 min-w-[200px] rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted outline-none focus-visible:border-primary/60"
@@ -220,16 +220,7 @@ export function ReportTemplateCatalog() {
             {filteredBuiltIn.map((t) => (
               <button
                 key={t.id}
-                onClick={() => {
-                  const builtInTemplateId = resolveBuiltInTemplateId(t.id);
-                  if (builtInTemplateId) {
-                    navigate(buildRunReportPath(builtInTemplateId, clientId));
-                    return;
-                  }
-
-                  // Fallback de compatibilidade para slugs sem mapeamento.
-                  navigate(`/reports/templates/new?template=${t.id}`);
-                }}
+                onClick={() => { navigate(`/reports/templates/new${clientId ? `?clientId=${clientId}` : ""}`, { state: { starter: { name: t.name, description: t.description, datasets: t.datasets } } }); }}
                 className="rounded-xl border border-border bg-surface-light p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
               >
                 <div className="mb-2 text-2xl">{t.icon}</div>

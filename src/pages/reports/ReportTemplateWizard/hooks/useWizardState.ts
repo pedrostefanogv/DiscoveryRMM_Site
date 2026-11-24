@@ -848,9 +848,15 @@ export function useWizardState(initialState?: Partial<WizardState>) {
    * datasetType, preservando alias e o join gravado.
    */
   const hydrateFromLayout = useCallback(
-    (layout: HydratableLayout, catalog: DatasetCatalogItem[]) => {
+    (layout: HydratableLayout, catalog: DatasetCatalogItem[], fallbackDatasetType?: number | string | null) => {
       const byType = indexCatalogByKey(catalog);
-      const sources = Array.isArray(layout.dataSources) ? layout.dataSources : [];
+      let sources = Array.isArray(layout.dataSources) ? layout.dataSources : [];
+      if (sources.length === 0 && fallbackDatasetType !== undefined && fallbackDatasetType !== null) {
+        const fallbackItem = byType.get(String(fallbackDatasetType));
+        if (fallbackItem) {
+          sources = [{ datasetType: Number(fallbackItem.datasetType) || (fallbackDatasetType as number), alias: getDefaultAlias(fallbackItem) }];
+        }
+      }
       if (sources.length === 0) return;
 
       const restored: SelectedDataset[] = [];

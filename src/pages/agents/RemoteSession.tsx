@@ -2351,35 +2351,35 @@ export default function RemoteSession() {
           )
         )}
 
-        {activeTab === 'registry' && (
-          registrySession ? (
-            <div className="h-full flex flex-col min-h-0">
-              <div className="flex-1 min-h-0">
-                <RegistryPanel
-                  key={`registry-${registrySession.sessionId}-${reconnectKeys.registry ?? 0}`}
-                  natsSubject={registrySession.natsSubject}
-                  natsUrl={registrySession.natsUrl}
-                  jwt={registrySession.jwt}
-                  nkeySeed={registrySession.nkeySeed}
-                  getFreshCredentials={() =>
-                    remoteSessionsApi
-                      .getSessionCredentials(agentId, registrySession.sessionId)
-                      .then((creds) => creds.jwt)
-                  }
-                  isVisible={activeTab === 'registry'}
-                />
-              </div>
+        {registrySession && (
+          <div className={activeTab === 'registry' ? 'h-full flex flex-col min-h-0' : 'hidden'}>
+            <div className="flex-1 min-h-0">
+              <RegistryPanel
+                key={`registry-${registrySession.sessionId}-${reconnectKeys.registry ?? 0}`}
+                natsSubject={registrySession.natsSubject}
+                natsUrl={registrySession.natsUrl}
+                jwt={registrySession.jwt}
+                nkeySeed={registrySession.nkeySeed}
+                getFreshCredentials={() =>
+                  remoteSessionsApi
+                    .getSessionCredentials(agentId, registrySession.sessionId)
+                    .then((creds) => creds.jwt)
+                }
+                isVisible={activeTab === 'registry'}
+              />
             </div>
-          ) : (
-            <ConnectPlaceholder
-              label="Registro"
-              icon="🗝"
-              connecting={connectingTab === 'registry'}
-              onConnect={() => startTabSession('registry')}
-              conflict={sessionConflict}
-              onForce={() => startTabSession('registry', true)}
-            />
-          )
+          </div>
+        )}
+
+        {activeTab === 'registry' && !registrySession && (
+          <ConnectPlaceholder
+            label="Registro"
+            icon="🗝"
+            connecting={connectingTab === 'registry'}
+            onConnect={() => startTabSession('registry')}
+            conflict={sessionConflict}
+            onForce={() => startTabSession('registry', true)}
+          />
         )}
 
         {activeTab === 'services' && (

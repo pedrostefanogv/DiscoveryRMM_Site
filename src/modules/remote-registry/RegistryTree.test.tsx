@@ -162,3 +162,84 @@ describe('RegistryTree — revela o caminho ativo', () => {
         expect(screen.getByText('SOFTWARE')).toBeTruthy();
     });
 });
+
+describe('RegistryTree — paginação, prontidão, retry e invalidação', () => {
+    it('aguarda disabled=false antes de expandir automaticamente', async () => {
+        const loadSubkeys = vi.fn(async () => ['SOFTWARE']);
+        const { rerender } = render(
+            <RegistryTree activeHive="HKLM" activePath="" onSelect={vi.fn()} loadSubkeys={loadSubkeys} disabled />,
+        );
+        expect(loadSubkeys).not.toHaveBeenCalled();
+
+        rerender(
+            <RegistryTree activeHive="HKLM" activePath="" onSelect={vi.fn()} loadSubkeys={loadSubkeys} disabled={false} />,
+        );
+        await waitFor(() => expect(screen.getByText('SOFTWARE')).toBeTruthy());
+        expect(loadSubkeys).toHaveBeenCalledWith('HKLM', '');
+    });
+
+    it('carrega próxima página de subchaves ao clicar em "Carregar mais"', async () => {
+        const loadSubkeys = vi.fn(async (_hive: string, _path: string, token?: string) => {
+            if (!token) {
+                return { subkeys: ['Chave1', 'Chave2'], hasMore: true, nextToken: '2', subkeyCount: 3 };
+            }
+            return { subkeys: ['Chave3'], hasMore: false, subkeyCount: 3 };
+        });
+
+        render(<RegistryTree activeHive="HKLM" activePath="" onSelect={vi.fn()} loadSubkeys={loadSubkeys} />);
+        await waitFor(() => expect(screen.getByText('Chave1')).toBeTruthy());
+
+        const moreBtn = await waitFor(() => screen.getByText(/Carregar mais/));
+        fireEvent.click(moreBtn);
+
+        await waitFor(() => expect(screen.getByText('Chave3')).toBeTruthy());
+        expect(loadSubkeys).toHaveBeenCalledWith('HKLM', '', '2');
+    });
+
+    it('permite tentar novamente quando um nó falha ao carregar', async () => {
+        let shouldFail = true;
+        const loadSubkeys = vi.fn(async (_hive: string, path: string) => {
+            if (path === 'INSTAVEL' && shouldFail) throw new Error('timeout temporário');
+            if (path === 'INSTAVEL') return ['Recuperada'];
+            return ['INSTAVEL'];
+        });
+
+        render(<RegistryTree activeHive="HKLM" activePath="" onSelect={vi.fn()} loadSubkeys={loadSubkeys} />);
+        await waitFor(() => expect(screen.getByText('INSTAVEL')).toBeTruthy());
+
+        fireEvent.click(screen.getByLabelText('Expandir INSTAVEL'));
+        await waitFor(() => expect(screen.getByText('Tentar novamente')).toBeTruthy());
+
+        shouldFail = false;
+        fireEvent.click(screen.getByText('Tentar novamente'));
+        await waitFor(() => expect(screen.getByText('Recuperada')).toBeTruthy());
+    });
+
+    it('recarrega nós expandidos quando nodeRefreshSignal muda', async () => {
+        let keys = ['Antiga'];
+        const loadSubkeys = vi.fn(async () => keys);
+
+        const { rerender } = render(
+            <RegistryTree
+                activeHive="HKLM"
+                activePath=""
+                onSelect={vi.fn()}
+                loadSubkeys={loadSubkeys}
+                nodeRefreshSignal={{ version: 0 }}
+            />,
+        );
+        await waitFor(() => expect(screen.getByText('Antiga')).toBeTruthy());
+
+        keys = ['Antiga', 'Nova'];
+        rerender(
+            <RegistryTree
+                activeHive="HKLM"
+                activePath=""
+                onSelect={vi.fn()}
+                loadSubkeys={loadSubkeys}
+                nodeRefreshSignal={{ version: 1, keys: ['HKLM|\u0000|'] }}
+            />,
+        );
+        await waitFor(() => expect(screen.getByText('Nova')).toBeTruthy());
+    });
+});

@@ -88,7 +88,9 @@ export function printHtmlAsPdf(html: string, title = "Relatorio"): void {
 
   const iframe = document.createElement("iframe");
   iframe.setAttribute("data-report-print", "true");
-  iframe.setAttribute("sandbox", "allow-modals");
+  // allow-same-origin sem allow-scripts permite chamar contentWindow.print()
+  // sem SecurityError mantendo JavaScript completamente bloqueado (DOMPurify).
+  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
   iframe.setAttribute("aria-hidden", "true");
   iframe.style.position = "fixed";
   iframe.style.right = "0";
@@ -120,13 +122,13 @@ export function printHtmlAsPdf(html: string, title = "Relatorio"): void {
   iframe.addEventListener(
     "load",
     () => {
-      window.setTimeout(triggerPrint, 250);
+      window.setTimeout(triggerPrint, 50);
     },
     { once: true },
   );
 
   (document.body ?? document.documentElement).appendChild(iframe);
-  fallbackTimer = window.setTimeout(triggerPrint, 250);
+  fallbackTimer = window.setTimeout(triggerPrint, 1500);
 
   window.setTimeout(() => {
     iframe.remove();

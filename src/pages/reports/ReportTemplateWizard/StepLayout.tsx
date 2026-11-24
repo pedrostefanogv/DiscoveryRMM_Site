@@ -4,12 +4,14 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -25,6 +27,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
   const { state } = wizard;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const normalizeSubTableField = (field: string, alias: string) =>
@@ -164,6 +167,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                 📋 Tabela Principal
               </h3>
               <select
+                aria-label="Adicionar coluna à tabela principal"
                 onChange={(e) => {
                   if (e.target.value) wizard.addColumn(e.target.value);
                   e.target.value = "";
@@ -225,10 +229,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                     >
                       <tbody>
                         {state.columns.map((col, i) => (
-                          <SortableRow key={i} id={`col-${i}`}>
-                            <td className="px-1 py-1 text-center text-muted cursor-grab active:cursor-grabbing">
-                              ⠿
-                            </td>
+                          <SortableRow key={`${col.field}-${i}`} id={`col-${i}`} fieldName={col.field}>
                             <td className="px-2 py-1">
                               <span className="rounded bg-surface-light px-1.5 py-0.5 text-[11px] text-muted-foreground">
                                 {col.field}
@@ -236,6 +237,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             </td>
                             <td className="px-2 py-1">
                               <input
+                                aria-label={`Label da coluna ${col.field}`}
                                 value={col.header}
                                 onChange={(e) =>
                                   wizard.updateColumn(i, { header: e.target.value })
@@ -245,6 +247,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             </td>
                             <td className="px-2 py-1">
                               <select
+                                aria-label={`Formato da coluna ${col.field}`}
                                 value={col.format}
                                 onChange={(e) =>
                                   wizard.updateColumn(i, { format: e.target.value as any })
@@ -259,6 +262,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             </td>
                             <td className="px-2 py-1">
                               <select
+                                aria-label={`Alinhamento da coluna ${col.field}`}
                                 value={col.align}
                                 onChange={(e) =>
                                   wizard.updateColumn(i, { align: e.target.value as any })
@@ -272,9 +276,11 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             </td>
                             <td className="px-2 py-1">
                               <button
+                                type="button"
                                 onClick={() => wizard.removeColumn(i)}
                                 className="text-danger hover:text-danger"
                                 title="Remover"
+                                aria-label={`Remover coluna ${col.field}`}
                               >
                                 ✕
                               </button>
@@ -478,8 +484,8 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
   );
 }
 
-/** Draggable table row wrapper for @dnd-kit */
-function SortableRow({ id, children }: { id: string; children: React.ReactNode }) {
+/** Draggable table row wrapper for @dnd-kit (drag handle isolated to button) */
+function SortableRow({ id, fieldName, children }: { id: string; fieldName: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
   const style = {
@@ -488,7 +494,18 @@ function SortableRow({ id, children }: { id: string; children: React.ReactNode }
     opacity: isDragging ? 0.5 : 1,
   };
   return (
-    <tr ref={setNodeRef} style={style} {...attributes} {...listeners} className="border-b border-border">
+    <tr ref={setNodeRef} style={style} className="border-b border-border">
+      <td className="px-1 py-1 text-center">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Reordenar coluna ${fieldName}`}
+          className="cursor-grab active:cursor-grabbing text-muted hover:text-foreground px-1"
+        >
+          ⠿
+        </button>
+      </td>
       {children}
     </tr>
   );

@@ -518,7 +518,9 @@ export async function downloadReportFile(
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(blobUrl);
+  window.setTimeout(() => {
+    URL.revokeObjectURL(blobUrl);
+  }, 10_000);
 }
 
 // â   Preview (fallback local)          ”

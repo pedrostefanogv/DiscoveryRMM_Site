@@ -1,9 +1,10 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import DOMPurify from "dompurify";
 import { LazyMarkdown } from "@/components/ui/LazyMarkdown";
 import { useReportPreview } from "@/hooks/useReportPreview";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
+import { printHtmlAsPdf } from "@/utils/reportPrint";
 import type { ReportDatasetTypeValue } from "@/api/types";
 
 interface Props {
@@ -19,6 +20,8 @@ export function LiveMarkdownPreview({ wizard }: Props) {
   const [siteId, setSiteId] = useState<string>("");
   const [dataLimit, setDataLimit] = useState<string>("10");
   const [isExpandedPreviewOpen, setIsExpandedPreviewOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const serializedLayout = wizard.buildLayoutJson();
 
   const { data: clients = [] } = useClients();
   const { data: sites = [] } = useSites(clientId || undefined);
@@ -135,25 +138,16 @@ export function LiveMarkdownPreview({ wizard }: Props) {
       const timer = setTimeout(loadDataPreview, 800);
       return () => clearTimeout(timer);
     }
-  }, [mode, clientId, siteId, dataLimit]);
+  }, [mode, clientId, siteId, dataLimit, serializedLayout]);
 
   useEffect(() => {
-    if (!isExpandedPreviewOpen)
-      return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape")
-        setIsExpandedPreviewOpen(false);
-    };
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (isExpandedPreviewOpen && !dialog.open) {
+      dialog.showModal();
+    } else if (!isExpandedPreviewOpen && dialog.open) {
+      dialog.close();
+    }
   }, [isExpandedPreviewOpen]);
 
   const hasColumns = state.columns.length > 0;
@@ -178,32 +172,43 @@ export function LiveMarkdownPreview({ wizard }: Props) {
         </div>
 
         {mode === "data" && (
-          <button
-            type="button"
-            onClick={() => setIsExpandedPreviewOpen(true)}
-            disabled={!previewSrcDoc}
-            title="Abrir preview ampliado"
-            className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ⤢ Ampliar
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => previewMutation.data?.html && printHtmlAsPdf(previewMutation.data.html, state.name || "Relatorio")}
+              disabled={!previewMutation.data?.html}
+              title="Imprimir / Salvar como PDF"
+              className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              📄 PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsExpandedPreviewOpen(true)}
+              disabled={!previewSrcDoc}
+              title="Abrir preview ampliado"
+              className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ⤢ Ampliar
+            </button>
+          </div>
         )}
       </div>
 
       {mode === "data" && (
         <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-2">
           <div className="grid grid-cols-2 gap-2">
-            <select value={clientId} onChange={(e) => { setClientId(e.target.value); setSiteId(""); }}
+            <select aria-label="Filtrar preview por cliente" value={clientId} onChange={(e) => { setClientId(e.target.value); setSiteId(""); }}
               className="rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground">
               <option value="">Todos clientes</option>
               {clients.map((c) => <option key={c.id} value={c.id} className="bg-surface">{c.name}</option>)}
             </select>
-            <select value={siteId} onChange={(e) => setSiteId(e.target.value)} disabled={!clientId}
+            <select aria-label="Filtrar preview por site" value={siteId} onChange={(e) => setSiteId(e.target.value)} disabled={!clientId}
               className="rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground">
               <option value="">Todos sites</option>
               {sites.map((s) => <option key={s.id} value={s.id} className="bg-surface">{s.name}</option>)}
             </select>
-            <select value={dataLimit} onChange={(e) => setDataLimit(e.target.value)}
+            <select aria-label="Limite de linhas do preview" value={dataLimit} onChange={(e) => setDataLimit(e.target.value)}
               className="rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground">
               <option value="5" className="bg-surface">5 linhas</option>
               <option value="10" className="bg-surface">10 linhas</option>
@@ -263,29 +268,40 @@ export function LiveMarkdownPreview({ wizard }: Props) {
         </p>
       )}
 
-      {isExpandedPreviewOpen && previewSrcDoc && typeof document !== "undefined" && createPortal(
-        <div
-          className="fixed inset-0 z-[2147483640] flex items-center justify-center bg-black/75 p-4"
-          onClick={(event) => {
-            if (event.target === event.currentTarget)
-              setIsExpandedPreviewOpen(false);
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Preview ampliado"
-        >
-          <div className="h-[90vh] w-[min(1200px,96vw)] rounded-xl border border-border bg-background shadow-2xl">
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="expanded-preview-title"
+        onClose={() => setIsExpandedPreviewOpen(false)}
+        onClick={(event) => {
+          if (event.target === dialogRef.current) setIsExpandedPreviewOpen(false);
+        }}
+        className="m-auto h-[90vh] w-[min(1200px,96vw)] rounded-xl border border-border bg-background p-0 shadow-2xl backdrop:bg-black/75 overscroll-contain"
+      >
+        {previewSrcDoc && (
+          <div className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b border-border px-4 py-2">
-              <h4 className="text-sm font-semibold text-foreground">Preview ampliado</h4>
-              <button
-                type="button"
-                onClick={() => setIsExpandedPreviewOpen(false)}
-                className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-              >
-                ✕ Fechar
-              </button>
+              <h1 id="expanded-preview-title" className="text-sm font-semibold text-foreground">
+                Preview ampliado
+              </h1>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => previewMutation.data?.html && printHtmlAsPdf(previewMutation.data.html, state.name || "Relatorio")}
+                  disabled={!previewMutation.data?.html}
+                  className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover disabled:opacity-40"
+                >
+                  📄 Salvar PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsExpandedPreviewOpen(false)}
+                  className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                >
+                  ✕ Fechar
+                </button>
+              </div>
             </div>
-            <div className="h-[calc(90vh-49px)] p-3">
+            <div className="flex-1 p-3">
               <iframe
                 title="Preview de dados do relatorio ampliado"
                 className="h-full w-full rounded-lg bg-white"
@@ -294,19 +310,20 @@ export function LiveMarkdownPreview({ wizard }: Props) {
               />
             </div>
           </div>
-        </div>,
-        document.body,
-      )}
+        )}
+      </dialog>
     </div>
   );
 }
 
 function sanitizePreviewHtml(html: string): string {
-  return html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
-    .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
-    .replace(/\son\w+\s*=\s*'[^']*'/gi, "");
+  const isFullDocument = /<html[\s>]/i.test(html);
+  return DOMPurify.sanitize(html, {
+    WHOLE_DOCUMENT: isFullDocument,
+    ADD_TAGS: ["style"],
+    FORBID_TAGS: ["script", "iframe", "object", "embed", "applet", "base", "meta", "link", "form"],
+    FORBID_ATTR: ["srcdoc", "formaction"],
+  });
 }
 
 function toPreviewSrcDoc(html: string): string {

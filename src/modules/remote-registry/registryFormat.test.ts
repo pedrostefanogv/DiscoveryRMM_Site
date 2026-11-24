@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { parseUserRegistryPath } from './registryTypes';
 import {
     base64ByteLength,
     base64ToHexPreview,
@@ -311,5 +312,34 @@ describe('registryFormat — descrição de mutação para confirmação', () =>
     it('anexa o detalhe quando informado', () => {
         const msg = describeMutation('setValue', 'alvo', 'Valor anterior: 1');
         expect(msg).toContain('Valor anterior: 1');
+    });
+});
+
+describe('registryTypes — parseUserRegistryPath', () => {
+    it('aceita abreviações e nomes longos de hive', () => {
+        expect(parseUserRegistryPath('HKLM\\SOFTWARE\\Microsoft')).toEqual({ hive: 'HKLM', path: 'SOFTWARE\\Microsoft' });
+        expect(parseUserRegistryPath('HKEY_LOCAL_MACHINE\\SOFTWARE')).toEqual({ hive: 'HKLM', path: 'SOFTWARE' });
+        expect(parseUserRegistryPath('hkey_current_user\\Environment')).toEqual({ hive: 'HKCU', path: 'Environment' });
+        expect(parseUserRegistryPath('HKEY_CLASSES_ROOT')).toEqual({ hive: 'HKCR', path: '' });
+        expect(parseUserRegistryPath('HKEY_USERS\\.DEFAULT')).toEqual({ hive: 'HKU', path: '.DEFAULT' });
+        expect(parseUserRegistryPath('HKEY_CURRENT_CONFIG\\System')).toEqual({ hive: 'HKCC', path: 'System' });
+    });
+
+    it('remove prefixo Computador/Computer, espaços e normaliza barras', () => {
+        expect(parseUserRegistryPath('  Computador\\HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies  ')).toEqual({
+            hive: 'HKLM',
+            path: 'SOFTWARE\\Policies',
+        });
+        expect(parseUserRegistryPath('Computer/HKLM//SOFTWARE///Teste/')).toEqual({
+            hive: 'HKLM',
+            path: 'SOFTWARE\\Teste',
+        });
+    });
+
+    it('retorna null para caminhos vazios ou hives inválidos', () => {
+        expect(parseUserRegistryPath('')).toBeNull();
+        expect(parseUserRegistryPath('   ')).toBeNull();
+        expect(parseUserRegistryPath('Computador\\')).toBeNull();
+        expect(parseUserRegistryPath('HKEY_INVALID\\SOFTWARE')).toBeNull();
     });
 });

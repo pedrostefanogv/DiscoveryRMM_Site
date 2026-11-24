@@ -309,3 +309,158 @@ describe('RegistryPanel — valores', () => {
         expect(editar.disabled).toBe(true);
     });
 });
+
+describe('RegistryPanel — prontidão fallback, endereço e ações completas', () => {
+    it('inicia carregamento via fallback quando isConnected=true e isReady=false', async () => {
+        readyState = false;
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') return listOk(args.hive, args.path, ['SOFTWARE']);
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        expect(screen.getByTestId('registry-connecting')).toBeTruthy();
+
+        await waitFor(() => {
+            expect(sendMock).toHaveBeenCalledWith('listKey', expect.objectContaining({ hive: 'HKLM', path: '' }));
+        }, { timeout: 1500 });
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SOFTWARE')).toBeTruthy());
+    });
+
+    it('navega por caminho digitado na barra de endereço', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') return listOk(args.hive, args.path, []);
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByLabelText('Editar caminho')).toBeTruthy());
+
+        fireEvent.click(screen.getByLabelText('Editar caminho'));
+        const input = screen.getByLabelText('Endereço do registro');
+        fireEvent.change(input, { target: { value: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\MinhaApp' } });
+        fireEvent.click(screen.getByText('Ir'));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('registry-current-path').getAttribute('data-path')).toBe('HKLM\\SOFTWARE\\MinhaApp');
+        });
+    });
+
+    it('exige confirmação antes de excluir um valor', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                return listOk(args.hive, args.path, [], [{ name: 'ChaveTeste', type: 'REG_SZ', data: 'abc' }]);
+            }
+            if (action === 'deleteValue') return { success: true, requestId: 'd' };
+            return statOk(args.hive, args.path, true);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByText('ChaveTeste')).toBeTruthy());
+
+        fireEvent.click(screen.getByText('Excluir'));
+        expect(sendMock).not.toHaveBeenCalledWith('deleteValue', expect.anything());
+        await waitFor(() => expect(screen.getByText('Confirmar exclusão')).toBeTruthy());
+
+        fireEvent.click(screen.getByText('Confirmar exclusão'));
+        await waitFor(() => {
+            expect(sendMock).toHaveBeenCalledWith('deleteValue', expect.objectContaining({
+                name: 'ChaveTeste',
+                confirmed: true,
+            }));
+        });
+    });
+
+    it('cria subchave, renomeia chave e exporta .reg', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                return listOk(args.hive, args.path, args.path === '' ? ['MinhaEmpresa'] : [], []);
+            }
+            if (action === 'createKey') return { success: true, requestId: 'c' };
+            if (action === 'renameKey') return { success: true, requestId: 'rn' };
+            if (action === 'export') return { success: true, requestId: 'ex', export: 'Windows Registry Editor Version 5.00\r\n' };
+            return statOk(args.hive, args.path, true);
+        });
+
+        const createObjectURLMock = vi.fn(() => 'blob:mock');
+        const revokeObjectURLMock = vi.fn();
+        vi.stubGlobal('URL', {
+            ...URL,
+            createObjectURL: createObjectURLMock,
+            revokeObjectURL: revokeObjectURLMock,
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-MinhaEmpresa')).toBeTruthy());
+
+        // Criar subchave
+        fireEvent.click(screen.getByText('Nova subchave'));
+        fireEvent.change(screen.getByLabelText('Nome da subchave'), { target: { value: 'NovaSub' } });
+        fireEvent.click(screen.getByText('Criar subchave'));
+        await waitFor(() => {
+            expect(sendMock).toHaveBeenCalledWith('createKey', expect.objectContaining({
+                hive: 'HKLM',
+                path: 'NovaSub',
+                confirmed: true,
+            }));
+        });
+
+        // Navegar para subchave para habilitar Renomear e Exportar
+        fireEvent.click(screen.getByTestId('registry-subkey-MinhaEmpresa'));
+        await waitFor(() => {
+            expect(screen.getByTestId('registry-current-path').getAttribute('data-path')).toBe('HKLM\\MinhaEmpresa');
+        });
+
+        // Exportar .reg
+        fireEvent.click(screen.getByText('Exportar .reg'));
+        fireEvent.click(screen.getByText('Baixar .reg'));
+        await waitFor(() => {
+            expect(sendMock).toHaveBeenCalledWith('export', expect.objectContaining({
+                hive: 'HKLM',
+                path: 'MinhaEmpresa',
+                recursive: false,
+            }));
+        });
+
+        // Renomear
+        fireEvent.click(screen.getByText('Renomear'));
+        fireEvent.change(screen.getByLabelText('Novo nome'), { target: { value: 'EmpresaRenomeada' } });
+        fireEvent.click(screen.getByText('Confirmar renomeação'));
+        await waitFor(() => {
+            expect(sendMock).toHaveBeenCalledWith('renameKey', expect.objectContaining({
+                hive: 'HKLM',
+                path: 'MinhaEmpresa',
+                newName: 'EmpresaRenomeada',
+                confirmed: true,
+            }));
+        });
+
+        vi.unstubAllGlobals();
+    });
+
+    it('carrega próxima página de subchaves no painel direito', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                if (args.token === '500') {
+                    return {
+                        success: true, requestId: 'r2', hive: args.hive, path: args.path,
+                        page: { hive: args.hive, path: args.path, subkeys: ['SubExtra'], values: [], hasMore: false, subkeyCount: 2, valueCount: 0 },
+                    };
+                }
+                return {
+                    success: true, requestId: 'r1', hive: args.hive, path: args.path,
+                    page: { hive: args.hive, path: args.path, subkeys: ['SubInicial'], values: [], hasMore: true, nextToken: '500', subkeyCount: 2, valueCount: 0 },
+                };
+            }
+            return statOk(args.hive, args.path, true);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SubInicial')).toBeTruthy());
+
+        const loadMoreBtns = screen.getAllByText('Carregar mais');
+        fireEvent.click(loadMoreBtns[loadMoreBtns.length - 1]);
+
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SubExtra')).toBeTruthy());
+    });
+});

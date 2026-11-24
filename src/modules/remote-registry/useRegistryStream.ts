@@ -165,6 +165,7 @@ export function useRegistryStream({
             }
             const rid = parsed.requestId;
             if (typeof rid === 'string' && pendingRef.current.has(rid)) {
+                setIsReady(true);
                 const pend = pendingRef.current.get(rid)!;
                 pendingRef.current.delete(rid);
                 pend.resolve(parsed as unknown as RegistryResponse);
