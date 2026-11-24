@@ -310,8 +310,41 @@ export interface NatsTestResult {
   latencyMs?: number;
 }
 
-export function testObjectStorage() {
+export interface ObjectStorageDraftPayload {
+  internal?: boolean;
+  endpoint?: string;
+  bucketName?: string;
+  region?: string;
+  accessKey?: string;
+  secretKey?: string;
+  urlTtlHours?: number;
+  usePathStyle?: boolean;
+  sslVerify?: boolean;
+}
+
+export interface ObjectStorageCorsProbeResult {
+  objectKey: string;
+  uploadUrl: string;
+}
+
+export function testObjectStorage(draft?: ObjectStorageDraftPayload) {
+  if (draft) {
+    return api.post<ObjectStorageTestResult>(
+      `${CONFIG_BASE}/server/object-storage/test`,
+      draft as unknown as Record<string, unknown>,
+    );
+  }
   return api.post<ObjectStorageTestResult>(`${CONFIG_BASE}/server/object-storage/test`);
+}
+
+export function beginObjectStorageCorsProbe() {
+  return api.post<ObjectStorageCorsProbeResult>(`${CONFIG_BASE}/server/object-storage/cors-probe`);
+}
+
+export function cleanupObjectStorageCorsProbe(objectKey: string) {
+  return api.del<void>(
+    `${CONFIG_BASE}/server/object-storage/cors-probe?objectKey=${encodeURIComponent(objectKey)}`,
+  );
 }
 
 export function testNatsServer(payload: { url: string; user?: string; password?: string }) {

@@ -65,4 +65,11 @@ export const objectStorageApi = {
       {},
       init,
     ),
+
+  /**
+   * Executa um probe ativo (1 HEAD bucket) ignorando o cache atual (com
+   * cooldown no servidor), ideal para destravar circuit breaker apos correcao.
+   */
+  probeTelemetry: () =>
+    api.post<ObjectStorageTelemetryDto>("/api/v1/ops/object-storage/probe"),
 };

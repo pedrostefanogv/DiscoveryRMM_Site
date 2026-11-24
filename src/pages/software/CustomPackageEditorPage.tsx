@@ -209,6 +209,8 @@ type AssetUpload = {
   bytesPerSecond?: number;
   /** Segundos restantes estimados; undefined enquanto não dá para estimar. */
   etaSeconds?: number;
+  /** Etapa atual: 'uploading' ou 'finalizing' (commit multipart + SHA-256). */
+  phase?: 'uploading' | 'finalizing';
 };
 
 const ASSET_UPLOAD_LABEL: Record<'installer' | 'icon', string> = {
@@ -356,6 +358,7 @@ function AssetUploadPanel({
   const resumable = upload.total > ASSET_MULTIPART_MIN_BYTES;
 
   const isUploading = upload.status === 'uploading';
+  const isFinalizing = isUploading && upload.phase === 'finalizing';
   const isError = upload.status === 'error';
   const isCanceled = upload.status === 'canceled';
   const eta = formatEta(upload.etaSeconds);
@@ -387,15 +390,19 @@ function AssetUploadPanel({
           <span className="truncate">
             {isError
               ? 'Falha ao enviar o arquivo'
-              : isUploading
-                ? ASSET_UPLOAD_LABEL[kind]
-                : isCanceled
-                  ? 'Envio cancelado'
-                  : 'Arquivo publicado no object storage'}
+              : isFinalizing
+                ? 'Finalizando montagem e calculando SHA-256…'
+                : isUploading
+                  ? ASSET_UPLOAD_LABEL[kind]
+                  : isCanceled
+                    ? resumable
+                      ? 'Envio pausado'
+                      : 'Envio cancelado'
+                    : 'Arquivo publicado no object storage'}
           </span>
         </span>
 
-        {isUploading && upload.total > 0 && (
+        {isUploading && upload.total > 0 && !isFinalizing && (
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{upload.percent}%</span>
         )}
       </div>
@@ -408,26 +415,35 @@ function AssetUploadPanel({
       {isUploading && (
         <>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-            {upload.total > 0 ? (
+            {isFinalizing || upload.total <= 0 ? (
+              <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
+            ) : (
               <div
                 className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
                 style={{ width: `${Math.max(upload.percent, 2)}%` }}
               />
-            ) : (
-              <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              {upload.total > 0
-                ? `${formatBytes(upload.loaded)} de ${formatBytes(upload.total)} enviados`
-                : 'Aguarde a conclusão…'}
-              {speed ? ` · ${speed}` : ''}
-              {eta ? ` · ≈ ${eta} restantes` : ''}
+              {isFinalizing
+                ? 'Partes recebidas no storage — validando integridade (pode levar alguns instantes para arquivos grandes).'
+                : upload.total > 0
+                  ? `${formatBytes(upload.loaded)} de ${formatBytes(upload.total)} enviados`
+                  : 'Aguarde a conclusão…'}
+              {!isFinalizing && speed ? ` · ${speed}` : ''}
+              {!isFinalizing && eta ? ` · ≈ ${eta} restantes` : ''}
             </p>
-            <Button variant="ghost" size="sm" onClick={onCancel} title="Cancelar o envio (o progresso é preservado)">
-              <Icon name="close" className="h-3.5 w-3.5" /> Cancelar
-            </Button>
+            {!isFinalizing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                title={resumable ? 'Pausar o envio (o progresso é preservado)' : 'Cancelar o envio'}
+              >
+                <Icon name="close" className="h-3.5 w-3.5" /> {resumable ? 'Pausar' : 'Cancelar'}
+              </Button>
+            )}
           </div>
         </>
       )}
@@ -698,6 +714,7 @@ export default function CustomPackageEditorPage() {
             percent: progress.percent,
             bytesPerSecond: progress.bytesPerSecond,
             etaSeconds: progress.etaSeconds,
+            phase: progress.phase,
           });
         },
         controller.signal,
@@ -833,6 +850,7 @@ export default function CustomPackageEditorPage() {
             percent: progress.percent,
             bytesPerSecond: progress.bytesPerSecond,
             etaSeconds: progress.etaSeconds,
+            phase: progress.phase,
           });
         },
         controller.signal,

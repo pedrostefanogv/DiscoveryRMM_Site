@@ -36,6 +36,11 @@ import {
   useUpdateTicketAttachmentSettings,
 } from "../../hooks/useConfigurationApi";
 import {
+  beginObjectStorageCorsProbe,
+  cleanupObjectStorageCorsProbe,
+  type ObjectStorageDraftPayload,
+} from "@/services/configurationApi";
+import {
   buildServerDraft,
   formatFieldValue,
   isBooleanToggleField,
@@ -184,7 +189,15 @@ export default function ServerConfigurationPage() {
     bucketReachable: boolean;
     errors: string[];
     latencyMs: number;
+    draftTested?: boolean;
   } | null>(null);
+  const [corsProbeLoading, setCorsProbeLoading] = useState(false);
+  const [corsProbeResult, setCorsProbeResult] = useState<{
+    ok: boolean;
+    etagExposed: boolean;
+    message: string;
+  } | null>(null);
+  const [storagePresetHint, setStoragePresetHint] = useState<string | null>(null);
 
   const {
     setValue,
@@ -449,11 +462,34 @@ export default function ServerConfigurationPage() {
     }
   };
 
+  const hasStoragePendingChanges = Array.from(storageSaveWhitelist).some((k) => pendingKeys.has(k));
+
+  const buildStorageDraft = (): ObjectStorageDraftPayload => {
+    const readStr = (key: string) => String(getValues(`values.${key}` as never) ?? "").trim();
+    const readBool = (key: string) => isConfigFlagOn(readStr(key));
+    const ttl = Number(readStr("objectStorageUrlTtlHours"));
+    const secret = readStr("objectStorageSecretKey");
+    return {
+      internal: readBool("objectStorageInternal"),
+      endpoint: readStr("objectStorageEndpoint"),
+      bucketName: readStr("objectStorageBucketName"),
+      region: readStr("objectStorageRegion"),
+      accessKey: readStr("objectStorageAccessKey"),
+      ...(secret ? { secretKey: secret } : {}),
+      ...(Number.isFinite(ttl) && ttl > 0 ? { urlTtlHours: ttl } : {}),
+      usePathStyle: readBool("objectStorageUsePathStyle"),
+      sslVerify: readBool("objectStorageSslVerify"),
+    };
+  };
+
   const testConnection = async () => {
     setTestResult(null);
+    const useDraft = hasStoragePendingChanges;
     try {
-      const result = await testStorageMutation.mutateAsync();
-      setTestResult(result);
+      const result = useDraft
+        ? await testStorageMutation.mutateAsync(buildStorageDraft())
+        : await testStorageMutation.mutateAsync(undefined);
+      setTestResult({ ...result, draftTested: useDraft });
     } catch (error) {
       setTestResult({
         success: false,
@@ -461,7 +497,106 @@ export default function ServerConfigurationPage() {
         bucketReachable: false,
         errors: [readApiError(error)],
         latencyMs: 0,
+        draftTested: useDraft,
       });
+    }
+  };
+
+  type StoragePresetId = "rustfs" | "r2" | "aws" | "minio" | "custom";
+  const applyStoragePreset = (preset: StoragePresetId) => {
+    const setField = (key: string, val: string) => {
+      setValue(`values.${key}` as never, val as never, { shouldDirty: true, shouldTouch: true });
+      markPending(key);
+    };
+    setTestResult(null);
+    setCorsProbeResult(null);
+
+    if (preset === "rustfs") {
+      setField("objectStorageInternal", "true");
+      setField("objectStorageUsePathStyle", "true");
+      setField("objectStorageRegion", "us-east-1");
+      setStoragePresetHint("RustFS interno: informe no Endpoint a URL pública do portal (ex.: https://portal.suaempresa.com.br). As chaves vêm do discovery.env.");
+    } else if (preset === "r2") {
+      setField("objectStorageInternal", "false");
+      setField("objectStorageUsePathStyle", "true");
+      setField("objectStorageRegion", "auto");
+      setStoragePresetHint("Cloudflare R2: use o endpoint S3 da conta (<account>.r2.cloudflarestorage.com) e região 'auto'.");
+    } else if (preset === "aws") {
+      setField("objectStorageInternal", "false");
+      setField("objectStorageUsePathStyle", "false");
+      if (!String(getValues("values.objectStorageRegion" as never) ?? "").trim()) {
+        setField("objectStorageRegion", "us-east-1");
+      }
+      setStoragePresetHint("AWS S3: informe o endpoint regional (ex.: https://s3.us-east-1.amazonaws.com) e a região correspondente.");
+    } else if (preset === "minio") {
+      setField("objectStorageInternal", "false");
+      setField("objectStorageUsePathStyle", "true");
+      setField("objectStorageRegion", "us-east-1");
+      setStoragePresetHint("MinIO / S3 compatível: Path-style habilitado; informe a URL pública acessível por navegadores e agentes.");
+    } else {
+      setField("objectStorageInternal", "false");
+      setStoragePresetHint("Provedor S3 customizado (Wasabi, Oracle, Backblaze, etc.): ajuste Endpoint, Região e Path-style conforme o provedor.");
+    }
+  };
+
+  const copyCorsPolicy = async () => {
+    try {
+      await navigator.clipboard.writeText(corsPolicyExample);
+      toast.success("Política CORS copiada.");
+    } catch {
+      toast.error("Não foi possível copiar a política CORS.");
+    }
+  };
+
+  const runCorsProbe = async () => {
+    if (hasStoragePendingChanges) {
+      toast.error("Salve as alterações de storage antes de testar o upload direto (CORS).");
+      return;
+    }
+    setCorsProbeLoading(true);
+    setCorsProbeResult(null);
+    let createdKey: string | null = null;
+    try {
+      const probe = await beginObjectStorageCorsProbe();
+      createdKey = probe.objectKey;
+      const response = await fetch(probe.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "text/plain" },
+        body: "discovery-cors-probe",
+      });
+      if (!response.ok) {
+        setCorsProbeResult({
+          ok: false,
+          etagExposed: false,
+          message: `O bucket recusou o PUT direto do navegador (HTTP ${response.status}). Verifique AllowedOrigins (${corsOriginLabel}) e AllowedMethods (PUT).`,
+        });
+        return;
+      }
+      const etag = response.headers.get("etag") ?? response.headers.get("ETag");
+      if (!etag) {
+        setCorsProbeResult({
+          ok: false,
+          etagExposed: false,
+          message: "Upload direto funcionou, mas o header ETag NÃO está exposto ao navegador. Adicione \"ETag\" em ExposeHeaders na regra de CORS para uploads multipart.",
+        });
+        return;
+      }
+      setCorsProbeResult({
+        ok: true,
+        etagExposed: true,
+        message: `CORS validado com sucesso! PUT direto aceito e header ETag exposto (${etag}).`,
+      });
+    } catch (error) {
+      setCorsProbeResult({
+        ok: false,
+        etagExposed: false,
+        message: `Bloqueio de CORS ou erro de rede no navegador ao acessar o bucket diretamente: ${readApiError(error)}`,
+      });
+    } finally {
+      if (createdKey) {
+        void cleanupObjectStorageCorsProbe(createdKey).catch(() => {});
+      }
+      setCorsProbeLoading(false);
     }
   };
 
@@ -1521,17 +1656,61 @@ export default function ServerConfigurationPage() {
           />
           {!collapsedSections.storage && (
             <div className="space-y-5">
+              {/* Presets rápidos de provedor S3 */}
+              <div className="rounded-lg border border-border bg-surface-light p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Preset rápido de provedor
+                  </p>
+                  <Link
+                    to="/settings/database-maintenance"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <Icon name="cleaning_services" className="h-3.5 w-3.5" />
+                    Inventário e limpeza do bucket
+                  </Link>
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {[
+                    { id: "rustfs" as const, label: "RustFS Interno" },
+                    { id: "r2" as const, label: "Cloudflare R2" },
+                    { id: "aws" as const, label: "AWS S3" },
+                    { id: "minio" as const, label: "MinIO" },
+                    { id: "custom" as const, label: "Outro S3" },
+                  ].map((preset) => (
+                    <Button
+                      key={preset.id}
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => applyStoragePreset(preset.id)}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+                {storagePresetHint && (
+                  <p className="mt-2 text-[11px] text-muted">{storagePresetHint}</p>
+                )}
+              </div>
+
               {storageInternal && (
                 <div className="rounded-lg border border-border bg-surface-light p-4">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted">Modo interno (RustFS)</p>
-                  <p className="mt-1 text-[11px] text-muted">
-                    O servidor fala com o RustFS por <strong>loopback</strong> usando as chaves do env do servidor
-                    (ObjectStorage__AccessKey/__SecretKey/__InternalEndpoint). Os agentes e o navegador NÃO
-                    acessam o loopback: eles recebem URLs pré-assinadas com o <strong>Endpoint S3</strong> acima
-                    (URL pública, ex.: https://portal.suaempresa.com.br), e o nginx encaminha /&lt;bucket&gt;/ para o storage
-                    preservando o Host da assinatura.
-                    {' '}Para migrar para um provedor externo, desative “Usar RustFS interno”, preencha Conexão e Credenciais abaixo e salve — o servidor passa a usar o banco na hora, sem editar o discovery.env. Para voltar ao RustFS, basta reativar o toggle.
-                  </p>
+                  <ul className="mt-1.5 list-inside list-disc space-y-1 text-[11px] text-muted">
+                    <li>
+                      O servidor acessa o RustFS por <strong>loopback</strong> usando as chaves do{" "}
+                      <code>discovery.env</code> (<code>ObjectStorage__AccessKey</code> / <code>__SecretKey</code>).
+                    </li>
+                    <li>
+                      Agentes e navegadores usam URLs pré-assinadas com o <strong>Endpoint S3</strong> acima
+                      (URL pública, ex.: <code>https://portal.suaempresa.com.br</code>), roteada pelo nginx em{" "}
+                      <code>/&lt;bucket&gt;/</code>.
+                    </li>
+                    <li>
+                      Para migrar para um provedor externo, desative “Usar RustFS interno” ou escolha um preset acima, preencha Conexão/Credenciais e salve.
+                    </li>
+                  </ul>
                 </div>
               )}
               {storageEndpointIsLoopback && (
@@ -1586,7 +1765,29 @@ export default function ServerConfigurationPage() {
 
               {!storageInternal && (
                 <div className="rounded-lg border border-border bg-surface-light p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">CORS do bucket (uploads diretos)</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      CORS do bucket (uploads diretos)
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" size="sm" variant="ghost" onClick={copyCorsPolicy}>
+                        <Icon name="content_copy" className="h-3.5 w-3.5" />
+                        Copiar JSON
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={runCorsProbe}
+                        loading={corsProbeLoading}
+                        disabled={savingStorage}
+                        title="Executa um PUT direto do navegador no bucket usando a configuração salva"
+                      >
+                        <Icon name="fact_check" className="h-3.5 w-3.5" />
+                        Testar Upload Direto (CORS)
+                      </Button>
+                    </div>
+                  </div>
                   <p className="mt-1 text-[11px] text-muted">
                     Pacotes e anexos grandes vão do <strong>navegador direto para o bucket</strong> (PUT pré-assinado). O bucket precisa de uma regra
                     de CORS com a origem <code>{corsOriginLabel}</code>, métodos <code>PUT</code>, <code>GET</code> e <code>HEAD</code>,
@@ -1594,6 +1795,19 @@ export default function ServerConfigurationPage() {
                     multipart não fecha. Exemplo (Cloudflare R2):
                     <code className="mt-1 block whitespace-pre-wrap break-all">{corsPolicyExample}</code>
                   </p>
+                  {corsProbeResult && (
+                    <div
+                      className={`mt-3 flex items-start gap-2 rounded-lg border p-2.5 text-xs ${
+                        corsProbeResult.ok ? statusSurface.success : statusSurface.danger
+                      }`}
+                    >
+                      <Icon
+                        name={corsProbeResult.ok ? "check_circle" : "warning"}
+                        className="mt-0.5 h-4 w-4 shrink-0"
+                      />
+                      <span>{corsProbeResult.message}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1629,7 +1843,14 @@ export default function ServerConfigurationPage() {
                   {testResult.success ? (
                     <>
                       <Icon name="check_circle" className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>Conexão OK — {testResult.latencyMs}ms</span>
+                      <div>
+                        <span>Conexão OK — {testResult.latencyMs}ms</span>
+                        {testResult.draftTested && (
+                          <p className="mt-0.5 text-xs opacity-90">
+                            Testado com os valores preenchidos na tela — clique em <strong>Salvar</strong> para aplicar.
+                          </p>
+                        )}
+                      </div>
                     </>
                   ) : (
                     <>

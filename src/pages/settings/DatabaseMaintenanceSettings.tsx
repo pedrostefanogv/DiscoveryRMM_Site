@@ -93,9 +93,33 @@ export default function DatabaseMaintenanceSettings() {
     );
   };
 
+  const [selectedStorageChecks, setSelectedStorageChecks] = useState<string[] | null>(null);
+
+  const availableStorageChecks = storageChecksQuery.data ?? [];
+  const activeStorageChecks =
+    selectedStorageChecks ?? availableStorageChecks.map((check) => check.key);
+  const hasMutatingStorageCheckSelected = availableStorageChecks.some(
+    (check) => !check.reportOnly && activeStorageChecks.includes(check.key),
+  );
+
+  const toggleStorageCheck = (key: string) => {
+    const current = new Set(activeStorageChecks);
+    if (current.has(key)) current.delete(key);
+    else current.add(key);
+    setSelectedStorageChecks(Array.from(current));
+  };
+
   const runStorage = (dryRun: boolean) => {
+    const checksPayload =
+      selectedStorageChecks !== null && selectedStorageChecks.length < availableStorageChecks.length
+        ? selectedStorageChecks
+        : undefined;
     runStorageSanitization.mutate(
-      { dryRun, minAgeHours: Number(storageMinAgeHours) || 24 },
+      {
+        dryRun,
+        checks: checksPayload,
+        minAgeHours: Number(storageMinAgeHours) || 24,
+      },
       {
         onSuccess: (data) => {
           setStorageReport(data);
@@ -123,9 +147,14 @@ export default function DatabaseMaintenanceSettings() {
     runStorageSanitization.isPending && runStorageSanitization.variables?.dryRun === true;
   const isStorageApplyPending =
     runStorageSanitization.isPending && runStorageSanitization.variables?.dryRun === false;
-  const availableStorageChecks = storageChecksQuery.data ?? [];
   const availableChecks = checksQuery.data ?? [];
   const health = healthQuery.data;
+  const matchingDryRunPreview =
+    storageReport &&
+    storageReport.dryRun &&
+    storageReport.minAgeHours === (Number(storageMinAgeHours) || 24)
+      ? storageReport
+      : null;
 
   return (
     <div className="space-y-6">
@@ -265,17 +294,31 @@ export default function DatabaseMaintenanceSettings() {
             ) : availableStorageChecks.length === 0 ? (
               <p className="text-xs text-muted">Nenhuma verificação disponível.</p>
             ) : (
-              <ul className="space-y-1 text-xs text-muted">
-                {availableStorageChecks.map((check) => (
-                  <li key={check.key}>
-                    <span className="font-medium text-foreground">{check.title}</span> — {check.description}
-                    {check.reportOnly && (
-                      <Badge color="slate" className="ml-2">
-                        somente relatório
-                      </Badge>
-                    )}
-                  </li>
-                ))}
+              <ul className="space-y-1.5 text-xs text-muted">
+                {availableStorageChecks.map((check) => {
+                  const checked = activeStorageChecks.includes(check.key);
+                  return (
+                    <li key={check.key}>
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-primary"
+                          checked={checked}
+                          disabled={!canManage || runStorageSanitization.isPending}
+                          onChange={() => toggleStorageCheck(check.key)}
+                        />
+                        <span>
+                          <span className="font-medium text-foreground">{check.title}</span> — {check.description}
+                          {check.reportOnly && (
+                            <Badge color="slate" className="ml-2">
+                              somente relatório
+                            </Badge>
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -298,7 +341,7 @@ export default function DatabaseMaintenanceSettings() {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
-              disabled={!canManage || runStorageSanitization.isPending}
+              disabled={!canManage || runStorageSanitization.isPending || activeStorageChecks.length === 0}
               loading={isStorageDryRunPending}
               onClick={() => runStorage(true)}
             >
@@ -307,7 +350,11 @@ export default function DatabaseMaintenanceSettings() {
             </Button>
             <Button
               variant="danger"
-              disabled={!canManage || runStorageSanitization.isPending}
+              disabled={
+                !canManage ||
+                runStorageSanitization.isPending ||
+                !hasMutatingStorageCheckSelected
+              }
               loading={isStorageApplyPending}
               onClick={() => setConfirmStorageOpen(true)}
             >
@@ -354,14 +401,31 @@ export default function DatabaseMaintenanceSettings() {
 
           {storageReport.inventory.length > 0 && (
             <div className="mb-4 rounded-lg border border-border p-3">
-              <p className="mb-2 text-sm font-medium text-foreground">Inventário por prefixo</p>
-              <ul className="space-y-0.5 font-mono text-[11px] text-muted">
-                {storageReport.inventory.map((entry) => (
-                  <li key={entry.prefix}>
-                    {entry.prefix} — {entry.objects} objeto(s), {formatStorageBytes(entry.bytes)}
-                  </li>
-                ))}
-              </ul>
+              <p className="mb-2.5 text-sm font-medium text-foreground">Inventário por prefixo</p>
+              <div className="space-y-2.5">
+                {storageReport.inventory.map((entry) => {
+                  const pct =
+                    storageReport.totalBytes > 0
+                      ? Math.min(100, Math.round((entry.bytes / storageReport.totalBytes) * 1000) / 10)
+                      : 0;
+                  return (
+                    <div key={entry.prefix} className="space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-mono font-medium text-foreground">{entry.prefix}</span>
+                        <span className="text-muted">
+                          {entry.objects} objeto(s) · {formatStorageBytes(entry.bytes)} ({pct.toFixed(1)}%)
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-light">
+                        <div
+                          className="h-full rounded-full bg-primary transition-[width] duration-300"
+                          style={{ width: `${Math.max(pct, entry.bytes > 0 ? 2 : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -409,7 +473,20 @@ export default function DatabaseMaintenanceSettings() {
           <span>
             Os objetos de <strong>app-store/custom/</strong> que nenhum pacote referencia e que estão sem
             alteração há mais de <strong>{storageMinAgeHours} hora(s)</strong> serão apagados do object
-            storage. É irreversível — rode <strong>Analisar (sem apagar)</strong> antes para ver a lista.
+            storage.{" "}
+            {matchingDryRunPreview ? (
+              <>
+                Pela pré-visualização atual, serão processados{" "}
+                <strong>
+                  {matchingDryRunPreview.totalFound} item(ns) ({formatStorageBytes(matchingDryRunPreview.totalFoundBytes)})
+                </strong>
+                . Esta ação é irreversível.
+              </>
+            ) : (
+              <>
+                É irreversível — rode <strong>Analisar (sem apagar)</strong> antes para ver a lista exata.
+              </>
+            )}
           </span>
         }
         confirmLabel="Limpar órfãos"

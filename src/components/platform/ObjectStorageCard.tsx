@@ -1,5 +1,6 @@
+import { Link } from 'react-router-dom';
 import { formatBytes as formatBytesBase } from '@/utils/format';
-import { useObjectStorageTelemetry } from '@/hooks/useObjectStorageTelemetry';
+import { useObjectStorageTelemetry, useProbeObjectStorage } from '@/hooks/useObjectStorageTelemetry';
 import { useNowTick } from '@/hooks/useNowTick';
 import { Icon, Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
 import type { ObjectStorageTelemetryDto } from '@/api/object-storage';
@@ -73,6 +74,7 @@ function tile(label: string, value: string, tone = 'text-foreground') {
 
 export function ObjectStorageCard() {
   const overview = useObjectStorageTelemetry();
+  const probeMutation = useProbeObjectStorage();
   const now = useNowTick();
   const data = overview.data;
   const health = resolveHealth(data);
@@ -115,12 +117,18 @@ export function ObjectStorageCard() {
           <Button variant="secondary" size="sm" onClick={() => void overview.refetch()}>Tentar novamente</Button>
         </div>
       ) : !data.configured ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-light px-4 py-6 text-center">
+        <div className="flex flex-col items-center justify-center gap-2.5 rounded-lg bg-surface-light px-4 py-6 text-center">
           <Icon name="storage" className="h-6 w-6 text-warning" />
           <p className="text-sm font-medium text-muted-foreground">Object storage não configurado</p>
           <p className="max-w-md text-xs text-muted">
             Configure bucket, endpoint e credenciais em Configurações → Servidor para habilitar o storage de objetos.
           </p>
+          <Link to="/settings/server#server-config-storage">
+            <Button variant="secondary" size="sm">
+              <Icon name="tune" className="h-3.5 w-3.5" />
+              Configurar Object Storage
+            </Button>
+          </Link>
         </div>
       ) : (
         <div className="space-y-4">
@@ -132,6 +140,17 @@ export function ObjectStorageCard() {
                 <Icon name="warning" className="mr-1 h-3 w-3" aria-hidden="true" />
                 Circuit breaker aberto ({data.consecutiveFailures} falha{data.consecutiveFailures !== 1 ? 's' : ''})
               </Badge>
+            )}
+            {(data.throttled || health === 'down') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => probeMutation.mutate()}
+                loading={probeMutation.isPending}
+              >
+                <Icon name="restart_alt" className="h-3.5 w-3.5" />
+                Verificar agora
+              </Button>
             )}
             {data.latencyMs != null && (
               <span className="text-xs text-muted">{data.latencyMs} ms (HEAD bucket)</span>
@@ -200,6 +219,13 @@ export function ObjectStorageCard() {
                 ? 'Inventário de uso (ListObjects) habilitado.'
                 : 'Inventário de uso (ListObjects) desativado — evita varredura no bucket.'}
             </span>
+            <Link
+              to="/settings/database-maintenance"
+              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+            >
+              <Icon name="cleaning_services" className="h-3.5 w-3.5" />
+              Sanitização e inventário
+            </Link>
             {data.generatedAtUtc && <span>Última leitura: {formatDateTime(data.generatedAtUtc)}</span>}
           </div>
 
@@ -207,6 +233,16 @@ export function ObjectStorageCard() {
             <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
               <p className="font-medium">Último erro no probe:</p>
               <p className="mt-0.5 break-words">{data.errors[0]}</p>
+            </div>
+          )}
+
+          {(traffic?.failures ?? 0) > 0 && traffic?.lastError && (
+            <div className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+              <p className="font-medium">
+                Último erro operacional ({traffic.failures} falha{traffic.failures !== 1 ? 's' : ''}
+                {traffic.lastFailureAtUtc ? ` • ${formatDateTime(traffic.lastFailureAtUtc)}` : ''}):
+              </p>
+              <p className="mt-0.5 break-words">{traffic.lastError}</p>
             </div>
           )}
         </div>

@@ -35,11 +35,14 @@ import {
   resetSiteProperty,
   testNatsServer,
   testObjectStorage,
+  beginObjectStorageCorsProbe,
+  cleanupObjectStorageCorsProbe,
   testStoredAiKey,
   upsertClientConfig,
   upsertSiteConfig,
   type ClientConfigurationPayload,
   type ConfigurationEntityType,
+  type ObjectStorageDraftPayload,
   type ServerConfigurationPayload,
   type SiteConfigurationPayload,
 } from "@/services/configurationApi";
@@ -142,6 +145,9 @@ export function usePatchServerConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
       });
+      queryClient.invalidateQueries({
+        queryKey: ["object-storage", "telemetry"],
+      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -155,6 +161,9 @@ export function usePatchServerNatsConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
       });
+      queryClient.invalidateQueries({
+        queryKey: ["object-storage", "telemetry"],
+      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -167,6 +176,9 @@ export function useResetServerConfig() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["object-storage", "telemetry"],
       });
       invalidateRecentAudit(queryClient);
     },
@@ -538,8 +550,16 @@ export function useClientTicketAttachmentSettings(
 
 export function useTestObjectStorage() {
   return useMutation({
-    mutationFn: () => testObjectStorage(),
+    mutationFn: (draft?: ObjectStorageDraftPayload) =>
+      draft ? testObjectStorage(draft) : testObjectStorage(),
   });
+}
+
+export function useObjectStorageCorsProbe() {
+  return {
+    begin: beginObjectStorageCorsProbe,
+    cleanup: cleanupObjectStorageCorsProbe,
+  };
 }
 
 export function useTestNatsServer() {

@@ -1222,6 +1222,13 @@ async function uploadCustomAssetDirect(
     ? []
     : state.parts;
 
+  onProgress?.({
+    loaded: file.size,
+    total: file.size,
+    percent: 100,
+    phase: "finalizing",
+  });
+
   let asset: CustomPackageAsset;
   try {
     asset = await api.post<CustomPackageAsset>(

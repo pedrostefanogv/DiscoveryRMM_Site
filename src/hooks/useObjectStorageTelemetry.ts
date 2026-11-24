@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   objectStorageApi,
   type ObjectStorageTelemetryDto,
@@ -22,5 +22,15 @@ export function useObjectStorageTelemetry(enabled = true) {
     staleTime: STALE_MS,
     refetchInterval: REFETCH_MS,
     refetchIntervalInBackground: false,
+  });
+}
+
+export function useProbeObjectStorage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => objectStorageApi.probeTelemetry(),
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(["object-storage", "telemetry"], snapshot);
+    },
   });
 }

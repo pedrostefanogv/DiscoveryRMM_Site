@@ -498,6 +498,8 @@ export interface UploadProgress {
   bytesPerSecond?: number;
   /** Estimativa de segundos restantes; undefined quando não dá para estimar. */
   etaSeconds?: number;
+  /** Etapa atual do upload ("uploading" durante transferência; "finalizing" no commit/SHA-256). */
+  phase?: "uploading" | "finalizing";
 }
 
 /**
