@@ -670,6 +670,11 @@ export default function RemoteSession() {
   /** Controles do rodapé só habilitam com a sessão RDP de fato conectada. */
   const rdpConnected = rdpIronStatus === 'connected';
   const [inputLockState, setInputLockState] = useState<InputLockChangedState | null>(null);
+  const [annotating, setAnnotating] = useState(false);
+
+  useEffect(() => {
+    setAnnotating(false);
+  }, [activeTab]);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
   const lockMenuRef = useRef<HTMLDivElement | null>(null);
   // Popovers compactos da barra superior (sessões e ajustes finos).
@@ -1655,6 +1660,7 @@ export default function RemoteSession() {
     if (monitorChanging || !agentId) return;
     setMonitorChanging(true);
     setMonitorIndex(newMonitor);
+    setAnnotating(false);
 
     // Encerra a sessão de tela atual (se houver) antes de iniciar a nova.
     if (screenSession) {
@@ -2210,9 +2216,12 @@ export default function RemoteSession() {
                     // Sessão caiu: o agent libera o bloqueio no Stop — o
                     // indicador do rodapé volta a destravado.
                     setInputLockState(null);
+                    setAnnotating(false);
                     setErrorMsg(`Sessão encerrada: ${reason}`);
                   }}
                   onInputLockStateChange={setInputLockState}
+                  annotating={annotating}
+                  onAnnotatingChange={setAnnotating}
                   ref={screenViewerRef}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
@@ -2712,6 +2721,23 @@ export default function RemoteSession() {
               direction="up"
               onSelect={(id) => screenViewerRef.current?.sendSpecialKey(id)}
             />
+            <button
+              type="button"
+              onClick={() => setAnnotating((prev) => !prev)}
+              aria-pressed={annotating}
+              title={
+                annotating
+                  ? 'Sair do modo de anotação (Esc)'
+                  : 'Desenhar anotações na tela do usuário remoto'
+              }
+              className={`px-2 py-1 rounded ${
+                annotating
+                  ? 'bg-primary text-primary-foreground font-medium'
+                  : 'bg-surface-hover hover:bg-border text-foreground'
+              }`}
+            >
+              {annotating ? '✎ Desenhando' : '✎ Desenhar'}
+            </button>
             </>
           )}
           {/* Indicadores da aba RDP: resolução REAL (lida do IronRDP) e estado
@@ -2797,15 +2823,36 @@ export default function RemoteSession() {
       {/* Saída do fullscreen imersivo: as barras estão ocultas, então este
           botão flutuante garante uma saída visível (Esc também funciona). */}
       {screenFullscreen && activeTab === 'screen' && (
-        <button
-          type="button"
-          className="absolute top-2 left-2 z-50 inline-flex h-7 w-7 items-center justify-center rounded bg-surface/70 text-sm text-foreground opacity-70 shadow ring-1 ring-border backdrop-blur-sm transition-opacity hover:bg-surface hover:opacity-100"
-          onClick={toggleScreenFullscreen}
-          title="Sair da tela cheia (Esc)"
-          aria-label="Sair da tela cheia"
-        >
-          ⤢
-        </button>
+        <div className="absolute top-2 left-2 z-50 flex items-center gap-1.5">
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded bg-surface/70 text-sm text-foreground opacity-70 shadow ring-1 ring-border backdrop-blur-sm transition-opacity hover:bg-surface hover:opacity-100"
+            onClick={toggleScreenFullscreen}
+            title="Sair da tela cheia (Esc)"
+            aria-label="Sair da tela cheia"
+          >
+            ⤢
+          </button>
+          {screenSession && (
+            <button
+              type="button"
+              onClick={() => setAnnotating((prev) => !prev)}
+              aria-pressed={annotating}
+              title={
+                annotating
+                  ? 'Sair do modo de anotação (Esc)'
+                  : 'Desenhar anotações na tela do usuário remoto'
+              }
+              className={`inline-flex h-7 items-center rounded px-2 text-xs shadow ring-1 ring-border backdrop-blur-sm transition-opacity ${
+                annotating
+                  ? 'bg-primary text-primary-foreground opacity-100 font-medium'
+                  : 'bg-surface/70 text-foreground opacity-70 hover:bg-surface hover:opacity-100'
+              }`}
+            >
+              {annotating ? '✎ Desenhando' : '✎ Desenhar'}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Error toast */}

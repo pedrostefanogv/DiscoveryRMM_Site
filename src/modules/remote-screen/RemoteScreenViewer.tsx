@@ -16,6 +16,15 @@ import {
   parseInputLockChanged,
   type InputLockChangedState,
 } from './inputLock';
+import AnnotationCanvas from './annotations/AnnotationCanvas';
+import AnnotationToolbar from './annotations/AnnotationToolbar';
+import {
+  buildClearAnnotationsCommand,
+  buildUndoAnnotationCommand,
+  DEFAULT_ANNOTATION_SETTINGS,
+  type AnnotationCommand,
+  type AnnotationSettings,
+} from './annotations/types';
 
 interface FrameHeader {
   seq: number;
@@ -60,6 +69,10 @@ interface RemoteScreenViewerProps {
   ref?: Ref<RemoteScreenViewerHandle>;
   /** Estado do bloqueio de entrada, para o indicador no rodapé do pai. */
   onInputLockStateChange?: (state: InputLockChangedState | null) => void;
+  /** Modo de anotação visual sobre a tela remota. */
+  annotating?: boolean;
+  /** Notifica quando o usuário sai do modo anotação (Esc / botão Controlar). */
+  onAnnotatingChange?: (active: boolean) => void;
 }
 
 export interface RemoteScreenViewerHandle {
@@ -67,6 +80,8 @@ export interface RemoteScreenViewerHandle {
   sendSpecialKey: (id: string) => void;
   /** Trava (true) ou destrava (false) a entrada da máquina remota. */
   setInputLock: (locked: boolean) => void;
+  /** Limpa todas as anotações visuais na tela remota. */
+  clearAnnotations: () => void;
 }
 
 export interface MonitorInfo {
@@ -145,6 +160,8 @@ export default function RemoteScreenViewer({
   cursorMode = 'local',
   ref,
   onInputLockStateChange,
+  annotating = false,
+  onAnnotatingChange,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgSnapshotRef = useRef<HTMLCanvasElement | null>(null);
@@ -188,6 +205,14 @@ export default function RemoteScreenViewer({
   // Ponte para o enviar definido dentro do efeito de conexão (onde sendInput e
   // o WebSocket vivem) — o JSX não enxerga essas variáveis locais.
   const sendSpecialKeyRef = useRef<(combo: string) => void>(() => {});
+  // Ponte para publicação de anotações visuais no subject .annotate.
+  const sendAnnotationRef = useRef<(cmd: AnnotationCommand) => void>(() => {});
+  const annotatingRef = useRef(annotating);
+  annotatingRef.current = annotating;
+  const [annotationSettings, setAnnotationSettings] = useState<AnnotationSettings>(
+    DEFAULT_ANNOTATION_SETTINGS,
+  );
+  const annotationHistoryRef = useRef<string[]>([]);
   // Combinação aguardando confirmação do agent (evento special_key em .event).
   const specialKeyPendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frameCountRef = useRef(0);
@@ -1148,12 +1173,27 @@ export default function RemoteScreenViewer({
       }, SPECIAL_KEY_ACK_TIMEOUT_MS);
     };
 
-    const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }, { requireCoords: true }); };
+    sendAnnotationRef.current = (cmd: AnnotationCommand) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN || !natsSubject) return;
+      const payload = JSON.stringify(cmd);
+      wsRef.current.send(
+        `PUB ${natsSubject}.annotate ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`,
+      );
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (annotatingRef.current) return;
+      canvas.focus();
+      sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }, { requireCoords: true });
+    };
     // mouseup é registrado no DOCUMENT (não no canvas) e enviado SEM coordenadas:
     // ele libera o botão pressionado onde quer que o cursor termine (mesmo se o
     // usuário soltar fora da área útil do frame após arrastar). O agente ignora
     // x/y no mouseup — só precisa do `button` para liberar.
-    const onMouseUp = (e: MouseEvent) => { sendInput('mouseup', { button: e.button }); };
+    const onMouseUp = (e: MouseEvent) => {
+      if (annotatingRef.current) return;
+      sendInput('mouseup', { button: e.button });
+    };
     const onMouseMove = (e: MouseEvent) => {
       // Info overlay hover detection — sem pointer-events, detecta via coordenadas
       const overlay = infoOverlayRef.current;
@@ -1161,14 +1201,21 @@ export default function RemoteScreenViewer({
         const r = overlay.getBoundingClientRect();
         setInfoHovered(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
       }
+      if (annotatingRef.current) return;
       lastMove = e;
       if (moveThrottle) return;
       moveThrottle = setTimeout(() => {
-        if (lastMove) sendInput('mousemove', { x: lastMove.clientX, y: lastMove.clientY }, { requireCoords: true });
+        if (lastMove && !annotatingRef.current) {
+          sendInput('mousemove', { x: lastMove.clientX, y: lastMove.clientY }, { requireCoords: true });
+        }
         moveThrottle = null;
       }, THROTTLE_MS);
     };
-    const onWheel = (e: WheelEvent) => { e.preventDefault(); sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY }); };
+    const onWheel = (e: WheelEvent) => {
+      if (annotatingRef.current) return;
+      e.preventDefault();
+      sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY });
+    };
 
     // ── Clipboard local→remoto (front→agent) ──
     // Ao pressionar Ctrl+V no viewer, lê o clipboard local do navegador e
@@ -1194,6 +1241,7 @@ export default function RemoteScreenViewer({
       return active === canvas || containerRef.current?.contains(active);
     };
     const onKeyDown = (e: KeyboardEvent) => {
+      if (annotatingRef.current) return;
       // Ignora se o foco está em um input/textarea/select (não rouba o teclado)
       const active = document.activeElement;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
@@ -1218,6 +1266,7 @@ export default function RemoteScreenViewer({
       sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      if (annotatingRef.current) return;
       // keyup é SEMPRE enviado, mesmo se o foco migrou para um input/textarea
       // local durante o hold (ex.: usuário segurou backspace no canvas e clicou
       // numa busca local antes de soltar). Sem isso o keyup se perde e a tecla
@@ -1264,6 +1313,7 @@ export default function RemoteScreenViewer({
       clearInterval(netstatsTimer);
       sendSpecialKeyRef.current = () => {};
       sendInputLockRef.current = () => {};
+      sendAnnotationRef.current = () => {};
       if (lockPendingRef.current) {
         clearTimeout(lockPendingRef.current);
         lockPendingRef.current = null;
@@ -1386,9 +1436,35 @@ export default function RemoteScreenViewer({
         sendInputLockRef.current(locked);
         canvasRef.current?.focus();
       },
+      clearAnnotations: () => {
+        annotationHistoryRef.current = [];
+        sendAnnotationRef.current(buildClearAnnotationsCommand());
+      },
     }),
     [],
   );
+
+  const handleCommitAnnotation = useCallback((cmd: AnnotationCommand) => {
+    if (cmd.op === 'add') {
+      annotationHistoryRef.current.push(cmd.id);
+    }
+    sendAnnotationRef.current(cmd);
+  }, []);
+
+  const handleUndoAnnotation = useCallback(() => {
+    const lastId = annotationHistoryRef.current.pop();
+    sendAnnotationRef.current(buildUndoAnnotationCommand(lastId));
+  }, []);
+
+  const handleClearAnnotations = useCallback(() => {
+    annotationHistoryRef.current = [];
+    sendAnnotationRef.current(buildClearAnnotationsCommand());
+  }, []);
+
+  const handleExitAnnotating = useCallback(() => {
+    onAnnotatingChange?.(false);
+    canvasRef.current?.focus();
+  }, [onAnnotatingChange]);
 
 
   // Keyboard shortcuts
@@ -1412,11 +1488,30 @@ export default function RemoteScreenViewer({
           : 'items-center justify-center overflow-auto'
       }`}
     >
-      <canvas
-        ref={canvasRef}
-        className={`${cursorMode === 'remote' ? 'cursor-none' : 'cursor-default'} ${scale === 'fit' ? 'max-w-full max-h-full' : 'object-contain m-auto'}`}
-        tabIndex={0}
-      />
+      <div className={`relative inline-flex ${scale === 'fit' ? 'shrink-0' : 'm-auto'}`}>
+        <canvas
+          ref={canvasRef}
+          className={`${cursorMode === 'remote' ? 'cursor-none' : 'cursor-default'} ${scale === 'fit' ? 'max-w-full max-h-full' : 'object-contain'}`}
+          tabIndex={0}
+        />
+        <AnnotationCanvas
+          active={annotating}
+          settings={annotationSettings}
+          onCommit={handleCommitAnnotation}
+          onUndo={handleUndoAnnotation}
+          onExit={handleExitAnnotating}
+        />
+      </div>
+
+      {annotating && !sessionEnded && (
+        <AnnotationToolbar
+          settings={annotationSettings}
+          onChange={setAnnotationSettings}
+          onUndo={handleUndoAnnotation}
+          onClear={handleClearAnnotations}
+          onExit={handleExitAnnotating}
+        />
+      )}
 
       {/* Info overlay — telemetria compacta em 1 linha (FPS, RTT e, com
            agentMetrics, resolução/qualidade). Ao passar o mouse sobre a
