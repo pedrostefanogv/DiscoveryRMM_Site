@@ -16,6 +16,7 @@ import { RegistryPanel } from './RegistryPanel';
 const sendMock = vi.fn();
 let readyCallbacks: Array<() => void> = [];
 let readyState = true;
+let initialActiveUserState: { sid: string; username: string; domain?: string } | null = null;
 
 vi.mock('./useRegistryStream', () => ({
     useRegistryStream: () => ({
@@ -23,6 +24,7 @@ vi.mock('./useRegistryStream', () => ({
         isReady: readyState,
         error: null,
         agentProtocolVersion: 1,
+        initialActiveUser: initialActiveUserState,
         onReady: (cb: () => void) => { readyCallbacks.push(cb); return () => {}; },
         send: sendMock,
     }),
@@ -47,6 +49,7 @@ beforeEach(() => {
     sendMock.mockReset();
     readyCallbacks = [];
     readyState = true;
+    initialActiveUserState = null;
 });
 
 describe('RegistryPanel — carregamento inicial', () => {
@@ -462,5 +465,148 @@ describe('RegistryPanel — prontidão fallback, endereço e ações completas',
         fireEvent.click(loadMoreBtns[loadMoreBtns.length - 1]);
 
         await waitFor(() => expect(screen.getByTestId('registry-subkey-SubExtra')).toBeTruthy());
+    });
+});
+
+describe('RegistryPanel — UX, usuário interativo e otimizações', () => {
+    it('não renderiza o seletor redundante de Hive na barra superior', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') return listOk(args.hive, args.path, ['SOFTWARE']);
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SOFTWARE')).toBeTruthy());
+
+        expect(screen.queryByLabelText('Hive')).toBeNull();
+    });
+
+    it('evita chamar statKey e deduplica listKey concorrente no carregamento inicial', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                return {
+                    success: true, requestId: 'r', hive: args.hive, path: args.path,
+                    page: {
+                        hive: args.hive, path: args.path, subkeys: ['SOFTWARE'], values: [],
+                        hasMore: false, subkeyCount: 1, valueCount: 0, writable: true, denyReason: '',
+                    },
+                };
+            }
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SOFTWARE')).toBeTruthy());
+
+        const statCalls = sendMock.mock.calls.filter(([action]) => action === 'statKey');
+        const hklmListCalls = sendMock.mock.calls.filter(
+            ([action, args]) => action === 'listKey' && args.hive === 'HKLM' && args.path === '',
+        );
+        expect(statCalls).toHaveLength(0);
+        expect(hklmListCalls).toHaveLength(1);
+    });
+
+    it('mostra estado vazio específico quando o filtro não encontra valores e permite limpar', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                return listOk(args.hive, args.path, [], [{ name: 'Versao', type: 'REG_SZ', data: '1.0' }]);
+            }
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByText('Versao')).toBeTruthy());
+
+        fireEvent.change(screen.getByLabelText('Filtrar'), { target: { value: 'Inexistente' } });
+        await waitFor(() => expect(screen.getByText('Nenhum valor corresponde ao filtro.')).toBeTruthy());
+
+        fireEvent.click(screen.getByText('Limpar filtro'));
+        await waitFor(() => expect(screen.getByText('Versao')).toBeTruthy());
+    });
+
+    it('exibe o usuário interativo conectado no nó HKCU e na barra superior', async () => {
+        initialActiveUserState = { sid: 'S-1-5-21-1001', username: 'pedro', domain: 'WORKGROUP' };
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                return {
+                    ...listOk(args.hive, args.path, ['Software']),
+                    activeUser: initialActiveUserState,
+                };
+            }
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-tree-hkcu-user').textContent).toBe('pedro'));
+
+        fireEvent.click(screen.getByText('HKEY_CURRENT_USER'));
+        await waitFor(() => {
+            expect(screen.getByTestId('registry-hkcu-badge').textContent).toContain('Usuário: pedro');
+        });
+    });
+
+    it('limpa o usuário de HKCU quando o usuário conectado faz logoff', async () => {
+        initialActiveUserState = { sid: 'S-1-5-21-1001', username: 'pedro', domain: 'WORKGROUP' };
+        let loggedOff = false;
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                return {
+                    ...listOk(args.hive, args.path, ['Software']),
+                    activeUser: loggedOff ? undefined : initialActiveUserState,
+                };
+            }
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-tree-hkcu-user').textContent).toBe('pedro'));
+
+        loggedOff = true;
+        fireEvent.click(screen.getByText('HKEY_CURRENT_USER'));
+        await waitFor(() => {
+            expect(screen.getByTestId('registry-hkcu-badge').textContent).toBe('SYSTEM');
+        });
+        expect(screen.queryByTestId('registry-tree-hkcu-user')).toBeNull();
+    });
+
+    it('limpa a nota de HKCU ao navegar para uma chave que falha', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') {
+                if (args.hive === 'HKCU') {
+                    return { ...listOk(args.hive, args.path, []), note: 'HKCU é SYSTEM' };
+                }
+                if (args.path === 'SAM') {
+                    return { success: false, requestId: 'r', errorKind: 'protected', error: 'bloqueada' };
+                }
+                return listOk(args.hive, args.path, ['SAM']);
+            }
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SAM')).toBeTruthy());
+
+        fireEvent.click(screen.getByText('HKEY_CURRENT_USER'));
+        await waitFor(() => expect(screen.getByTestId('registry-note')).toBeTruthy());
+
+        fireEvent.click(screen.getByText('HKEY_LOCAL_MACHINE'));
+        await waitFor(() => expect(screen.getByTestId('registry-subkey-SAM')).toBeTruthy());
+        fireEvent.click(screen.getByTestId('registry-subkey-SAM'));
+
+        await waitFor(() => expect(screen.getByTestId('registry-error')).toBeTruthy());
+        expect(screen.queryByTestId('registry-note')).toBeNull();
+    });
+
+    it('ativa a edição de caminho ao clicar no espaço vazio do breadcrumb', async () => {
+        sendMock.mockImplementation(async (action: string, args: any) => {
+            if (action === 'listKey') return listOk(args.hive, args.path, ['SOFTWARE']);
+            return statOk(args.hive, args.path);
+        });
+
+        render(<RegistryPanel natsSubject="s" natsUrl="wss://x/" jwt="j" />);
+        const nav = await waitFor(() => screen.getByTestId('registry-current-path'));
+
+        fireEvent.click(nav);
+        await waitFor(() => expect(screen.getByLabelText('Endereço do registro')).toBeTruthy());
     });
 });

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { RegistryValueEntry, RegistryValueType } from './registryTypes';
 import {
     base64ByteLength,
@@ -24,6 +24,8 @@ export interface RegistryValueGridProps {
     onDelete: (name: string) => void;
     onCopy?: (entry: RegistryValueEntry) => void;
     busy?: boolean;
+    isFiltered?: boolean;
+    onClearFilter?: () => void;
 }
 
 /** Largura das colunas fixas. A coluna "Dado" ocupa o resto. */
@@ -58,22 +60,68 @@ export function RegistryValueGrid({
     onDelete,
     onCopy,
     busy = false,
+    isFiltered = false,
+    onClearFilter,
 }: RegistryValueGridProps) {
+    const [sortBy, setSortBy] = useState<'name' | 'type'>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const hasUnreadable = useMemo(() => values.some((v) => !!v.readError), [values]);
+
+    const sortedValues = useMemo(() => {
+        const list = [...values];
+        list.sort((a, b) => {
+            const cmp = sortBy === 'name'
+                ? displayValueName(a.name).localeCompare(displayValueName(b.name), undefined, { sensitivity: 'base' })
+                : a.type.localeCompare(b.type);
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return list;
+    }, [values, sortBy, sortDir]);
+
+    const toggleSort = (col: 'name' | 'type') => {
+        if (sortBy === col) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortBy(col);
+            setSortDir('asc');
+        }
+    };
 
     if (loading && values.length === 0) {
         return (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-xs text-muted">
-                Carregando…
+            <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 py-4">
+                <div className="text-xs text-muted">Carregando…</div>
+                {[0, 1, 2, 3].map((row) => (
+                    <div key={row} className="grid grid-cols-12 gap-3 py-1">
+                        <div className="col-span-3 h-4 animate-pulse rounded bg-surface-hover/70" />
+                        <div className="col-span-2 h-4 animate-pulse rounded bg-surface-hover/50" />
+                        <div className="col-span-7 h-4 animate-pulse rounded bg-surface-hover/40" />
+                    </div>
+                ))}
             </div>
         );
     }
     if (values.length === 0) {
         return (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-center text-xs text-muted">
-                <p>
-                    Esta chave não tem valores. Use <strong>Novo valor</strong> para criar um.
-                </p>
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 py-6 text-center text-xs text-muted">
+                {isFiltered ? (
+                    <>
+                        <p>Nenhum valor corresponde ao filtro.</p>
+                        {onClearFilter && (
+                            <button
+                                type="button"
+                                className="rounded border border-border px-2.5 py-1 text-xs text-foreground hover:bg-surface"
+                                onClick={onClearFilter}
+                            >
+                                Limpar filtro
+                            </button>
+                        )}
+                    </>
+                ) : (
+                    <p>
+                        Esta chave não tem valores. Use <strong>Novo valor</strong> para criar um.
+                    </p>
+                )}
             </div>
         );
     }
@@ -94,14 +142,32 @@ export function RegistryValueGrid({
             <table className={`w-full table-fixed border-collapse text-xs leading-tight transition-opacity ${loading ? 'opacity-60' : ''}`}>
                 <thead className="sticky top-0 z-10 bg-surface">
                     <tr className="border-b border-border text-left text-[10px] uppercase tracking-wide text-muted">
-                        <th className={`py-1.5 pl-3 pr-1 text-left font-medium ${COL_NAME}`}>Nome</th>
-                        <th className={`px-1.5 py-1.5 text-left font-medium ${COL_TYPE}`}>Tipo</th>
+                        <th className={`py-1.5 pl-3 pr-1 text-left font-medium ${COL_NAME}`}>
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-foreground"
+                                onClick={() => toggleSort('name')}
+                            >
+                                <span>Nome</span>
+                                {sortBy === 'name' && <span aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                            </button>
+                        </th>
+                        <th className={`px-1.5 py-1.5 text-left font-medium ${COL_TYPE}`}>
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-foreground"
+                                onClick={() => toggleSort('type')}
+                            >
+                                <span>Tipo</span>
+                                {sortBy === 'type' && <span aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+                            </button>
+                        </th>
                         <th className="px-1.5 py-1.5 text-left font-medium">Dado</th>
                         <th className="w-[165px] py-1.5 pl-1 pr-3 text-right font-medium">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {values.map((v) => {
+                    {sortedValues.map((v) => {
                         const rowKey = v.name === '' ? '__default__' : v.name;
                         const editable = isEditableType(v.type);
                         const canEdit = writable && editable && !busy;

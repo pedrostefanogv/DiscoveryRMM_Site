@@ -4,7 +4,6 @@ import { RegistryTree, registryNodeKey } from './RegistryTree';
 import { RegistryValueGrid } from './RegistryValueGrid';
 import { RegistryValueEditor } from './RegistryValueEditor';
 import {
-    REGISTRY_HIVES,
     fullRegistryPath,
     joinPath,
     lastPathComponent,
@@ -12,10 +11,12 @@ import {
     parseUserRegistryPath,
     type RegistryHive,
     type RegistryListPage,
+    type RegistryResponse,
     type RegistrySubkeyPageResult,
+    type RegistryUserContext,
     type RegistryValueEntry,
 } from './registryTypes';
-import { describeErrorKind, describeMutation, displayValueName, formatValueForDisplay } from './registryFormat';
+import { describeErrorKind, describeMutation, displayValueName, splitMultiString } from './registryFormat';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAINEL DO REGISTRO — layout de duas colunas, como o editor do Windows.
@@ -81,9 +82,20 @@ export function RegistryPanel({
     getFreshCredentials,
     isVisible = true,
 }: RegistryPanelProps) {
-    const { isConnected, isReady, error: streamError, send } = useRegistryStream({
+    const { isConnected, isReady, error: streamError, initialActiveUser, send } = useRegistryStream({
         natsSubject, natsUrl, jwt, nkeySeed, getFreshCredentials,
     });
+    const [activeUser, setActiveUser] = useState<RegistryUserContext | null>(null);
+    const activeUserSidRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (initialActiveUser) {
+            setActiveUser((prev) => {
+                if (prev) return prev;
+                activeUserSidRef.current = initialActiveUser.sid;
+                return initialActiveUser;
+            });
+        }
+    }, [initialActiveUser]);
 
     const [fallbackReady, setFallbackReady] = useState(false);
     useEffect(() => {
@@ -159,6 +171,7 @@ export function RegistryPanel({
     const navSeqRef = useRef(0);
     const knownSeqRef = useRef(0);
     const subkeyCacheRef = useRef<Map<string, RegistrySubkeyPageResult>>(new Map());
+    const inFlightListRef = useRef<Map<string, Promise<RegistryResponse>>>(new Map());
     const loadedOnceRef = useRef(false);
     const treePaneRef = useRef<HTMLDivElement | null>(null);
     const toastTimerRef = useRef<number | null>(null);
@@ -184,6 +197,57 @@ export function RegistryPanel({
         setKnownSubkeys({ key, page: pageData, seq: knownSeqRef.current });
     }, []);
 
+    const syncActiveUserFromResponse = useCallback((
+        targetHive: RegistryHive,
+        nextUser: RegistryUserContext | undefined,
+    ) => {
+        if (targetHive !== 'HKCU') {
+            if (nextUser) {
+                activeUserSidRef.current = nextUser.sid;
+                setActiveUser(nextUser);
+            }
+            return;
+        }
+        const resolved = nextUser ?? null;
+        const prevSid = activeUserSidRef.current;
+        const nextSid = resolved?.sid ?? null;
+        activeUserSidRef.current = nextSid;
+        setActiveUser(resolved);
+        if (prevSid !== nextSid) {
+            const staleKeys: string[] = [];
+            for (const k of subkeyCacheRef.current.keys()) {
+                if (k.startsWith('HKCU|\u0000|')) {
+                    staleKeys.push(k);
+                    subkeyCacheRef.current.delete(k);
+                }
+            }
+            if (staleKeys.length > 0) {
+                signalTreeRefresh(staleKeys);
+            }
+        }
+    }, [signalTreeRefresh]);
+
+    /** Deduplica requisições listKey sem token em voo para a mesma chave (árvore + painel). */
+    const fetchListKey = useCallback((
+        targetHive: RegistryHive,
+        targetPath: string,
+        token?: string,
+    ): Promise<RegistryResponse> => {
+        if (token) {
+            return send('listKey', { hive: targetHive, path: targetPath, token });
+        }
+        const key = registryNodeKey(targetHive, targetPath);
+        const existing = inFlightListRef.current.get(key);
+        if (existing) return existing;
+
+        const promise = send('listKey', { hive: targetHive, path: targetPath })
+            .finally(() => {
+                inFlightListRef.current.delete(key);
+            });
+        inFlightListRef.current.set(key, promise);
+        return promise;
+    }, [send]);
+
     // ── Abrir uma chave ─────────────────────────────────────────────────────
     const openPath = useCallback(async (
         nextHive: RegistryHive,
@@ -198,17 +262,14 @@ export function RegistryPanel({
         setFilter('');
         setAddressError(null);
         try {
-            const [listResp, statResp] = await Promise.all([
-                send('listKey', { hive: nextHive, path: nextPath }),
-                send('statKey', { hive: nextHive, path: nextPath }),
-            ]);
+            const listResp = await fetchListKey(nextHive, nextPath);
             if (!mountedRef.current || seq !== navSeqRef.current) return;
 
-            setHasLoaded(true);
-
             if (!listResp.success) {
+                setHasLoaded(true);
                 setLoadError(describeErrorKind(listResp.errorKind, listResp.error));
                 setPage(null);
+                setNote(null);
                 setWritable(false);
                 setDenyReason('A chave não pôde ser carregada.');
                 setHive(nextHive);
@@ -216,6 +277,30 @@ export function RegistryPanel({
                 return;
             }
             const nextPage = listResp.page ?? null;
+            syncActiveUserFromResponse(nextHive, listResp.activeUser);
+
+            // Agentes novos já devolvem writable/denyReason em listKey,
+            // evitando o round-trip extra de statKey.
+            if (typeof nextPage?.writable === 'boolean') {
+                setHasLoaded(true);
+                setWritable(nextPage.writable);
+                setDenyReason(nextPage.denyReason ?? '');
+            } else {
+                const statResp = await send('statKey', { hive: nextHive, path: nextPath });
+                if (!mountedRef.current || seq !== navSeqRef.current) return;
+                setHasLoaded(true);
+                if (statResp.success && statResp.key) {
+                    setWritable(statResp.key.writable);
+                    setDenyReason(statResp.key.denyReason ?? '');
+                    if (statResp.activeUser !== undefined || nextHive === 'HKCU') {
+                        syncActiveUserFromResponse(nextHive, statResp.activeUser ?? listResp.activeUser);
+                    }
+                } else {
+                    setWritable(false);
+                    setDenyReason('Não foi possível verificar a política desta chave.');
+                }
+            }
+
             setPage(nextPage);
             setNote(listResp.note ?? null);
 
@@ -226,14 +311,6 @@ export function RegistryPanel({
                     nextToken: nextPage.nextToken,
                     subkeyCount: nextPage.subkeyCount,
                 });
-            }
-
-            if (statResp.success && statResp.key) {
-                setWritable(statResp.key.writable);
-                setDenyReason(statResp.key.denyReason ?? '');
-            } else {
-                setWritable(false);
-                setDenyReason('Não foi possível verificar a política desta chave.');
             }
 
             if (record && (prevHive !== nextHive || prevPath !== nextPath)) {
@@ -250,7 +327,7 @@ export function RegistryPanel({
         } finally {
             if (mountedRef.current && seq === navSeqRef.current) setLoading(false);
         }
-    }, [send, syncKnownSubkeys]);
+    }, [fetchListKey, send, syncKnownSubkeys, syncActiveUserFromResponse]);
 
     // Carrega a raiz quando o stream estiver pronto (ou após fallback).
     useEffect(() => {
@@ -278,13 +355,11 @@ export function RegistryPanel({
             if (cached) return cached;
         }
 
-        const payload: Record<string, unknown> = { hive: nodeHive, path: nodePath };
-        if (token) payload.token = token;
-
-        const resp = await send('listKey', payload);
+        const resp = await fetchListKey(nodeHive, nodePath, token);
         if (!resp.success) {
             throw new Error(describeErrorKind(resp.errorKind, resp.error));
         }
+        syncActiveUserFromResponse(nodeHive, resp.activeUser);
 
         const incoming = resp.page?.subkeys ?? [];
         const hasMore = Boolean(resp.page?.hasMore);
@@ -303,7 +378,7 @@ export function RegistryPanel({
         return token
             ? { subkeys: incoming, hasMore, nextToken, subkeyCount }
             : mergedPage;
-    }, [send]);
+    }, [fetchListKey, syncActiveUserFromResponse]);
 
     const loadMoreCurrentSubkeys = useCallback(async () => {
         if (!page?.hasMore || !page.nextToken || loadingMoreSubkeys) return;
@@ -572,6 +647,64 @@ export function RegistryPanel({
         void openPath(nextHive, nextPath, true);
     }, [openPath]);
 
+    const goBack = useCallback(() => {
+        const prev = history[history.length - 1];
+        if (!prev || loading) return;
+        setForward((f) => [...f, { hive, path: currentPath }]);
+        setHistory((h) => h.slice(0, -1));
+        void openPath(prev.hive, prev.path, false);
+    }, [history, loading, hive, currentPath, openPath]);
+
+    const goForward = useCallback(() => {
+        const next = forward[forward.length - 1];
+        if (!next || loading) return;
+        setHistory((h) => [...h, { hive, path: currentPath }]);
+        setForward((f) => f.slice(0, -1));
+        void openPath(next.hive, next.path, false);
+    }, [forward, loading, hive, currentPath, openPath]);
+
+    const currentFull = fullRegistryPath(hive, currentPath);
+
+    // Atalhos de teclado quando nenhum modal/input estiver ativo.
+    useEffect(() => {
+        const hasModal = Boolean(
+            editingValue || creatingValue || pendingDeleteValue !== null || pendingKey ||
+            creatingKeyOpen || renamingKeyOpen || exportModalOpen,
+        );
+        if (hasModal || !isVisible) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            const tag = (e.target as HTMLElement | null)?.tagName;
+            const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+                e.preventDefault();
+                setAddressInput(currentFull);
+                setAddressError(null);
+                setEditingAddress(true);
+                return;
+            }
+            if (isTyping) return;
+            if (e.key === 'F5') {
+                e.preventDefault();
+                void refresh();
+            } else if (e.altKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                goBack();
+            } else if (e.altKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                goForward();
+            } else if (e.altKey && e.key === 'ArrowUp' && currentPath && !loading) {
+                e.preventDefault();
+                navigate(hive, parentPath(currentPath));
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [
+        editingValue, creatingValue, pendingDeleteValue, pendingKey, creatingKeyOpen,
+        renamingKeyOpen, exportModalOpen, isVisible, currentFull, refresh, goBack,
+        goForward, currentPath, loading, navigate, hive,
+    ]);
+
     const submitAddress = useCallback(() => {
         const parsed = parseUserRegistryPath(addressInput);
         if (!parsed) {
@@ -608,22 +741,56 @@ export function RegistryPanel({
     }
 
     const segments = currentPath ? currentPath.split('\\') : [];
-    const currentFull = fullRegistryPath(hive, currentPath);
+    const hkcuUserLabel = activeUser
+        ? (activeUser.domain ? `${activeUser.domain}\\${activeUser.username}` : activeUser.username)
+        : undefined;
 
     return (
         <div className="flex h-full min-h-0 flex-col bg-background text-foreground" data-testid="registry-panel" data-visible={isVisible}>
-            {/* ── Barra superior: hive + caminho + ações ── */}
+            {/* ── Barra superior: navegação + caminho + contexto ── */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-2.5 py-1.5 text-xs">
-                <select
-                    className="rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:border-primary focus:outline-none"
-                    value={hive}
-                    onChange={(e) => navigate(e.target.value as RegistryHive, '')}
-                    aria-label="Hive"
-                >
-                    {REGISTRY_HIVES.map((h) => (
-                        <option key={h.hive} value={h.hive}>{h.label}</option>
-                    ))}
-                </select>
+                <div className="flex shrink-0 items-center gap-1">
+                    <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
+                        onClick={goBack}
+                        disabled={history.length === 0 || loading}
+                        aria-label="Voltar"
+                        title="Voltar (Alt+←)"
+                    >
+                        ←
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
+                        onClick={goForward}
+                        disabled={forward.length === 0 || loading}
+                        aria-label="Avançar"
+                        title="Avançar (Alt+→)"
+                    >
+                        →
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
+                        onClick={() => navigate(hive, parentPath(currentPath))}
+                        disabled={!currentPath || loading}
+                        aria-label="Subir um nível"
+                        title="Subir um nível (Alt+↑)"
+                    >
+                        ↑
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
+                        onClick={() => void refresh()}
+                        disabled={loading}
+                        aria-label="Atualizar"
+                        title="Atualizar (F5)"
+                    >
+                        ⟳
+                    </button>
+                </div>
 
                 {/* Breadcrumb / barra de endereço editável */}
                 {editingAddress ? (
@@ -662,14 +829,21 @@ export function RegistryPanel({
                 ) : (
                     <div className="flex min-w-0 flex-1 items-center gap-1 rounded border border-border/70 bg-background/60 px-1.5 py-0.5">
                         <nav
-                            className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto font-mono"
+                            className="flex min-w-0 flex-1 cursor-text items-center gap-0.5 overflow-x-auto font-mono"
                             aria-label="Caminho"
                             data-testid="registry-current-path"
                             data-path={currentFull}
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    setAddressInput(currentFull);
+                                    setAddressError(null);
+                                    setEditingAddress(true);
+                                }
+                            }}
                         >
                             <button
                                 type="button"
-                                className="shrink-0 rounded px-1 py-0.5 hover:bg-surface-hover"
+                                className="shrink-0 rounded px-1 py-0.5 font-medium hover:bg-surface-hover"
                                 onClick={() => navigate(hive, '')}
                             >
                                 {hive}
@@ -699,7 +873,7 @@ export function RegistryPanel({
                                 setAddressError(null);
                                 setEditingAddress(true);
                             }}
-                            title="Editar caminho"
+                            title="Editar caminho (Ctrl+L)"
                             aria-label="Editar caminho"
                         >
                             Editar caminho
@@ -716,59 +890,26 @@ export function RegistryPanel({
                     </div>
                 )}
 
-                <div className="flex shrink-0 items-center gap-1">
-                    <button
-                        type="button"
-                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
-                        onClick={() => {
-                            const prev = history[history.length - 1];
-                            if (!prev) return;
-                            setForward((f) => [...f, { hive, path: currentPath }]);
-                            setHistory((h) => h.slice(0, -1));
-                            void openPath(prev.hive, prev.path, false);
-                        }}
-                        disabled={history.length === 0 || loading}
-                        aria-label="Voltar"
-                        title="Voltar"
+                <div className="flex shrink-0 items-center gap-1.5">
+                    {hive === 'HKCU' && (
+                        <span
+                            className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${
+                                activeUser
+                                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                    : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-500'
+                            }`}
+                            title={hkcuUserLabel ? `HKCU mapeado para ${hkcuUserLabel}` : 'Nenhum usuário interativo conectado (SYSTEM)'}
+                            data-testid="registry-hkcu-badge"
+                        >
+                            {activeUser ? `Usuário: ${activeUser.username}` : 'SYSTEM'}
+                        </span>
+                    )}
+                    <span
+                        className="rounded border border-border bg-background/60 px-1.5 py-0.5 font-mono text-[10px] text-muted"
+                        title="Visão de registro 64-bit (WOW64_64KEY)"
                     >
-                        ←
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
-                        onClick={() => {
-                            const next = forward[forward.length - 1];
-                            if (!next) return;
-                            setHistory((h) => [...h, { hive, path: currentPath }]);
-                            setForward((f) => f.slice(0, -1));
-                            void openPath(next.hive, next.path, false);
-                        }}
-                        disabled={forward.length === 0 || loading}
-                        aria-label="Avançar"
-                        title="Avançar"
-                    >
-                        →
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
-                        onClick={() => navigate(hive, parentPath(currentPath))}
-                        disabled={!currentPath || loading}
-                        aria-label="Subir um nível"
-                        title="Subir um nível"
-                    >
-                        ↑
-                    </button>
-                    <button
-                        type="button"
-                        className="rounded border border-border px-2 py-1 hover:bg-background disabled:opacity-40"
-                        onClick={() => void refresh()}
-                        disabled={loading}
-                        aria-label="Atualizar"
-                        title="Atualizar"
-                    >
-                        ⟳
-                    </button>
+                        64-bit
+                    </span>
                 </div>
             </div>
 
@@ -784,7 +925,14 @@ export function RegistryPanel({
                 </p>
             )}
             {note && (
-                <p className="border-b border-border bg-yellow-500/10 px-3 py-1 text-[11px] text-yellow-500" data-testid="registry-note">
+                <p
+                    className={`border-b border-border px-3 py-1 text-[11px] ${
+                        hive === 'HKCU' && activeUser
+                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                            : 'bg-yellow-500/10 text-yellow-500'
+                    }`}
+                    data-testid="registry-note"
+                >
                     {note}
                 </p>
             )}
@@ -814,6 +962,7 @@ export function RegistryPanel({
                         disabled={!streamReady}
                         nodeRefreshSignal={nodeRefreshSignal}
                         knownSubkeys={knownSubkeys}
+                        hkcuUserLabel={activeUser?.username}
                     />
                 </div>
 
@@ -894,6 +1043,7 @@ export function RegistryPanel({
                             >
                                 Exportar .reg
                             </button>
+                            <span className="mx-0.5 h-5 w-px self-center bg-border" aria-hidden="true" />
                             <button
                                 type="button"
                                 className="rounded border border-border px-2 py-1 text-xs hover:bg-background disabled:opacity-40"
@@ -923,8 +1073,15 @@ export function RegistryPanel({
                         denyReason={denyReason}
                         onEdit={(v) => { setEditingValue(v); setMutationError(null); }}
                         onDelete={(name) => { setPendingDeleteValue(name); setMutationError(null); }}
-                        onCopy={(v) => void copyToClipboard(formatValueForDisplay(v), 'Valor copiado.')}
+                        onCopy={(v) => {
+                            const fullData = v.type === 'REG_MULTI_SZ'
+                                ? (v.stringList ?? splitMultiString(v.data)).join('\n')
+                                : v.data;
+                            void copyToClipboard(fullData, 'Valor copiado.');
+                        }}
                         busy={busy}
+                        isFiltered={Boolean(filter)}
+                        onClearFilter={() => setFilter('')}
                     />
 
                     {/* Subchaves */}
@@ -955,17 +1112,20 @@ export function RegistryPanel({
                                 )}
                             </div>
                             {subkeysExpanded && (
-                                <div className="max-h-40 overflow-y-auto px-3 pb-2">
+                                <div className={`${values.length === 0 ? 'max-h-56' : 'max-h-40'} overflow-y-auto px-3 pb-2`}>
                                     <div className="flex flex-wrap gap-1">
                                         {filteredSubkeys.map((sub) => (
                                             <button
                                                 key={sub}
                                                 type="button"
                                                 data-testid={`registry-subkey-${sub}`}
-                                                className="rounded border border-border bg-background/60 px-2 py-0.5 font-mono text-[11px] hover:border-primary/40 hover:bg-surface-hover"
+                                                className="inline-flex items-center gap-1 rounded border border-border bg-background/60 px-2 py-0.5 font-mono text-[11px] hover:border-primary/40 hover:bg-surface-hover"
                                                 onClick={() => navigate(hive, joinPath(currentPath, sub))}
                                             >
-                                                {sub}
+                                                <svg className="h-3 w-3 shrink-0 text-amber-500/80" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                                    <path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h3.172a1.5 1.5 0 0 1 1.06.44l.83.828A.5.5 0 0 0 8.414 3H13a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5V3z" />
+                                                </svg>
+                                                <span>{sub}</span>
                                             </button>
                                         ))}
                                     </div>
@@ -1031,7 +1191,10 @@ export function RegistryPanel({
 
             {creatingKeyOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-                    <div className="w-full max-w-md rounded-lg border border-border bg-surface p-4 shadow-xl">
+                    <form
+                        className="w-full max-w-md rounded-lg border border-border bg-surface p-4 shadow-xl"
+                        onSubmit={(e) => { e.preventDefault(); void confirmCreateKey(); }}
+                    >
                         <h3 className="text-sm font-semibold">Nova subchave</h3>
                         <p className="mt-1 break-all font-mono text-xs text-muted">{currentFull}</p>
                         <div className="mt-3">
@@ -1068,21 +1231,23 @@ export function RegistryPanel({
                                 Cancelar
                             </button>
                             <button
-                                type="button"
+                                type="submit"
                                 className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                                onClick={() => void confirmCreateKey()}
                                 disabled={busy || !newKeyName.trim()}
                             >
                                 {busy ? 'Criando…' : 'Criar subchave'}
                             </button>
                         </div>
-                    </div>
+                    </form>
                 </div>
             )}
 
             {renamingKeyOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
-                    <div className="w-full max-w-md rounded-lg border border-border bg-surface p-4 shadow-xl">
+                    <form
+                        className="w-full max-w-md rounded-lg border border-border bg-surface p-4 shadow-xl"
+                        onSubmit={(e) => { e.preventDefault(); void confirmRenameKey(); }}
+                    >
                         <h3 className="text-sm font-semibold">Renomear chave</h3>
                         <p className="mt-1 break-all font-mono text-xs text-muted">{currentFull}</p>
                         <div className="mt-3">
@@ -1116,15 +1281,14 @@ export function RegistryPanel({
                                 Cancelar
                             </button>
                             <button
-                                type="button"
+                                type="submit"
                                 className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                                onClick={() => void confirmRenameKey()}
                                 disabled={busy || !renameKeyInput.trim()}
                             >
                                 {busy ? 'Renomeando…' : 'Confirmar renomeação'}
                             </button>
                         </div>
-                    </div>
+                    </form>
                 </div>
             )}
 

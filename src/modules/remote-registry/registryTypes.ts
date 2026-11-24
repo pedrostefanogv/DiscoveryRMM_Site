@@ -26,11 +26,18 @@ export type RegistryHive = 'HKLM' | 'HKCU' | 'HKCR' | 'HKU' | 'HKCC';
 /** Ordem de exibição da árvore. Espelha CanonicalHives() no agente. */
 export const REGISTRY_HIVES: ReadonlyArray<{ hive: RegistryHive; label: string; description: string }> = [
     { hive: 'HKLM', label: 'HKEY_LOCAL_MACHINE', description: 'Configuração da máquina (todos os usuários)' },
-    { hive: 'HKCU', label: 'HKEY_CURRENT_USER', description: 'Configuração do usuário do agente (SYSTEM no serviço)' },
+    { hive: 'HKCU', label: 'HKEY_CURRENT_USER', description: 'Configuração do usuário conectado (ou SYSTEM se nenhum usuário logado)' },
     { hive: 'HKCR', label: 'HKEY_CLASSES_ROOT', description: 'Associações de arquivos e registro COM' },
     { hive: 'HKU', label: 'HKEY_USERS', description: 'Perfis de usuários carregados' },
     { hive: 'HKCC', label: 'HKEY_CURRENT_CONFIG', description: 'Perfil de hardware atual' },
 ] as const;
+
+export interface RegistryUserContext {
+    sid: string;
+    username: string;
+    domain?: string;
+    sessionId?: number;
+}
 
 export interface RegistryValueEntry {
     name: string;
@@ -61,6 +68,8 @@ export interface RegistryListPage {
     nextToken?: string;
     subkeyCount: number;
     valueCount: number;
+    writable?: boolean;
+    denyReason?: string;
 }
 
 export interface RegistrySubkeyPageResult {
@@ -116,8 +125,9 @@ export interface RegistryResponse {
     page?: RegistryListPage;
     value?: RegistryValueEntry;
     export?: string;
-    /** Aviso do agente (ex.: HKCU é a chave do SYSTEM). */
+    /** Aviso do agente (ex.: HKCU mapeado para usuário conectado ou SYSTEM). */
     note?: string;
+    activeUser?: RegistryUserContext;
 }
 
 /** Ações aceitas pelo agente. Lista fechada — espelha session_registry.go. */

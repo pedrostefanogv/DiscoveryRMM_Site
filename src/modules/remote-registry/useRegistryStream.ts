@@ -5,7 +5,12 @@ import {
     type NatsCredentialsResponse,
     type NatsService,
 } from '@/api/nats';
-import { REGISTRY_PROTOCOL_VERSION, type RegistryAction, type RegistryResponse } from './registryTypes';
+import {
+    REGISTRY_PROTOCOL_VERSION,
+    type RegistryAction,
+    type RegistryResponse,
+    type RegistryUserContext,
+} from './registryTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STREAM NATS do editor de Registro.
@@ -36,6 +41,8 @@ export interface UseRegistryStreamReturn {
     error: string | null;
     /** Versão do protocolo anunciada pelo agente no .registry.ready. */
     agentProtocolVersion: number | null;
+    /** Usuário interativo conectado anunciado pelo agente no .registry.ready. */
+    initialActiveUser: RegistryUserContext | null;
     onReady: (callback: () => void) => () => void;
     /** Envia uma requisição e resolve quando a resposta correlacionada chega. */
     send: (action: RegistryAction, extra?: Record<string, unknown>) => Promise<RegistryResponse>;
@@ -67,6 +74,7 @@ export function useRegistryStream({
     const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [agentProtocolVersion, setAgentProtocolVersion] = useState<number | null>(null);
+    const [initialActiveUser, setInitialActiveUser] = useState<RegistryUserContext | null>(null);
 
     const pendingRef = useRef<Map<string, { resolve: (r: RegistryResponse) => void; reject: (e: Error) => void }>>(new Map());
     const readyCallbacksRef = useRef<Set<() => void>>(new Set());
@@ -158,6 +166,9 @@ export function useRegistryStream({
             if (parsed.status === 'ready' && !('requestId' in parsed)) {
                 if (typeof parsed.version === 'number') {
                     setAgentProtocolVersion(parsed.version);
+                }
+                if (parsed.activeUser && typeof parsed.activeUser === 'object') {
+                    setInitialActiveUser(parsed.activeUser as RegistryUserContext);
                 }
                 setIsReady(true);
                 readyCallbacksRef.current.forEach((cb) => cb());
@@ -266,5 +277,5 @@ export function useRegistryStream({
         return () => { readyCallbacksRef.current.delete(callback); };
     }, []);
 
-    return { isConnected, isReady, error, agentProtocolVersion, onReady, send };
+    return { isConnected, isReady, error, agentProtocolVersion, initialActiveUser, onReady, send };
 }

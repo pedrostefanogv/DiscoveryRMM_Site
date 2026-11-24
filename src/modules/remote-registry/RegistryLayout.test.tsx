@@ -19,6 +19,7 @@ const sendMock = vi.fn();
 vi.mock('./useRegistryStream', () => ({
     useRegistryStream: () => ({
         isConnected: true, isReady: true, error: null, agentProtocolVersion: 1,
+        initialActiveUser: null,
         onReady: () => () => {}, send: sendMock,
     }),
 }));

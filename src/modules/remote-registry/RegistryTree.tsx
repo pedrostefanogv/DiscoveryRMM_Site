@@ -32,6 +32,8 @@ export interface RegistryTreeProps {
     nodeRefreshSignal?: { version: number; keys?: string[] };
     /** Sincroniza subchaves já obtidas pelo openPath do painel sem nova requisição. */
     knownSubkeys?: { key: string; page: RegistrySubkeyPageResult; seq: number } | null;
+    /** Rótulo do usuário conectado exibido ao lado de HKEY_CURRENT_USER. */
+    hkcuUserLabel?: string;
     /** Callback opcional para recarregar um nó específico. */
     onRefreshNode?: (hive: RegistryHive, path: string) => void;
 }
@@ -96,6 +98,7 @@ export function RegistryTree({
     disabled = false,
     nodeRefreshSignal,
     knownSubkeys,
+    hkcuUserLabel,
 }: RegistryTreeProps) {
     const [nodes, setNodes] = useState<Record<string, NodeState>>({});
     const nodesRef = useRef<Record<string, NodeState>>(nodes);
@@ -366,6 +369,15 @@ export function RegistryTree({
                     >
                         {isHive ? <HiveIcon active={isActive} /> : <FolderIcon open={state.expanded} active={isActive} />}
                         <span>{label}</span>
+                        {isHive && hive === 'HKCU' && hkcuUserLabel && (
+                            <span
+                                className="ml-1 shrink-0 rounded bg-primary/10 px-1 py-0.5 font-sans text-[9px] font-medium text-primary"
+                                title={`Mapeado para o usuário conectado: ${hkcuUserLabel}`}
+                                data-testid="registry-tree-hkcu-user"
+                            >
+                                {hkcuUserLabel}
+                            </span>
+                        )}
                     </button>
                 </div>
 
