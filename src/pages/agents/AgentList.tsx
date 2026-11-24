@@ -28,6 +28,7 @@ import { POWER_ACTION_VERBS, powerVerbIcon, type PowerActionVerb } from '@/compo
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
+import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
 import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
 import {
@@ -157,6 +158,7 @@ export default function AgentList() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const now = useNowTick(5_000);
+  const { natsConnected } = useRealtimeStatus();
   const clients = useClients();
   const deleteAgent = useDeleteAgent();
   const restoreAgent = useRestoreAgent();
@@ -738,7 +740,7 @@ export default function AgentList() {
       queryKey: ['agents', 'byClient', c.id] as const,
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         agentsApi.listByClient(c.id, { signal }),
-      refetchInterval: 300_000,
+      refetchInterval: natsConnected ? false : 60_000,
       refetchIntervalInBackground: false,
     })),
   });

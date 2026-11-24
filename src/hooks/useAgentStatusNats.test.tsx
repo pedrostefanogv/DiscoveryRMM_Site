@@ -311,6 +311,205 @@ describe("useAgentStatusNats invalidação de queries", () => {
 
     unmount();
   });
+
+  it("AgentRegistered com ZeroTouchPending invalida apenas byClient e bySite alvo (não o prefixo amplo)", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const handlers: Array<(event: unknown) => void> = [];
+    subscribeMock.mockImplementation(
+      (_subject: string, handler: (event: unknown) => void) => {
+        handlers.push(handler);
+        return Promise.resolve(true);
+      },
+    );
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+    }
+
+    const { unmount } = renderHook(
+      () => useAgentStatusNats(true, { level: "global" }),
+      { wrapper: Wrapper },
+    );
+
+    await vi.advanceTimersByTimeAsync(350);
+
+    handlers.forEach((handler) =>
+      handler({
+        eventType: "AgentRegistered",
+        clientId: "client-1",
+        siteId: "site-1",
+        data: {
+          agentId: "agent-new",
+          clientId: "client-1",
+          siteId: "site-1",
+          zeroTouchPending: true,
+        },
+      }),
+    );
+
+    const keys = invalidateSpy.mock.calls.map(
+      (call) => (call[0] as { queryKey?: unknown[] })?.queryKey,
+    );
+
+    expect(keys).toContainEqual(["agents", "byClient", "client-1"]);
+    expect(keys).toContainEqual(["agents", "bySite", "site-1"]);
+    expect(keys).toContainEqual(["agents", "detail", "agent-new"]);
+    expect(keys).not.toContainEqual(["agents"]);
+
+    unmount();
+  });
+
+  it("AgentDeleted invalida byClient, bySite e deleted", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const handlers: Array<(event: unknown) => void> = [];
+    subscribeMock.mockImplementation(
+      (_subject: string, handler: (event: unknown) => void) => {
+        handlers.push(handler);
+        return Promise.resolve(true);
+      },
+    );
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+    }
+
+    const { unmount } = renderHook(
+      () => useAgentStatusNats(true, { level: "global" }),
+      { wrapper: Wrapper },
+    );
+
+    await vi.advanceTimersByTimeAsync(350);
+
+    handlers.forEach((handler) =>
+      handler({
+        eventType: "AgentDeleted",
+        clientId: "client-1",
+        siteId: "site-1",
+        data: {
+          agentId: "agent-1",
+          clientId: "client-1",
+          siteId: "site-1",
+        },
+      }),
+    );
+
+    const keys = invalidateSpy.mock.calls.map(
+      (call) => (call[0] as { queryKey?: unknown[] })?.queryKey,
+    );
+
+    expect(keys).toContainEqual(["agents", "byClient", "client-1"]);
+    expect(keys).toContainEqual(["agents", "bySite", "site-1"]);
+    expect(keys).toContainEqual(["agents", "deleted"]);
+
+    unmount();
+  });
+
+  it("heartbeat de agente desconhecido na listagem dispara invalidação direcionada de byClient", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    queryClient.setQueryData(["agents", "byClient", "client-1"], [
+      { id: "agent-existing", siteId: "site-1", hostname: "EXISTING" },
+    ]);
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const handlers: Array<(event: unknown) => void> = [];
+    subscribeMock.mockImplementation(
+      (_subject: string, handler: (event: unknown) => void) => {
+        handlers.push(handler);
+        return Promise.resolve(true);
+      },
+    );
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+    }
+
+    const { unmount } = renderHook(
+      () => useAgentStatusNats(true, { level: "global" }),
+      { wrapper: Wrapper },
+    );
+
+    await vi.advanceTimersByTimeAsync(350);
+
+    handlers.forEach((handler) =>
+      handler({
+        eventType: "AgentHeartbeat",
+        clientId: "client-1",
+        siteId: "site-1",
+        data: {
+          agentId: "agent-brand-new",
+          clientId: "client-1",
+          siteId: "site-1",
+          timestampUtc: "2026-01-01T00:00:00Z",
+        },
+      }),
+    );
+
+    const keys = invalidateSpy.mock.calls.map(
+      (call) => (call[0] as { queryKey?: unknown[] })?.queryKey,
+    );
+
+    expect(keys).toContainEqual(["agents", "byClient", "client-1"]);
+    expect(keys).toContainEqual(["agents", "bySite", "site-1"]);
+
+    unmount();
+  });
+
+  it("reconcilia byClient e bySite ao reconectar após queda de conexão", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    let stateListener = null as ((state: string) => void) | null;
+    onConnectionStateChangeMock.mockImplementation(
+      (listener: (state: string) => void) => {
+        stateListener = listener;
+        listener("connected");
+        return () => {};
+      },
+    );
+
+    function Wrapper({ children }: { children: ReactNode }) {
+      return (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+    }
+
+    const { unmount } = renderHook(
+      () => useAgentStatusNats(true, { level: "global" }),
+      { wrapper: Wrapper },
+    );
+
+    await vi.advanceTimersByTimeAsync(350);
+    expect(invalidateSpy).not.toHaveBeenCalled();
+
+    stateListener?.("reconnecting");
+    stateListener?.("connected");
+
+    const keys = invalidateSpy.mock.calls.map(
+      (call) => (call[0] as { queryKey?: unknown[] })?.queryKey,
+    );
+    expect(keys).toContainEqual(["agents", "byClient"]);
+    expect(keys).toContainEqual(["agents", "bySite"]);
+
+    unmount();
+  });
 });
 
 describe("toHeartbeatPayload — usuário logado", () => {

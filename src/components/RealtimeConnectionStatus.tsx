@@ -1,13 +1,24 @@
+import { useState } from "react";
 import { Icon } from "@/components/ui";
-﻿import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
+import { getNatsService } from "@/api/nats";
+import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
 
 
 export function RealtimeConnectionStatus() {
   const status = useRealtimeStatus();
+  const [reconnectingAuth, setReconnectingAuth] = useState(false);
 
-  const handleReloadSession = () => {
-    if (typeof window === 'undefined') return;
-    window.location.reload();
+  const handleReloadSession = async () => {
+    if (reconnectingAuth) return;
+    setReconnectingAuth(true);
+    try {
+      const reconnected = await getNatsService().forceReconnect();
+      if (!reconnected && typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    } finally {
+      setReconnectingAuth(false);
+    }
   };
 
   const isConnected = status.natsConnected;
@@ -74,11 +85,14 @@ export function RealtimeConnectionStatus() {
       {isAuthError && (
         <button
           type="button"
-          onClick={handleReloadSession}
-          className="rounded-full border border-red-300 bg-red-100/80 px-2 py-1 text-xs font-medium text-red-800 transition hover:bg-red-200 dark:border-red-800 dark:bg-red-950/80 dark:text-red-100 dark:hover:bg-red-900"
-          title="Recarregar sessão autenticada"
+          onClick={() => {
+            void handleReloadSession();
+          }}
+          disabled={reconnectingAuth}
+          className="rounded-full border border-red-300 bg-red-100/80 px-2 py-1 text-xs font-medium text-red-800 transition hover:bg-red-200 disabled:opacity-60 dark:border-red-800 dark:bg-red-950/80 dark:text-red-100 dark:hover:bg-red-900"
+          title="Reconectar sessão NATS ou recarregar página"
         >
-          Recarregar sessão
+          {reconnectingAuth ? 'Reconectando...' : 'Reconectar sessão'}
         </button>
       )}
       {isServerOverloaded && (

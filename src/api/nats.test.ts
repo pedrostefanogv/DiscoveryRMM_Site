@@ -38,10 +38,10 @@ vi.mock("@nats-io/nats-core", () => ({
 
 import { getNatsService, resetNatsService } from "./nats";
 
-function createConnectionMock() {
+function createConnectionMock(closedPromise?: Promise<unknown>) {
   return {
     close: vi.fn().mockResolvedValue(undefined),
-    closed: vi.fn().mockResolvedValue(undefined),
+    closed: vi.fn().mockReturnValue(closedPromise ?? new Promise(() => {})),
     isClosed: vi.fn().mockReturnValue(false),
     publish: vi.fn(),
     subscribe: vi.fn(),
@@ -142,5 +142,106 @@ describe("NatsService auth mode", () => {
 
     expect(subscribed).toBe(false);
     expect(connectSpy).not.toHaveBeenCalled();
+  });
+
+  it("passa reconnect: false para o cliente NATS para controlar rotação de credenciais", async () => {
+    wsconnectMock.mockResolvedValue(createConnectionMock());
+
+    const natsService = getNatsService({
+      url: "ws://localhost:9222",
+      enabled: true,
+      authMode: "auth_token",
+    });
+
+    await natsService.connect();
+
+    expect(wsconnectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reconnect: false,
+      }),
+    );
+  });
+
+  it("renova credenciais proativamente antes da expiração sem cair em auth_error", async () => {
+    vi.useFakeTimers();
+    try {
+      const firstConn = createConnectionMock();
+      const secondConn = createConnectionMock();
+      wsconnectMock
+        .mockResolvedValueOnce(firstConn)
+        .mockResolvedValueOnce(secondConn);
+
+      let issuanceCount = 0;
+      const natsService = getNatsService({
+        url: "ws://localhost:9222",
+        enabled: true,
+        authMode: "jwt_credentials",
+        credentialsProvider: async () => {
+          issuanceCount += 1;
+          return {
+            jwt: `scoped-jwt-${issuanceCount}`,
+            nkeySeed: "SUANDKJUZCC3KC5KRUNDKWXDKXTTCP7Y3TSHD52IKH4RF4HTXJJ7WU3IX4",
+            publicKey: "",
+            expiresAtUtc: new Date(Date.now() + 5 * 60_000).toISOString(),
+            publishSubjects: [],
+            subscribeSubjects: ["tenant.global.dashboard.events"],
+          };
+        },
+      });
+
+      await natsService.subscribe("tenant.global.dashboard.events", vi.fn());
+      expect(issuanceCount).toBe(1);
+
+      // Avança além da margem de 2 minutos antes da expiração de 5 minutos (3 min = 180s)
+      await vi.advanceTimersByTimeAsync(185_000);
+
+      expect(issuanceCount).toBe(2);
+      expect(firstConn.close).toHaveBeenCalled();
+      expect(natsService.getConnectionState()).toBe("connected");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("tenta renovar credenciais uma vez quando conexão já aberta fecha com AuthorizationError", async () => {
+    let resolveClosed!: (err: unknown) => void;
+    const firstClosed = new Promise((resolve) => {
+      resolveClosed = resolve;
+    });
+    const firstConn = createConnectionMock(firstClosed);
+    const secondConn = createConnectionMock();
+    wsconnectMock
+      .mockResolvedValueOnce(firstConn)
+      .mockResolvedValueOnce(secondConn);
+
+    let issuanceCount = 0;
+    const natsService = getNatsService({
+      url: "ws://localhost:9222",
+      enabled: true,
+      authMode: "jwt_credentials",
+      credentialsProvider: async () => {
+        issuanceCount += 1;
+        return {
+          jwt: `scoped-jwt-${issuanceCount}`,
+          nkeySeed: "SUANDKJUZCC3KC5KRUNDKWXDKXTTCP7Y3TSHD52IKH4RF4HTXJJ7WU3IX4",
+          publicKey: "",
+          expiresAtUtc: new Date(Date.now() + 30 * 60_000).toISOString(),
+          publishSubjects: [],
+          subscribeSubjects: ["tenant.global.dashboard.events"],
+        };
+      },
+    });
+
+    await natsService.subscribe("tenant.global.dashboard.events", vi.fn());
+    expect(natsService.getConnectionState()).toBe("connected");
+
+    const authErr = new Error("Authorization Violation");
+    authErr.name = "AuthorizationError";
+    resolveClosed(authErr);
+
+    await vi.waitFor(() => {
+      expect(issuanceCount).toBe(2);
+      expect(natsService.getConnectionState()).toBe("connected");
+    });
   });
 });

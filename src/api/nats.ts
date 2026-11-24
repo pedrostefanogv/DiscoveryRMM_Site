@@ -39,6 +39,11 @@ type NatsClientModule = {
 export type NatsAuthMode = "auth_token" | "jwt_credentials";
 
 const CREDENTIALS_REFRESH_SKEW_MS = 60_000;
+const NATS_CALLOUT_MAX_TTL_MS = 60 * 60_000;
+const CREDENTIAL_PROACTIVE_REFRESH_MARGIN_MS = 2 * 60_000;
+const MIN_PROACTIVE_REFRESH_DELAY_MS = 10_000;
+const MAX_TIMEOUT_MS = 2_147_483_647;
+const SLOW_RECONNECT_DELAY_MS = 60_000;
 
 function sanitizeNatsUrl(url: string): string {
   const normalized = url.trim();
@@ -159,7 +164,7 @@ function isAuthorizationNatsError(error: unknown): boolean {
     const message = typeof err.message === "string" ? err.message : "";
     if (
       name === "AuthorizationError" ||
-      /authorization violation|missing auth token|authentication token/i.test(
+      /authorization violation|missing auth token|authentication token|authentication expired/i.test(
         message,
       )
     ) {
@@ -277,6 +282,8 @@ export class NatsService {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private credentialRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private authRecoveryAttempted = false;
   private warnedInvalidUrl = false;
   private warnedUnavailableClient = false;
   private connectionState: NatsConnectionState = "disconnected";
@@ -492,6 +499,97 @@ export class NatsService {
     this.reconnectTimer = null;
   }
 
+  private clearCredentialRefreshTimer() {
+    if (!this.credentialRefreshTimer) return;
+
+    clearTimeout(this.credentialRefreshTimer);
+    this.credentialRefreshTimer = null;
+  }
+
+  private scheduleProactiveCredentialRefresh() {
+    this.clearCredentialRefreshTimer();
+
+    if (this.getAuthMode() !== "jwt_credentials") return;
+    if (!this.connection || this.connection.isClosed()) return;
+    if (!this.credentials?.expiresAtUtc) return;
+
+    const now = Date.now();
+    const parsedExpMs = new Date(this.credentials.expiresAtUtc).getTime();
+    const credExpMs = Number.isFinite(parsedExpMs)
+      ? parsedExpMs
+      : now + NATS_CALLOUT_MAX_TTL_MS;
+    const effectiveExpMs = Math.min(credExpMs, now + NATS_CALLOUT_MAX_TTL_MS);
+    const remainingMs = effectiveExpMs - now;
+
+    const rawDelayMs =
+      remainingMs >
+      CREDENTIAL_PROACTIVE_REFRESH_MARGIN_MS + MIN_PROACTIVE_REFRESH_DELAY_MS
+        ? remainingMs - CREDENTIAL_PROACTIVE_REFRESH_MARGIN_MS
+        : Math.max(MIN_PROACTIVE_REFRESH_DELAY_MS, Math.floor(remainingMs * 0.75));
+    const delayMs = Math.min(
+      Math.max(MIN_PROACTIVE_REFRESH_DELAY_MS, rawDelayMs),
+      MAX_TIMEOUT_MS,
+    );
+
+    this.emitTelemetry("info", "proactive_credential_refresh_scheduled", {
+      delayMs,
+      expiresAtUtc: this.credentials.expiresAtUtc,
+    });
+
+    this.credentialRefreshTimer = setTimeout(() => {
+      this.credentialRefreshTimer = null;
+      void this.rotateCredentialsAndReconnect();
+    }, delayMs);
+  }
+
+  private async rotateCredentialsAndReconnect(): Promise<void> {
+    if (this.manualDisconnect) return;
+    if (!this.config.enabled) return;
+    if (this.listeners.size === 0 && this.rawListeners.size === 0) return;
+    if (this.connectInFlight) return;
+
+    this.emitTelemetry("info", "proactive_credential_refresh_start");
+    this.invalidateCredentials();
+
+    try {
+      await this.getCredentials();
+    } catch (error) {
+      const errorType = classifyNatsErrorType(error);
+      this.emitTelemetry("warn", "proactive_credential_refresh_failed", {
+        errorType,
+        errorMessage: getNatsErrorMessage(error),
+      });
+      if (
+        errorType !== "auth" &&
+        this.connection &&
+        !this.connection.isClosed()
+      ) {
+        this.credentialRefreshTimer = setTimeout(() => {
+          this.credentialRefreshTimer = null;
+          void this.rotateCredentialsAndReconnect();
+        }, 30_000);
+      }
+      return;
+    }
+
+    if (this.manualDisconnect || !this.config.enabled) return;
+
+    const activeConnection = this.connection;
+    if (activeConnection && !activeConnection.isClosed()) {
+      this.connection = null;
+      this.subscriptions.clear();
+      this.subscriptionInFlight.clear();
+      try {
+        await activeConnection.close();
+      } catch {
+        // conexão antiga já encerrada
+      }
+    }
+
+    if (this.manualDisconnect || !this.config.enabled) return;
+    await this.connect();
+  }
+
   setPreSuppliedCredentials(creds: NatsCredentialsResponse): void {
     this.credentials = creds;
   }
@@ -528,6 +626,7 @@ export class NatsService {
     if (!this.credentials || isCredentialsExpiring(this.credentials)) {
       this.invalidateCredentials();
     }
+    this.clearCredentialRefreshTimer();
     this.clearReconnectTimer();
     this.reconnectAttempts = 0;
 
@@ -573,6 +672,7 @@ export class NatsService {
       return;
     }
 
+    this.clearCredentialRefreshTimer();
     this.clearReconnectTimer();
     this.reconnectAttempts = 0;
 
@@ -729,6 +829,7 @@ export class NatsService {
         return;
       }
 
+      this.clearCredentialRefreshTimer();
       this.connection = null;
       const subjects = Array.from(this.subscriptions.keys());
       this.subscriptions.clear();
@@ -749,6 +850,25 @@ export class NatsService {
         const errorType = this.updateConnectionError(error);
         if (errorType === "auth") {
           this.invalidateCredentials();
+          if (
+            !this.authRecoveryAttempted &&
+            (this.listeners.size > 0 || this.rawListeners.size > 0)
+          ) {
+            this.authRecoveryAttempted = true;
+            this.emitTelemetry("warn", "connection_closed_auth_refresh_retry", {
+              errorMessage: getNatsErrorMessage(error),
+              errorCode: getErrorCode(error),
+              subscribedSubjects: subjects,
+            });
+            natsLogger.warn(
+              "Conexão encerrada por erro de autorização; tentando renovar credenciais.",
+              { error, subjects },
+            );
+            this.setConnectionState("reconnecting");
+            void this.connect();
+            return;
+          }
+
           this.setConnectionState("auth_error");
           this.emitAuthError();
           this.emitTelemetry("warn", "connection_closed_auth_error", {
@@ -1042,13 +1162,16 @@ export class NatsService {
           this.connection = await client.wsconnect({
             servers: [url],
             authenticator,
+            reconnect: false,
           });
           this.reconnectAttempts = 0;
+          this.authRecoveryAttempted = false;
           this.clearReconnectTimer();
           this.watchConnection(this.connection);
           await this.restoreSubscriptions();
           this.clearConnectionError();
           this.setConnectionState("connected");
+          this.scheduleProactiveCredentialRefresh();
           this.emitTelemetry("info", "connect_attempt_success", {
             connectAttemptId,
             authMode,
@@ -1179,15 +1302,38 @@ export class NatsService {
       return;
     }
 
-    this.emitTelemetry("error", "reconnect_exhausted", {
-      maxReconnectAttempts: this.maxReconnectAttempts,
+    const isHidden =
+      typeof document !== "undefined" && document.visibilityState === "hidden";
+    const isOffline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
+
+    if (isHidden || isOffline) {
+      this.emitTelemetry("error", "reconnect_exhausted", {
+        maxReconnectAttempts: this.maxReconnectAttempts,
+        isHidden,
+        isOffline,
+      });
+      natsLogger.log(
+        "Máximo de tentativas de reconexão atingido (",
+        this.maxReconnectAttempts,
+        "). Desconectando.",
+      );
+      this.setConnectionState("disconnected");
+      return;
+    }
+
+    this.emitTelemetry("warn", "reconnect_slow_retry", {
+      attempt: this.reconnectAttempts,
+      delayMs: SLOW_RECONNECT_DELAY_MS,
     });
-    natsLogger.log(
-      "Máximo de tentativas de reconexão atingido (",
-      this.maxReconnectAttempts,
-      "). Desconectando.",
-    );
-    this.setConnectionState("disconnected");
+    this.setConnectionState("reconnecting");
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.emitTelemetry("info", "reconnect_slow_attempt_execute", {
+        attempt: this.reconnectAttempts,
+      });
+      void this.connect();
+    }, SLOW_RECONNECT_DELAY_MS);
   }
 
   async subscribe(
@@ -1438,6 +1584,7 @@ export class NatsService {
       activeListeners: this.listeners.size,
     });
     this.manualDisconnect = true;
+    this.clearCredentialRefreshTimer();
     this.clearReconnectTimer();
 
     // Unsubscribe from all subjects

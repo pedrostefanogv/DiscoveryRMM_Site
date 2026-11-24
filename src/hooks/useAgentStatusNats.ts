@@ -67,6 +67,38 @@ function isPongType(normalizedType: string): boolean {
   return normalizedType === "pong";
 }
 
+const AGENT_LIFECYCLE_EVENT_TYPES = new Set([
+  "agentregistered",
+  "agentcreated",
+  "agentapproved",
+  "agentdeleted",
+  "agentrestored",
+  "agentpurged",
+  "agenttransferred",
+]);
+
+function isAgentLifecycleType(normalizedType: string): boolean {
+  return AGENT_LIFECYCLE_EVENT_TYPES.has(normalizedType);
+}
+
+function isMissingFromLoadedClientLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  agentId: string,
+): boolean {
+  const entries = queryClient.getQueriesData<Agent[]>({
+    queryKey: ["agents", "byClient"],
+  });
+  let hasLoadedList = false;
+  for (const [, data] of entries) {
+    if (!Array.isArray(data)) continue;
+    hasLoadedList = true;
+    if (data.some((agent) => agent.id === agentId)) {
+      return false;
+    }
+  }
+  return hasLoadedList;
+}
+
 function getStringField(
   data: Record<string, unknown>,
   keys: string[],
@@ -652,6 +684,20 @@ export function useAgentStatusNats(
         (current) => current?.map(applyToCollection),
       );
 
+      if (isMissingFromLoadedClientLists(queryClient, heartbeatAgentId)) {
+        if (heartbeatData.clientId) {
+          invalidateThrottled(
+            ["agents", "byClient", heartbeatData.clientId],
+            2_000,
+          );
+        } else {
+          invalidateThrottled(["agents", "byClient"], 2_000);
+        }
+        if (heartbeatData.siteId) {
+          invalidateThrottled(["agents", "bySite", heartbeatData.siteId], 2_000);
+        }
+      }
+
       // IMPORTANTE: NÃO invalidar o prefixo ["agents"] a cada heartbeat!
       // O prefixo casa detail + hardware + softwarePage + softwareSnapshot —
       // com heartbeat a cada ~30s isso refetchava o lote completo da página
@@ -740,10 +786,93 @@ export function useAgentStatusNats(
           );
         }
 
+        if (isMissingFromLoadedClientLists(queryClient, agentId)) {
+          const statusClientId =
+            getStringField(safeData, ["clientId", "client_id"]) ??
+            getStringField(eventEnvelope, ["clientId", "client_id"]);
+          const statusSiteId =
+            getStringField(safeData, ["siteId", "site_id"]) ??
+            getStringField(eventEnvelope, ["siteId", "site_id"]);
+          if (statusClientId) {
+            invalidateThrottled(["agents", "byClient", statusClientId], 2_000);
+          } else {
+            invalidateThrottled(["agents", "byClient"], 2_000);
+          }
+          if (statusSiteId) {
+            invalidateThrottled(["agents", "bySite", statusSiteId], 2_000);
+          }
+        }
+
         // Status change é raro (online↔offline): reconcilia só o detail do
         // agente afetado — nunca o prefixo ["agents"] inteiro.
         invalidateThrottled(["agents", "detail", agentId], 5_000);
         invalidateEventQueries(normalizedType, invalidateThrottled);
+        return;
+      }
+
+      if (isAgentLifecycleType(normalizedType)) {
+        const payload = safeData ?? eventEnvelope;
+        const lifecycleAgentId =
+          getStringField(payload, ["agentId", "agent_id"]) ??
+          getStringField(eventEnvelope, ["agentId", "agent_id"]);
+
+        const clientIds = new Set<string>();
+        const siteIds = new Set<string>();
+        for (const key of [
+          "clientId",
+          "client_id",
+          "previousClientId",
+          "targetClientId",
+        ]) {
+          const val =
+            getStringField(payload, [key]) ??
+            getStringField(eventEnvelope, [key]);
+          if (val) clientIds.add(val);
+        }
+        for (const key of [
+          "siteId",
+          "site_id",
+          "previousSiteId",
+          "targetSiteId",
+        ]) {
+          const val =
+            getStringField(payload, [key]) ??
+            getStringField(eventEnvelope, [key]);
+          if (val) siteIds.add(val);
+        }
+
+        if (clientIds.size > 0) {
+          for (const cid of clientIds) {
+            invalidateThrottled(["agents", "byClient", cid], 500);
+          }
+        } else if (siteIds.size === 0) {
+          invalidateThrottled(["agents", "byClient"], 500);
+        }
+
+        if (siteIds.size > 0) {
+          for (const sid of siteIds) {
+            invalidateThrottled(["agents", "bySite", sid], 500);
+          }
+        } else if (clientIds.size === 0) {
+          invalidateThrottled(["agents", "bySite"], 500);
+        }
+
+        if (lifecycleAgentId) {
+          invalidateThrottled(["agents", "detail", lifecycleAgentId], 500);
+        }
+
+        if (
+          normalizedType === "agentdeleted" ||
+          normalizedType === "agentrestored" ||
+          normalizedType === "agentpurged"
+        ) {
+          invalidateThrottled(["agents", "deleted"], 500);
+        }
+
+        invalidateThrottled(
+          ["realtime", "stats"],
+          REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS,
+        );
         return;
       }
 
@@ -885,6 +1014,8 @@ export function useAgentStatusNats(
       scopeMode: incompleteAgentScope ? "preserve" : "replace",
     });
 
+    let hasConnectedBefore = false;
+    let needsReconcileOnReconnect = false;
     const unsubscribeConnectionState = natsService.onConnectionStateChange(
       (state) => {
         if (disposed) return;
@@ -896,6 +1027,22 @@ export function useAgentStatusNats(
           diagnostics.lastErrorMessage,
           diagnostics.lastErrorAtUtc,
         );
+
+        if (state === "connected") {
+          if (hasConnectedBefore && needsReconcileOnReconnect) {
+            needsReconcileOnReconnect = false;
+            invalidateThrottled(["agents", "byClient"], 2_000);
+            invalidateThrottled(["agents", "bySite"], 2_000);
+          }
+          hasConnectedBefore = true;
+        } else if (
+          hasConnectedBefore &&
+          (state === "disconnected" ||
+            state === "reconnecting" ||
+            state === "auth_error")
+        ) {
+          needsReconcileOnReconnect = true;
+        }
       },
     );
 
