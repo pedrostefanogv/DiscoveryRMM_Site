@@ -37,6 +37,8 @@ import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import AgentSensorsPanel from '@/components/agents/AgentSensorsPanel';
 import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
+import { PowerActionVerbDialog } from '@/components/agents/PowerActionVerbDialog';
+import { POWER_ACTION_VERBS, powerVerbIcon, type PowerActionVerb } from '@/components/agents/powerActionVerbs';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
 import { AgentCustomFieldsCard } from '@/components/custom-fields/AgentCustomFieldsCard';
@@ -227,8 +229,9 @@ export default function AgentDetail() {
   // Submenu de energia ("Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
-  // Reinício direto no setup do firmware (BIOS/UEFI) — confirmado num dialog dedicado.
-  const [firmwareRestartOpen, setFirmwareRestartOpen] = useState(false);
+  // Verbo de energia genérico pendente de confirmação num diálogo dedicado
+  // (BIOS/UEFI, Opções Avançadas, cancelar energia pendente, bloquear sessão).
+  const [powerVerb, setPowerVerb] = useState<PowerActionVerb | null>(null);
   const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
 
@@ -876,25 +879,22 @@ export default function AgentDetail() {
     setPowerAction(action);
   };
 
-  // Reinício direto no setup do firmware (BIOS/UEFI): comando genérico
-  // "poweraction". O agent valida se a máquina é UEFI e devolve falha tipada
-  // (mostrada no acompanhamento) quando for BIOS legado (Legacy/CSM).
-  const handleOpenFirmwareRestart = () => {
+  // Verbos do comando genérico "poweraction" (BIOS/UEFI, Opções Avançadas,
+  // cancelar energia pendente, bloquear sessão). O agent valida a capacidade de
+  // cada verbo (ex.: /fw exige UEFI) e devolve falha tipada no acompanhamento.
+  const handleOpenPowerVerb = (verb: PowerActionVerb) => {
     setIsPowerMenuOpen(false);
-    setFirmwareRestartOpen(true);
+    setPowerVerb(verb);
   };
 
-  const handleFirmwareRestartConfirm = async () => {
-    if (!id) return;
+  const handlePowerVerbConfirm = async () => {
+    if (!id || !powerVerb) return;
     try {
-      const response = await powerActionMutation.mutateAsync({
-        id,
-        data: { action: 'restart-firmware', delaySeconds: 0, force: true, notifyUser: false, message: '' },
-      });
+      const response = await powerActionMutation.mutateAsync({ id, data: powerVerb.request });
       void awaitAgentCommandById(id, response.commandId).then(notifyAgentCommandOutcome);
-      setFirmwareRestartOpen(false);
+      setPowerVerb(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao enviar o comando de reinício no firmware.');
+      toast.error(error instanceof Error ? error.message : powerVerb.errorMessage);
     }
   };
 
@@ -1130,16 +1130,21 @@ export default function AgentDetail() {
                         <Icon name="power_settings_new" className="h-4 w-4" />
                         Desligar
                       </button>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={handleOpenFirmwareRestart}
-                        disabled={restartAgent.isPending || shutdownAgent.isPending || powerActionMutation.isPending}
-                        title="Reinicia direto no setup do firmware — somente UEFI; pode pedir a chave do BitLocker"
-                      >
-                        <Icon name="memory" className="h-4 w-4" />
-                        Reiniciar na BIOS/UEFI
-                      </button>
+                      {/* Verbos do comando genérico "poweraction" — declarados
+                          em powerActionVerbs.tsx (fonte única dos três menus). */}
+                      {POWER_ACTION_VERBS.map((verb) => (
+                        <button
+                          key={verb.kind}
+                          type="button"
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 ${verb.separatorBefore ? 'border-t border-border ' : ''}${verb.danger ? 'text-danger hover:bg-danger/10' : 'text-foreground'}`}
+                          onClick={() => handleOpenPowerVerb(verb)}
+                          disabled={restartAgent.isPending || shutdownAgent.isPending || powerActionMutation.isPending}
+                          title={verb.hint}
+                        >
+                          {powerVerbIcon(verb)}
+                          {verb.label}
+                        </button>
+                      ))}
                       {/* "Ligar" não aparece com o agente online: o despertar
                           só faz sentido desligado, onde o item Wake-on-LAN é
                           oferecido no lugar do submenu de energia. */}
@@ -2179,22 +2184,12 @@ export default function AgentDetail() {
         onConfirm={() => { void confirmDeleteAgent(); }}
       />
 
-      <ConfirmDialog
-        open={firmwareRestartOpen}
-        title="Reiniciar na BIOS/UEFI"
-        message={
-          <>
-            O computador <span className="font-semibold">{a.displayName ?? a.hostname}</span> vai{' '}
-            <span className="font-semibold">reiniciar imediatamente e entrar no setup do firmware (BIOS/UEFI)</span>.
-            {' '}Se a máquina estiver em BIOS legado (Legacy/CSM), o agente recusa e o motivo aparece no histórico do comando.
-            {' '}Aplicativos abertos serão fechados à força — <span className="font-semibold">salve o trabalho antes</span>.
-            {' '}Alterações de firmware/boot podem exigir a <span className="font-semibold">chave de recuperação do BitLocker</span> no próximo boot.
-          </>
-        }
-        confirmLabel="Reiniciar no firmware"
+      <PowerActionVerbDialog
+        verb={powerVerb}
+        agentName={a.displayName ?? a.hostname}
         isLoading={powerActionMutation.isPending}
-        onClose={() => { if (!powerActionMutation.isPending) setFirmwareRestartOpen(false); }}
-        onConfirm={() => { void handleFirmwareRestartConfirm(); }}
+        onClose={() => { if (!powerActionMutation.isPending) setPowerVerb(null); }}
+        onConfirm={() => { void handlePowerVerbConfirm(); }}
       />
 
       {powerAction && (

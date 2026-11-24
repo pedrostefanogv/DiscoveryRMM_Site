@@ -8,6 +8,8 @@ import PowerActionModal from '@/components/agents/PowerActionModal';
 import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
+import { PowerActionVerbDialog } from '@/components/agents/PowerActionVerbDialog';
+import { POWER_ACTION_VERBS, powerVerbIcon, type PowerActionVerb } from '@/components/agents/powerActionVerbs';
 import { useApproveZeroTouch, useDeleteAgent, usePowerAction, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import {
@@ -80,7 +82,9 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const [transferAgent, setTransferAgent] = useState<AgentCardAgent | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
   const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
-  const [firmwareRestartAgent, setFirmwareRestartAgent] = useState<AgentCardAgent | null>(null);
+  // Verbo de energia genérico pendente de confirmação (BIOS/UEFI, Opções
+  // Avançadas, cancelar energia pendente, bloquear sessão).
+  const [powerVerbAgent, setPowerVerbAgent] = useState<{ agent: AgentCardAgent; verb: PowerActionVerb } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentCardAgent | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentCardAgent | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -176,21 +180,18 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
   };
 
-  // Reinício direto no setup do firmware (BIOS/UEFI): comando genérico
-  // "poweraction". O agent valida se a máquina é UEFI e devolve falha tipada
-  // (reportada no acompanhamento) quando for BIOS legado.
-  const handleFirmwareRestartConfirm = async () => {
-    if (!firmwareRestartAgent) return;
-    const agent = firmwareRestartAgent;
+  // Verbos do comando genérico "poweraction" (BIOS/UEFI, Opções Avançadas,
+  // cancelar energia pendente, bloquear sessão). O agent valida a capacidade de
+  // cada verbo (ex.: /fw exige UEFI) e devolve falha tipada no acompanhamento.
+  const handlePowerVerbConfirm = async () => {
+    if (!powerVerbAgent) return;
+    const { agent, verb } = powerVerbAgent;
     try {
-      const response = await powerAction.mutateAsync({
-        id: agent.id,
-        data: { action: 'restart-firmware', delaySeconds: 0, force: true, notifyUser: false, message: '' },
-      });
+      const response = await powerAction.mutateAsync({ id: agent.id, data: verb.request });
       void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
-      setFirmwareRestartAgent(null);
+      setPowerVerbAgent(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Falha ao enviar o comando de reinício no firmware.');
+      toast.error(error instanceof Error ? error.message : verb.errorMessage);
     }
   };
 
@@ -370,14 +371,17 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           danger: true,
           onClick: () => setPowerActionAgent({ agent, action: 'shutdown' }),
         },
-        {
-          key: 'restart-firmware',
-          label: 'Reiniciar na BIOS/UEFI',
-          icon: <Icon name="memory" className="h-4 w-4" />,
-          separatorBefore: true,
-          hint: 'reinicia direto no setup do firmware — somente UEFI; pode pedir a chave do BitLocker',
-          onClick: () => setFirmwareRestartAgent(agent),
-        },
+        // Verbos do comando genérico "poweraction" — declarados em
+        // powerActionVerbs.tsx (fonte única dos três menus).
+        ...POWER_ACTION_VERBS.map((verb) => ({
+          key: verb.kind,
+          label: verb.label,
+          icon: powerVerbIcon(verb),
+          danger: verb.danger,
+          separatorBefore: verb.separatorBefore,
+          hint: verb.hint,
+          onClick: () => setPowerVerbAgent({ agent, verb }),
+        })),
         {
           key: 'update-restart',
           label: 'Atualizar e reiniciar',
@@ -484,22 +488,12 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
         />
       )}
 
-      <ConfirmDialog
-        open={!!firmwareRestartAgent}
-        title="Reiniciar na BIOS/UEFI"
-        message={
-          <>
-            O computador <span className="font-semibold">{firmwareRestartAgent?.displayName ?? firmwareRestartAgent?.hostname}</span> vai{' '}
-            <span className="font-semibold">reiniciar imediatamente e entrar no setup do firmware (BIOS/UEFI)</span>.
-            {' '}Se a máquina estiver em BIOS legado (Legacy/CSM), o agente recusa e o motivo aparece no histórico do comando.
-            {' '}Aplicativos abertos serão fechados à força — <span className="font-semibold">salve o trabalho antes</span>.
-            {' '}Alterações de firmware/boot podem exigir a <span className="font-semibold">chave de recuperação do BitLocker</span> no próximo boot.
-          </>
-        }
-        confirmLabel="Reiniciar no firmware"
+      <PowerActionVerbDialog
+        verb={powerVerbAgent?.verb ?? null}
+        agentName={powerVerbAgent?.agent.displayName ?? powerVerbAgent?.agent.hostname ?? ''}
         isLoading={powerAction.isPending}
-        onClose={() => { if (!powerAction.isPending) setFirmwareRestartAgent(null); }}
-        onConfirm={() => { void handleFirmwareRestartConfirm(); }}
+        onClose={() => { if (!powerAction.isPending) setPowerVerbAgent(null); }}
+        onConfirm={() => { void handlePowerVerbConfirm(); }}
       />
 
       {wolAgent && (

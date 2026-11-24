@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, useDeferredValue, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { Fragment, useState, useMemo, useEffect, useLayoutEffect, useRef, useDeferredValue, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useQueries } from '@tanstack/react-query';
@@ -23,6 +23,8 @@ import PowerActionModal from '@/components/agents/PowerActionModal';
 import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
+import { PowerActionVerbDialog } from '@/components/agents/PowerActionVerbDialog';
+import { POWER_ACTION_VERBS, powerVerbIcon, type PowerActionVerb } from '@/components/agents/powerActionVerbs';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -249,7 +251,9 @@ export default function AgentList() {
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
-  const [firmwareRestartAgent, setFirmwareRestartAgent] = useState<AgentWithClient | null>(null);
+  // Verbo de energia genérico pendente de confirmação (BIOS/UEFI, Opções
+  // Avançadas, cancelar energia pendente, bloquear sessão).
+  const [powerVerbAgent, setPowerVerbAgent] = useState<{ agent: AgentWithClient; verb: PowerActionVerb } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -667,26 +671,23 @@ export default function AgentList() {
     setPowerActionAgent({ agent, action: "shutdown" });
   };
 
-  // Reinício direto no setup do firmware (BIOS/UEFI) via comando genérico
-  // "poweraction": o agent valida se a máquina é UEFI e falha de forma tipada
-  // (reportada no acompanhamento) quando for BIOS legado (Legacy/CSM).
-  const handleFirmwareRestart = (agent: AgentWithClient) => {
+  // Verbos do comando genérico "poweraction" (BIOS/UEFI, Opções Avançadas,
+  // cancelar energia pendente, bloquear sessão). O agent valida a capacidade de
+  // cada verbo (ex.: /fw exige UEFI) e devolve falha tipada no acompanhamento.
+  const handlePowerVerb = (agent: AgentWithClient, verb: PowerActionVerb) => {
     setContextMenu(null);
-    setFirmwareRestartAgent(agent);
+    setPowerVerbAgent({ agent, verb });
   };
 
-  const handleFirmwareRestartConfirm = async () => {
-    if (!firmwareRestartAgent) return;
-    const agent = firmwareRestartAgent;
+  const handlePowerVerbConfirm = async () => {
+    if (!powerVerbAgent) return;
+    const { agent, verb } = powerVerbAgent;
     try {
-      const response = await powerAction.mutateAsync({
-        id: agent.id,
-        data: { action: "restart-firmware", delaySeconds: 0, force: true, notifyUser: false, message: "" },
-      });
+      const response = await powerAction.mutateAsync({ id: agent.id, data: verb.request });
       void awaitAgentCommandById(agent.id, response.commandId).then(notifyAgentCommandOutcome);
-      setFirmwareRestartAgent(null);
+      setPowerVerbAgent(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao enviar o comando de reinício no firmware.");
+      toast.error(error instanceof Error ? error.message : verb.errorMessage);
     }
   };
 
@@ -1901,14 +1902,21 @@ export default function AgentList() {
                       Desligar
                     </button>
                     <div className="my-1 border-t border-border" />
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => handleFirmwareRestart(contextMenu.agent)}
-                      title="Reinicia direto no setup do firmware — somente UEFI; pode pedir a chave do BitLocker"
-                    >
-                      <Icon name="memory" className="h-4 w-4" />
-                      Reiniciar na BIOS/UEFI
-                    </button>
+                    {/* Verbos do comando genérico "poweraction" — declarados
+                        em powerActionVerbs.tsx (fonte única dos três menus). */}
+                    {POWER_ACTION_VERBS.map(verb => (
+                      <Fragment key={verb.kind}>
+                        {verb.separatorBefore && <div className="my-1 border-t border-border" />}
+                        <button
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 ${verb.danger ? 'text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10' : 'text-foreground'}`}
+                          onClick={() => handlePowerVerb(contextMenu.agent, verb)}
+                          title={verb.hint}
+                        >
+                          {powerVerbIcon(verb)}
+                          {verb.label}
+                        </button>
+                      </Fragment>
+                    ))}
                     <div className="my-1 border-t border-border" />
                     <button
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
@@ -2091,22 +2099,12 @@ export default function AgentList() {
         />
       )}
 
-      <ConfirmDialog
-        open={!!firmwareRestartAgent}
-        title="Reiniciar na BIOS/UEFI"
-        message={
-          <>
-            O computador <span className="font-semibold">{firmwareRestartAgent?.displayName ?? firmwareRestartAgent?.hostname}</span> vai{' '}
-            <span className="font-semibold">reiniciar imediatamente e entrar no setup do firmware (BIOS/UEFI)</span>.
-            {' '}Se a máquina estiver em BIOS legado (Legacy/CSM), o agente recusa e o motivo aparece no histórico do comando.
-            {' '}Aplicativos abertos serão fechados à força — <span className="font-semibold">salve o trabalho antes</span>.
-            {' '}Alterações de firmware/boot podem exigir a <span className="font-semibold">chave de recuperação do BitLocker</span> no próximo boot.
-          </>
-        }
-        confirmLabel="Reiniciar no firmware"
+      <PowerActionVerbDialog
+        verb={powerVerbAgent?.verb ?? null}
+        agentName={powerVerbAgent?.agent.displayName ?? powerVerbAgent?.agent.hostname ?? ''}
         isLoading={powerAction.isPending}
-        onClose={() => { if (!powerAction.isPending) setFirmwareRestartAgent(null); }}
-        onConfirm={() => { void handleFirmwareRestartConfirm(); }}
+        onClose={() => { if (!powerAction.isPending) setPowerVerbAgent(null); }}
+        onConfirm={() => { void handlePowerVerbConfirm(); }}
       />
 
       {updatePowerAction && (

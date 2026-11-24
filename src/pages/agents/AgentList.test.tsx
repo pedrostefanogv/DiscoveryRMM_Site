@@ -495,6 +495,35 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     expect(confirm).toBeTruthy();
   });
 
+  it('oferece "Reiniciar nas Opções Avançadas" (WinRE) e pede confirmação', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+
+    // Opções Avançadas de inicialização (menu do WinRE, com modo de segurança e
+    // reparo). Diferente do /fw, funciona também em BIOS legado — por isso a UI
+    // não faz gate de capacidade; o desfecho vem do histórico do comando.
+    fireEvent.click(screen.getByText('Reiniciar nas Opções Avançadas'));
+
+    const confirm = screen.getByRole('button', { name: 'Entrar nas Opções Avançadas' });
+    expect(confirm).toBeTruthy();
+  });
+
+  it('oferece "Cancelar energia pendente" e "Bloquear sessão" no submenu', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+
+    expect(screen.getByText('Cancelar energia pendente')).toBeTruthy();
+
+    // Bloquear sessão é reversível: confirmação própria, sem aviso de perda de
+    // trabalho nem de BitLocker.
+    fireEvent.click(screen.getByText('Bloquear sessão'));
+    expect(screen.getByRole('button', { name: 'Bloquear agora' })).toBeTruthy();
+  });
+
   it('offline: bloqueia sessões ao vivo e mantém comandos enfileirados', () => {
     statusFlag.online = false;
     renderPage();

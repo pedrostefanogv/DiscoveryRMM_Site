@@ -2350,11 +2350,17 @@ export interface ShutdownRequest {
 }
 
 /**
- * Comando genérico de energia. Hoje o único verbo exposto é
- * "restart-firmware": reinicia a máquina direto no setup do firmware (BIOS/UEFI).
- * O agent valida a capacidade e devolve falha tipada em BIOS legado (Legacy/CSM).
+ * Verbos do comando genérico de energia (`POST /agents/{id}/power`):
+ *
+ * - `restart-firmware`: reinicia direto no setup do firmware (BIOS/UEFI) —
+ *   `shutdown /r /fw`. Exclusivo de boot UEFI: o agent valida e devolve falha
+ *   tipada em BIOS legado (Legacy/CSM).
+ * - `restart-advanced`: reinicia nas Opções Avançadas de inicialização (menu
+ *   do WinRE, onde ficam modo de segurança e reparo) — `shutdown /r /o`.
+ * - `cancel`: cancela um desligamento/reinício pendente — `shutdown /a`.
+ * - `lock`: bloqueia a sessão interativa (LockWorkStation).
  */
-export type PowerActionKind = 'restart-firmware';
+export type PowerActionKind = 'restart-firmware' | 'restart-advanced' | 'cancel' | 'lock';
 
 export interface PowerActionRequest {
   action: PowerActionKind;
