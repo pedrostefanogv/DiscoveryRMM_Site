@@ -19,6 +19,8 @@ export function AgentCustomFieldsCard({ agentId, canEdit }: Props) {
       isError={schemaQuery.isError}
       canEdit={canEdit}
       title="Extras"
+      defaultExpanded
+      onRetry={() => void schemaQuery.refetch()}
       emptyMessage="Nenhum campo customizado visível para este agente. Os campos são criados em Configurações → Campos customizados."
       onSave={(item, value) =>
         upsertValue.mutateAsync({ definitionId: item.definitionId, value }).then(() => undefined)

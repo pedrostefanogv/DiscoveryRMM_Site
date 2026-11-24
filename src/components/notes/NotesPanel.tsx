@@ -1,7 +1,18 @@
 import { formatDateTime } from '@/utils/format';
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Icon, Card, CardHeader, Button, Badge, TextArea, Loading, ErrorDisplay } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmDialog,
+  ErrorDisplay,
+  Icon,
+  Input,
+  Loading,
+  TextArea,
+} from "@/components/ui";
 import {
   useClientNotesPage,
   useSiteNotesPage,
@@ -22,6 +33,8 @@ interface NotesPanelProps {
   entityId: string;
   title?: string;
   subtitle?: string;
+  /** Permissão de edição/criação/exclusão (default true). */
+  canEdit?: boolean;
   /**
    * Substantivo no singular usado em textos/botões (ex.: "nota" ou "anotação").
    * Mantém a terminologia da tela que hospeda o painel.
@@ -37,10 +50,9 @@ function getNoteDate(note: Note): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/** Extrai mensagem útil do erro (ApError/Error genérico) para exibir ao usuário. */
+/** Extrai mensagem útil do erro (ApiError/Error genérico) para exibir ao usuário. */
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message && error.message.trim().length > 0) {
-    // Evita mostrar placeholder genérico de status quando há detalhe real.
     return error.message;
   }
   return fallback;
@@ -51,31 +63,24 @@ export function NotesPanel({
   entityId,
   title = "Notas",
   subtitle,
+  canEdit = true,
   singular = "nota",
   plural = "notas",
 }: NotesPanelProps) {
   const LIMIT = 20;
   const singularCap = singular.charAt(0).toUpperCase() + singular.slice(1);
 
-  // REGRA DOS HOOKS: os três hooks são chamados SEMPRE, na mesma ordem. O id
-  // vazio desliga a query inativa (enabled: !!id em useNotes), então não há
-  // request extra. A versão anterior escolhia o hook por ternário, o que muda a
-  // ORDEM/quantidade de hooks quando entityType muda (React error #310).
   const clientNotesQuery = useClientNotesPage(entityType === "client" ? entityId : "", LIMIT);
   const siteNotesQuery = useSiteNotesPage(entityType === "site" ? entityId : "", LIMIT);
   const agentNotesQuery = useAgentNotesPage(entityType === "agent" ? entityId : "", LIMIT);
   const notesQuery =
     entityType === "client" ? clientNotesQuery : entityType === "site" ? siteNotesQuery : agentNotesQuery;
 
-  // Flatten all pages into a single array
   const allNotes = useMemo(() => {
     return notesQuery.data?.pages.flatMap((page) => page.items) ?? [];
   }, [notesQuery.data]);
 
-  const totalCount = notesQuery.data?.pages[0]?.returnedItems != null
-    ? allNotes.length // approximate; cursor pagination doesn't give total
-    : allNotes.length;
-
+  const totalCount = allNotes.length;
   const hasMore = notesQuery.data?.pages[notesQuery.data.pages.length - 1]?.hasMore ?? false;
   const isFetchingNextPage = notesQuery.isFetchingNextPage;
 
@@ -96,6 +101,28 @@ export function NotesPanel({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handleOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpenMenuId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openMenuId]);
 
   const sortedNotes = useMemo(() => {
     return [...allNotes].sort((a, b) => {
@@ -103,6 +130,16 @@ export function NotesPanel({
       return getNoteDate(b) - getNoteDate(a);
     });
   }, [allNotes]);
+
+  const visibleNotes = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sortedNotes;
+    return sortedNotes.filter(
+      (n) =>
+        n.content.toLowerCase().includes(q) ||
+        (n.author ?? "").toLowerCase().includes(q),
+    );
+  }, [sortedNotes, search]);
 
   const handleCreate = () => {
     const content = newContent.trim();
@@ -120,6 +157,7 @@ export function NotesPanel({
       toast.success(`${singularCap} criada`);
       setNewContent("");
       setNewPinned(false);
+      setShowCreateForm(false);
     };
 
     const onError = (error: unknown) =>
@@ -177,10 +215,35 @@ export function NotesPanel({
     );
   };
 
-  const removeNote = (noteId: string) => {
-    if (!confirm(`Deseja excluir esta ${singular}?`)) return;
-    deleteNote.mutate(noteId, {
-      onSuccess: () => toast.success(`${singularCap} excluída`),
+  const handleTogglePin = (note: Note) => {
+    setOpenMenuId(null);
+    updateNote.mutate(
+      {
+        id: note.id,
+        data: {
+          content: note.content,
+          isPinned: !note.isPinned,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            !note.isPinned ? `${singularCap} fixada` : `${singularCap} desafixada`,
+          );
+        },
+        onError: (error: unknown) =>
+          toast.error(errorMessage(error, `Erro ao atualizar ${singular}`)),
+      },
+    );
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTargetId) return;
+    deleteNote.mutate(deleteTargetId, {
+      onSuccess: () => {
+        toast.success(`${singularCap} excluída`);
+        setDeleteTargetId(null);
+      },
       onError: (error: unknown) =>
         toast.error(errorMessage(error, `Erro ao excluir ${singular}`)),
     });
@@ -200,11 +263,11 @@ export function NotesPanel({
 
   const handleMenuDelete = (noteId: string) => {
     setOpenMenuId(null);
-    removeNote(noteId);
+    setDeleteTargetId(noteId);
   };
 
   const hasNotes = sortedNotes.length > 0;
-  const createFormVisible = !hasNotes || showCreateForm;
+  const createFormVisible = canEdit && (!hasNotes || showCreateForm);
 
   return (
     <Card>
@@ -212,14 +275,15 @@ export function NotesPanel({
         title={title}
         subtitle={subtitle ?? `${totalCount} ${totalCount === 1 ? singular : plural}`}
         action={
-          hasNotes ? (
+          canEdit && hasNotes ? (
             <Button
               size="sm"
-              variant="ghost"
+              variant="secondary"
               onClick={() => setShowCreateForm((v) => !v)}
               aria-label={showCreateForm ? "Fechar formulário" : `Nova ${singular}`}
             >
-              {showCreateForm ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="add" className="h-4 w-4" />}
+              <Icon name={showCreateForm ? "close" : "add"} className="h-4 w-4" />
+              {showCreateForm ? "Fechar" : `Nova ${singular}`}
             </Button>
           ) : undefined
         }
@@ -230,10 +294,53 @@ export function NotesPanel({
       ) : notesQuery.isError ? (
         <ErrorDisplay onRetry={() => notesQuery.refetch()} />
       ) : (
-        <>
+        <div className="space-y-4">
+          {createFormVisible && (
+            <div className="space-y-3 rounded-xl border border-border bg-surface-light/60 p-4">
+              <p className="text-sm font-medium text-foreground">Nova {singular}</p>
+              <TextArea
+                label="Conteúdo"
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                rows={3}
+                placeholder={`Escreva a ${singular}`}
+              />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={newPinned}
+                    onChange={(e) => setNewPinned(e.target.checked)}
+                    className="rounded border-border bg-surface-light accent-[var(--primary)]"
+                  />
+                  Fixar {singular}
+                </label>
+                <div className="flex gap-2">
+                  {hasNotes && (
+                    <Button size="sm" variant="ghost" onClick={() => setShowCreateForm(false)}>
+                      <Icon name="close" className="h-4 w-4" /> Cancelar
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={handleCreate} loading={isCreating}>
+                    Salvar {singular}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sortedNotes.length > 3 && (
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Filtrar ${plural}...`}
+            />
+          )}
+
           <div className="space-y-3">
-            {sortedNotes.map((note) => {
+            {visibleNotes.map((note) => {
               const isCurrentEdit = editingId === note.id;
+              const wasEdited = Boolean(note.updatedAt && note.updatedAt !== note.createdAt);
               return (
                 <div key={note.id} className="rounded-lg border border-border bg-surface-light p-3">
                   {isCurrentEdit ? (
@@ -282,44 +389,57 @@ export function NotesPanel({
                           </div>
                           <p className="text-xs text-muted">
                             {formatDateTime(note.createdAt)}
+                            {wasEdited ? ` · editada em ${formatDateTime(note.updatedAt)}` : ""}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <div className="relative" ref={openMenuId === note.id ? menuRef : null}>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => toggleMenu(note.id)}
-                              aria-label={`Opções da ${singular}`}
-                              aria-haspopup="true"
-                              aria-expanded={openMenuId === note.id}
-                            >
-                              <Icon name="tune" className="h-4 w-4" />
-                            </Button>
-                            {openMenuId === note.id && (
-                              <div
-                                className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-surface-light shadow-xl"
-                                onMouseLeave={() => setOpenMenuId(null)}
+                        {canEdit && (
+                          <div className="flex items-center gap-1">
+                            <div className="relative" ref={openMenuId === note.id ? menuRef : null}>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => toggleMenu(note.id)}
+                                aria-label={`Opções da ${singular}`}
+                                aria-haspopup="true"
+                                aria-expanded={openMenuId === note.id}
                               >
-                                <button
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface-hover transition-colors"
-                                  onClick={() => handleMenuEdit(note)}
+                                <Icon name="more_vert" className="h-4 w-4" />
+                              </Button>
+                              {openMenuId === note.id && (
+                                <div
+                                  role="menu"
+                                  className="absolute right-0 top-full z-20 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-surface shadow-xl"
                                 >
-                                  <Icon name="edit" className="h-3.5 w-3.5 text-muted" />
-                                  Editar
-                                </button>
-                                <button
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-surface-hover transition-colors"
-                                  onClick={() => handleMenuDelete(note.id)}
-                                  disabled={isDeleting}
-                                >
-                                  <Icon name="delete" className="h-3.5 w-3.5" />
-                                  Excluir
-                                </button>
-                              </div>
-                            )}
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
+                                    onClick={() => handleTogglePin(note)}
+                                  >
+                                    <Icon name="push_pin" className="h-3.5 w-3.5 text-muted" />
+                                    {note.isPinned ? "Desafixar" : "Fixar"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
+                                    onClick={() => handleMenuEdit(note)}
+                                  >
+                                    <Icon name="edit" className="h-3.5 w-3.5 text-muted" />
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-sm text-danger transition-colors hover:bg-surface-hover"
+                                    onClick={() => handleMenuDelete(note.id)}
+                                    disabled={isDeleting}
+                                  >
+                                    <Icon name="delete" className="h-3.5 w-3.5" />
+                                    Excluir
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                       <p className="whitespace-pre-wrap text-sm text-muted-foreground">{note.content}</p>
                     </>
@@ -330,6 +450,10 @@ export function NotesPanel({
 
             {sortedNotes.length === 0 && (
               <p className="text-sm text-muted">Nenhuma {singular} cadastrada</p>
+            )}
+
+            {sortedNotes.length > 0 && visibleNotes.length === 0 && (
+              <p className="text-sm text-muted">Nenhuma {singular} encontrada para o filtro informado.</p>
             )}
 
             {hasMore && (
@@ -346,38 +470,21 @@ export function NotesPanel({
               </div>
             )}
           </div>
-
-          {createFormVisible && <div className="mt-4 space-y-3 border-t border-border pt-4">
-            <p className="text-sm font-medium text-foreground">Nova {singular}</p>
-            <TextArea
-              label="Conteúdo"
-              value={newContent}
-              onChange={(e) => setNewContent(e.target.value)}
-              rows={4}
-              placeholder={`Escreva a ${singular}`}
-            />
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={newPinned}
-                onChange={(e) => setNewPinned(e.target.checked)}
-                className="rounded border-border bg-surface-light"
-              />
-              Fixar {singular}
-            </label>
-            <div className="flex justify-end gap-2">
-              {hasNotes && (
-                <Button size="sm" variant="ghost" onClick={() => setShowCreateForm(false)}>
-                  <Icon name="close" className="h-4 w-4" /> Cancelar
-                </Button>
-              )}
-              <Button size="sm" onClick={handleCreate} loading={isCreating}>
-                Salvar {singular}
-              </Button>
-            </div>
-          </div>}
-        </>
+        </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTargetId)}
+        title={`Excluir ${singular}`}
+        message={`Deseja excluir esta ${singular}? Esta ação não pode ser desfeita.`}
+        confirmLabel={`Excluir ${singular}`}
+        tone="danger"
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
+        onClose={() => {
+          if (!isDeleting) setDeleteTargetId(null);
+        }}
+      />
     </Card>
   );
 }

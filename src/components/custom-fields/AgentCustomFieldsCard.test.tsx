@@ -164,4 +164,38 @@ describe('AgentCustomFieldsCard', () => {
     expect(ids.every(Boolean)).toBe(true);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('preserva o rascunho editado quando o schema revalida', () => {
+    const { rerender } = render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    const input = screen.getByLabelText('ID do anydesk') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'rascunho-nao-salvo' } });
+
+    schemaState.data = [item({ valueJson: JSON.stringify('123 456 789') })];
+    rerender(<AgentCustomFieldsCard agentId="a1" canEdit />);
+
+    expect((screen.getByLabelText('ID do anydesk') as HTMLInputElement).value).toBe('rascunho-nao-salvo');
+  });
+
+  it('mostra erro com opção de tentar novamente quando isError é verdadeiro', () => {
+    schemaState.isError = true;
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    expect(screen.getByText('Não foi possível carregar os campos.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Tentar novamente/ })).toBeTruthy();
+  });
+
+  it('exibe filtro de busca quando há mais de 4 campos', () => {
+    schemaState.data = [
+      item({ definitionId: 'd1', name: 'c1', label: 'AnyDesk' }),
+      item({ definitionId: 'd2', name: 'c2', label: 'TeamViewer' }),
+      item({ definitionId: 'd3', name: 'c3', label: 'Patrimônio' }),
+      item({ definitionId: 'd4', name: 'c4', label: 'Setor' }),
+      item({ definitionId: 'd5', name: 'c5', label: 'Responsável' }),
+    ];
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    const filterInput = screen.getByPlaceholderText('Filtrar campos por nome ou chave...');
+    fireEvent.change(filterInput, { target: { value: 'Patrimônio' } });
+
+    expect(screen.getByText('Patrimônio')).toBeTruthy();
+    expect(screen.queryByText('TeamViewer')).toBeNull();
+  });
 });

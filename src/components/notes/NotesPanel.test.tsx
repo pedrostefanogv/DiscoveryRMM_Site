@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * NotesPanel é compartilhado por Cliente/Site/Agente. O substantivo agora é
@@ -7,9 +7,23 @@ import { describe, expect, it, vi } from 'vitest';
  * continuar iguais ao texto histórico de Clientes/Sites.
  */
 
+const { notesState, deleteMutateMock } = vi.hoisted(() => ({
+  deleteMutateMock: vi.fn(),
+  notesState: {
+    items: [] as Array<{
+      id: string;
+      content: string;
+      isPinned: boolean;
+      author: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>,
+  },
+}));
+
 vi.mock('@/hooks/useNotes', () => {
-  const emptyPage = () => ({
-    data: { pages: [{ items: [], hasMore: false }] },
+  const pageQuery = () => ({
+    data: { pages: [{ items: notesState.items, hasMore: false }] },
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -19,18 +33,24 @@ vi.mock('@/hooks/useNotes', () => {
   const mutation = () => ({ mutate: vi.fn(), isPending: false });
 
   return {
-    useClientNotesPage: emptyPage,
-    useSiteNotesPage: emptyPage,
-    useAgentNotesPage: emptyPage,
+    useClientNotesPage: pageQuery,
+    useSiteNotesPage: pageQuery,
+    useAgentNotesPage: pageQuery,
     useCreateClientNote: mutation,
     useCreateSiteNote: mutation,
     useCreateAgentNote: mutation,
     useUpdateNote: mutation,
-    useDeleteNote: mutation,
+    useDeleteNote: () => ({ mutate: deleteMutateMock, isPending: false }),
   };
 });
 
 import { NotesPanel } from './NotesPanel';
+
+afterEach(() => {
+  cleanup();
+  notesState.items = [];
+  deleteMutateMock.mockClear();
+});
 
 describe('NotesPanel — terminologia', () => {
   it('usa "nota" por padrão (Clientes/Sites)', () => {
@@ -53,5 +73,48 @@ describe('NotesPanel — terminologia', () => {
     expect(screen.getByText('Nenhuma anotação cadastrada')).toBeTruthy();
     expect(screen.getByText('Nova anotação')).toBeTruthy();
     expect(screen.getByText('Salvar anotação')).toBeTruthy();
+  });
+
+  it('oculta formulário de criação quando canEdit=false', () => {
+    render(
+      <NotesPanel
+        entityType="agent"
+        entityId="a1"
+        title="Anotações do Agente"
+        canEdit={false}
+        singular="anotação"
+        plural="anotações"
+      />,
+    );
+    expect(screen.queryByText('Nova anotação')).toBeNull();
+  });
+
+  it('usa ConfirmDialog ao excluir nota (sem window.confirm)', () => {
+    notesState.items = [
+      {
+        id: 'n1',
+        content: 'Nota de teste',
+        isPinned: false,
+        author: 'pedro',
+        createdAt: '2026-10-01T10:00:00Z',
+        updatedAt: '2026-10-01T10:00:00Z',
+      },
+    ];
+    render(
+      <NotesPanel
+        entityType="agent"
+        entityId="a1"
+        title="Anotações do Agente"
+        singular="anotação"
+        plural="anotações"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opções da anotação' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    expect(screen.getByRole('dialog', { name: 'Excluir anotação' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir anotação' }));
+    expect(deleteMutateMock).toHaveBeenCalledWith('n1', expect.any(Object));
   });
 });

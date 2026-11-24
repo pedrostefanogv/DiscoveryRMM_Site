@@ -473,4 +473,18 @@ describe('AgentDetail — abas do agente', () => {
 
     expect(screen.getByTestId('agent-app-install-modal')).toBeTruthy();
   });
+
+  it('oculta os StatCards nas abas de dados e exibe filtros na aba Logs', async () => {
+    await renderPage('?tab=logs');
+
+    expect(screen.queryByText('MachineScore')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Erros' })).toBeTruthy();
+    expect(screen.getByPlaceholderText('Filtrar logs por mensagem...')).toBeTruthy();
+  });
+
+  it('exibe seção de labels ativas na aba Labels', async () => {
+    await renderPage('?tab=historico-labels');
+
+    expect(screen.getByText(/Labels ativas/)).toBeTruthy();
+  });
 });

@@ -1,116 +1,43 @@
 import { formatDateTime } from '@/utils/format';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Icon,
   Badge,
   Button,
   DataTable,
   EmptyState,
+  Input,
   Loading,
   type Column,
 } from '@/components/ui';
 import {
+  AppApprovalScopeType,
+  AutomationNotificationMode,
   type AgentAutomationPolicyPreview,
   type AgentAutomationTaskPolicy,
 } from '@/api';
 import {
+  actionDisplayLabel,
   describeCron,
+  installationTypeLabel,
   isToastNotificationMode,
+  normalizeScopeType,
   notificationModeFromTask,
   notificationModeLabel,
   toastTimingLabel,
 } from '@/pages/automation/automationTasksUtils';
 
-// ── Rótulos (aceitam enum numérico OU string: a API serializa enums como nome) ──
-
-function actionTypeLabel(value: unknown): string {
-  const key = typeof value === 'string' ? value : '';
-  switch (key) {
-    case 'InstallPackage':
-      return 'Instalar pacote';
-    case 'UpdatePackage':
-      return 'Atualizar pacote';
-    case 'UpdateOrInstallPackage':
-      return 'Instalar ou atualizar';
-    case 'RemovePackage':
-      return 'Remover pacote';
-    case 'RunScript':
-      return 'Executar script';
-    case 'CustomCommand':
-      return 'Comando personalizado';
-    default:
-      break;
-  }
-  switch (value) {
-    case 0:
-      return 'Instalar pacote';
-    case 1:
-      return 'Atualizar pacote';
-    case 2:
-      return 'Executar script';
-    case 3:
-      return 'Comando personalizado';
-    case 4:
-      return 'Remover pacote';
-    case 5:
-      return 'Instalar ou atualizar';
-    default:
-      return String(value ?? '—');
-  }
-}
-
 function scopeTypeLabel(value: unknown): string {
-  const key = typeof value === 'string' ? value : '';
-  switch (key) {
-    case 'Global':
+  switch (normalizeScopeType(value)) {
+    case AppApprovalScopeType.Global:
       return 'Global';
-    case 'Client':
+    case AppApprovalScopeType.Client:
       return 'Cliente';
-    case 'Site':
+    case AppApprovalScopeType.Site:
       return 'Site';
-    case 'Agent':
-      return 'Agente';
-    default:
-      break;
-  }
-  switch (value) {
-    case 0:
-      return 'Global';
-    case 1:
-      return 'Cliente';
-    case 2:
-      return 'Site';
-    case 3:
+    case AppApprovalScopeType.Agent:
       return 'Agente';
     default:
       return String(value ?? '—');
-  }
-}
-
-function installationTypeLabel(value: unknown): string {
-  const key = typeof value === 'string' ? value : '';
-  switch (key) {
-    case 'Winget':
-    case 'winget':
-      return 'Winget';
-    case 'Chocolatey':
-    case 'chocolatey':
-    case 'choco':
-      return 'Chocolatey';
-    case 'Custom':
-    case 'custom':
-      return 'Personalizado';
-    default:
-      break;
-  }
-  switch (value) {
-    case 0:
-      return 'Winget';
-    case 1:
-      return 'Chocolatey';
-    case 2:
-      return 'Personalizado';
-    default:
-      return value ? String(value) : '';
   }
 }
 
@@ -193,13 +120,28 @@ export default function AgentPoliciesPanel({
   isForcing,
   onForceSync,
 }: AgentPoliciesPanelProps) {
+  const [search, setSearch] = useState('');
   const tasks = policies?.tasks ?? [];
   const preload = policies?.preloadPackages ?? [];
+
+  const filteredTasks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? '').toLowerCase().includes(q) ||
+        (p.packageId ?? '').toLowerCase().includes(q) ||
+        (p.script?.name ?? '').toLowerCase().includes(q) ||
+        (p.commandPayload ?? '').toLowerCase().includes(q),
+    );
+  }, [tasks, search]);
 
   const renderDetails = (policy: AgentAutomationTaskPolicy) => {
     // Modo efetivo: payload antigo sem notificationMode cai em requiresApproval
     // (Prompt) ou Silent — sem isso um Toast aparecia como "Silencioso".
     const mode = notificationModeFromTask(policy.notificationMode, policy.requiresApproval);
+    const isPromptMode = mode === AutomationNotificationMode.Prompt;
     return (
     <div className='space-y-3'>
       <div className='flex items-start justify-between gap-3'>
@@ -213,18 +155,22 @@ export default function AgentPoliciesPanel({
       </div>
 
       <div className='grid gap-2 sm:grid-cols-2'>
-        <DetailItem label='Ação' value={actionTypeLabel(policy.actionType)} />
+        <DetailItem label='Ação' value={actionDisplayLabel(policy.actionType)} />
         <DetailItem label='Alvo' value={actionTarget(policy)} />
         <DetailItem label='Gatilhos' value={triggerSummary(policy)} />
         <DetailItem label='Notificação' value={notificationModeLabel(mode)} />
         {isToastNotificationMode(mode) ? (
           <DetailItem label='Momento do toast' value={toastTimingLabel(policy.toastTiming)} />
         ) : null}
-        <DetailItem label='Permite adiar' value={policy.allowDefer ? 'Sim' : 'Não'} />
-        <DetailItem label='Tempo de resposta' value={`${policy.promptTimeoutSeconds}s`} />
+        {isPromptMode ? (
+          <>
+            <DetailItem label='Permite adiar' value={policy.allowDefer ? 'Sim' : 'Não'} />
+            <DetailItem label='Tempo de resposta' value={`${policy.promptTimeoutSeconds}s`} />
+            <DetailItem label='Fecha processos' value={policy.closeProcesses.length > 0 ? policy.closeProcesses.join(', ') : '—'} />
+          </>
+        ) : null}
         <DetailItem label='Inclui tags' value={policy.includeTags.length > 0 ? policy.includeTags.join(', ') : 'Todas'} />
         <DetailItem label='Exclui tags' value={policy.excludeTags.length > 0 ? policy.excludeTags.join(', ') : '—'} />
-        <DetailItem label='Fecha processos' value={policy.closeProcesses.length > 0 ? policy.closeProcesses.join(', ') : '—'} />
         <DetailItem label='Atualizada em' value={formatDateTime(policy.lastUpdatedAt)} />
       </div>
 
@@ -277,7 +223,7 @@ export default function AgentPoliciesPanel({
         width: '27%',
         render: (policy) => (
           <div className='min-w-0'>
-            <p className='truncate text-foreground'>{actionTypeLabel(policy.actionType)}</p>
+            <p className='truncate text-foreground'>{actionDisplayLabel(policy.actionType)}</p>
             <p className='truncate font-mono text-xs text-muted' title={actionTarget(policy)}>
               {actionTarget(policy)}
             </p>
@@ -415,17 +361,26 @@ export default function AgentPoliciesPanel({
           description='Nenhuma política de automação ativa se aplica a este agente (escopo e tags considerados).'
         />
       ) : (
-        <DataTable
-          columns={columns}
-          data={tasks}
-          keyExtractor={(policy) => policy.taskId}
-          rowHoverCard={renderDetails}
-          rowHoverDelayMs={1500}
-          pageSize={15}
-          emptyMessage='Nenhuma política de automação encontrada'
-          maxHeight='min(560px, 52vh)'
-          fixedLayout
-        />
+        <div className='space-y-3'>
+          {tasks.length > 3 && (
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder='Filtrar políticas por nome, pacote, script ou comando...'
+            />
+          )}
+          <DataTable
+            columns={columns}
+            data={filteredTasks}
+            keyExtractor={(policy) => policy.taskId}
+            rowHoverCard={renderDetails}
+            rowHoverDelayMs={1500}
+            pageSize={15}
+            emptyMessage='Nenhuma política de automação encontrada'
+            maxHeight='min(560px, 52vh)'
+            fixedLayout
+          />
+        </div>
       )}
 
       {canView && preload.length > 0 && (
@@ -440,7 +395,7 @@ export default function AgentPoliciesPanel({
           <div className='mt-2 flex flex-wrap gap-1.5'>
             {preload.map((item) => (
               <Badge key={item.packageId} color='slate'>
-                {item.packageId} · {actionTypeLabel(item.actionType)}
+                {item.packageId} · {actionDisplayLabel(item.actionType)}
               </Badge>
             ))}
           </div>

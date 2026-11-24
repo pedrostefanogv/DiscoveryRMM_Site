@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   ApiError,
@@ -17,11 +17,11 @@ import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
 import {
   Badge,
   Button,
-  Card,
-  CardHeader,
   DataTable,
+  ErrorDisplay,
   Icon,
   Input,
+  Loading,
   Pagination,
   Select,
   type Column,
@@ -57,6 +57,16 @@ interface AgentNetworkTabProps {
   onSelectView: (view: AgentNetworkView) => void;
   networkAdapters: NetworkAdapterInfo[] | null | undefined;
   isOnline: boolean;
+  canExecute?: boolean;
+}
+
+async function copyText(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copiado.`);
+  } catch {
+    toast.error(`Não foi possível copiar ${label.toLowerCase()}.`);
+  }
 }
 
 export function AgentNetworkTab({
@@ -65,6 +75,7 @@ export function AgentNetworkTab({
   onSelectView,
   networkAdapters,
   isOnline,
+  canExecute = true,
 }: AgentNetworkTabProps) {
   const [portsCursors, setPortsCursors] = useState<(string | undefined)[]>([undefined]);
   const [listeningPortsLimit, setListeningPortsLimit] = useState('10');
@@ -79,18 +90,46 @@ export function AgentNetworkTab({
   const [openSocketsStateFilter, setOpenSocketsStateFilter] = useState('all');
   const [isRefreshingConnections, setIsRefreshingConnections] = useState(false);
 
-  const portsPageQuery = useAgentListeningPortsPage(agentId, {
-    cursor: portsCursors[portsCursors.length - 1],
-    limit: listeningPortsLimit === 'max' ? LISTENING_PORTS_MAX_PAGE_SIZE : Number(listeningPortsLimit),
-    search: listeningPortsSearchApplied,
-  });
+  useEffect(() => {
+    const trimmed = listeningPortsSearchInput.trim();
+    if (trimmed === listeningPortsSearchApplied) return;
+    const timer = setTimeout(() => {
+      setListeningPortsSearchApplied(trimmed);
+      setPortsCursors([undefined]);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [listeningPortsSearchInput, listeningPortsSearchApplied]);
 
-  const socketsPageQuery = useAgentOpenSocketsPage(agentId, {
-    cursor: socketsCursors[socketsCursors.length - 1],
-    limit: openSocketsLimit === 'max' ? OPEN_SOCKETS_MAX_PAGE_SIZE : Number(openSocketsLimit),
-    search: openSocketsSearchApplied,
-    state: openSocketsStateFilter,
-  });
+  useEffect(() => {
+    const trimmed = openSocketsSearchInput.trim();
+    if (trimmed === openSocketsSearchApplied) return;
+    const timer = setTimeout(() => {
+      setOpenSocketsSearchApplied(trimmed);
+      setSocketsCursors([undefined]);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [openSocketsSearchInput, openSocketsSearchApplied]);
+
+  const portsPageQuery = useAgentListeningPortsPage(
+    agentId,
+    {
+      cursor: portsCursors[portsCursors.length - 1],
+      limit: listeningPortsLimit === 'max' ? LISTENING_PORTS_MAX_PAGE_SIZE : Number(listeningPortsLimit),
+      search: listeningPortsSearchApplied,
+    },
+    { enabled: activeView === 'listeningPorts' },
+  );
+
+  const socketsPageQuery = useAgentOpenSocketsPage(
+    agentId,
+    {
+      cursor: socketsCursors[socketsCursors.length - 1],
+      limit: openSocketsLimit === 'max' ? OPEN_SOCKETS_MAX_PAGE_SIZE : Number(openSocketsLimit),
+      search: openSocketsSearchApplied,
+      state: openSocketsStateFilter,
+    },
+    { enabled: activeView === 'openSockets' },
+  );
 
   const portsPageItems: ListeningPortInfo[] = portsPageQuery.data?.items ?? [];
   const portsTotalCount = portsPageQuery.data?.totalCount ?? 0;
@@ -152,7 +191,7 @@ export function AgentNetworkTab({
   };
 
   const handleRefreshPorts = async () => {
-    if (!agentId || isRefreshingPorts) return;
+    if (!agentId || isRefreshingPorts || !canExecute) return;
     setIsRefreshingPorts(true);
     try {
       await agentsApi.refreshData(agentId, { listeningPorts: true });
@@ -169,7 +208,7 @@ export function AgentNetworkTab({
   };
 
   const handleRefreshConnections = async () => {
-    if (!agentId || isRefreshingConnections) return;
+    if (!agentId || isRefreshingConnections || !canExecute) return;
     setIsRefreshingConnections(true);
     try {
       await agentsApi.refreshData(agentId, { openConnections: true });
@@ -198,11 +237,26 @@ export function AgentNetworkTab({
         key: 'address',
         header: 'Endereço',
         sortable: false,
-        render: item => (
-          <span className="font-mono text-muted-foreground">
-            {item.address ?? '\u2014'}:{item.port}
-          </span>
-        ),
+        render: item => {
+          const endpoint = `${item.address ?? '\u2014'}:${item.port}`;
+          return (
+            <span className="inline-flex items-center gap-1.5 font-mono text-muted-foreground">
+              <span>{endpoint}</span>
+              <button
+                type="button"
+                aria-label={`Copiar endereço ${endpoint}`}
+                title="Copiar endereço"
+                className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                onClick={e => {
+                  e.stopPropagation();
+                  void copyText(endpoint, 'Endereço');
+                }}
+              >
+                <Icon name="content_copy" className="h-3 w-3" />
+              </button>
+            </span>
+          );
+        },
       },
       {
         key: 'process',
@@ -312,58 +366,80 @@ export function AgentNetworkTab({
         aria-labelledby={`agent-network-tabs-tab-${activeView}`}
       >
         {activeView === 'adapters' && (
-          <>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-foreground sm:text-xl">Adaptadores de Rede</h3>
+              {networkAdapters && networkAdapters.length > 0 && (
+                <p className="text-sm text-muted">{networkAdapters.length} adaptador(es)</p>
+              )}
+            </div>
             {networkAdapters && networkAdapters.length > 0 ? (
-              <Card>
-                <CardHeader title="Adaptadores de Rede" subtitle={`${networkAdapters.length} adaptador(es)`} />
-                <div className="space-y-2">
-                  {networkAdapters.map(n => (
-                    <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
-                          {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
-                        </div>
-                        <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+              <div className="space-y-2">
+                {networkAdapters.map(n => (
+                  <div key={n.id} className="rounded-lg border border-border bg-surface-light px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
+                        {n.macAddress && (
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <p className="font-mono text-xs text-muted">{n.macAddress}</p>
+                            <button
+                              type="button"
+                              aria-label={`Copiar MAC ${n.macAddress}`}
+                              title="Copiar MAC"
+                              className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                              onClick={() => void copyText(n.macAddress!, 'MAC')}
+                            >
+                              <Icon name="content_copy" className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {(n.ipAddress || n.ipv6Address || n.gateway) && (
-                        <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-                          {n.ipAddress && (
-                            <div>
-                              <span className="text-muted">IP: </span>
-                              <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
-                              {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
-                            </div>
-                          )}
-                          {n.ipv6Address && (
-                            <div className="col-span-full">
-                              <span className="text-muted">IPv6: </span>
-                              <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
-                            </div>
-                          )}
-                          {n.gateway && (
-                            <div>
-                              <span className="text-muted">Gateway: </span>
-                              <span className="font-mono text-muted-foreground">{n.gateway}</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
                     </div>
-                  ))}
-                </div>
-              </Card>
+                    {(n.ipAddress || n.ipv6Address || n.gateway) && (
+                      <div className="mt-1.5 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                        {n.ipAddress && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-muted">IP: </span>
+                            <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
+                            {n.subnetMask && <span className="text-muted">/ {n.subnetMask}</span>}
+                            <button
+                              type="button"
+                              aria-label={`Copiar IP ${n.ipAddress}`}
+                              title="Copiar IP"
+                              className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                              onClick={() => void copyText(n.ipAddress!, 'IP')}
+                            >
+                              <Icon name="content_copy" className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                        {n.gateway && (
+                          <div>
+                            <span className="text-muted">Gateway: </span>
+                            <span className="font-mono text-muted-foreground">{n.gateway}</span>
+                          </div>
+                        )}
+                        {n.ipv6Address && (
+                          <div className="col-span-full">
+                            <span className="text-muted">IPv6: </span>
+                            <span className="break-all font-mono text-xs text-muted-foreground">{n.ipv6Address}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
-              <Card>
-                <CardHeader title="Adaptadores de Rede" />
-                <p className="text-sm text-muted">Nenhum adaptador de rede coletado para este agente.</p>
-              </Card>
+              <p className="text-sm text-muted">Nenhum adaptador de rede coletado para este agente.</p>
             )}
-          </>
+          </div>
         )}
 
         {activeView === 'listeningPorts' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+          <div className="w-full min-w-0 max-w-full">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
@@ -374,10 +450,13 @@ export function AgentNetworkTab({
                 variant="ghost"
                 onClick={handleRefreshPorts}
                 loading={isRefreshingPorts}
+                disabled={!canExecute}
                 title={
-                  !isOnline
-                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                    : 'Solicitar nova coleta de portas ao agente'
+                  !canExecute
+                    ? 'Sem permissão para executar ações no agente'
+                    : !isOnline
+                      ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                      : 'Solicitar nova coleta de portas ao agente'
                 }
               >
                 <Icon name="refresh" className="h-4 w-4" />
@@ -421,36 +500,46 @@ export function AgentNetworkTab({
                 Limpar
               </Button>
             </form>
-            <div style={{ minHeight: '400px' }} className="relative">
-              <DataTable
-                columns={listeningPortColumns}
-                data={portsPageItems}
-                keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
-                emptyMessage="Nenhuma porta em escuta encontrada"
-                showPagination={false}
-                maxHeight="min(640px, 55vh)"
-              />
-            </div>
-            {portsPageItems.length > 0 && (
-              <Pagination
-                className="mt-4"
-                page={portsPageIndex}
-                totalPages={portsTotalPages}
-                onPageChange={target => {
-                  if (target < portsPageIndex) goToPreviousPortsPage();
-                  else if (target > portsPageIndex) goToNextPortsPage();
-                }}
-                totalItems={portsTotalCount}
-                pageSize={Number(listeningPortsLimit)}
-                itemLabel={`${portsTotalCount} no total`}
-                showFirstLast={false}
-              />
+
+            {portsPageQuery.isLoading ? (
+              <Loading message="Carregando portas em escuta..." />
+            ) : portsPageQuery.isError ? (
+              <ErrorDisplay onRetry={() => void portsPageQuery.refetch()} />
+            ) : (
+              <>
+                <DataTable
+                  columns={listeningPortColumns}
+                  data={portsPageItems}
+                  keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
+                  emptyMessage="Nenhuma porta em escuta encontrada"
+                  showPagination={false}
+                  maxHeight="min(640px, 55vh)"
+                />
+                {portsPageItems.length > 0 && (
+                  <Pagination
+                    className="mt-4"
+                    page={portsPageIndex}
+                    totalPages={portsTotalPages}
+                    onPageChange={() => {}}
+                    totalItems={portsTotalCount}
+                    pageSize={portsLimitNum}
+                    itemLabel={`${portsTotalCount} no total`}
+                    cursor={{
+                      hasPrev: portsPageIndex > 1,
+                      hasNext: Boolean(portsPageQuery.data?.hasMore && portsPageQuery.data?.nextCursor),
+                      onPrev: goToPreviousPortsPage,
+                      onNext: goToNextPortsPage,
+                      loading: portsPageQuery.isFetching,
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
         )}
 
         {activeView === 'openSockets' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+          <div className="w-full min-w-0 max-w-full">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
@@ -461,10 +550,13 @@ export function AgentNetworkTab({
                 variant="ghost"
                 onClick={handleRefreshConnections}
                 loading={isRefreshingConnections}
+                disabled={!canExecute}
                 title={
-                  !isOnline
-                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                    : 'Solicitar nova coleta de conexões ao agente'
+                  !canExecute
+                    ? 'Sem permissão para executar ações no agente'
+                    : !isOnline
+                      ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                      : 'Solicitar nova coleta de conexões ao agente'
                 }
               >
                 <Icon name="refresh" className="h-4 w-4" />
@@ -513,30 +605,40 @@ export function AgentNetworkTab({
                 Limpar
               </Button>
             </form>
-            <div style={{ minHeight: '400px' }} className="relative">
-              <DataTable
-                columns={openSocketColumns}
-                data={socketsPageItems}
-                keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
-                emptyMessage="Nenhuma conexão aberta encontrada"
-                showPagination={false}
-                maxHeight="min(640px, 55vh)"
-              />
-            </div>
-            {socketsPageItems.length > 0 && (
-              <Pagination
-                className="mt-4"
-                page={socketsPageIndex}
-                totalPages={socketsTotalPages}
-                onPageChange={target => {
-                  if (target < socketsPageIndex) goToPreviousSocketsPage();
-                  else if (target > socketsPageIndex) goToNextSocketsPage();
-                }}
-                totalItems={socketsTotalCount}
-                pageSize={Number(openSocketsLimit)}
-                itemLabel={`${socketsTotalCount} no total`}
-                showFirstLast={false}
-              />
+
+            {socketsPageQuery.isLoading ? (
+              <Loading message="Carregando conexões abertas..." />
+            ) : socketsPageQuery.isError ? (
+              <ErrorDisplay onRetry={() => void socketsPageQuery.refetch()} />
+            ) : (
+              <>
+                <DataTable
+                  columns={openSocketColumns}
+                  data={socketsPageItems}
+                  keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
+                  emptyMessage="Nenhuma conexão aberta encontrada"
+                  showPagination={false}
+                  maxHeight="min(640px, 55vh)"
+                />
+                {socketsPageItems.length > 0 && (
+                  <Pagination
+                    className="mt-4"
+                    page={socketsPageIndex}
+                    totalPages={socketsTotalPages}
+                    onPageChange={() => {}}
+                    totalItems={socketsTotalCount}
+                    pageSize={socketsLimitNum}
+                    itemLabel={`${socketsTotalCount} no total`}
+                    cursor={{
+                      hasPrev: socketsPageIndex > 1,
+                      hasNext: Boolean(socketsPageQuery.data?.hasMore && socketsPageQuery.data?.nextCursor),
+                      onPrev: goToPreviousSocketsPage,
+                      onNext: goToNextSocketsPage,
+                      loading: socketsPageQuery.isFetching,
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
         )}

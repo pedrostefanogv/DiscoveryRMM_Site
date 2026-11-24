@@ -30,6 +30,7 @@ interface AgentStartupItemsPanelProps {
   agentId: string;
   items: StartupItemInfo[];
   canManage: boolean;
+  canRefresh?: boolean;
   isOnline: boolean;
   isLoading: boolean;
   isError: boolean;
@@ -70,6 +71,7 @@ export default function AgentStartupItemsPanel({
   agentId,
   items,
   canManage,
+  canRefresh = true,
   isOnline,
   isLoading,
   isError,
@@ -299,10 +301,13 @@ export default function AgentStartupItemsPanel({
           variant='ghost'
           onClick={onRefresh}
           loading={isRefreshing}
+          disabled={!canRefresh}
           title={
-            !isOnline
-              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-              : 'Solicitar nova coleta ao agent'
+            !canRefresh
+              ? 'Sem permissão para executar ações no agente'
+              : !isOnline
+                ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                : 'Solicitar nova coleta ao agent'
           }
         >
           <Icon name="refresh" className='h-4 w-4' />

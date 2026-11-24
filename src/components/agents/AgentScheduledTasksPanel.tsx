@@ -56,6 +56,7 @@ interface AgentScheduledTasksPanelProps {
   agentId: string;
   tasks: ScheduledTaskInfo[];
   canManage: boolean;
+  canRefresh?: boolean;
   isOnline: boolean;
   isLoading: boolean;
   isError: boolean;
@@ -100,6 +101,7 @@ export default function AgentScheduledTasksPanel({
   agentId,
   tasks,
   canManage,
+  canRefresh = true,
   isOnline,
   isLoading,
   isError,
@@ -159,9 +161,15 @@ export default function AgentScheduledTasksPanel({
       request: ScheduledTaskActionRequest,
       sentMessage: string,
       commandLabel: 'ScheduledTask',
+      onDispatched?: () => void,
     ) => {
       const dispatchedAt = new Date();
       await taskAction.mutateAsync(request);
+      onDispatched?.();
+      if (!isOnline) {
+        toast.success(`${sentMessage} (agente offline — comando na fila)`);
+        return;
+      }
       toast.success(sentMessage);
       const outcome = await awaitAgentCommandResult(agentId, commandLabel, dispatchedAt);
       if (outcome.ok) {
@@ -172,7 +180,7 @@ export default function AgentScheduledTasksPanel({
       // O agent já re-sincronizou — recarrega para refletir o novo estado.
       onDataRefetch?.();
     },
-    [agentId, taskAction, onDataRefetch],
+    [agentId, isOnline, taskAction, onDataRefetch],
   );
 
   const confirmAction = useCallback(async () => {
@@ -190,8 +198,8 @@ export default function AgentScheduledTasksPanel({
         { action, taskName: task.taskName, taskPath: task.taskPath },
         messages[action],
         'ScheduledTask',
+        () => setConfirmState(null),
       );
-      setConfirmState(null);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : 'Falha ao enviar ação ao agent.';
@@ -222,13 +230,34 @@ export default function AgentScheduledTasksPanel({
   const openEdit = useCallback(
     (task: ScheduledTaskInfo) => {
       setMenu(null);
-      setEditTriggerType(
-        EDITABLE_TRIGGERS.has(task.triggerType?.toLowerCase() ?? '')
-          ? task.triggerType.toLowerCase()
-          : 'daily',
-      );
-      setEditTime('08:00');
-      setEditDate('');
+      const normalizedTrigger = EDITABLE_TRIGGERS.has(task.triggerType?.toLowerCase() ?? '')
+        ? task.triggerType.toLowerCase()
+        : 'daily';
+      setEditTriggerType(normalizedTrigger);
+
+      let extractedTime = '08:00';
+      const descMatch = task.triggerDesc?.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
+      if (descMatch) {
+        extractedTime = `${descMatch[1].padStart(2, '0')}:${descMatch[2]}`;
+      } else if (task.nextRunTime) {
+        const nextDate = new Date(task.nextRunTime);
+        if (!Number.isNaN(nextDate.getTime())) {
+          extractedTime = `${String(nextDate.getHours()).padStart(2, '0')}:${String(nextDate.getMinutes()).padStart(2, '0')}`;
+        }
+      }
+      setEditTime(extractedTime);
+
+      let extractedDate = '';
+      if (normalizedTrigger === 'once' && task.nextRunTime) {
+        const nextDate = new Date(task.nextRunTime);
+        if (!Number.isNaN(nextDate.getTime())) {
+          const yyyy = nextDate.getFullYear();
+          const mm = String(nextDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(nextDate.getDate()).padStart(2, '0');
+          extractedDate = `${yyyy}-${mm}-${dd}T${extractedTime}`;
+        }
+      }
+      setEditDate(extractedDate);
       setEditDays([1]);
       setEditDaysInterval(1);
       setEditActionPath(task.actionPath ?? '');
@@ -282,8 +311,8 @@ export default function AgentScheduledTasksPanel({
         request,
         'Solicitação de edição enviada ao agent.',
         'ScheduledTask',
+        () => setEditState(null),
       );
-      setEditState(null);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : 'Falha ao enviar edição ao agent.';
@@ -502,10 +531,13 @@ export default function AgentScheduledTasksPanel({
           variant='ghost'
           onClick={onRefresh}
           loading={isRefreshing}
+          disabled={!canRefresh}
           title={
-            !isOnline
-              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-              : 'Solicitar nova coleta ao agent'
+            !canRefresh
+              ? 'Sem permissão para executar ações no agente'
+              : !isOnline
+                ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                : 'Solicitar nova coleta ao agent'
           }
         >
           <Icon name="refresh" className='h-4 w-4' />

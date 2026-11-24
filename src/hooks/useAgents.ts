@@ -511,6 +511,7 @@ export function useAgentHardwareComponents(
 export function useAgentListeningPortsPage(
   id: string,
   params?: { cursor?: string; limit?: number; search?: string },
+  options?: { enabled?: boolean },
 ) {
   const safeLimit = Math.min(LISTENING_PORTS_BACKEND_LIMIT, Math.max(1, params?.limit ?? 50));
   const safeSearch = params?.search?.trim() ?? "";
@@ -527,7 +528,7 @@ export function useAgentListeningPortsPage(
         { cursor: params?.cursor, limit: safeLimit, search: safeSearch },
         { signal },
       ),
-    enabled: !!id,
+    enabled: !!id && (options?.enabled ?? true),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
@@ -540,6 +541,7 @@ export function useAgentListeningPortsPage(
 export function useAgentOpenSocketsPage(
   id: string,
   params?: { cursor?: string; limit?: number; search?: string; state?: string },
+  options?: { enabled?: boolean },
 ) {
   const safeLimit = Math.min(OPEN_SOCKETS_BACKEND_LIMIT, Math.max(1, params?.limit ?? 50));
   const safeSearch = params?.search?.trim() ?? "";
@@ -558,7 +560,7 @@ export function useAgentOpenSocketsPage(
         { cursor: params?.cursor, limit: safeLimit, search: safeSearch, state: safeState },
         { signal },
       ),
-    enabled: !!id,
+    enabled: !!id && (options?.enabled ?? true),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });

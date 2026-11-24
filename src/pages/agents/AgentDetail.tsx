@@ -146,6 +146,9 @@ export default function AgentDetail() {
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
   const [zeroTouchConfirmOpen, setZeroTouchConfirmOpen] = useState(false);
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
+  const [printerSearch, setPrinterSearch] = useState('');
+  const [logLevelFilter, setLogLevelFilter] = useState<'all' | 'error' | 'warning' | 'info'>('all');
+  const [logSearch, setLogSearch] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   // A aba ativa é lida da querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
   // A troca de aba usa `replace` para NÃO empilhar entradas no histórico: a URL
@@ -520,7 +523,7 @@ export default function AgentDetail() {
     includeNetwork: false,
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
-  const agentLogs = useLogs({ agentId: id, limit: 10 }, { enabled: activeDataTab === 'logs' });
+  const agentLogs = useLogs({ agentId: id, limit: 50 }, { enabled: activeDataTab === 'logs' });
   const agentTickets = useTickets({ agentId: id, limit: 5 }, { enabled: activeDataTab === 'tickets' });
   // Tick de 15s (antes 5s): re-renderizava a página inteira a cada 5s só para
   // o freshness do heartbeat (P1.4).
@@ -954,6 +957,15 @@ export default function AgentDetail() {
     }
   };
 
+  const copyField = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copiado.`);
+    } catch {
+      toast.error(`Não foi possível copiar ${label.toLowerCase()}.`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1052,8 +1064,14 @@ export default function AgentDetail() {
                   setIsPowerMenuOpen(false);
                   void handleTriggerAgentUpdate();
                 }}
-                disabled={isTriggeringAgentUpdate}
-                title={canReachAgent ? undefined : offlineQueueHint}
+                disabled={isTriggeringAgentUpdate || !canExecuteAgent}
+                title={
+                  !canExecuteAgent
+                    ? 'Sem permissão para executar ações no agente'
+                    : canReachAgent
+                      ? undefined
+                      : offlineQueueHint
+                }
               >
                 <Icon name="refresh" className="h-4 w-4" />
                 {isTriggeringAgentUpdate ? 'Atualizando...' : 'Atualizar agente'}
@@ -1178,7 +1196,8 @@ export default function AgentDetail() {
       <LiveAgentHeartbeatCard agentId={a.id} fallbackMetrics={a.heartbeatMetrics} />
 
 
-      {/* Stat Cards */}
+      {/* Stat Cards — exibidos apenas na aba principal Info para manter as abas de dados acima da dobra */}
+      {activeDataTab === 'info' && (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Tooltip
           position="bottom"
@@ -1296,11 +1315,15 @@ export default function AgentDetail() {
           )}
         >
           <div className="glass-card relative h-full rounded-xl border border-border bg-surface p-5">
-            <div className="relative mb-3 h-8" ref={labelPickerRef}>
+            <div className="relative mb-3 flex h-8 items-center justify-between" ref={labelPickerRef}>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                <Icon name="sell" className="h-3.5 w-3.5 text-accent" />
+                Labels
+              </span>
               <Button
                 size="sm"
                 variant="ghost"
-                className="absolute right-0 top-0 h-9 w-9 shrink-0 p-0"
+                className="h-8 w-8 shrink-0 p-0"
                 title="Vincular label manual existente"
                 aria-label="Adicionar label manual"
                 onClick={() => {
@@ -1354,8 +1377,7 @@ export default function AgentDetail() {
                       <p className="px-3 py-2 text-xs text-muted">
                         Nenhuma label manual disponível. Crie uma regra com modo Manual em Labels Automáticas (labels automáticas não aparecem aqui).
                       </p>
-                    ) : null}
-                    {manualLabelOptions.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
+                    ) : manualLabelOptions.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
                       <p className="px-3 py-2 text-xs text-muted">Nenhuma label encontrada.</p>
                     ) : null}
                   </div>
@@ -1417,11 +1439,13 @@ export default function AgentDetail() {
               <Icon name="web_asset" className="h-6 w-6 text-success" />
             </div>
             <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-muted">Aplicativos</p>
               <p className="text-3xl font-bold text-foreground tabular-nums">{softwareTotalInstalled}</p>
             </div>
           </div>
         </Tooltip>
       </div>
+      )}
 
       {/* Abas do agente: Info (principal) · Anotações · Histórico de labels · dados */}
       <DetailTabs
@@ -1450,7 +1474,18 @@ export default function AgentDetail() {
                 <dl className="space-y-3 text-sm">
                   <div>
                     <dt className="text-muted">Hostname</dt>
-                    <dd className="mt-0.5 font-mono text-foreground">{a.hostname}</dd>
+                    <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-foreground">
+                      <span>{a.hostname}</span>
+                      <button
+                        type="button"
+                        aria-label="Copiar hostname"
+                        title="Copiar hostname"
+                        className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                        onClick={() => void copyField(a.hostname, 'Hostname')}
+                      >
+                        <Icon name="content_copy" className="h-3.5 w-3.5" />
+                      </button>
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-muted">Usuário logado</dt>
@@ -1516,7 +1551,27 @@ export default function AgentDetail() {
                   )}
                   <div>
                     <dt className="text-muted">Último IP</dt>
-                    <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '\u2014'}</dd>
+                    <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-foreground">
+                      {(() => {
+                        const ipValue = a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress;
+                        return ipValue ? (
+                          <>
+                            <span>{ipValue}</span>
+                            <button
+                              type="button"
+                              aria-label="Copiar último IP"
+                              title="Copiar último IP"
+                              className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                              onClick={() => void copyField(ipValue, 'IP')}
+                            >
+                              <Icon name="content_copy" className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          '\u2014'
+                        );
+                      })()}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-muted">Última vez online</dt>
@@ -1531,7 +1586,18 @@ export default function AgentDetail() {
                   {hw.data?.hardware?.serialNumber && (
                     <div>
                       <dt className="text-muted">Número de série</dt>
-                      <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
+                      <dd className="mt-0.5 flex items-center gap-1.5 font-mono text-foreground">
+                        <span>{hw.data.hardware.serialNumber}</span>
+                        <button
+                          type="button"
+                          aria-label="Copiar número de série"
+                          title="Copiar número de série"
+                          className="rounded p-0.5 text-muted hover:bg-surface-hover hover:text-foreground"
+                          onClick={() => void copyField(hw.data!.hardware!.serialNumber!, 'Número de série')}
+                        >
+                          <Icon name="content_copy" className="h-3.5 w-3.5" />
+                        </button>
+                      </dd>
                     </div>
                   )}
                   {/* Resumo dos campos DESTACADOS, depois do bloco de fabricante/
@@ -1701,6 +1767,7 @@ export default function AgentDetail() {
             entityType="agent"
             entityId={a.id}
             title="Anotações do Agente"
+            canEdit={canManageAgent}
             singular="anotação"
             plural="anotações"
           />
@@ -1710,7 +1777,11 @@ export default function AgentDetail() {
           <AgentLabelsHistoryTab
             history={labelHistory}
             isLoading={labelHistoryQuery.isFetching}
+            isError={labelHistoryQuery.isError}
             onRefresh={() => void labelHistoryQuery.refetch()}
+            activeLabels={allLabels}
+            canManage={canManageAgent}
+            onRemoveLabel={(labelId) => void handleRemoveManualLabel(labelId)}
           />
         )}
 
@@ -1735,21 +1806,39 @@ export default function AgentDetail() {
             )}
 
             {activeDataTab === 'tickets' && (
-              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                <>
-                <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
-                <div className="space-y-2">
-                  {agentTickets.isLoading && (
-                    <div className="py-4 text-center text-sm text-muted">
-                      Carregando chamados...
+              <div className="w-full min-w-0 max-w-full">
+                <CardHeader
+                  title="Últimos Chamados"
+                  subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`}
+                  action={
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => navigate(`/tickets/new?agentId=${a.id}`)}
+                      >
+                        <Icon name="add" className="h-4 w-4" />
+                        Abrir chamado
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => navigate(`/tickets?agentId=${a.id}`)}
+                      >
+                        Ver todos
+                      </Button>
                     </div>
-                  )}
-                  {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.items.length === 0) && (
+                  }
+                />
+                <div className="space-y-2">
+                  {agentTickets.isLoading && <Loading message="Carregando chamados..." />}
+                  {agentTickets.isError && <ErrorDisplay onRetry={() => void agentTickets.refetch()} />}
+                  {!agentTickets.isLoading && !agentTickets.isError && (!agentTickets.data || agentTickets.data.items.length === 0) && (
                     <div className="py-4 text-center text-sm text-muted">
                       Nenhum chamado encontrado
                     </div>
                   )}
-                  {!agentTickets.isLoading && agentTickets.data && agentTickets.data.items.length > 0 && (
+                  {!agentTickets.isLoading && !agentTickets.isError && agentTickets.data && agentTickets.data.items.length > 0 && (
                     <div className="space-y-2">
                       {agentTickets.data.items.map(ticket => {
                         const priority = getTicketPriorityMeta(ticket.priority);
@@ -1772,9 +1861,14 @@ export default function AgentDetail() {
                                   {ticket.closedAt && '  Encerrado'}
                                 </p>
                               </div>
-                              <Badge color={priority.color} className="shrink-0">
-                                {priority.label}
-                              </Badge>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                <Badge color={ticket.closedAt ? 'slate' : 'success'}>
+                                  {ticket.closedAt ? 'Encerrado' : 'Aberto'}
+                                </Badge>
+                                <Badge color={priority.color} className="shrink-0">
+                                  {priority.label}
+                                </Badge>
+                              </div>
                             </div>
                           </button>
                         );
@@ -1782,14 +1876,12 @@ export default function AgentDetail() {
                     </div>
                   )}
                 </div>
-                </>
               </div>
             )}
 
             {activeDataTab === 'printers' && (
-              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                <>
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="w-full min-w-0 max-w-full space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-foreground sm:text-xl">Impressoras</h3>
                     <p className="text-sm text-muted">{printers.length} impressora(s) detectada(s)</p>
@@ -1799,53 +1891,81 @@ export default function AgentDetail() {
                     variant="ghost"
                     onClick={handleRefreshPrinters}
                     loading={isRefreshingPrinters || hwComponents.isFetching}
+                    disabled={!canExecuteAgent}
                     title={
-                      !isOnlineNow
-                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                        : 'Solicitar nova coleta de impressoras ao agente'
+                      !canExecuteAgent
+                        ? 'Sem permissão para executar ações no agente'
+                        : !isOnlineNow
+                          ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                          : 'Solicitar nova coleta de impressoras ao agente'
                     }
                   >
                     <Icon name="refresh" className="h-4 w-4" />
                     Atualizar
                   </Button>
                 </div>
-                {printers.length === 0 ? (
-                  <p className="text-sm text-muted">Nenhuma impressora coletada para este agente.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {printers.map((printer, index) => (
-                      <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-surface-light px-3 py-2.5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">{printer.name}</p>
-                            {printer.driverName && (
-                              <p className="truncate text-xs text-muted">Driver: {printer.driverName}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {printer.isDefault && <Badge color="primary">Padrão</Badge>}
-                            <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
-                          </div>
-                        </div>
 
-                        <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
-                          <span className="flex items-center gap-1">
-                            <Icon name="print" className="h-3.5 w-3.5" />
-                            {printer.isNetworkPrinter ? 'Rede' : 'Local'}
-                          </span>
-                          <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
-                          <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
-                          <span>
-                            {printer.shared
-                              ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
-                              : 'Não compartilhada'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                {printers.length > 3 && (
+                  <Input
+                    value={printerSearch}
+                    onChange={e => setPrinterSearch(e.target.value)}
+                    placeholder="Filtrar impressoras por nome, driver ou porta..."
+                  />
                 )}
-                </>
+
+                {hwComponents.isLoading ? (
+                  <Loading message="Carregando impressoras..." />
+                ) : hwComponents.isError ? (
+                  <ErrorDisplay onRetry={() => void hwComponents.refetch()} />
+                ) : printers.length === 0 ? (
+                  <p className="text-sm text-muted">Nenhuma impressora coletada para este agente.</p>
+                ) : (() => {
+                  const q = printerSearch.trim().toLowerCase();
+                  const filteredPrinters = q
+                    ? printers.filter(
+                        p =>
+                          p.name.toLowerCase().includes(q) ||
+                          (p.driverName ?? '').toLowerCase().includes(q) ||
+                          (p.portName ?? '').toLowerCase().includes(q),
+                      )
+                    : printers;
+                  return filteredPrinters.length === 0 ? (
+                    <p className="text-sm text-muted">Nenhuma impressora encontrada para o filtro informado.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredPrinters.map((printer, index) => (
+                        <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg border border-border/60 bg-surface-light px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">{printer.name}</p>
+                              {printer.driverName && (
+                                <p className="truncate text-xs text-muted">Driver: {printer.driverName}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {printer.isDefault && <Badge color="primary">Padrão</Badge>}
+                              <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
+                            <span className="flex items-center gap-1">
+                              <Icon name="print" className="h-3.5 w-3.5" />
+                              {printer.isNetworkPrinter ? 'Rede' : 'Local'}
+                            </span>
+                            <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
+                            <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
+                            <span>
+                              {printer.shared
+                                ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
+                                : 'Não compartilhada'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -1856,6 +1976,7 @@ export default function AgentDetail() {
                 onSelectView={handleSelectNetworkView}
                 networkAdapters={hw.data?.networkAdapters}
                 isOnline={isOnlineNow}
+                canExecute={canExecuteAgent}
               />
             )}
 
@@ -1867,6 +1988,7 @@ export default function AgentDetail() {
                 startupItems={startupItems}
                 scheduledTasks={scheduledTasks}
                 canManage={canManageAgent}
+                canExecute={canExecuteAgent}
                 isOnline={isOnlineNow}
                 isLoading={hwComponents.isLoading}
                 isError={Boolean(hwComponents.isError)}
@@ -1930,31 +2052,118 @@ export default function AgentDetail() {
               </div>
             )}
 
-            {activeDataTab === 'logs' && (
-              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                <>
-                <CardHeader title="Logs Recentes" />
-                <div className="space-y-2">
-                  {logsArray.map(log => {
-                    const l = getLogLevelMeta(log.level);
-                    return (
-                      <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
-                        <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm text-muted-foreground">{log.message}</p>
-                          <p className="text-xs text-muted">{formatDate(log.createdAt)}</p>
-                        </div>
+            {activeDataTab === 'logs' && (() => {
+              const q = logSearch.trim().toLowerCase();
+              const filteredLogs = logsArray.filter(log => {
+                if (logLevelFilter !== 'all') {
+                  const lvl = String(log.level ?? '').toLowerCase();
+                  if (logLevelFilter === 'error' && !lvl.includes('err') && !lvl.includes('crit') && lvl !== '3' && lvl !== '4') return false;
+                  if (logLevelFilter === 'warning' && !lvl.includes('warn') && lvl !== '2') return false;
+                  if (logLevelFilter === 'info' && !lvl.includes('info') && lvl !== '1') return false;
+                }
+                if (!q) return true;
+                return log.message.toLowerCase().includes(q);
+              });
+
+              return (
+                <div className="w-full min-w-0 max-w-full space-y-4">
+                  <CardHeader
+                    title="Logs Recentes"
+                    subtitle={`${filteredLogs.length} de ${logsArray.length} registro(s)`}
+                    action={
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void agentLogs.refetch()}
+                          loading={agentLogs.isFetching}
+                        >
+                          <Icon name="refresh" className="h-4 w-4" />
+                          Atualizar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => navigate(`/logs?agentId=${a.id}`)}
+                        >
+                          Ver todos os logs
+                        </Button>
                       </div>
-                    );
-                  })}
-                  {agentLogs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
-                  {(logsArray.length === 0) && !agentLogs.isLoading && (
-                    <p className="text-sm text-muted">Nenhum log registrado</p>
+                    }
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(
+                        [
+                          { id: 'all', label: 'Todos' },
+                          { id: 'error', label: 'Erros' },
+                          { id: 'warning', label: 'Avisos' },
+                          { id: 'info', label: 'Info' },
+                        ] as const
+                      ).map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          aria-pressed={logLevelFilter === opt.id}
+                          onClick={() => setLogLevelFilter(opt.id)}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                            logLevelFilter === opt.id
+                              ? 'border-primary/60 bg-primary/20 text-primary-100'
+                              : 'border-border bg-surface-light text-muted hover:bg-surface-hover hover:text-foreground'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="min-w-[200px] flex-1">
+                      <Input
+                        value={logSearch}
+                        onChange={e => setLogSearch(e.target.value)}
+                        placeholder="Filtrar logs por mensagem..."
+                      />
+                    </div>
+                  </div>
+
+                  {agentLogs.isLoading ? (
+                    <Loading message="Carregando logs..." />
+                  ) : agentLogs.isError ? (
+                    <ErrorDisplay onRetry={() => void agentLogs.refetch()} />
+                  ) : filteredLogs.length === 0 ? (
+                    <p className="text-sm text-muted">
+                      {logsArray.length === 0
+                        ? 'Nenhum log registrado'
+                        : 'Nenhum log encontrado para o filtro selecionado.'}
+                    </p>
+                  ) : (
+                    <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+                      {filteredLogs.map(log => {
+                        const l = getLogLevelMeta(log.level);
+                        return (
+                          <div key={log.id} className="flex items-start gap-2 rounded-lg border border-border/60 bg-surface-light px-3 py-2">
+                            <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words text-sm text-muted-foreground">{log.message}</p>
+                              <p className="text-xs text-muted">{formatDate(log.createdAt)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              aria-label="Copiar mensagem do log"
+                              title="Copiar mensagem"
+                              className="shrink-0 rounded p-1 text-muted hover:bg-surface-hover hover:text-foreground"
+                              onClick={() => void copyField(log.message, 'Log')}
+                            >
+                              <Icon name="content_copy" className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-                </>
-              </div>
-            )}
+              );
+            })()}
           </Card>
         )}
       </div>

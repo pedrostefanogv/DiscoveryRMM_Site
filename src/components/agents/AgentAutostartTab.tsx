@@ -18,6 +18,7 @@ interface AgentAutostartTabProps {
   startupItems: StartupItemInfo[];
   scheduledTasks: ScheduledTaskInfo[];
   canManage: boolean;
+  canExecute?: boolean;
   isOnline: boolean;
   isLoading: boolean;
   isError: boolean;
@@ -33,6 +34,7 @@ export function AgentAutostartTab({
   startupItems,
   scheduledTasks,
   canManage,
+  canExecute = canManage,
   isOnline,
   isLoading,
   isError,
@@ -43,8 +45,19 @@ export function AgentAutostartTab({
   const [isRefreshingStartup, setIsRefreshingStartup] = useState(false);
   const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
 
+  const tabs: DetailTab<AgentAutostartView>[] = [
+    {
+      ...AUTOSTART_TABS[0],
+      badge: !isLoading && startupItems.length > 0 ? startupItems.length : undefined,
+    },
+    {
+      ...AUTOSTART_TABS[1],
+      badge: !isLoading && scheduledTasks.length > 0 ? scheduledTasks.length : undefined,
+    },
+  ];
+
   const handleRefreshStartup = async () => {
-    if (!agentId || isRefreshingStartup) return;
+    if (!agentId || isRefreshingStartup || !canExecute) return;
     setIsRefreshingStartup(true);
     try {
       await agentsApi.refreshData(agentId, { startupItems: true });
@@ -60,7 +73,7 @@ export function AgentAutostartTab({
   };
 
   const handleRefreshScheduledTasks = async () => {
-    if (!agentId || isRefreshingScheduledTasks) return;
+    if (!agentId || isRefreshingScheduledTasks || !canExecute) return;
     setIsRefreshingScheduledTasks(true);
     try {
       await agentsApi.refreshData(agentId, { scheduledTasks: true });
@@ -78,7 +91,7 @@ export function AgentAutostartTab({
   return (
     <div className="space-y-4">
       <DetailTabs
-        tabs={AUTOSTART_TABS}
+        tabs={tabs}
         active={activeView}
         onChange={onSelectView}
         ariaLabel="Seções de execução automática do agente"
@@ -98,6 +111,7 @@ export function AgentAutostartTab({
               agentId={agentId}
               items={startupItems}
               canManage={canManage}
+              canRefresh={canExecute}
               isOnline={isOnline}
               isLoading={isLoading}
               isError={isError}
@@ -117,6 +131,7 @@ export function AgentAutostartTab({
               agentId={agentId}
               tasks={scheduledTasks}
               canManage={canManage}
+              canRefresh={canExecute}
               isOnline={isOnline}
               isLoading={isLoading}
               isError={isError}

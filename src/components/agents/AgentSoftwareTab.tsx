@@ -78,6 +78,16 @@ export function AgentSoftwareTab({
     softwareRefetchTimers.current = [];
   }, []);
 
+  useEffect(() => {
+    const trimmed = softwareSearchInput.trim();
+    if (trimmed === softwareSearchApplied) return;
+    const timer = setTimeout(() => {
+      setSoftwareSearchApplied(trimmed);
+      setSoftwarePage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [softwareSearchInput, softwareSearchApplied]);
+
   const softwarePageSize =
     softwareLimitSelected === 'max' ? SOFTWARE_MAX_PAGE_SIZE : Number(softwareLimitSelected);
   const software = useAgentSoftwarePage(agentId, {
@@ -368,7 +378,7 @@ export function AgentSoftwareTab({
 
   return (
     <>
-      <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+      <div className="w-full min-w-0 max-w-full">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
@@ -385,8 +395,13 @@ export function AgentSoftwareTab({
             <Button
               size="sm"
               variant="primary"
+              disabled={!canExecute}
               onClick={() => setInstallModalOpen(true)}
-              title="Buscar aplicativo na loja para instalar no agente"
+              title={
+                !canExecute
+                  ? 'Sem permissão para executar ações no agente'
+                  : 'Buscar aplicativo na loja para instalar no agente'
+              }
             >
               <Icon name="download" className="h-4 w-4" />
               Instalar aplicativo
