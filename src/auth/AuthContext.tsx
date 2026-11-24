@@ -355,7 +355,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nextStage = resolveLoginStage(response);
     const tokens = readSessionTokens(response);
 
-    if (nextStage === "authenticated" && tokens) {
+    if (nextStage === "authenticated") {
+      if (!tokens) {
+        setSession((previous) => ({
+          ...previous,
+          stage: previous.accessToken ? "authenticated" : "anonymous",
+        }));
+        throw new Error(
+          "Resposta de autenticação incompleta (tokens ausentes). Tente novamente.",
+        );
+      }
+
       const next = applyTokenPair(tokens, sessionRef.current);
       setSession({ ...next, loginResponse: response });
       broadcastTokens({

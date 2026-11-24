@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -32,6 +32,13 @@ import {
 } from "@/utils/format";
 
 type TabId = "activity" | "sessions" | "security";
+
+const PERIOD_OPTIONS: Array<{ days: number | undefined; label: string }> = [
+  { days: 7, label: "7 dias" },
+  { days: 30, label: "30 dias" },
+  { days: 90, label: "90 dias" },
+  { days: undefined, label: "Tudo" },
+];
 
 const CATEGORY_OPTIONS: Array<{
   id: UserActivityCategory;
@@ -81,7 +88,14 @@ export function UserActivityModal({
 }) {
   const [activeTab, setActiveTab] = useState<TabId>("activity");
   const [category, setCategory] = useState<UserActivityCategory>("all");
+  const [days, setDays] = useState<number | undefined>(undefined);
   const [search, setSearch] = useState("");
+  const [allCategoryCounts, setAllCategoryCounts] = useState<
+    Record<string, number>
+  >({});
+  const [totalAllCount, setTotalAllCount] = useState<number | undefined>(
+    undefined,
+  );
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
     message: string;
@@ -89,7 +103,19 @@ export function UserActivityModal({
     run: () => Promise<void>;
   } | null>(null);
 
-  const activityQuery = useIamUserActivity(user.id, category, 100);
+  const activityQuery = useIamUserActivity(user.id, category, 100, days);
+
+  useEffect(() => {
+    setAllCategoryCounts({});
+    setTotalAllCount(undefined);
+  }, [user.id, days]);
+
+  useEffect(() => {
+    if (category === "all" && activityQuery.data) {
+      setAllCategoryCounts(activityQuery.data.categoryCounts ?? {});
+      setTotalAllCount(activityQuery.data.totalReturned);
+    }
+  }, [activityQuery.data, category]);
   const sessionsQuery = useIamUserSessions(user.id);
   const securityQuery = useIamUserSecurityState(user.id);
   const revokeSession = useRevokeIamUserSession(user.id);
@@ -264,29 +290,52 @@ export function UserActivityModal({
         {/* Aba Atividade */}
         {activeTab === "activity" && (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {CATEGORY_OPTIONS.map((opt) => {
-                const count =
-                  opt.id === "all"
-                    ? activityQuery.data?.totalReturned
-                    : activityQuery.data?.categoryCounts?.[opt.id];
-                const selected = category === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setCategory(opt.id)}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      selected
-                        ? "border-accent bg-accent/15 text-accent"
-                        : "border-border bg-surface-light text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {opt.label}
-                    {typeof count === "number" && count > 0 ? ` (${count})` : ""}
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {CATEGORY_OPTIONS.map((opt) => {
+                  const count =
+                    opt.id === "all"
+                      ? (totalAllCount ?? activityQuery.data?.totalReturned)
+                      : (allCategoryCounts[opt.id] ??
+                        activityQuery.data?.categoryCounts?.[opt.id]);
+                  const selected = category === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setCategory(opt.id)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        selected
+                          ? "border-accent bg-accent/15 text-accent"
+                          : "border-border bg-surface-light text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                      {typeof count === "number" && count > 0 ? ` (${count})` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-0.5">
+                {PERIOD_OPTIONS.map((opt) => {
+                  const selected = days === opt.days;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setDays(opt.days)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                        selected
+                          ? "bg-accent text-white"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

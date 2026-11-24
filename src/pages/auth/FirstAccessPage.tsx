@@ -129,7 +129,7 @@ export default function FirstAccessPage() {
     }
 
     try {
-      const result = await authApi.completeFirstAccess(token, {
+      await authApi.completeFirstAccess(token, {
         newLogin: values.newLogin.trim(),
         newEmail: values.newEmail.trim(),
         newFullName: values.newFullName.trim(),
@@ -137,13 +137,12 @@ export default function FirstAccessPage() {
         newPassword: values.newPassword,
       });
 
-      toast.success(result.message);
-
       const status = await authApi.getFirstAccessStatus(token);
 
       // MFA ainda pendente de cadastro: o token de setup serve para registrar a chave.
       if (status.mfaRequired && !status.mfaConfigured) {
         setTemporaryStage("mfa-register-begin");
+        toast.success("Dados atualizados. Conclua o cadastro do MFA para finalizar.");
         navigate("/auth/mfa/register", { replace: true });
         return;
       }
@@ -151,7 +150,7 @@ export default function FirstAccessPage() {
       // MFA já configurado (ou inexistente): o token de setup não permite asserção —
       // refaz o login com a nova senha em vez de cair num 401 de "token expirado".
       clearTemporarySession();
-      toast.success("Dados atualizados. Entre novamente com a nova senha para concluir a autenticação.");
+      toast.success("Senha atualizada. Entre novamente com a nova senha.");
       navigate("/auth/login", { replace: true });
     } catch (caught) {
       // Token de setup expirado (30 min por padrão) → reinicia o fluxo de login.

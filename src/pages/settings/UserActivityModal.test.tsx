@@ -168,6 +168,15 @@ describe("UserActivityModal", () => {
       "user-1",
       "remote",
       100,
+      undefined,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^30 dias$/i }));
+    expect(mockUseIamUserActivity).toHaveBeenLastCalledWith(
+      "user-1",
+      "remote",
+      100,
+      30,
     );
   });
 

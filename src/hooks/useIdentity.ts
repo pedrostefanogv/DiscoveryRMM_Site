@@ -45,8 +45,12 @@ const IAM_KEYS = {
     ["iam", "users", userId, "security-state"] as const,
   userSessions: (userId: string) =>
     ["iam", "users", userId, "sessions"] as const,
-  userActivity: (userId: string, category: string, limit: number) =>
-    ["iam", "users", userId, "activity", category, limit] as const,
+  userActivity: (
+    userId: string,
+    category: string,
+    limit: number,
+    days?: number,
+  ) => ["iam", "users", userId, "activity", category, limit, days ?? "all"] as const,
   groupMembers: (groupId: string) =>
     ["iam", "groups", groupId, "members"] as const,
   groupRoles: (groupId: string) => ["iam", "groups", groupId, "roles"] as const,
@@ -261,14 +265,15 @@ export function useIamUserActivity(
   userId: string | null,
   category: UserActivityCategory = "all",
   limit = 100,
+  days?: number,
   enabled = true,
 ) {
   return useQuery({
     queryKey: userId
-      ? IAM_KEYS.userActivity(userId, category, limit)
+      ? IAM_KEYS.userActivity(userId, category, limit, days)
       : ["iam", "users", "activity", "disabled"],
     queryFn: () =>
-      iamApi.getUserActivity(userId as string, { category, limit }),
+      iamApi.getUserActivity(userId as string, { category, limit, days }),
     enabled: !!userId && enabled,
   });
 }

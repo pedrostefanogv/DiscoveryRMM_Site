@@ -485,9 +485,9 @@ function UserSecurityModal({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium text-foreground">{key.name}</p>
-                    <p className="text-xs text-muted">Criada em: {key.createdAt}</p>
+                    <p className="text-xs text-muted">Criada em: {formatDateTime(key.createdAt)}</p>
                     <p className="text-xs text-muted">
-                      Último uso: {key.lastUsedAt ?? "Nunca"}
+                      Último uso: {key.lastUsedAt ? formatDateTime(key.lastUsedAt) : "Nunca"}
                     </p>
                   </div>
 

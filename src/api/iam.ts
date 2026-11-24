@@ -391,7 +391,7 @@ export const iamApi = {
 
   getUserActivity: (
     id: string,
-    params?: { category?: UserActivityCategory; limit?: number },
+    params?: { category?: UserActivityCategory; limit?: number; days?: number },
   ) => {
     const search = new URLSearchParams();
     if (params?.category && params.category !== "all") {
@@ -399,6 +399,9 @@ export const iamApi = {
     }
     if (params?.limit) {
       search.set("limit", String(params.limit));
+    }
+    if (params?.days) {
+      search.set("days", String(params.days));
     }
     const qs = search.toString();
     return api.get<UserActivityResponseDto>(
