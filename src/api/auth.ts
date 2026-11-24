@@ -19,17 +19,21 @@ export interface LoginResponse {
   accessToken?: string;
   refreshToken?: string;
   expiresInSeconds?: number;
+  expiresAt?: string;
   RoleMfaRequirement?: MfaRequirement;
   SessionEstablished?: boolean;
   AccessToken?: string;
   RefreshToken?: string;
   ExpiresInSeconds?: number;
+  ExpiresAt?: string;
 }
 
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   expiresInSeconds: number;
+  expiresAt?: string;
+  ExpiresAt?: string;
 }
 
 export interface RefreshTokenRequest {

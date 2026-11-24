@@ -38,6 +38,8 @@ import {
 import { ApiError } from "@/api";
 import { useAuthorization } from "@/auth/authorization";
 import { PASSWORD_RULES, validatePassword } from "@/auth/passwordPolicy";
+import { formatDateTime, formatRelative } from "@/utils/format";
+import { UserActivityModal } from "./UserActivityModal";
 
 const EMPTY_CREATE_FORM: CreateUserRequest = {
   login: "",
@@ -69,6 +71,7 @@ export default function IamUsersPage({ embedded = false }: { embedded?: boolean 
   const [editTarget, setEditTarget] = useState<UserDto | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<UserDto | null>(null);
   const [securityTarget, setSecurityTarget] = useState<UserDto | null>(null);
+  const [activityTarget, setActivityTarget] = useState<UserDto | null>(null);
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<UserDto | null>(null);
 
@@ -112,11 +115,35 @@ export default function IamUsersPage({ embedded = false }: { embedded?: boolean 
         ),
       },
       {
+        key: "lastLoginAt",
+        header: "Último acesso",
+        render: (item) => (
+          <span
+            className="text-xs text-muted-foreground"
+            title={item.lastLoginAt ? formatDateTime(item.lastLoginAt) : undefined}
+          >
+            {item.lastLoginAt ? formatRelative(item.lastLoginAt) : "Nunca acessou"}
+          </span>
+        ),
+      },
+      {
         key: "actions",
         header: "Ações",
-        className: "w-[260px]",
+        className: "w-[360px]",
         render: (item) => (
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setActivityTarget(item);
+                }}
+              >
+                <Icon name="history" className="h-4 w-4" /> Atividade
+              </Button>
+            )}
             {canChangePassword && (
               <Button
                 variant="ghost"
@@ -311,6 +338,13 @@ if (usersQuery.isLoading) {
           user={securityTarget}
           canEdit={canEdit}
           onClose={() => setSecurityTarget(null)}
+        />
+      )}
+
+      {activityTarget && (
+        <UserActivityModal
+          user={activityTarget}
+          onClose={() => setActivityTarget(null)}
         />
       )}
     </div>

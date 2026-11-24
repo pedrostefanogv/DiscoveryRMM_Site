@@ -16,6 +16,7 @@ import {
   type UpdateRoleRequest,
   type UpdateUserGroupRequest,
   type UpdateUserRequest,
+  type UserActivityCategory,
   type UserDto,
 } from "@/api";
 
@@ -40,6 +41,12 @@ const IAM_KEYS = {
   mySecurity: ["iam", "me", "security"] as const,
   userMfaKeys: (userId: string) =>
     ["iam", "users", userId, "mfa", "keys"] as const,
+  userSecurityState: (userId: string) =>
+    ["iam", "users", userId, "security-state"] as const,
+  userSessions: (userId: string) =>
+    ["iam", "users", userId, "sessions"] as const,
+  userActivity: (userId: string, category: string, limit: number) =>
+    ["iam", "users", userId, "activity", category, limit] as const,
   groupMembers: (groupId: string) =>
     ["iam", "groups", groupId, "members"] as const,
   groupRoles: (groupId: string) => ["iam", "groups", groupId, "roles"] as const,
@@ -195,6 +202,74 @@ export function useForceIamUserPasswordReset(userId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: IAM_KEYS.users });
     },
+  });
+}
+
+export function useIamUserSecurityState(
+  userId: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: userId
+      ? IAM_KEYS.userSecurityState(userId)
+      : ["iam", "users", "security-state", "disabled"],
+    queryFn: () => iamApi.getUserSecurityState(userId as string),
+    enabled: !!userId && enabled,
+  });
+}
+
+export function useIamUserSessions(userId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: userId
+      ? IAM_KEYS.userSessions(userId)
+      : ["iam", "users", "sessions", "disabled"],
+    queryFn: () => iamApi.listUserSessions(userId as string),
+    enabled: !!userId && enabled,
+  });
+}
+
+export function useRevokeIamUserSession(userId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      iamApi.revokeUserSession(userId as string, sessionId),
+    onSuccess: () => {
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.userSessions(userId) });
+      queryClient.invalidateQueries({
+        queryKey: ["iam", "users", userId, "activity"],
+      });
+    },
+  });
+}
+
+export function useRevokeAllIamUserSessions(userId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => iamApi.revokeAllUserSessions(userId as string),
+    onSuccess: () => {
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.userSessions(userId) });
+      queryClient.invalidateQueries({
+        queryKey: ["iam", "users", userId, "activity"],
+      });
+    },
+  });
+}
+
+export function useIamUserActivity(
+  userId: string | null,
+  category: UserActivityCategory = "all",
+  limit = 100,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: userId
+      ? IAM_KEYS.userActivity(userId, category, limit)
+      : ["iam", "users", "activity", "disabled"],
+    queryFn: () =>
+      iamApi.getUserActivity(userId as string, { category, limit }),
+    enabled: !!userId && enabled,
   });
 }
 

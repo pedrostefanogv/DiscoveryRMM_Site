@@ -264,6 +264,11 @@ export type {
   BulkRolePermissionsRequest,
   BulkAssignRolePermissionsResponse,
   BulkRemoveRolePermissionsResponse,
+  UserSecurityStateDto,
+  UserSessionSummaryDto,
+  UserActivityCategory,
+  UserActivityItemDto,
+  UserActivityResponseDto,
 } from "./iam";
 export type {
   DashboardWindow,

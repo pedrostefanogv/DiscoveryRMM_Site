@@ -15,8 +15,75 @@ export interface UserDto {
   fullName: string;
   isActive: boolean;
   mfaRequired: boolean;
+  mfaConfigured?: boolean;
+  mustChangePassword?: boolean;
+  mustChangeProfile?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  lastLoginAt?: string | null;
+}
+
+export interface UserSecurityStateDto {
+  id: string;
+  isActive: boolean;
+  mfaRequired: boolean;
+  mfaConfigured: boolean;
+  mustChangePassword: boolean;
+  mustChangeProfile: boolean;
+  failedLoginAttempts: number;
+  lockoutUntil: string | null;
+  mfaFailedAttempts: number;
+  mfaLockoutUntil: string | null;
+  lastLoginAt: string | null;
+}
+
+export interface UserSessionSummaryDto {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  isActive: boolean;
+  isExpired: boolean;
+  isRevoked: boolean;
+  mfaVerified: boolean;
+  ipAddress: string | null;
+  userAgent: string | null;
+}
+
+export type UserActivityCategory =
+  | "all"
+  | "auth"
+  | "identity"
+  | "remote"
+  | "tickets"
+  | "configuration"
+  | "automation"
+  | "approvals"
+  | "reports";
+
+export interface UserActivityItemDto {
+  id: string;
+  category: Exclude<UserActivityCategory, "all">;
+  eventType: string;
+  title: string;
+  summary: string | null;
+  success: boolean;
+  failureReason: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  actorLogin: string | null;
+  role: "actor" | "target" | "self";
+  targetType: string | null;
+  targetId: string | null;
+  linkPath: string | null;
+  details: string | null;
+  occurredAt: string;
+}
+
+export interface UserActivityResponseDto {
+  items: UserActivityItemDto[];
+  categoryCounts: Record<string, number>;
+  totalReturned: number;
 }
 
 export interface CreateUserRequest {
@@ -301,6 +368,43 @@ export const iamApi = {
 
   /** Libera os bloqueios da conta (lockout de senha e de MFA). */
   unlockUser: (id: string) => api.post<void>(`${USERS}/${id}/unlock`),
+
+  getUserSecurityState: (id: string) =>
+    api.get<UserSecurityStateDto>(`${USERS}/${id}/security-state`),
+
+  listUserSessions: async (
+    id: string,
+    limit = 30,
+  ): Promise<UserSessionSummaryDto[]> => {
+    const res = await api.get<
+      { items?: UserSessionSummaryDto[] } | UserSessionSummaryDto[]
+    >(`${USERS}/${id}/sessions?limit=${limit}`);
+    if (Array.isArray(res)) return res;
+    return Array.isArray(res?.items) ? res.items : [];
+  },
+
+  revokeUserSession: (id: string, sessionId: string) =>
+    api.del<void>(`${USERS}/${id}/sessions/${sessionId}`),
+
+  revokeAllUserSessions: (id: string) =>
+    api.del<void>(`${USERS}/${id}/sessions`),
+
+  getUserActivity: (
+    id: string,
+    params?: { category?: UserActivityCategory; limit?: number },
+  ) => {
+    const search = new URLSearchParams();
+    if (params?.category && params.category !== "all") {
+      search.set("category", params.category);
+    }
+    if (params?.limit) {
+      search.set("limit", String(params.limit));
+    }
+    const qs = search.toString();
+    return api.get<UserActivityResponseDto>(
+      `${USERS}/${id}/activity${qs ? `?${qs}` : ""}`,
+    );
+  },
 
   deleteUser: (id: string) => api.del<void>(`${USERS}/${id}`),
 

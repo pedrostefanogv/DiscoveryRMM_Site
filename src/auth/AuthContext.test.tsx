@@ -244,3 +244,48 @@ describe("BUG-03: getMyHeartbeat (antigo getHeartbeat)", () => {
     expect((agentsApi as Record<string, unknown>).getHeartbeat).toBeUndefined();
   });
 });
+
+describe("readSessionTokens (login sem MFA com expiresAt ou expiresInSeconds)", () => {
+  it("aceita resposta com expiresAt sem expiresInSeconds", async () => {
+    const { readSessionTokens } = await import("./AuthContext");
+    const futureIso = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    const tokens = readSessionTokens({
+      accessToken: "jwt-access",
+      refreshToken: "opaque-refresh",
+      expiresAt: futureIso,
+      mfaRequired: false,
+      firstAccessRequired: false,
+      mustChangePassword: false,
+      mustChangeProfile: false,
+      sessionEstablished: true,
+    });
+
+    expect(tokens).not.toBeNull();
+    expect(tokens?.accessToken).toBe("jwt-access");
+    expect(tokens?.refreshToken).toBe("opaque-refresh");
+    expect(tokens?.expiresInSeconds).toBeGreaterThan(0);
+  });
+
+  it("aceita resposta com expiresInSeconds explícito", async () => {
+    const { readSessionTokens } = await import("./AuthContext");
+
+    const tokens = readSessionTokens({
+      accessToken: "jwt-access",
+      refreshToken: "opaque-refresh",
+      expiresInSeconds: 1800,
+      mfaRequired: false,
+      firstAccessRequired: false,
+      mustChangePassword: false,
+      mustChangeProfile: false,
+      sessionEstablished: true,
+    });
+
+    expect(tokens).toEqual({
+      accessToken: "jwt-access",
+      refreshToken: "opaque-refresh",
+      expiresInSeconds: 1800,
+      expiresAt: undefined,
+    });
+  });
+});

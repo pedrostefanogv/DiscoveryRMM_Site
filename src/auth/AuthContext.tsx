@@ -35,19 +35,62 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readSessionTokens(response: LoginResponse): TokenPair | null {
+const DEFAULT_SESSION_EXPIRY_SECONDS = 1800;
+
+function decodeJwtExpSeconds(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
+    if (typeof payload.exp === "number" && Number.isFinite(payload.exp)) {
+      return Math.max(1, Math.floor(payload.exp - Date.now() / 1000));
+    }
+  } catch {
+    // Token não é JWT padrão ou atob indisponível; usa fallback abaixo.
+  }
+  return null;
+}
+
+function resolveExpiresInSeconds(
+  expiresInSeconds: number | undefined,
+  expiresAtIso: string | undefined,
+  accessToken: string,
+): number {
+  if (typeof expiresInSeconds === "number" && Number.isFinite(expiresInSeconds) && expiresInSeconds > 0) {
+    return expiresInSeconds;
+  }
+
+  if (expiresAtIso) {
+    const parsedMs = Date.parse(expiresAtIso);
+    if (Number.isFinite(parsedMs)) {
+      return Math.max(1, Math.floor((parsedMs - Date.now()) / 1000));
+    }
+  }
+
+  return decodeJwtExpSeconds(accessToken) ?? DEFAULT_SESSION_EXPIRY_SECONDS;
+}
+
+export function readSessionTokens(response: LoginResponse): TokenPair | null {
   const accessToken = response.accessToken ?? response.AccessToken;
   const refreshToken = response.refreshToken ?? response.RefreshToken;
-  const expiresInSeconds = response.expiresInSeconds ?? response.ExpiresInSeconds;
 
-  if (!accessToken || !refreshToken || !expiresInSeconds) {
+  if (!accessToken || !refreshToken) {
     return null;
   }
+
+  const expiresInSeconds = resolveExpiresInSeconds(
+    response.expiresInSeconds ?? response.ExpiresInSeconds,
+    response.expiresAt ?? response.ExpiresAt,
+    accessToken,
+  );
 
   return {
     accessToken,
     refreshToken,
     expiresInSeconds,
+    expiresAt: response.expiresAt ?? response.ExpiresAt,
   };
 }
 
@@ -83,12 +126,18 @@ function resolveLoginStage(response: LoginResponse): AuthStage {
 }
 
 function applyTokenPair(tokens: TokenPair, previous: AuthSessionState): AuthSessionState {
+  const expiresInSeconds = resolveExpiresInSeconds(
+    tokens.expiresInSeconds,
+    tokens.expiresAt ?? tokens.ExpiresAt,
+    tokens.accessToken,
+  );
+
   return {
     ...previous,
     stage: "authenticated",
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    expiresAt: Date.now() + tokens.expiresInSeconds * 1000,
+    expiresAt: Date.now() + expiresInSeconds * 1000,
     temporaryMfaToken: null,
     loginResponse: null,
   };
