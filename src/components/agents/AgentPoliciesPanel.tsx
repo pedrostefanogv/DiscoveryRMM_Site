@@ -121,7 +121,7 @@ export default function AgentPoliciesPanel({
   onForceSync,
 }: AgentPoliciesPanelProps) {
   const [search, setSearch] = useState('');
-  const tasks = policies?.tasks ?? [];
+  const tasks = useMemo(() => policies?.tasks ?? [], [policies?.tasks]);
   const preload = policies?.preloadPackages ?? [];
 
   const filteredTasks = useMemo(() => {

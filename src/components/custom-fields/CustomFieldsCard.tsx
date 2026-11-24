@@ -68,6 +68,12 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
     );
   }, [sorted, search]);
 
+  const currentEntityId = items[0]?.entityId ?? null;
+  useEffect(() => {
+    dirtyIdsRef.current.clear();
+    setSearch('');
+  }, [currentEntityId]);
+
   // Sincroniza os rascunhos quando o schema chega/muda, preservando campos
   // alterados pelo usuário para evitar perda de rascunho em revalidações.
   useEffect(() => {

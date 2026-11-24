@@ -1811,23 +1811,13 @@ export default function AgentDetail() {
                   title="Últimos Chamados"
                   subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`}
                   action={
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => navigate(`/tickets/new?agentId=${a.id}`)}
-                      >
-                        <Icon name="add" className="h-4 w-4" />
-                        Abrir chamado
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => navigate(`/tickets?agentId=${a.id}`)}
-                      >
-                        Ver todos
-                      </Button>
-                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => navigate(`/tickets?agentId=${a.id}`)}
+                    >
+                      Ver todos os chamados
+                    </Button>
                   }
                 />
                 <div className="space-y-2">

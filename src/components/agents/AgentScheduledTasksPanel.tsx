@@ -321,7 +321,6 @@ export default function AgentScheduledTasksPanel({
       setIsEditWorking(false);
     }
   }, [
-    agentId,
     dispatchAndAwait,
     editActionArgs,
     editActionPath,
@@ -331,7 +330,6 @@ export default function AgentScheduledTasksPanel({
     editState,
     editTime,
     editTriggerType,
-    taskAction,
   ]);
 
   const copyTaskId = useCallback((task: ScheduledTaskInfo) => {

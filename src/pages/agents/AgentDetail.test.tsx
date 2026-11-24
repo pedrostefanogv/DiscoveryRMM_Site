@@ -483,7 +483,7 @@ describe('AgentDetail — abas do agente', () => {
   });
 
   it('exibe seção de labels ativas na aba Labels', async () => {
-    await renderPage('?tab=historico-labels');
+    await renderPage('?tab=historico-de-labels');
 
     expect(screen.getByText(/Labels ativas/)).toBeTruthy();
   });
