@@ -27,6 +27,7 @@ import { PowerActionVerbDialog } from '@/components/agents/PowerActionVerbDialog
 import { POWER_ACTION_VERBS, powerVerbIcon, type PowerActionVerb } from '@/components/agents/powerActionVerbs';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
+import { hasPendingWindowsUpdatePowerOption } from '@/utils/agentReboot';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
 import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
@@ -254,7 +255,7 @@ export default function AgentList() {
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   // Verbo de energia genérico pendente de confirmação (BIOS/UEFI, Opções
-  // Avançadas, cancelar energia pendente, bloquear sessão).
+  // Avançadas, bloquear sessão).
   const [powerVerbAgent, setPowerVerbAgent] = useState<{ agent: AgentWithClient; verb: PowerActionVerb } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
@@ -674,8 +675,8 @@ export default function AgentList() {
   };
 
   // Verbos do comando genérico "poweraction" (BIOS/UEFI, Opções Avançadas,
-  // cancelar energia pendente, bloquear sessão). O agent valida a capacidade de
-  // cada verbo (ex.: /fw exige UEFI) e devolve falha tipada no acompanhamento.
+  // bloquear sessão). O agent valida a capacidade de cada verbo (ex.: /fw
+  // exige UEFI) e devolve falha tipada no acompanhamento.
   const handlePowerVerb = (agent: AgentWithClient, verb: PowerActionVerb) => {
     setContextMenu(null);
     setPowerVerbAgent({ agent, verb });
@@ -1903,7 +1904,6 @@ export default function AgentList() {
                       <Icon name="power_settings_new" className="h-4 w-4" />
                       Desligar
                     </button>
-                    <div className="my-1 border-t border-border" />
                     {/* Verbos do comando genérico "poweraction" — declarados
                         em powerActionVerbs.tsx (fonte única dos três menus). */}
                     {POWER_ACTION_VERBS.map(verb => (
@@ -1919,27 +1919,31 @@ export default function AgentList() {
                         </button>
                       </Fragment>
                     ))}
-                    <div className="my-1 border-t border-border" />
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => {
-                        setContextMenu(null);
-                        setUpdatePowerAction({ agent: contextMenu.agent, action: 'restart' });
-                      }}
-                    >
-                      <Icon name="refresh" className="h-4 w-4" />
-                      Atualizar e reiniciar
-                    </button>
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
-                      onClick={() => {
-                        setContextMenu(null);
-                        setUpdatePowerAction({ agent: contextMenu.agent, action: 'shutdown' });
-                      }}
-                    >
-                      <Icon name="refresh" className="h-4 w-4" />
-                      Atualizar e desligar
-                    </button>
+                    {hasPendingWindowsUpdatePowerOption(contextMenu.agent) && (
+                      <>
+                        <div className="my-1 border-t border-border" />
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => {
+                            setContextMenu(null);
+                            setUpdatePowerAction({ agent: contextMenu.agent, action: 'restart' });
+                          }}
+                        >
+                          <Icon name="refresh" className="h-4 w-4" />
+                          Atualizar e reiniciar
+                        </button>
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
+                          onClick={() => {
+                            setContextMenu(null);
+                            setUpdatePowerAction({ agent: contextMenu.agent, action: 'shutdown' });
+                          }}
+                        >
+                          <Icon name="refresh" className="h-4 w-4" />
+                          Atualizar e desligar
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2115,6 +2119,7 @@ export default function AgentList() {
           agentId={updatePowerAction.agent.id}
           agentName={updatePowerAction.agent.displayName ?? updatePowerAction.agent.hostname}
           action={updatePowerAction.action}
+          hasPendingWindowsUpdate={hasPendingWindowsUpdatePowerOption(updatePowerAction.agent)}
           onClose={() => setUpdatePowerAction(null)}
         />
       )}

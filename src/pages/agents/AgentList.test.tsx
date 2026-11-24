@@ -510,18 +510,64 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     expect(confirm).toBeTruthy();
   });
 
-  it('oferece "Cancelar energia pendente" e "Bloquear sessão" no submenu', () => {
+  it('não exibe "Cancelar energia pendente" e oferece "Bloquear sessão" no submenu', () => {
     renderPage();
 
     openContextMenuFor('ATIVO-01', 40, 40);
     fireEvent.mouseOver(energyTrigger());
 
-    expect(screen.getByText('Cancelar energia pendente')).toBeTruthy();
+    expect(screen.queryByText('Cancelar energia pendente')).toBeNull();
 
     // Bloquear sessão é reversível: confirmação própria, sem aviso de perda de
     // trabalho nem de BitLocker.
     fireEvent.click(screen.getByText('Bloquear sessão'));
     expect(screen.getByRole('button', { name: 'Bloquear agora' })).toBeTruthy();
+  });
+
+  it('oculta "Atualizar e reiniciar/desligar" quando não há atualização pendente de reinício no Windows', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+
+    expect(screen.queryByText('Atualizar e reiniciar')).toBeNull();
+    expect(screen.queryByText('Atualizar e desligar')).toBeNull();
+  });
+
+  it('exibe "Atualizar e reiniciar/desligar" quando há pendingReboot de Windows Update', () => {
+    const mutableAgent = activeAgent as Record<string, unknown>;
+    mutableAgent.pendingReboot = true;
+    mutableAgent.pendingRebootReasons = JSON.stringify(['windows_update']);
+    try {
+      renderPage();
+
+      openContextMenuFor('ATIVO-01', 40, 40);
+      fireEvent.mouseOver(energyTrigger());
+
+      expect(screen.getByText('Atualizar e reiniciar')).toBeTruthy();
+      expect(screen.getByText('Atualizar e desligar')).toBeTruthy();
+    } finally {
+      delete mutableAgent.pendingReboot;
+      delete mutableAgent.pendingRebootReasons;
+    }
+  });
+
+  it('oculta "Atualizar e reiniciar/desligar" quando pendingReboot é apenas file_rename', () => {
+    const mutableAgent = activeAgent as Record<string, unknown>;
+    mutableAgent.pendingReboot = true;
+    mutableAgent.pendingRebootReasons = JSON.stringify(['file_rename']);
+    try {
+      renderPage();
+
+      openContextMenuFor('ATIVO-01', 40, 40);
+      fireEvent.mouseOver(energyTrigger());
+
+      expect(screen.queryByText('Atualizar e reiniciar')).toBeNull();
+      expect(screen.queryByText('Atualizar e desligar')).toBeNull();
+    } finally {
+      delete mutableAgent.pendingReboot;
+      delete mutableAgent.pendingRebootReasons;
+    }
   });
 
   it('offline: bloqueia sessões ao vivo e mantém comandos enfileirados', () => {

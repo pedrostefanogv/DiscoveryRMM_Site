@@ -29,3 +29,21 @@ export function agentRebootTooltip(raw: string | null | undefined): string {
 export function hasPendingReboot(agent: { pendingReboot?: boolean | null }): boolean {
   return agent.pendingReboot === true;
 }
+
+const WINDOWS_UPDATE_REBOOT_REASONS = new Set(['windows_update', 'cbs', 'servicing']);
+
+/**
+ * Indica se o Windows do agente possui atualização pendente de reinício/servicing
+ * (equivalente às opções "Atualizar e reiniciar" / "Atualizar e desligar" no
+ * menu Iniciar do Windows). Motivos como `file_rename` ou `computer_rename`
+ * não exibem essas opções no Windows.
+ */
+export function hasPendingWindowsUpdatePowerOption(
+  agent: { pendingReboot?: boolean | null; pendingRebootReasons?: string | string[] | null } | null | undefined,
+): boolean {
+  if (!agent || agent.pendingReboot !== true) return false;
+  const reasons = Array.isArray(agent.pendingRebootReasons)
+    ? agent.pendingRebootReasons
+    : parseAgentRebootReasons(agent.pendingRebootReasons);
+  return reasons.some((reason) => WINDOWS_UPDATE_REBOOT_REASONS.has(reason));
+}

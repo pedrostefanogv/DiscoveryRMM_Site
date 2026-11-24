@@ -19,6 +19,7 @@ import {
 } from '@/hooks/useAgentWindowsUpdates';
 import { useAuthorization } from '@/auth/authorization';
 import { isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
+import { hasPendingWindowsUpdatePowerOption } from '@/utils/agentReboot';
 import { awaitAgentCommandById, notifyAgentCommandOutcome } from '@/pages/agents/agentDetailUtils';
 import { openRemoteDebugPopup } from '@/pages/agents/remoteDebugLauncher';
 import { openRemoteSessionPopup } from '@/pages/agents/remoteSessionLauncher';
@@ -83,7 +84,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
   const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
   // Verbo de energia genérico pendente de confirmação (BIOS/UEFI, Opções
-  // Avançadas, cancelar energia pendente, bloquear sessão).
+  // Avançadas, bloquear sessão).
   const [powerVerbAgent, setPowerVerbAgent] = useState<{ agent: AgentCardAgent; verb: PowerActionVerb } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentCardAgent | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentCardAgent | null>(null);
@@ -181,8 +182,8 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   };
 
   // Verbos do comando genérico "poweraction" (BIOS/UEFI, Opções Avançadas,
-  // cancelar energia pendente, bloquear sessão). O agent valida a capacidade de
-  // cada verbo (ex.: /fw exige UEFI) e devolve falha tipada no acompanhamento.
+  // bloquear sessão). O agent valida a capacidade de cada verbo (ex.: /fw
+  // exige UEFI) e devolve falha tipada no acompanhamento.
   const handlePowerVerbConfirm = async () => {
     if (!powerVerbAgent) return;
     const { agent, verb } = powerVerbAgent;
@@ -382,19 +383,24 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           hint: verb.hint,
           onClick: () => setPowerVerbAgent({ agent, verb }),
         })),
-        {
-          key: 'update-restart',
-          label: 'Atualizar e reiniciar',
-          icon: <Icon name="refresh" className="h-4 w-4" />,
-          onClick: () => setUpdatePowerAction({ agent, action: 'restart' }),
-        },
-        {
-          key: 'update-shutdown',
-          label: 'Atualizar e desligar',
-          icon: <Icon name="refresh" className="h-4 w-4" />,
-          danger: true,
-          onClick: () => setUpdatePowerAction({ agent, action: 'shutdown' }),
-        },
+        ...(hasPendingWindowsUpdatePowerOption(agent)
+          ? [
+              {
+                key: 'update-restart',
+                label: 'Atualizar e reiniciar',
+                icon: <Icon name="refresh" className="h-4 w-4" />,
+                separatorBefore: true,
+                onClick: () => setUpdatePowerAction({ agent, action: 'restart' }),
+              },
+              {
+                key: 'update-shutdown',
+                label: 'Atualizar e desligar',
+                icon: <Icon name="refresh" className="h-4 w-4" />,
+                danger: true,
+                onClick: () => setUpdatePowerAction({ agent, action: 'shutdown' }),
+              },
+            ]
+          : []),
         // "Ligar" não aparece com o agente online: o despertar só faz sentido
         // com a máquina desligada, onde o item "Wake-on-LAN" é oferecido abaixo.
       ],
@@ -484,6 +490,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           agentId={updatePowerAction.agent.id}
           agentName={updatePowerAction.agent.displayName ?? updatePowerAction.agent.hostname}
           action={updatePowerAction.action}
+          hasPendingWindowsUpdate={hasPendingWindowsUpdatePowerOption(updatePowerAction.agent)}
           onClose={() => setUpdatePowerAction(null)}
         />
       )}

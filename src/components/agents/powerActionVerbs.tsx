@@ -86,28 +86,10 @@ export const POWER_ACTION_VERBS: PowerActionVerb[] = [
     errorMessage: 'Falha ao enviar o comando de reinício nas Opções Avançadas.',
   },
   {
-    kind: 'cancel',
-    label: 'Cancelar energia pendente',
-    icon: 'cancel',
-    separatorBefore: true,
-    hint: 'cancela um desligamento/reinício pendente (contador do agente e agendamento do Windows)',
-    confirmTitle: 'Cancelar energia pendente',
-    confirmLabel: 'Cancelar pendência',
-    confirmMessage: (agentName) => (
-      <>
-        O agente vai <span className="font-semibold">cancelar qualquer desligamento ou reinício pendente</span>{' '}
-        de <span className="font-semibold">{agentName}</span>: tanto o contador interno do agente
-        quanto um agendamento do Windows. Nada é reiniciado ou desligado. Se não houver nada
-        pendente, a ação apenas confirma que a máquina está livre.
-      </>
-    ),
-    request: { action: 'cancel', delaySeconds: 0, force: false, notifyUser: false, message: '' },
-    errorMessage: 'Falha ao enviar o comando de cancelamento de energia.',
-  },
-  {
     kind: 'lock',
     label: 'Bloquear sessão',
     icon: 'lock',
+    separatorBefore: true,
     hint: 'bloqueia a sessão do usuário — reversível e sem perda de trabalho',
     confirmTitle: 'Bloquear sessão',
     confirmLabel: 'Bloquear agora',

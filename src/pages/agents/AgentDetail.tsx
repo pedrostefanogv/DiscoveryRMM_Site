@@ -26,6 +26,8 @@ import { useLogs } from '@/hooks/useLogs';
 import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, StatCard, Tooltip, PageHeader } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
+import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
+import { hasPendingWindowsUpdatePowerOption } from '@/utils/agentReboot';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import { LiveAgentHeartbeatCard } from '@/components/agents/LiveAgentHeartbeatCard';
 import { AgentPowerPanel } from '@/components/agents/AgentPowerPanel';
@@ -229,8 +231,9 @@ export default function AgentDetail() {
   // Submenu de energia ("Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
+  const [updatePowerAction, setUpdatePowerAction] = useState<'restart' | 'shutdown' | null>(null);
   // Verbo de energia genérico pendente de confirmação num diálogo dedicado
-  // (BIOS/UEFI, Opções Avançadas, cancelar energia pendente, bloquear sessão).
+  // (BIOS/UEFI, Opções Avançadas, bloquear sessão).
   const [powerVerb, setPowerVerb] = useState<PowerActionVerb | null>(null);
   const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
@@ -880,8 +883,8 @@ export default function AgentDetail() {
   };
 
   // Verbos do comando genérico "poweraction" (BIOS/UEFI, Opções Avançadas,
-  // cancelar energia pendente, bloquear sessão). O agent valida a capacidade de
-  // cada verbo (ex.: /fw exige UEFI) e devolve falha tipada no acompanhamento.
+  // bloquear sessão). O agent valida a capacidade de cada verbo (ex.: /fw
+  // exige UEFI) e devolve falha tipada no acompanhamento.
   const handleOpenPowerVerb = (verb: PowerActionVerb) => {
     setIsPowerMenuOpen(false);
     setPowerVerb(verb);
@@ -1145,6 +1148,36 @@ export default function AgentDetail() {
                           {verb.label}
                         </button>
                       ))}
+                      {hasPendingWindowsUpdatePowerOption(a) && (
+                        <>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => {
+                              setPowerSubmenuOpen(false);
+                              setIsPowerMenuOpen(false);
+                              setUpdatePowerAction('restart');
+                            }}
+                            disabled={restartAgent.isPending || shutdownAgent.isPending || powerActionMutation.isPending}
+                          >
+                            <Icon name="refresh" className="h-4 w-4" />
+                            Atualizar e reiniciar
+                          </button>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => {
+                              setPowerSubmenuOpen(false);
+                              setIsPowerMenuOpen(false);
+                              setUpdatePowerAction('shutdown');
+                            }}
+                            disabled={restartAgent.isPending || shutdownAgent.isPending || powerActionMutation.isPending}
+                          >
+                            <Icon name="refresh" className="h-4 w-4" />
+                            Atualizar e desligar
+                          </button>
+                        </>
+                      )}
                       {/* "Ligar" não aparece com o agente online: o despertar
                           só faz sentido desligado, onde o item Wake-on-LAN é
                           oferecido no lugar do submenu de energia. */}
@@ -2201,6 +2234,17 @@ export default function AgentDetail() {
           }}
           onConfirm={handlePowerActionConfirm}
           isLoading={restartAgent.isPending || shutdownAgent.isPending}
+        />
+      )}
+
+      {updatePowerAction && (
+        <UpdatePowerActionModal
+          open
+          agentId={a.id}
+          agentName={a.displayName ?? a.hostname}
+          action={updatePowerAction}
+          hasPendingWindowsUpdate={hasPendingWindowsUpdatePowerOption(a)}
+          onClose={() => setUpdatePowerAction(null)}
         />
       )}
 
