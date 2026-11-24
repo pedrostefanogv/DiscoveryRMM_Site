@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -142,6 +142,9 @@ export function TaskFormModal({
   onTransitionToEdit,
 }: TaskFormModalProps) {
   const { keyForTitle, markTouched, setTouched } = useAutoKey(editing !== null);
+  const setTouchedRef = useRef(setTouched);
+  setTouchedRef.current = setTouched;
+  const skipNextEditInitRef = useRef(false);
   const [form, setForm] = useState<TaskFormState>(defaultForm);
   const [executionOrderTouched, setExecutionOrderTouched] = useState(false);
   const [scopeClientId, setScopeClientId] = useState("");
@@ -222,8 +225,14 @@ export function TaskFormModal({
   // Inicializa o formulário ao abrir para criação, edição (resumo) ou duplicação.
   useEffect(() => {
     if (!open) {
-      setTouched(false);
+      skipNextEditInitRef.current = false;
+      setTouchedRef.current(false);
       resetLocalState();
+      return;
+    }
+
+    if (skipNextEditInitRef.current) {
+      skipNextEditInitRef.current = false;
       return;
     }
 
@@ -233,7 +242,7 @@ export function TaskFormModal({
 
     if (editing) {
       const normalizedScopeType = normalizeScopeType(editing.scopeType);
-      setTouched(true);
+      setTouchedRef.current(true);
       setForm({
         ...defaultForm,
         name: editing.name,
@@ -263,7 +272,7 @@ export function TaskFormModal({
     if (duplicateSource) {
       const detail = duplicateSource as Partial<AutomationTaskDetail>;
       const normalizedScopeType = normalizeScopeType(duplicateSource.scopeType);
-      setTouched(false);
+      setTouchedRef.current(false);
       setForm({
         ...defaultForm,
         name: `${duplicateSource.name} (cópia)`,
@@ -307,9 +316,10 @@ export function TaskFormModal({
       return;
     }
 
-    setTouched(false);
+    setTouchedRef.current(false);
     resetLocalState();
-  }, [open, editing, duplicateSource, setTouched]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing?.id, duplicateSource?.id]);
 
   // Hidrata detalhes completos quando editando.
   useEffect(() => {
@@ -650,6 +660,7 @@ export function TaskFormModal({
           if (notice) {
             setSavedWithNotice(true);
             toast(notice, { icon: "⚠️" });
+            skipNextEditInitRef.current = true;
             onTransitionToEdit?.(result);
             setTouched(true);
             return;
@@ -1462,7 +1473,7 @@ export function TaskFormModal({
         </div>
 
         {/* Footer fixo */}
-        <div className="sticky bottom-0 -mx-6 -mb-4 mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-6 py-3">
+        <div className="sticky -bottom-4 -mx-6 -mb-4 mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-6 py-3">
           <label className="flex cursor-pointer items-center gap-2.5 text-sm">
             <button
               type="button"

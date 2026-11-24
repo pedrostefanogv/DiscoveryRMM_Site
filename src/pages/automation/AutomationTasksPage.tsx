@@ -36,6 +36,7 @@ import {
   actionDisplayLabel,
   buildCorrelationId,
   normalizeActionType,
+  normalizeInstallationType,
   normalizeScopeType,
   notificationModeFromTask,
   scopeLabel,
@@ -405,7 +406,10 @@ export default function AutomationTasksPage() {
             name: detail.name,
             description: detail.description ?? "",
             actionType: normalizeActionType(detail.actionType),
-            installationType: detail.installationType as never,
+            installationType:
+              detail.installationType !== null && detail.installationType !== undefined
+                ? normalizeInstallationType(detail.installationType)
+                : null,
             packageId: detail.packageId,
             scriptId: detail.scriptId,
             commandPayload: detail.commandPayload,

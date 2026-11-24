@@ -115,6 +115,10 @@ export function TaskCronAssistant({ value, onChange, error }: TaskCronAssistantP
 
   const trimmed = value.trim();
   const valid = isValidCron(trimmed);
+  const stepOptions =
+    /^\d+$/.test(cronStep) && !CRON_STEP_OPTIONS.some((o) => o.value === cronStep)
+      ? [{ value: cronStep, label: `A cada ${cronStep} minutos` }, ...CRON_STEP_OPTIONS]
+      : CRON_STEP_OPTIONS;
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-surface-light p-3.5">
@@ -184,7 +188,7 @@ export function TaskCronAssistant({ value, onChange, error }: TaskCronAssistantP
             {cronFrequency === "minutes" && (
               <Select
                 label="Intervalo"
-                options={CRON_STEP_OPTIONS}
+                options={stepOptions}
                 value={cronStep}
                 onChange={(e) => {
                   const step = e.target.value;
