@@ -140,3 +140,32 @@ export function useDeleteSensor() {
     onSuccess: () => qc.invalidateQueries({ queryKey: SENSOR_KEYS.all }),
   });
 }
+
+/** Silencia ou reativa alertas de um sensor no agente. */
+export function useMuteSensor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      sensorId,
+      durationMinutes,
+      targetKey,
+    }: {
+      agentId: string;
+      sensorId: string;
+      durationMinutes: number | null;
+      targetKey?: string | null;
+    }) => sensorsApi.mute(agentId, sensorId, durationMinutes, targetKey),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SENSOR_KEYS.all }),
+  });
+}
+
+/** Fixa ou desafixa um sensor no resumo do agente. */
+export function usePinSensor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sensorId, isPinned }: { sensorId: string; isPinned: boolean }) =>
+      sensorsApi.setPinned(sensorId, isPinned),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SENSOR_KEYS.all }),
+  });
+}

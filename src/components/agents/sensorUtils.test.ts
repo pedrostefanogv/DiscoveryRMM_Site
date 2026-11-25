@@ -10,14 +10,19 @@ import {
   SENSOR_TYPE_CHANNEL_FALLBACK,
   SENSOR_TYPE_GUIDE,
   buildRecommendedSensorRequests,
+  computeSensorForecast,
   sensorGuideExamples,
   sensorThresholdHint,
   defaultComparison,
   defaultThresholdUnit,
+  describeSensorThresholdsCompact,
   describeSustainSamples,
   emptySensorChannelRow,
   escapeCsvField,
+  formatSensorAxisTick,
+  formatSensorChannelLabel,
   formatSensorChannelValue,
+  isSensorMuted,
   mergeSensorOptionsJson,
   normalizeSustainSamples,
   sensorChannelRowsFromChannels,
@@ -385,3 +390,102 @@ function sensorTypeLabelAll(): Record<string, string> {
 function jsonOf(value: unknown): string {
   return JSON.stringify(value);
 }
+
+describe("formatadores de eixo, canal e limiar compacto", () => {
+  it("formata ticks do eixo Y por unidade sem estourar o espaço", () => {
+    expect(formatSensorAxisTick(5_900_000_000, "Bytes")).toBe("5.5 GB");
+    expect(formatSensorAxisTick(50, "Percent")).toBe("50%");
+    expect(formatSensorAxisTick(1200, "Milliseconds")).toBe("1,2s");
+    expect(formatSensorAxisTick(45, "Milliseconds")).toBe("45 ms");
+    expect(formatSensorAxisTick(1, "Boolean")).toBe("Sim");
+  });
+
+  it("remove sufixo redundante (bytes) de canais em Bytes", () => {
+    expect(formatSensorChannelLabel("Total (bytes)", "total_bytes", "Bytes")).toBe("Total");
+    expect(formatSensorChannelLabel("Uso de memória", "used_percent", "Percent")).toBe("Uso de memória");
+  });
+
+  it("gera descrição compacta de limiares sem a direção entre parênteses", () => {
+    expect(describeSensorThresholdsCompact(15, 5, "Percent")).toBe("atenção 15% · crítico 5%");
+    expect(describeSensorThresholdsCompact(null, null, "Percent")).toBe("Sem limiares");
+  });
+});
+
+describe("isSensorMuted e computeSensorForecast", () => {
+  it("detecta janela de silenciamento ativa vs expirada", () => {
+    const now = Date.parse("2026-11-25T12:00:00Z");
+    expect(isSensorMuted(null, now)).toBe(false);
+    expect(isSensorMuted("2026-11-25T11:59:00Z", now)).toBe(false);
+    expect(isSensorMuted("2026-11-25T13:00:00Z", now)).toBe(true);
+  });
+
+  it("prevê esgotamento de disco (LowerIsWorse) até o limiar crítico", () => {
+    const base = Date.parse("2026-11-25T00:00:00Z");
+    const points = [0, 6, 12, 18, 24].map((h, i) => ({
+      t: new Date(base + h * 3_600_000).toISOString(),
+      v: 50 - i * 5, // 50 -> 30 em 24h (queda de 20% / dia)
+      min: null,
+      max: null,
+    }));
+    const channel = {
+      key: "free_percent",
+      label: "Livre",
+      unit: "Percent" as const,
+      points,
+      stats: { min: 30, avg: 40, max: 50, p95: 50, last: 30, count: 5 },
+    };
+    const s: SensorSeries = {
+      agentId: "a1",
+      sensorId: "s1",
+      targetKey: "C:",
+      from: points[0].t,
+      to: points[4].t,
+      resolution: "hourly",
+      stepSeconds: 3600,
+      warningThreshold: 15,
+      criticalThreshold: 10,
+      comparison: "LowerIsWorse",
+      thresholdUnit: "Percent",
+      channels: [channel],
+      statusStrips: [],
+    };
+
+    const forecast = computeSensorForecast(channel, s);
+    expect(forecast).not.toBeNull();
+    expect(forecast?.level).toBe("critical");
+    expect(forecast?.etaHours).toBeCloseTo(24, 1);
+  });
+
+  it("retorna null quando a tendência é estável ou se afasta do limiar", () => {
+    const base = Date.parse("2026-11-25T00:00:00Z");
+    const points = [0, 6, 12, 18, 24].map((h, i) => ({
+      t: new Date(base + h * 3_600_000).toISOString(),
+      v: 30 + i * 5, // melhorando em LowerIsWorse
+      min: null,
+      max: null,
+    }));
+    const channel = {
+      key: "free_percent",
+      label: "Livre",
+      unit: "Percent" as const,
+      points,
+      stats: { min: 30, avg: 40, max: 50, p95: 50, last: 50, count: 5 },
+    };
+    const s: SensorSeries = {
+      agentId: "a1",
+      sensorId: "s1",
+      targetKey: "C:",
+      from: points[0].t,
+      to: points[4].t,
+      resolution: "hourly",
+      stepSeconds: 3600,
+      warningThreshold: 15,
+      criticalThreshold: 10,
+      comparison: "LowerIsWorse",
+      thresholdUnit: "Percent",
+      channels: [channel],
+      statusStrips: [],
+    };
+    expect(computeSensorForecast(channel, s)).toBeNull();
+  });
+});

@@ -7,6 +7,7 @@ import type {
   SensorEventKind,
   SensorItem,
   SensorSeries,
+  SensorSeriesChannel,
   SensorSeverity,
   SensorStatus,
   SensorType,
@@ -580,6 +581,54 @@ export function formatSensorValue(
   }
 }
 
+/** Rótulo compacto para ticks do eixo Y do gráfico, respeitando a unidade. */
+export function formatSensorAxisTick(value: number, unit: SensorChannelUnit): string {
+  if (!Number.isFinite(value)) return "—";
+  switch (unit) {
+    case "Bytes":
+      return formatBytes(value, "0 B");
+    case "BytesPerSecond":
+      return `${formatBytes(value, "0 B")}/s`;
+    case "Percent":
+      return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value)}%`;
+    case "Milliseconds":
+      return Math.abs(value) >= 1000
+        ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value / 1000)}s`
+        : `${Math.round(value)} ms`;
+    case "Seconds":
+      return value >= 60 ? formatUptime(value) : `${Math.round(value)}s`;
+    case "Boolean":
+      return value >= 1 ? "Sim" : "Não";
+    case "Celsius":
+      return `${Math.round(value)}°C`;
+    case "Days":
+      return `${Math.round(value)}d`;
+    case "MegabitsPerSecond":
+      return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(value)} Mbps`;
+    default:
+      return new Intl.NumberFormat("pt-BR", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(value);
+  }
+}
+
+/**
+ * Rótulo amigável de canal: remove o sufixo redundante "(bytes)" quando o
+ * valor já é formatado em KB/MB/GB/TB.
+ */
+export function formatSensorChannelLabel(
+  label: string | null | undefined,
+  key: string,
+  unit: SensorChannelUnit,
+): string {
+  const base = (label ?? "").trim() || key;
+  if (unit === "Bytes") {
+    return base.replace(/\s*\(bytes\)$/i, "").trim() || base;
+  }
+  return base;
+}
+
 /* ------------------------------------------------------------------ *
  * Sensores de infraestrutura (F6b)
  *
@@ -810,6 +859,22 @@ export function describeSensorThresholds(
   if (parts.length === 0) return "Sem limiares";
   const direction = comparison === "LowerIsWorse" ? "quanto menor, pior" : "quanto maior, pior";
   return `${parts.join(" · ")} (${direction})`;
+}
+
+/** Versão compacta sem a direção entre parênteses (para tabelas em 2 linhas). */
+export function describeSensorThresholdsCompact(
+  warningThreshold: number | null,
+  criticalThreshold: number | null,
+  unit: SensorChannelUnit,
+): string {
+  const parts: string[] = [];
+  if (warningThreshold !== null && warningThreshold !== undefined) {
+    parts.push(`atenção ${formatSensorValue(warningThreshold, unit)}`);
+  }
+  if (criticalThreshold !== null && criticalThreshold !== undefined) {
+    parts.push(`crítico ${formatSensorValue(criticalThreshold, unit)}`);
+  }
+  return parts.length === 0 ? "Sem limiares" : parts.join(" · ");
 }
 
 /**
@@ -1194,4 +1259,116 @@ export function downloadTextFile(
   document.body.removeChild(link);
   // Sem o revoke o blob fica na memória até o unload da página.
   URL.revokeObjectURL(url);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Silenciamento (Snooze) e Previsão de tendência (Forecast)                  */
+/* -------------------------------------------------------------------------- */
+
+/** Indica se o sensor ainda está dentro da janela de silenciamento. */
+export function isSensorMuted(
+  mutedUntil: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!mutedUntil) return false;
+  const parsed = Date.parse(mutedUntil);
+  return Number.isFinite(parsed) && parsed > nowMs;
+}
+
+export interface SensorForecast {
+  level: "critical" | "warning";
+  thresholdValue: number;
+  etaHours: number;
+  etaLabel: string;
+  slopePerDay: number;
+  rSquared: number;
+}
+
+function formatForecastEta(hours: number): string {
+  if (hours < 1) return "< 1h";
+  if (hours < 48) return `~${Math.round(hours)}h`;
+  const days = Math.round(hours / 24);
+  if (days < 60) return days === 1 ? "~1 dia" : `~${days} dias`;
+  const months = Math.round(days / 30);
+  return months === 1 ? "~1 mês" : `~${months} meses`;
+}
+
+/**
+ * Calcula previsão linear simples até o próximo limiar (crítico primeiro,
+ * depois atenção) quando há tendência consistente (R² >= 0.25) na direção
+ * de piora. Devolve null quando não há tendência confiável ou já violou.
+ */
+export function computeSensorForecast(
+  channel: SensorSeriesChannel | undefined,
+  series: SensorSeries,
+): SensorForecast | null {
+  if (!channel) return null;
+  const pts = channel.points
+    .map((p) => ({ tMs: new Date(p.t).getTime(), v: p.v }))
+    .filter((p): p is { tMs: number; v: number } =>
+      Number.isFinite(p.tMs) && p.v !== null && Number.isFinite(p.v),
+    )
+    .sort((a, b) => a.tMs - b.tMs);
+
+  if (pts.length < 4) return null;
+  const firstT = pts[0].tMs;
+  const lastPt = pts[pts.length - 1];
+  const spanHours = (lastPt.tMs - firstT) / 3_600_000;
+  if (spanHours < 0.5) return null;
+
+  const n = pts.length;
+  let sumX = 0;
+  let sumY = 0;
+  for (const pt of pts) {
+    sumX += (pt.tMs - firstT) / 3_600_000;
+    sumY += pt.v;
+  }
+  const meanX = sumX / n;
+  const meanY = sumY / n;
+
+  let sxx = 0;
+  let sxy = 0;
+  let syy = 0;
+  for (const pt of pts) {
+    const dx = (pt.tMs - firstT) / 3_600_000 - meanX;
+    const dy = pt.v - meanY;
+    sxx += dx * dx;
+    sxy += dx * dy;
+    syy += dy * dy;
+  }
+  if (sxx <= 0 || syy <= 0) return null;
+
+  const slopePerHour = sxy / sxx;
+  const rSquared = (sxy * sxy) / (sxx * syy);
+  if (!Number.isFinite(rSquared) || rSquared < 0.25) return null;
+
+  const lowerIsWorse = series.comparison === "LowerIsWorse";
+  if (lowerIsWorse && slopePerHour >= -1e-9) return null;
+  if (!lowerIsWorse && slopePerHour <= 1e-9) return null;
+
+  const candidates: { level: "critical" | "warning"; threshold: number | null | undefined }[] = [
+    { level: "critical", threshold: series.criticalThreshold },
+    { level: "warning", threshold: series.warningThreshold },
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.threshold === null || candidate.threshold === undefined) continue;
+    const threshold = candidate.threshold;
+    const notBreached = lowerIsWorse ? lastPt.v > threshold : lastPt.v < threshold;
+    if (!notBreached) continue;
+
+    const etaHours = (threshold - lastPt.v) / slopePerHour;
+    if (Number.isFinite(etaHours) && etaHours > 0 && etaHours <= 365 * 24) {
+      return {
+        level: candidate.level,
+        thresholdValue: threshold,
+        etaHours,
+        etaLabel: formatForecastEta(etaHours),
+        slopePerDay: slopePerHour * 24,
+        rSquared,
+      };
+    }
+  }
+
+  return null;
 }

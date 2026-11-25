@@ -5307,6 +5307,7 @@ export interface SensorItem {
   lastRunAt: string | null;
   lastStatusChangedAt: string | null;
   lastAlertedAt: string | null;
+  mutedUntil?: string | null;
   intervalSeconds: number;
   timeoutSeconds: number;
   failsBeforeAlert: number;

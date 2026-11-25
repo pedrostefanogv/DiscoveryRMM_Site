@@ -12,6 +12,15 @@ vi.mock("@/hooks/useSensors", () => ({
   useSensorEvents: useSensorEventsMock,
   useSensorDefinitions: () => ({ data: [], isLoading: false }),
 }));
+vi.mock("@/hooks/useSensorSeries", () => ({
+  useSensorSeries: () => ({
+    data: undefined,
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+}));
 vi.mock("@/hooks/useClients", () => ({ useClients: () => ({ data: [] }) }));
 vi.mock("@/hooks/useSites", () => ({ useSites: () => ({ data: [] }) }));
 vi.mock("@/hooks/useAutomation", () => ({
@@ -450,5 +459,78 @@ describe("AgentSensorsPanel", () => {
     // Nenhum role=dialog antes de qualquer clique (o antigo hover-card usava
     // role=dialog e aparecia ao passar o mouse).
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("filtra sensores pelos chips de status e pelo campo de busca", () => {
+    renderPanel({
+      payload: payload({
+        counts: { total: 2, passing: 1, warning: 1, failing: 0, pending: 0, unknown: 0, stale: 0 },
+        items: [
+          sensor({ sensorId: "s1", name: "Disco C:", status: "Warning" }),
+          sensor({
+            sensorId: "s2",
+            name: "Uso de memória",
+            sensorType: "Memory",
+            status: "Passing",
+            message: "Uso de memória: 29%.",
+          }),
+        ],
+      }),
+    });
+
+    expect(screen.getByText("Disco C:")).toBeTruthy();
+    expect(screen.getByText("Uso de memória")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "OK 1" }));
+    expect(screen.queryByText("Disco C:")).toBeNull();
+    expect(screen.getByText("Uso de memória")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Total 2" }));
+    expect(screen.getByText("Disco C:")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Filtrar sensores"), { target: { value: "disco" } });
+    expect(screen.getByText("Disco C:")).toBeTruthy();
+    expect(screen.queryByText("Uso de memória")).toBeNull();
+  });
+
+  it("clicar no menu ⋯ não abre o modal de detalhes e clicar na sparkline abre o gráfico", () => {
+    renderPanel({ payload: payload({ items: [sensor()] }) });
+
+    fireEvent.click(screen.getByRole("button", { name: /Ações do sensor Disco C:/ }));
+    expect(screen.queryByRole("dialog", { name: /Detalhes — Disco C:/ })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /Ver gráfico/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Abrir gráfico de Disco C:/ }));
+    expect(screen.getByRole("dialog", { name: /Gráfico — Disco C:/ })).toBeTruthy();
+  });
+
+  it("permite silenciar, fixar e navegar para chamados a partir do sensor", () => {
+    const onMuteSensor = vi.fn().mockResolvedValue(undefined);
+    const onTogglePin = vi.fn().mockResolvedValue(undefined);
+    const onViewTickets = vi.fn();
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+
+    renderPanel({
+      onMuteSensor,
+      onTogglePin,
+      onViewTickets,
+      payload: payload({
+        items: [sensor({ isPinned: true, mutedUntil: future, status: "Warning" })],
+      }),
+    });
+
+    expect(screen.getByText("Silenciado")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Ações do sensor Disco C:/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Desafixar do resumo/ }));
+    expect(onTogglePin).toHaveBeenCalledWith("s1", false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Disco C:" }));
+    const dialog = screen.getByRole("dialog", { name: /Detalhes — Disco C:/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Remover silenciamento/ }));
+    expect(onMuteSensor).toHaveBeenCalledWith("s1", null, "C:");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /Ver chamados do agente/ }));
+    expect(onViewTickets).toHaveBeenCalledTimes(1);
   });
 });

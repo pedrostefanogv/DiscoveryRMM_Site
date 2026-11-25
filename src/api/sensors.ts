@@ -317,6 +317,7 @@ function normalizeSensorItem(raw: unknown): SensorItem {
     lastRunAt: asNullableString(pick(record, "lastRunAt")),
     lastStatusChangedAt: asNullableString(pick(record, "lastStatusChangedAt")),
     lastAlertedAt: asNullableString(pick(record, "lastAlertedAt")),
+    mutedUntil: asNullableString(pick(record, "mutedUntil")),
     intervalSeconds: asInteger(pick(record, "intervalSeconds")),
     timeoutSeconds: asInteger(pick(record, "timeoutSeconds")),
     failsBeforeAlert: asInteger(pick(record, "failsBeforeAlert"), 1),
@@ -719,6 +720,37 @@ export const sensorsApi = {
   /** Força o agent a re-sincronizar a policy de sensores agora. */
   async syncNow(agentId: string): Promise<void> {
     await api.post<unknown>(`${AGENTS_BASE}/${agentId}/sensors/sync-now`);
+  },
+
+  /** Silencia alertas de um sensor por N minutos (null/<= 0 remove o silenciamento). */
+  async mute(
+    agentId: string,
+    sensorId: string,
+    durationMinutes: number | null,
+    targetKey?: string | null,
+  ): Promise<{ mutedUntil: string | null }> {
+    const raw = await api.post<unknown>(
+      `${AGENTS_BASE}/${agentId}/sensors/${sensorId}/mute`,
+      {
+        durationMinutes,
+        targetKey: targetKey || null,
+      },
+    );
+    const record = asRecord(raw);
+    return { mutedUntil: asNullableString(pick(record, "mutedUntil")) };
+  },
+
+  /** Fixa ou desafixa um sensor no resumo do agente. */
+  async setPinned(
+    sensorId: string,
+    isPinned: boolean,
+  ): Promise<{ id: string; isPinned: boolean }> {
+    const raw = await api.post<unknown>(`${SENSORS_BASE}/${sensorId}/pin`, { isPinned });
+    const record = asRecord(raw);
+    return {
+      id: asString(pick(record, "id"), sensorId),
+      isPinned: asBoolean(pick(record, "isPinned")),
+    };
   },
 
   /** Agregados da frota (página "Sensores"): contadores, tipos e top agentes. */

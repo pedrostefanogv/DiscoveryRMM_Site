@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppApprovalScopeType } from "@/api/types";
 import type { SensorItem, SensorSeries } from "@/api";
 
-const { useSensorSeriesMock, downloadTextFileMock } = vi.hoisted(() => ({
+const { useSensorSeriesMock, useSensorEventsMock, downloadTextFileMock } = vi.hoisted(() => ({
   useSensorSeriesMock: vi.fn(),
+  useSensorEventsMock: vi.fn(),
   downloadTextFileMock: vi.fn(),
 }));
 
@@ -12,9 +13,15 @@ vi.mock("@/hooks/useSensorSeries", () => ({
   useSensorSeries: useSensorSeriesMock,
 }));
 
+vi.mock("@/hooks/useSensors", () => ({
+  useSensorEvents: useSensorEventsMock,
+}));
+
 // O recharts é carregado sob demanda: aqui interessa a barra de ações do modal.
 vi.mock("./SensorChartCanvas", () => ({
-  default: () => <div data-testid="canvas" />,
+  default: ({ visibleChannelKeys }: { visibleChannelKeys?: string[] }) => (
+    <div data-testid="canvas" data-visible-channels={(visibleChannelKeys ?? []).join(",")} />
+  ),
 }));
 
 // O download real mexeria com Blob/URL; espiona só a borda de I/O.
@@ -140,6 +147,8 @@ function botaoExportar(): HTMLButtonElement {
 
 beforeEach(() => {
   useSensorSeriesMock.mockReset();
+  useSensorEventsMock.mockReset();
+  useSensorEventsMock.mockReturnValue({ data: { items: [], nextCursor: null }, isLoading: false, isError: false });
   downloadTextFileMock.mockReset();
   mockSerie();
 });
@@ -176,5 +185,138 @@ describe("SensorChartModal — exportação CSV", () => {
     renderModal();
 
     expect(botaoExportar().disabled).toBe(true);
+  });
+});
+
+describe("SensorChartModal — canais por unidade, rótulos e atualização", () => {
+  function memorySensor(): SensorItem {
+    return sensor({
+      sensorId: "mem1",
+      name: "Uso de memória",
+      sensorType: "Memory",
+      target: null,
+      targetKey: "",
+      warningThreshold: 80,
+      criticalThreshold: 90,
+      thresholdUnit: "Percent",
+      comparison: "HigherIsWorse",
+      primaryChannel: "used_percent",
+      channels: [
+        { key: "used_percent", label: "Uso de memória", unit: "Percent", display: "chart", isPrimary: true },
+        { key: "available_bytes", label: "Disponível", unit: "Bytes", display: "chart", isPrimary: false },
+        { key: "total_bytes", label: "Total (bytes)", unit: "Bytes", display: "chart", isPrimary: false },
+      ],
+    });
+  }
+
+  function memorySeries(): SensorSeries {
+    return serie({
+      sensorId: "mem1",
+      targetKey: "",
+      warningThreshold: 80,
+      criticalThreshold: 90,
+      comparison: "HigherIsWorse",
+      thresholdUnit: "Percent",
+      channels: [
+        {
+          key: "used_percent",
+          label: "used_percent",
+          unit: "Percent",
+          points: [{ t: "2026-01-01T00:00:00.000Z", v: 29.14, min: null, max: null }],
+          stats: { min: 26, avg: 30, max: 48, p95: 32, last: 29.14, count: 54 },
+        },
+        {
+          key: "available_bytes",
+          label: "available_bytes",
+          unit: "Bytes",
+          points: [{ t: "2026-01-01T00:00:00.000Z", v: 4.2e9, min: null, max: null }],
+          stats: { min: 3e9, avg: 4.1e9, max: 4.3e9, p95: 4.2e9, last: 4.2e9, count: 54 },
+        },
+        {
+          key: "total_bytes",
+          label: "total_bytes",
+          unit: "Bytes",
+          points: [{ t: "2026-01-01T00:00:00.000Z", v: 5.9e9, min: null, max: null }],
+          stats: { min: 5.9e9, avg: 5.9e9, max: 5.9e9, p95: 5.9e9, last: 5.9e9, count: 54 },
+        },
+      ],
+      statusStrips: [
+        { from: "2026-01-01T00:00:00.000Z", to: "2026-01-01T01:00:00.000Z", status: "Passing" },
+      ],
+    });
+  }
+
+  it("seleciona por padrão apenas canais da unidade primária e enriquece rótulos", () => {
+    mockSerie(memorySeries());
+    render(
+      <SensorChartModal open onClose={vi.fn()} agentId="a1" sensor={memorySensor()} />,
+    );
+
+    const canvas = screen.getByTestId("canvas");
+    expect(canvas.getAttribute("data-visible-channels")).toBe("used_percent");
+
+    const toggleUsed = screen.getByRole("button", { name: /Uso de memória/ });
+    const toggleAvail = screen.getByRole("button", { name: /Disponível/ });
+    const toggleTotal = screen.getByRole("button", { name: /Total/ });
+    expect(toggleUsed.getAttribute("aria-pressed")).toBe("true");
+    expect(toggleAvail.getAttribute("aria-pressed")).toBe("false");
+    expect(toggleTotal.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(toggleAvail);
+    expect(canvas.getAttribute("data-visible-channels")).toBe("used_percent,available_bytes");
+    expect(screen.getByText("100% em OK no período")).toBeTruthy();
+  });
+
+  it("ignora placeholderData de outro sensor e permite atualizar", () => {
+    mockSerie(serie({ sensorId: "outro-sensor" }));
+    renderModal();
+
+    expect(screen.queryByTestId("canvas")).toBeNull();
+    expect(screen.getByText("Sem amostras nesta janela")).toBeTruthy();
+
+    mockSerie(serie());
+    fireEvent.click(screen.getByRole("button", { name: /Atualizar/ }));
+    expect(useSensorSeriesMock).toHaveBeenCalled();
+  });
+
+  it("exibe banner de previsão quando há tendência consistente e permite selecionar sensor para comparação", () => {
+    const base = Date.parse("2026-01-01T00:00:00.000Z");
+    const points = [0, 6, 12, 18, 24].map((h, i) => ({
+      t: new Date(base + h * 3_600_000).toISOString(),
+      v: 50 - i * 5,
+      min: null,
+      max: null,
+    }));
+    mockSerie(
+      serie({
+        from: points[0].t,
+        to: points[4].t,
+        channels: [
+          {
+            key: "free_percent",
+            label: "Livre",
+            unit: "Percent",
+            points,
+            stats: { min: 30, avg: 40, max: 50, p95: 50, last: 30, count: 5 },
+          },
+        ],
+      }),
+    );
+
+    const cpuSensor = sensor({ sensorId: "cpu1", name: "CPU", sensorType: "Cpu", target: null, targetKey: "" });
+    render(
+      <SensorChartModal
+        open
+        onClose={vi.fn()}
+        agentId="a1"
+        sensor={sensor()}
+        availableSensors={[sensor(), cpuSensor]}
+      />,
+    );
+
+    expect(screen.getByRole("status").textContent).toContain("Previsão:");
+    const select = screen.getByLabelText("Comparar com outro sensor") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "cpu1" } });
+    expect(select.value).toBe("cpu1");
   });
 });

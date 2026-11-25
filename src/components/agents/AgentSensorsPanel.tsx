@@ -29,10 +29,13 @@ import {
   SENSOR_EVENT_KIND_LABELS,
   SENSOR_STATUS_META,
   describeSensorThresholds,
+  describeSensorThresholdsCompact,
   describeSustainSamples,
   formatAgo,
+  formatSensorChannelLabel,
   formatSensorChannelValue,
   formatSensorInterval,
+  isSensorMuted,
   sensorOptionsFromJson,
   sensorScopeLabel,
   sensorSparklineValues,
@@ -69,6 +72,12 @@ interface AgentSensorsPanelProps {
   /** Zera o estado de TODOS os sensores do agente (o painel confirma antes). */
   onResetAllSensors: () => Promise<void>;
   isResetting: boolean;
+  /** Silencia ou reativa alertas de um sensor (opcional). */
+  onMuteSensor?: (sensorId: string, durationMinutes: number | null, targetKey?: string | null) => Promise<void>;
+  /** Fixa ou desafixa um sensor no resumo do agente (opcional). */
+  onTogglePin?: (sensorId: string, isPinned: boolean) => Promise<void>;
+  /** Navega para a aba de chamados do agente (opcional). */
+  onViewTickets?: () => void;
   /** Cria as definições recomendadas (Disco/CPU/Memória/Uptime) no agente. */
   onAddRecommended: () => Promise<void>;
   isAddingRecommended: boolean;
@@ -114,26 +123,140 @@ function DetailItem({ label, value }: { label: string; value: ReactNode }) {
  * renderizado como filho do `Modal` — que já cuida de portal, foco, Esc e
  * rolagem interna.
  */
-function SensorDetailsBody({ sensor, nowMs }: { sensor: SensorItem; nowMs: number }) {
-  const meta = sensorStatusMeta(sensor.status, sensor.isStale);
+const AUTO_TICKET_LABELS = {
+  Never: "Nunca",
+  OnEscalation: "Na escalação",
+  Always: "Sempre",
+} as const;
+
+function SensorDetailsBody({
+  sensor,
+  nowMs,
+  canExecute,
+  onMuteSensor,
+  onViewTickets,
+}: {
+  sensor: SensorItem;
+  nowMs: number;
+  canExecute: boolean;
+  onMuteSensor?: (durationMinutes: number | null) => void;
+  onViewTickets?: () => void;
+}) {
+  const primaryChannel = sensor.channels.find((item) => item.key === sensor.primaryChannel);
+  const primaryUnit = primaryChannel?.unit ?? sensor.thresholdUnit;
+  const primaryFormatted = formatSensorChannelValue(
+    sensor.primaryChannel ?? primaryChannel?.key,
+    sensor.primaryValue,
+    primaryUnit,
+  );
+  const muted = isSensorMuted(sensor.mutedUntil, nowMs);
+  const showAlertsBlock =
+    sensor.status === "Warning" ||
+    sensor.status === "Failing" ||
+    Boolean(sensor.lastAlertedAt) ||
+    sensor.autoTicketPolicy !== "Never";
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">{sensor.name}</p>
-          <p className="mt-0.5 text-xs text-muted">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <SensorStatusBadge status={sensor.status} isStale={sensor.isStale} />
+            {sensor.isInherited ? <Badge color="slate">herdado</Badge> : null}
+            {sensor.isPinned ? <Badge color="primary">fixado</Badge> : null}
+            {muted ? <Badge color="slate">silenciado</Badge> : null}
+          </div>
+          <p className="mt-1.5 text-base font-semibold text-foreground">{sensor.name}</p>
+          <p className="text-xs text-muted">
             {sensorTypeLabel(sensor.sensorType)}
-            {sensor.target ? ` · ${sensor.target}` : ""}
+            {sensor.target ? ` · ${sensor.target}` : sensor.targetKey ? ` · ${sensor.targetKey}` : ""}
           </p>
         </div>
-        <Badge color={meta.color}>{meta.label}</Badge>
+        <div className="text-right">
+          <p className="text-[11px] uppercase tracking-wide text-muted">
+            {primaryChannel?.label ?? "Valor atual"}
+          </p>
+          <p className="text-2xl font-semibold tabular-nums text-foreground">
+            {primaryFormatted}
+          </p>
+        </div>
       </div>
+
+      {muted ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Icon name="notifications_off" className="h-4 w-4 text-muted" />
+            Alertas silenciados até {formatDateTime(sensor.mutedUntil)}.
+          </span>
+          {onMuteSensor && canExecute ? (
+            <Button size="sm" variant="secondary" onClick={() => onMuteSensor(null)}>
+              Remover silenciamento
+            </Button>
+          ) : null}
+        </div>
+      ) : onMuteSensor && canExecute ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-light px-3 py-1.5 text-xs">
+          <span className="flex items-center gap-1.5 text-muted">
+            <Icon name="notifications_off" className="h-3.5 w-3.5" />
+            Silenciar alertas temporariamente:
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => onMuteSensor(60)}>
+              1h
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onMuteSensor(240)}>
+              4h
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => onMuteSensor(1440)}>
+              24h
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {sensor.description ? <p className="text-xs text-muted">{sensor.description}</p> : null}
       {sensor.message ? (
         <p className="rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted-foreground">
           {sensor.message}
         </p>
       ) : null}
+
+      {Object.keys(sensor.currentChannels).length > 0 ? (
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted">Canais atuais</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {Object.entries(sensor.currentChannels).map(([key, value]) => {
+              const channel = sensor.channels.find((item) => item.key === key);
+              const unit = channel?.unit ?? "Count";
+              const label = formatSensorChannelLabel(channel?.label, key, unit);
+              return (
+                <Badge key={key} color={key === sensor.primaryChannel ? "primary" : "slate"}>
+                  {label}: {formatSensorChannelValue(key, value, unit)}
+                </Badge>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {showAlertsBlock ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs">
+          <div className="space-y-0.5">
+            <p className="font-medium text-foreground">Alertas e chamados</p>
+            <p className="text-muted">
+              Auto-chamado: {AUTO_TICKET_LABELS[sensor.autoTicketPolicy] ?? sensor.autoTicketPolicy}
+              {sensor.lastAlertedAt ? ` · último alerta ${formatAgo(sensor.lastAlertedAt, nowMs)}` : ""}
+            </p>
+          </div>
+          {onViewTickets ? (
+            <Button size="sm" variant="secondary" onClick={onViewTickets}>
+              <Icon name="confirmation_number" className="h-4 w-4" />
+              Ver chamados do agente
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid gap-2 sm:grid-cols-2">
         <DetailItem label="Alvo" value={sensor.target || sensor.targetKey || "—"} />
         <DetailItem label="Escopo" value={sensorScopeLabel(sensor.scopeType) + (sensor.isInherited ? " (herdado)" : "")} />
@@ -155,27 +278,16 @@ function SensorDetailsBody({ sensor, nowMs }: { sensor: SensorItem; nowMs: numbe
         />
         <DetailItem label="Última execução" value={formatAgo(sensor.lastRunAt, nowMs)} />
         <DetailItem label="Mudança de estado" value={formatAgo(sensor.lastStatusChangedAt, nowMs)} />
-        <DetailItem label="Código de saída" value={sensor.exitCode === null ? "—" : String(sensor.exitCode)} />
         <DetailItem label="Duração" value={sensor.durationMs === null ? "—" : `${sensor.durationMs} ms`} />
         <DetailItem label="Execuções" value={`${sensor.totalRuns} (${sensor.totalFailures} falha(s))`} />
-        <DetailItem label="Script" value={sensor.scriptName ?? "—"} />
+        {sensor.exitCode !== null ? (
+          <DetailItem label="Código de saída" value={String(sensor.exitCode)} />
+        ) : null}
+        {sensor.scriptName ? (
+          <DetailItem label="Script" value={sensor.scriptName} />
+        ) : null}
       </div>
-      {Object.keys(sensor.currentChannels).length > 0 ? (
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted">Canais atuais</p>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {Object.entries(sensor.currentChannels).map(([key, value]) => {
-              const channel = sensor.channels.find((item) => item.key === key);
-              return (
-                <Badge key={key} color="slate">
-                  {channel?.label ?? key}:{" "}
-                  {formatSensorChannelValue(key, value, channel?.unit ?? "Count")}
-                </Badge>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+
       {sensor.outputExcerpt ? (
         <div className="min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-muted">Saída (trecho)</p>
@@ -194,7 +306,13 @@ interface SensorDetailsModalProps {
   onClose: () => void;
   onOpenChart: () => void;
   onOpenHistory: () => void;
+  onRunNow: () => void;
   onEdit: () => void;
+  onMuteSensor?: (durationMinutes: number | null) => void;
+  onTogglePin?: () => void;
+  onViewTickets?: () => void;
+  canExecute: boolean;
+  isRunning: boolean;
   canManage: boolean;
 }
 
@@ -211,15 +329,50 @@ function SensorDetailsModal({
   onClose,
   onOpenChart,
   onOpenHistory,
+  onRunNow,
   onEdit,
+  onMuteSensor,
+  onTogglePin,
+  onViewTickets,
+  canExecute,
+  isRunning,
   canManage,
 }: SensorDetailsModalProps) {
   return (
     <Modal open onClose={onClose} title={`Detalhes — ${sensor.name}`} maxWidth="max-w-2xl">
       <div className="space-y-4">
-        <SensorDetailsBody sensor={sensor} nowMs={nowMs} />
+        <SensorDetailsBody
+          sensor={sensor}
+          nowMs={nowMs}
+          canExecute={canExecute}
+          onMuteSensor={onMuteSensor}
+          onViewTickets={onViewTickets}
+        />
         {/* Sem botão "Fechar" aqui: o Modal já tem o X do cabeçalho e o Esc. */}
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+          {onTogglePin ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onTogglePin}
+              disabled={!canManage}
+              title={sensor.isPinned ? "Remover do resumo do agente" : "Fixar no resumo do agente"}
+            >
+              <Icon name="push_pin" className="h-4 w-4" />
+              {sensor.isPinned ? "Desafixar" : "Fixar"}
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onRunNow}
+            loading={isRunning}
+            disabled={!canExecute}
+            title="Pedir ao agent para coletar este sensor agora"
+          >
+            <Icon name="play_arrow" className="h-4 w-4" />
+            Executar agora
+          </Button>
           <Button size="sm" variant="secondary" onClick={onOpenHistory}>
             <Icon name="history" className="h-4 w-4" />
             Histórico
@@ -267,6 +420,9 @@ export default function AgentSensorsPanel({
   onResetSensor,
   onResetAllSensors,
   isResetting,
+  onMuteSensor,
+  onTogglePin,
+  onViewTickets,
   onAddRecommended,
   isAddingRecommended,
   recommendedProgress,
@@ -275,18 +431,66 @@ export default function AgentSensorsPanel({
 }: AgentSensorsPanelProps) {
   const nowMs = useNowTick(15_000);
   const [rowMenu, setRowMenu] = useState<RowMenuState | null>(null);
-  const [detailsSensor, setDetailsSensor] = useState<SensorItem | null>(null);
-  const [chartSensor, setChartSensor] = useState<SensorItem | null>(null);
-  const [historySensor, setHistorySensor] = useState<SensorItem | null>(null);
+  const [detailsSensorTarget, setDetailsSensorTarget] = useState<SensorItem | null>(null);
+  const [chartSensorTarget, setChartSensorTarget] = useState<SensorItem | null>(null);
+  const [historySensorTarget, setHistorySensorTarget] = useState<SensorItem | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingSensor, setEditingSensor] = useState<SensorItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SensorItem | null>(null);
   const [resetAllOpen, setResetAllOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "Passing" | "Warning" | "Failing" | "NoData">("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const items = payload?.items ?? [];
   const counts = payload?.counts;
   const staleCount = counts?.stale ?? 0;
   const semDadosCount = (counts?.unknown ?? 0) + (counts?.pending ?? 0);
+
+  // Mantém os modais sincronizados com o payload atualizado (realtime/refetch).
+  const detailsSensor = useMemo(
+    () =>
+      detailsSensorTarget
+        ? (items.find((item) => item.sensorId === detailsSensorTarget.sensorId) ?? detailsSensorTarget)
+        : null,
+    [detailsSensorTarget, items],
+  );
+  const chartSensor = useMemo(
+    () =>
+      chartSensorTarget
+        ? (items.find((item) => item.sensorId === chartSensorTarget.sensorId) ?? chartSensorTarget)
+        : null,
+    [chartSensorTarget, items],
+  );
+  const historySensor = useMemo(
+    () =>
+      historySensorTarget
+        ? (items.find((item) => item.sensorId === historySensorTarget.sensorId) ?? historySensorTarget)
+        : null,
+    [historySensorTarget, items],
+  );
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return items.filter((sensor) => {
+      if (statusFilter === "Passing" && sensor.status !== "Passing") return false;
+      if (statusFilter === "Warning" && sensor.status !== "Warning") return false;
+      if (statusFilter === "Failing" && sensor.status !== "Failing") return false;
+      if (statusFilter === "NoData" && sensor.status !== "Unknown" && sensor.status !== "Pending") {
+        return false;
+      }
+      if (!query) return true;
+      const haystack = [
+        sensor.name,
+        sensorTypeLabel(sensor.sensorType),
+        sensor.target ?? "",
+        sensor.targetKey,
+        sensor.message ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [items, searchQuery, statusFilter]);
 
   const openCreate = () => {
     setEditingSensor(null);
@@ -296,11 +500,12 @@ export default function AgentSensorsPanel({
     setEditingSensor(sensor);
     setFormOpen(true);
   };
-  const openDetails = (sensor: SensorItem) => setDetailsSensor(sensor);
-  const closeDetails = () => setDetailsSensor(null);
+  const openDetails = (sensor: SensorItem) => setDetailsSensorTarget(sensor);
+  const closeDetails = () => setDetailsSensorTarget(null);
 
   /** Abre o menu de ações posicionado no botão "⋯" da linha. */
   const openRowMenu = (event: ReactMouseEvent<HTMLButtonElement>, sensor: SensorItem) => {
+    event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     setRowMenu({ x: rect.right - 220, y: rect.bottom + 4, sensor });
   };
@@ -340,7 +545,15 @@ export default function AgentSensorsPanel({
               >
                 {sensor.name}
               </button>
+              {sensor.isPinned ? (
+                <span title="Fixado no resumo do agente" className="inline-flex shrink-0 text-primary">
+                  <Icon name="push_pin" className="h-3.5 w-3.5" />
+                </span>
+              ) : null}
               {sensor.isInherited ? <Badge color="slate">herdado</Badge> : null}
+              {isSensorMuted(sensor.mutedUntil, nowMs) ? (
+                <Badge color="slate">Silenciado</Badge>
+              ) : null}
             </div>
             <p className="truncate text-xs text-muted" title={sensor.target ?? sensor.targetKey}>
               {sensorTypeLabel(sensor.sensorType)}
@@ -352,51 +565,88 @@ export default function AgentSensorsPanel({
       {
         key: "value",
         header: "Valor atual",
-        width: "20%",
+        width: "14%",
         render: (sensor) => {
-          const sparkline = sensorSparklineValues(sensor);
           const channel = sensor.channels.find((item) => item.key === sensor.primaryChannel);
           const unit = channel?.unit ?? sensor.thresholdUnit;
           return (
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate font-medium tabular-nums text-foreground">
-                  {formatSensorChannelValue(
-                    sensor.primaryChannel ?? channel?.key,
-                    sensor.primaryValue,
-                    unit,
-                  )}
-                </p>
-                {channel?.label ? (
-                  <p className="truncate text-[11px] text-muted">{channel.label}</p>
-                ) : null}
-              </div>
-              <SensorSparkline
-                values={sparkline}
-                status={sensor.status}
-                isStale={sensor.isStale}
-                title={`Tendência de ${sensor.name}`}
-                className="shrink-0"
-              />
+            <div className="min-w-0">
+              <p className="truncate font-medium tabular-nums text-foreground">
+                {formatSensorChannelValue(
+                  sensor.primaryChannel ?? channel?.key,
+                  sensor.primaryValue,
+                  unit,
+                )}
+              </p>
+              {channel?.label ? (
+                <p className="truncate text-[11px] text-muted">{channel.label}</p>
+              ) : null}
             </div>
+          );
+        },
+      },
+      {
+        key: "trend",
+        header: "Tendência",
+        width: "11%",
+        sortable: false,
+        render: (sensor) => {
+          const sparkline = sensorSparklineValues(sensor);
+          return (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setChartSensorTarget(sensor);
+              }}
+              title={`Abrir gráfico de ${sensor.name}`}
+              aria-label={`Abrir gráfico de ${sensor.name}`}
+              className="inline-flex items-center rounded-md px-1.5 py-1 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {sparkline.length >= 2 ? (
+                <SensorSparkline
+                  values={sparkline}
+                  status={sensor.status}
+                  isStale={sensor.isStale}
+                  title={`Tendência de ${sensor.name}`}
+                  className="shrink-0"
+                />
+              ) : (
+                <Icon name="monitoring" className="h-4 w-4 text-muted" />
+              )}
+            </button>
           );
         },
       },
       {
         key: "thresholds",
         header: "Limiares",
-        width: "16%",
+        width: "18%",
         render: (sensor) => {
-          const label = describeSensorThresholds(
+          const fullLabel = describeSensorThresholds(
             sensor.warningThreshold,
             sensor.criticalThreshold,
             sensor.thresholdUnit,
             sensor.comparison,
           );
+          const compact = describeSensorThresholdsCompact(
+            sensor.warningThreshold,
+            sensor.criticalThreshold,
+            sensor.thresholdUnit,
+          );
+          const hasThresholds =
+            sensor.warningThreshold !== null || sensor.criticalThreshold !== null;
           return (
-            <span className="block truncate text-xs text-muted-foreground" title={label}>
-              {label}
-            </span>
+            <div className="min-w-0" title={fullLabel}>
+              <p className="truncate text-xs text-muted-foreground">{compact}</p>
+              {hasThresholds ? (
+                <p className="truncate text-[11px] text-muted">
+                  {sensor.comparison === "LowerIsWorse"
+                    ? "↓ quanto menor, pior"
+                    : "↑ quanto maior, pior"}
+                </p>
+              ) : null}
+            </div>
           );
         },
       },
@@ -457,7 +707,7 @@ export default function AgentSensorsPanel({
           key: "chart",
           label: "Ver gráfico",
           icon: <Icon name="monitoring" className="h-4 w-4" />,
-          onClick: () => setChartSensor(rowMenu.sensor),
+          onClick: () => setChartSensorTarget(rowMenu.sensor),
         },
         {
           key: "run",
@@ -470,7 +720,7 @@ export default function AgentSensorsPanel({
           key: "history",
           label: "Histórico",
           icon: <Icon name="history" className="h-4 w-4" />,
-          onClick: () => setHistorySensor(rowMenu.sensor),
+          onClick: () => setHistorySensorTarget(rowMenu.sensor),
         },
         {
           key: "reset",
@@ -481,6 +731,45 @@ export default function AgentSensorsPanel({
           disabled: !canExecute,
           onClick: () => void onResetSensor(rowMenu.sensor.sensorId),
         },
+        ...(onTogglePin
+          ? [
+              {
+                key: "pin",
+                label: rowMenu.sensor.isPinned ? "Desafixar do resumo" : "Fixar no resumo",
+                icon: <Icon name="push_pin" className="h-4 w-4" />,
+                disabled: !canManage,
+                onClick: () => void onTogglePin(rowMenu.sensor.sensorId, !rowMenu.sensor.isPinned),
+              },
+            ]
+          : []),
+        ...(onMuteSensor
+          ? isSensorMuted(rowMenu.sensor.mutedUntil, nowMs)
+            ? [
+                {
+                  key: "unmute",
+                  label: "Remover silenciamento",
+                  icon: <Icon name="notifications_active" className="h-4 w-4" />,
+                  disabled: !canExecute,
+                  onClick: () => void onMuteSensor(rowMenu.sensor.sensorId, null, rowMenu.sensor.targetKey),
+                },
+              ]
+            : [
+                {
+                  key: "mute-1h",
+                  label: "Silenciar por 1h",
+                  icon: <Icon name="notifications_off" className="h-4 w-4" />,
+                  disabled: !canExecute,
+                  onClick: () => void onMuteSensor(rowMenu.sensor.sensorId, 60, rowMenu.sensor.targetKey),
+                },
+                {
+                  key: "mute-4h",
+                  label: "Silenciar por 4h",
+                  icon: <Icon name="notifications_off" className="h-4 w-4" />,
+                  disabled: !canExecute,
+                  onClick: () => void onMuteSensor(rowMenu.sensor.sensorId, 240, rowMenu.sensor.targetKey),
+                },
+              ]
+          : []),
         {
           key: "edit",
           label: "Editar",
@@ -583,39 +872,77 @@ export default function AgentSensorsPanel({
         </div>
       </div>
 
-      <p className="mb-3 flex items-start gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted">
-        <Icon name="sensors" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>
-          Sensores medem a saúde deste dispositivo em intervalos próprios: o agent coleta e o
-          servidor avalia o estado (OK/Atenção/Crítico). Os canais numéricos alimentam as
-          sparklines e o gráfico de histórico.
-          {canView && payload ? (
-            payload.upToDate ? (
+      {canView && payload ? (
+        <p className="mb-3 flex items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-1.5 text-xs text-muted">
+          <Icon name="sensors" className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 truncate">
+            {payload.upToDate ? (
               <>
-                {" "}
-                O agent já recebeu esta configuração
-                {payload.lastSensorSyncAt ? ` (em ${formatDateTime(payload.lastSensorSyncAt)})` : ""}.
+                Configuração sincronizada com o agent
+                {payload.lastSensorSyncAt ? ` em ${formatDateTime(payload.lastSensorSyncAt)}` : ""}.
               </>
             ) : payload.lastSyncedSensorFingerprint ? (
               <>
-                {" "}
-                O agent ainda está com uma configuração anterior — aguarde o próximo check-in
-                {canExecute ? " ou use “Forçar sincronização” para antecipar" : ""}.
+                Agent com configuração anterior — aguarde o check-in
+                {canExecute ? " ou use “Forçar sincronização”" : ""}.
               </>
             ) : (
-              <> Este agent ainda não registrou o recebimento de nenhuma configuração de sensores.</>
-            )
-          ) : null}
-        </span>
-      </p>
+              <>Agent ainda não registrou o recebimento da configuração de sensores.</>
+            )}
+          </span>
+        </p>
+      ) : null}
 
       {canView && payload ? (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          <Badge color="success">OK {counts?.passing ?? 0}</Badge>
-          <Badge color="warning">Atenção {counts?.warning ?? 0}</Badge>
-          <Badge color="danger">Crítico {counts?.failing ?? 0}</Badge>
-          <Badge color="slate">Sem dados {semDadosCount}</Badge>
-          <Badge color="primary">Total {counts?.total ?? items.length}</Badge>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                { key: "Passing", label: `OK ${counts?.passing ?? 0}`, activeClass: "border-success/60 bg-success/20 text-success" },
+                { key: "Warning", label: `Atenção ${counts?.warning ?? 0}`, activeClass: "border-warning/60 bg-warning/20 text-warning" },
+                { key: "Failing", label: `Crítico ${counts?.failing ?? 0}`, activeClass: "border-danger/60 bg-danger/20 text-danger" },
+                { key: "NoData", label: `Sem dados ${semDadosCount}`, activeClass: "border-border bg-surface-hover text-foreground" },
+                { key: "all", label: `Total ${counts?.total ?? items.length}`, activeClass: "border-primary/60 bg-primary/15 text-primary" },
+              ] as const
+            ).map((chip) => {
+              const active = statusFilter === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() =>
+                    setStatusFilter((prev) =>
+                      prev === chip.key && chip.key !== "all" ? "all" : chip.key,
+                    )
+                  }
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    active
+                      ? chip.activeClass
+                      : "border-border bg-surface-light text-muted-foreground hover:bg-surface-hover"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+          {items.length > 0 ? (
+            <div className="relative w-full sm:w-56">
+              <Icon
+                name="search"
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Filtrar sensores..."
+                aria-label="Filtrar sensores"
+                className="w-full rounded-lg border border-border bg-surface-light py-1 pl-8 pr-3 text-xs text-foreground placeholder:text-muted focus:border-primary focus:outline-none"
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -681,13 +1008,13 @@ export default function AgentSensorsPanel({
       ) : (
         <DataTable
           columns={columns}
-          data={items}
+          data={filteredItems}
           keyExtractor={(sensor) => sensor.sensorId}
           // O card de detalhes é ALTO (canais, limiares, saída) e ficava
           // recortado na borda da tabela no hover — agora a linha abre um modal.
           onRowClick={openDetails}
           pageSize={15}
-          emptyMessage="Nenhum sensor encontrado"
+          emptyMessage="Nenhum sensor corresponde ao filtro"
           maxHeight="min(560px, 52vh)"
           fixedLayout
         />
@@ -709,14 +1036,36 @@ export default function AgentSensorsPanel({
         <SensorDetailsModal
           sensor={detailsSensor}
           nowMs={nowMs}
+          canExecute={canExecute}
+          isRunning={isRunning}
           canManage={canManage}
           onClose={closeDetails}
+          onRunNow={() => void onRun([detailsSensor.sensorId])}
+          onMuteSensor={
+            onMuteSensor
+              ? (durationMinutes) =>
+                  void onMuteSensor(detailsSensor.sensorId, durationMinutes, detailsSensor.targetKey)
+              : undefined
+          }
+          onTogglePin={
+            onTogglePin
+              ? () => void onTogglePin(detailsSensor.sensorId, !detailsSensor.isPinned)
+              : undefined
+          }
+          onViewTickets={
+            onViewTickets
+              ? () => {
+                  closeDetails();
+                  onViewTickets();
+                }
+              : undefined
+          }
           onOpenChart={() => {
-            setChartSensor(detailsSensor);
+            setChartSensorTarget(detailsSensor);
             closeDetails();
           }}
           onOpenHistory={() => {
-            setHistorySensor(detailsSensor);
+            setHistorySensorTarget(detailsSensor);
             closeDetails();
           }}
           onEdit={() => {
@@ -739,7 +1088,8 @@ export default function AgentSensorsPanel({
           open
           agentId={agentId}
           sensor={chartSensor}
-          onClose={() => setChartSensor(null)}
+          availableSensors={items}
+          onClose={() => setChartSensorTarget(null)}
         />
       ) : null}
 
@@ -747,7 +1097,7 @@ export default function AgentSensorsPanel({
         <SensorHistoryModal
           agentId={agentId}
           sensor={historySensor}
-          onClose={() => setHistorySensor(null)}
+          onClose={() => setHistorySensorTarget(null)}
         />
       ) : null}
 

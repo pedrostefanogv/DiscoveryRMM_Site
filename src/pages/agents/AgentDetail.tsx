@@ -37,6 +37,7 @@ import { AgentNetworkTab } from '@/components/agents/AgentNetworkTab';
 import { AgentSoftwareTab } from '@/components/agents/AgentSoftwareTab';
 import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import AgentSensorsPanel from '@/components/agents/AgentSensorsPanel';
+import { AgentPinnedSensorsCard } from '@/components/agents/AgentPinnedSensorsCard';
 import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { PowerActionVerbDialog } from '@/components/agents/PowerActionVerbDialog';
@@ -66,6 +67,8 @@ import {
   useAgentSensors,
   useCreateSensor,
   useDeleteSensor,
+  useMuteSensor,
+  usePinSensor,
   useResetSensorState,
   useRunSensors,
   useSyncSensorsNow,
@@ -346,13 +349,18 @@ export default function AgentDetail() {
   // Mesma armadilha do bloco acima: todos os hooks ficam ACIMA dos early returns
   // de carregamento/erro (React #310). O fetch do payload só liga quando a aba
   // está ativa e o usuário tem Sensors.View; as mutações só rodam por ação.
-  const agentSensors = useAgentSensors(id!, canViewSensors && activeDataTab === 'sensors');
+  const agentSensors = useAgentSensors(
+    id!,
+    canViewSensors && (activeDataTab === 'sensors' || activeDataTab === 'info'),
+  );
   const runSensors = useRunSensors();
   const syncSensorsNow = useSyncSensorsNow();
   const createSensor = useCreateSensor();
   const updateSensor = useUpdateSensor();
   const deleteSensor = useDeleteSensor();
   const resetSensorState = useResetSensorState();
+  const muteSensor = useMuteSensor();
+  const pinSensor = usePinSensor();
 
   // Tempo real da aba: assina "SensorStatusChanged" no NATS e invalida o payload
   // do agente. Só assina com a aba ativa (Sensors.View); o polling de 30s de
@@ -446,6 +454,37 @@ export default function AgentDetail() {
       }
     },
     [id, resetSensorState, agentSensors],
+  );
+
+  const handleMuteSensor = useCallback(
+    async (sensorId: string, durationMinutes: number | null, targetKey?: string | null) => {
+      if (!id) return;
+      try {
+        await muteSensor.mutateAsync({ agentId: id, sensorId, durationMinutes, targetKey });
+        toast.success(
+          durationMinutes && durationMinutes > 0
+            ? 'Alertas do sensor silenciados.'
+            : 'Silenciamento do sensor removido.',
+        );
+        await agentSensors.refetch();
+      } catch (error) {
+        toast.error(describeSensorsError(error, 'Falha ao atualizar o silenciamento do sensor.'));
+      }
+    },
+    [id, muteSensor, agentSensors],
+  );
+
+  const handleTogglePinSensor = useCallback(
+    async (sensorId: string, isPinned: boolean) => {
+      try {
+        await pinSensor.mutateAsync({ sensorId, isPinned });
+        toast.success(isPinned ? 'Sensor fixado no resumo.' : 'Sensor desafixado do resumo.');
+        await agentSensors.refetch();
+      } catch (error) {
+        toast.error(describeSensorsError(error, 'Falha ao fixar/desafixar o sensor.'));
+      }
+    },
+    [pinSensor, agentSensors],
   );
 
   const handleResetAllSensors = useCallback(async () => {
@@ -1790,6 +1829,13 @@ export default function AgentDetail() {
               </Card>
             </div>
 
+            {canViewSensors ? (
+              <AgentPinnedSensorsCard
+                items={agentSensors.data?.items ?? []}
+                onViewAll={() => handleSelectDataTab('sensors')}
+              />
+            ) : null}
+
             <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
           </>
         )}
@@ -2052,6 +2098,9 @@ export default function AgentDetail() {
                   onResetSensor={handleResetSensorState}
                   onResetAllSensors={handleResetAllSensors}
                   isResetting={resetSensorState.isPending}
+                  onMuteSensor={handleMuteSensor}
+                  onTogglePin={handleTogglePinSensor}
+                  onViewTickets={() => handleSelectDataTab('tickets')}
                   onAddRecommended={handleAddRecommendedSensors}
                   isAddingRecommended={recommendedSensorsProgress !== null}
                   recommendedProgress={recommendedSensorsProgress}
