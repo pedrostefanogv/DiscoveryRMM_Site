@@ -126,6 +126,7 @@ const featureIcons: Record<string, React.ReactNode> = {
   recoveryEnabled: <Icon name="storage" className="h-4 w-4" />,
   discoveryEnabled: <Icon name="wifi" className="h-4 w-4" />,
   p2PFilesEnabled: <Icon name="layers" className="h-4 w-4" />,
+  tpmRecoveryEnabled: <Icon name="lock" className="h-4 w-4" />,
   cloudBootstrapEnabled: <Icon name="cloud" className="h-4 w-4" />,
   chatAIEnabled: <Icon name="smart_toy" className="h-4 w-4" />,
   supportEnabled: <Icon name="monitoring" className="h-4 w-4" />,

@@ -1995,6 +1995,8 @@ export interface ServerConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  /** Cofre TPM herdável (servidor -> cliente -> site): grava URL da API + token no TPM. */
+  tpmRecoveryEnabled: boolean;
   cloudBootstrapEnabled: boolean;
   chatAIEnabled: boolean;
   supportEnabled: boolean;
@@ -2087,6 +2089,8 @@ export interface ClientConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  /** Cofre TPM; null/ausente herda do servidor. */
+  tpmRecoveryEnabled?: boolean | null;
   cloudBootstrapEnabled?: boolean | null;
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
@@ -2137,6 +2141,8 @@ export interface SiteConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  /** Cofre TPM; null/ausente herda do cliente/servidor. */
+  tpmRecoveryEnabled?: boolean | null;
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
@@ -2188,6 +2194,7 @@ export interface ResolvedConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  tpmRecoveryEnabled: boolean;
   cloudBootstrapEnabled: boolean;
   chatAIEnabled: boolean;
   supportEnabled: boolean;

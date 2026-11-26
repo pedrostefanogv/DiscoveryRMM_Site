@@ -29,6 +29,7 @@ const SERVER_CONFIG = {
   recoveryEnabled: true,
   discoveryEnabled: false,
   p2PFilesEnabled: false,
+  tpmRecoveryEnabled: false,
   cloudBootstrapEnabled: false,
   chatAIEnabled: false,
   supportEnabled: false,
@@ -205,5 +206,17 @@ describe("ServerConfigurationPage — campos de funcionalidades por kind", () =>
       enabled: false,
       defaultIntervalSeconds: 300,
     });
+  });
+
+  it("renderiza o Cofre TPM como switch e envia booleano no PATCH", async () => {
+    renderPage();
+
+    const toggle = screen.getByRole("switch", { name: /^Cofre TPM/ });
+    expect(toggle).toBeTruthy();
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => expect(patchMutate).toHaveBeenCalledTimes(1));
+    expect(patchMutate.mock.calls[0][0]).toEqual({ tpmRecoveryEnabled: true });
   });
 });

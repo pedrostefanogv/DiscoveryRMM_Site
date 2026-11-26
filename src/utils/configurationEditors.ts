@@ -389,6 +389,14 @@ export const serverEditableFields: EditableField[] = [
       "Habilita o download e o compartilhamento de instaladores entre agentes via P2P. Requer Descoberta de Rede ou Bootstrap P2P via Nuvem ativos — sem um caminho de descoberta os agentes não se encontram e o P2P fica desativado no agent.",
   },
   {
+    key: "tpmRecoveryEnabled",
+    label: "Cofre TPM (recuperação pós-formatação)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Grava no TPM da máquina o endereço da API e o token de comunicação do agente, permitindo que uma máquina formatada e reinstalada volte a ficar online sozinha, sem novo deploy token. Clientes e sites herdam este valor quando não o definem. ATENÇÃO: desligar este campo APAGA o registro do TPM nas máquinas do escopo — depois disso uma máquina formatada não se recupera mais até um novo provisionamento.",
+  },
+  {
     key: "cloudBootstrapEnabled",
     label: "Bootstrap P2P via Nuvem",
     kind: "boolean",
@@ -873,6 +881,14 @@ export const clientEditableFields: EditableField[] = [
       "Requer Descoberta de Rede neste escopo ou herdada, ou Bootstrap P2P via Nuvem neste escopo ou herdado do servidor.",
   },
   {
+    key: "tpmRecoveryEnabled",
+    label: "Cofre TPM (recuperação pós-formatação)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Grava no TPM da máquina o endereço da API e o token de comunicação do agente, permitindo que uma máquina formatada e reinstalada volte a ficar online sozinha, sem novo deploy token. Herda do nível superior quando não definido. ATENÇÃO: desligar este campo APAGA o registro do TPM nas máquinas do escopo — depois disso uma máquina formatada não se recupera mais até um novo provisionamento.",
+  },
+  {
     key: "cloudBootstrapEnabled",
     label: "Bootstrap P2P via Nuvem",
     kind: "boolean",
@@ -1095,6 +1111,14 @@ export const siteEditableFields: EditableField[] = [
     group: "features",
     description:
       "Requer Descoberta de Rede neste escopo ou herdada, ou Bootstrap P2P via Nuvem herdado do cliente/servidor.",
+  },
+  {
+    key: "tpmRecoveryEnabled",
+    label: "Cofre TPM (recuperação pós-formatação)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Grava no TPM da máquina o endereço da API e o token de comunicação do agente, permitindo que uma máquina formatada e reinstalada volte a ficar online sozinha, sem novo deploy token. Herda do nível superior quando não definido. ATENÇÃO: desligar este campo APAGA o registro do TPM nas máquinas do escopo — depois disso uma máquina formatada não se recupera mais até um novo provisionamento.",
   },
   {
     key: "chatAIEnabled",

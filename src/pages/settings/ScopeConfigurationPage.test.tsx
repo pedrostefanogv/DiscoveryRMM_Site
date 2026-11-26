@@ -27,7 +27,7 @@ const fixtures = vi.hoisted(() => {
       refetch: noop,
     },
     clientConfigActive: {
-      data: { recoveryEnabled: null },
+      data: { recoveryEnabled: null, tpmRecoveryEnabled: null },
       isLoading: false,
       isError: false,
       refetch: noop,
@@ -44,7 +44,7 @@ const fixtures = vi.hoisted(() => {
       refetch: noop,
     },
     siteConfigActive: {
-      data: { recoveryEnabled: null },
+      data: { recoveryEnabled: null, tpmRecoveryEnabled: null },
       isLoading: false,
       isError: false,
       refetch: noop,
@@ -176,5 +176,16 @@ describe("ScopeConfigurationPage (unificada)", () => {
     ).toBe("s1");
     expect(screen.getByText("Origem dos valores")).toBeTruthy();
     expect(screen.getByText("SupportEnabled")).toBeTruthy();
+  });
+
+  it("mostra o Cofre TPM entre os campos de funcionalidades do cliente", () => {
+    renderPage("client");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Cliente" }), {
+      target: { value: "c1" },
+    });
+
+    // WS7: o campo herdável novo precisa existir no catálogo renderizado do escopo.
+    expect(screen.getByText("Cofre TPM (recuperação pós-formatação)")).toBeTruthy();
   });
 });

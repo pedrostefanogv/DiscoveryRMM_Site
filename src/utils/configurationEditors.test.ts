@@ -974,3 +974,77 @@ describe("teto global de chamadas de tools MCP (McpToolCallsPerMinute)", () => {
     ).toContain("herda do cliente");
   });
 });
+
+/**
+ * WS7: cofre TPM (tpmRecoveryEnabled) — toggle HERDÁVEL servidor -> cliente ->
+ * site, no mesmo molde de p2PFilesEnabled. Semântica: true grava no TPM o par
+ * (URL da API + token) do agente; false APAGA esse registro nas máquinas do
+ * escopo. A descrição precisa avisar disso, e o kind tem de ser boolean (um
+ * "json" mandaria blob para uma propriedade bool e o PATCH voltaria 400).
+ */
+describe("cofre TPM (tpmRecoveryEnabled)", () => {
+  it("expõe o toggle boolean no grupo features em servidor, cliente e site", () => {
+    for (const [scope, fields] of scopes) {
+      const field = fields.find((item) => item.key === "tpmRecoveryEnabled");
+      expect(field, `${scope} sem tpmRecoveryEnabled`).toBeDefined();
+      expect(field?.kind, `${scope} tpmRecoveryEnabled não é boolean`).toBe("boolean");
+      expect(field?.group, `${scope} tpmRecoveryEnabled fora de features`).toBe("features");
+      expect(field?.label).toBe("Cofre TPM (recuperação pós-formatação)");
+      expect(field?.description).toBeTruthy();
+    }
+  });
+
+  it("aparece exatamente uma vez por escopo", () => {
+    for (const [scope, fields] of scopes) {
+      expect(
+        fields.filter((field) => field.key === "tpmRecoveryEnabled"),
+        `${scope} duplicou tpmRecoveryEnabled`,
+      ).toHaveLength(1);
+    }
+  });
+
+  it("é desenhado como switch (kind boolean) e não como JSON", () => {
+    const field = serverEditableFields.find((item) => item.key === "tpmRecoveryEnabled");
+    expect(field).toBeDefined();
+    expect(isBooleanToggleField(field!)).toBe(true);
+    expect(field!.kind).not.toBe("json");
+  });
+
+  it("valida e envia apenas true/false no payload", () => {
+    expect(validateFieldValue("boolean", "true", "tpmRecoveryEnabled")).toBe(true);
+    expect(validateFieldValue("boolean", "false", "tpmRecoveryEnabled")).toBe(true);
+    expect(validateFieldValue("boolean", "sim", "tpmRecoveryEnabled")).not.toBe(true);
+    expect(parseFieldValue("boolean", "true", "tpmRecoveryEnabled")).toBe(true);
+    expect(parseFieldValue("boolean", "false", "tpmRecoveryEnabled")).toBe(false);
+  });
+
+  it("avisa que desligar APAGA o registro do TPM nas máquinas do escopo", () => {
+    for (const [scope, fields] of scopes) {
+      const description =
+        fields.find((item) => item.key === "tpmRecoveryEnabled")?.description ?? "";
+      expect(description, `${scope} não cita o TPM`).toContain("TPM");
+      expect(description, `${scope} não avisa que apaga o registro`).toMatch(/APAGA/i);
+      expect(description.toLowerCase(), `${scope} não cita máquina formatada`).toContain(
+        "formatada",
+      );
+    }
+  });
+
+  it("declara a herança do nível superior (herdável como p2PFilesEnabled)", () => {
+    for (const [scope, fields] of scopes) {
+      const description =
+        fields.find((item) => item.key === "tpmRecoveryEnabled")?.description?.toLowerCase() ?? "";
+      expect(description, `${scope} não menciona herança`).toContain("herda");
+    }
+  });
+
+  it("não cria dependência de descoberta/zero-touch (fora de FEATURE_DEPENDENCIES)", () => {
+    expect(
+      getFeatureDependencyIssue("tpmRecoveryEnabled", {
+        discoveryEnabled: "false",
+        cloudBootstrapEnabled: "false",
+        zeroTouchEnabled: "false",
+      }),
+    ).toBeNull();
+  });
+});

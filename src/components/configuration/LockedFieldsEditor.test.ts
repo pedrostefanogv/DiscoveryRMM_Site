@@ -4,6 +4,7 @@ import { parseLockedFields, toApiFieldName } from "./LockedFieldsEditor";
 describe("editor de campos bloqueados", () => {
   it("converte o campo do editor para o nome da propriedade da API", () => {
     expect(toApiFieldName("recoveryEnabled")).toBe("RecoveryEnabled");
+    expect(toApiFieldName("tpmRecoveryEnabled")).toBe("TpmRecoveryEnabled");
     expect(toApiFieldName("agentOnlineGraceSeconds")).toBe("AgentOnlineGraceSeconds");
     expect(toApiFieldName("aiIntegrationSettingsJson")).toBe("AIIntegrationSettingsJson");
     expect(toApiFieldName("agentUpdatePolicyJson")).toBe("AgentUpdatePolicyJson");
