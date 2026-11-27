@@ -1,12 +1,15 @@
-import { api } from "./client";
+import { api, API_VERSION_PREFIX } from "./client";
 
 async function apiRequest<T>(path: string, init?: { method?: string; body?: string }): Promise<T> {
   const method = (init?.method || "GET").toUpperCase();
   const parsedBody = init?.body ? JSON.parse(init.body) : undefined;
-  if (method === "POST") return api.post<T>(path, parsedBody);
-  if (method === "PATCH") return api.patch<T>(path, parsedBody);
-  if (method === "DELETE") return api.del<T>(path);
-  return api.get<T>(path);
+  const fullPath = path.startsWith("/api/")
+    ? path
+    : `${API_VERSION_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
+  if (method === "POST") return api.post<T>(fullPath, parsedBody);
+  if (method === "PATCH") return api.patch<T>(fullPath, parsedBody);
+  if (method === "DELETE") return api.del<T>(fullPath);
+  return api.get<T>(fullPath);
 }
 
 export type FileScope = 0 | 1 | 2; // 0=Global, 1=Client, 2=Site

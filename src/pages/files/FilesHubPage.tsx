@@ -206,11 +206,11 @@ export default function FilesHubPage() {
 
   const clientsQuery = useQuery({
     queryKey: ["clients-minimal-files"],
-    queryFn: () => api.get<ClientItem[]>("/clients"),
+    queryFn: () => api.get<ClientItem[]>("/api/v1/clients"),
   });
   const sitesQuery = useQuery({
     queryKey: ["sites-minimal-files"],
-    queryFn: () => api.get<SiteItem[]>("/sites"),
+    queryFn: () => api.get<SiteItem[]>("/api/v1/sites"),
   });
 
   const filteredUploadSites = (sitesQuery.data || []).filter((s) => !uploadClientId || s.clientId === uploadClientId);
