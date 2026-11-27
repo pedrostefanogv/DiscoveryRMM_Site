@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, Icon, Input, Loading } from '@/components/ui';
 import {
@@ -57,14 +57,24 @@ export function TicketKnowledgePanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [feedbackSent, setFeedbackSent] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    setSearchInput('');
+    setSearchQuery('');
+    setFeedbackSent({});
+  }, [ticketId]);
+
   const linksQuery = useTicketKnowledgeLinks(ticketId);
-  const suggestionsQuery = useTicketKnowledgeSuggestions(ticketId, {
-    q: ticketTitle,
-    clientId: clientId || undefined,
-    siteId: siteId || undefined,
-    departmentId: departmentId || undefined,
-    maxResults: 5,
-  });
+  const suggestionsQuery = useTicketKnowledgeSuggestions(
+    ticketId,
+    {
+      q: ticketTitle,
+      clientId: clientId || undefined,
+      siteId: siteId || undefined,
+      departmentId: departmentId || undefined,
+      maxResults: 5,
+    },
+    canManageLinks,
+  );
   const manualSearchQuery = useKnowledgeSearch(
     {
       q: searchQuery,
@@ -214,7 +224,7 @@ export function TicketKnowledgePanel({
                       <button
                         type="button"
                         onClick={() => handleUnlink(link.linkId)}
-                        disabled={unlinkMutation.isPending}
+                        disabled={unlinkMutation.isPending && unlinkMutation.variables?.linkId === link.linkId}
                         className="shrink-0 rounded p-1 text-muted hover:text-danger"
                         title="Desvincular artigo"
                         aria-label={`Desvincular ${link.articleTitle}`}
@@ -229,7 +239,7 @@ export function TicketKnowledgePanel({
                     <button
                       type="button"
                       onClick={() => handleFeedback(link.articleId, true)}
-                      disabled={feedbackMutation.isPending}
+                      disabled={feedbackMutation.isPending && feedbackMutation.variables?.articleId === link.articleId}
                       aria-label={`Marcar ${link.articleTitle} como útil`}
                       className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
                         sent === true
@@ -243,7 +253,7 @@ export function TicketKnowledgePanel({
                     <button
                       type="button"
                       onClick={() => handleFeedback(link.articleId, false)}
-                      disabled={feedbackMutation.isPending}
+                      disabled={feedbackMutation.isPending && feedbackMutation.variables?.articleId === link.articleId}
                       aria-label={`Marcar ${link.articleTitle} como não útil`}
                       className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
                         sent === false
@@ -284,7 +294,7 @@ export function TicketKnowledgePanel({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  loading={linkMutation.isPending}
+                  loading={linkMutation.isPending && linkMutation.variables?.data.articleId === article.id}
                   onClick={() => handleLink(article.id)}
                 >
                   <Icon name="add" className="h-3.5 w-3.5" /> Vincular
@@ -317,7 +327,19 @@ export function TicketKnowledgePanel({
           </form>
 
           {manualSearchQuery.isFetching && <Loading message="Buscando..." />}
-          {!manualSearchQuery.isFetching && searchQuery && availableSearchResults.length === 0 && (
+          {manualSearchQuery.isError && !manualSearchQuery.isFetching && (
+            <div className="flex items-center justify-between text-xs text-danger">
+              <span>Erro ao buscar artigos.</span>
+              <button
+                type="button"
+                onClick={() => void manualSearchQuery.refetch()}
+                className="underline hover:text-foreground"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {!manualSearchQuery.isFetching && !manualSearchQuery.isError && searchQuery && availableSearchResults.length === 0 && (
             <p className="text-xs text-muted">Nenhum artigo encontrado.</p>
           )}
           {availableSearchResults.length > 0 && (
@@ -337,7 +359,7 @@ export function TicketKnowledgePanel({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    loading={linkMutation.isPending}
+                    loading={linkMutation.isPending && linkMutation.variables?.data.articleId === article.id}
                     onClick={() => handleLink(article.id)}
                   >
                     <Icon name="add" className="h-3.5 w-3.5" /> Vincular

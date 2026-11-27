@@ -65,7 +65,13 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
         <p className="text-xs text-muted">Carregando decisão da IA...</p>
       )}
 
-      {!decision.isLoading && !data && (
+      {!decision.isLoading && decision.isError && (
+        <p className="text-xs text-danger">
+          Não foi possível carregar a decisão da triagem por IA.
+        </p>
+      )}
+
+      {!decision.isLoading && !decision.isError && !data && (
         <p className="text-xs text-muted">
           Nenhuma decisão registrada. Use "Sugerir com IA" para avaliar a equipe deste chamado.
         </p>
@@ -87,12 +93,30 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
             </Badge>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+              {data.confidence > 0 && (
+                <span>Confiança {pct(data.confidence)}</span>
+              )}
+              <span>Dificuldade {data.difficulty}/5</span>
+              {data.model && <span>Modelo {data.model}</span>}
+              {data.tokensUsed > 0 && <span>{data.tokensUsed} tokens</span>}
+            </div>
             {data.confidence > 0 && (
-              <span>Confiança {pct(data.confidence)}</span>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-light">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${Math.min(100, Math.max(0, data.confidence * 100))}%` }}
+                />
+              </div>
             )}
-            <span>Dificuldade {data.difficulty}/5</span>
           </div>
+
+          {!data.applied && data.notAppliedReason && (
+            <p className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-[11px] text-warning">
+              Motivo de não aplicação: {data.notAppliedReason}
+            </p>
+          )}
 
           {parsedRationale && parsedRationale.summary && (
             <p className="text-xs leading-relaxed text-muted-foreground">
@@ -120,15 +144,22 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
                   {candidates.map((candidate) => (
                     <li
                       key={candidate.userId}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-light px-2.5 py-1.5 text-xs"
+                      className="flex flex-col gap-0.5 rounded-lg bg-surface-light px-2.5 py-1.5 text-xs"
                     >
-                      <span className="font-medium text-foreground">
-                        {candidate.userName ?? candidate.userId}
-                      </span>
-                      <span className="text-muted">
-                        score {candidate.score.toFixed(2)} · skill {candidate.skillScore.toFixed(2)} ·
-                        afinidade {candidate.affinityScore.toFixed(2)} · {candidate.openNow} abertos
-                      </span>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">
+                          {candidate.userName ?? candidate.userId}
+                        </span>
+                        <span className="text-muted">
+                          score {candidate.score.toFixed(2)} · skill {candidate.skillScore.toFixed(2)} ·
+                          afinidade {candidate.affinityScore.toFixed(2)} · {candidate.openNow} abertos
+                        </span>
+                      </div>
+                      {candidate.bestAffinityTicketTitle && (
+                        <span className="text-[11px] text-muted">
+                          Referência: {candidate.bestAffinityTicketTitle}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -143,6 +174,7 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
           size="sm"
           variant="secondary"
           loading={preview.isPending}
+          disabled={preview.isPending || apply.isPending}
           onClick={() =>
             preview.mutate(ticketId, {
               onSuccess: () => toast.success("Triagem executada. Sugestão registrada."),
@@ -156,6 +188,7 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
         <Button
           size="sm"
           loading={apply.isPending}
+          disabled={preview.isPending || apply.isPending}
           onClick={() =>
             apply.mutate(ticketId, {
               onSuccess: (result) => {

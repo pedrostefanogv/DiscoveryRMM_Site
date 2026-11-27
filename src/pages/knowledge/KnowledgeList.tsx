@@ -26,6 +26,7 @@ import {
   useDepartments,
   useKnowledgeAllArticles,
   useKnowledgeCategories,
+  useKnowledgeChatSearch,
   useKnowledgeSearch,
   usePublishKnowledgeArticle,
   useSites,
@@ -143,6 +144,9 @@ export default function KnowledgeList() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
+  const [ragPlaygroundOpen, setRagPlaygroundOpen] = useState(false);
+  const [ragQuery, setRagQuery] = useState('');
+  const ragMutation = useKnowledgeChatSearch();
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [publishModalArticle, setPublishModalArticle] = useState<KnowledgeArticle | null>(null);
   const [publishStatusChoice, setPublishStatusChoice] = useState<'Published' | 'Internal' | 'AiOnly'>('Published');
@@ -171,6 +175,18 @@ export default function KnowledgeList() {
   // Resposta sempre em formato ArticleListPage do backend unificado
   const listPage = listQuery.data as ArticleListPage | undefined;
   const listItems: KnowledgeArticle[] = listPage?.items ?? [];
+
+  const embeddingHealth = useMemo(() => {
+    let indexed = 0;
+    let indexing = 0;
+    let disabled = 0;
+    for (const art of listItems) {
+      if (art.aiIndexingEnabled === false) disabled++;
+      else if (art.status !== 'Draft' && art.embeddingsReady) indexed++;
+      else if (art.status !== 'Draft') indexing++;
+    }
+    return { indexed, indexing, disabled };
+  }, [listItems]);
 
   const searchQuery = useKnowledgeSearch(
     {
@@ -443,8 +459,12 @@ export default function KnowledgeList() {
           <Badge color={statusColor(article.status)}>
             {statusLabel(article)}
           </Badge>
-          {article.aiIndexingEnabled === false && (
+          {article.aiIndexingEnabled === false ? (
             <Badge color="warning">Sem IA</Badge>
+          ) : article.status !== 'Draft' && (
+            <Badge color={article.embeddingsReady ? 'success' : 'slate'}>
+              {article.embeddingsReady ? 'Indexado' : 'Indexando'}
+            </Badge>
           )}
         </div>
       ),
@@ -596,12 +616,100 @@ export default function KnowledgeList() {
         title="Base de Conhecimento"
         description="Busque artigos rapidamente, organize por departamento e controle o uso pela IA."
       >
-        {canCreateArticle && (
-          <Button onClick={() => navigate('/knowledge/new')}>
-            <Icon name="add" className="h-4 w-4" /> Novo Artigo
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setRagPlaygroundOpen((v) => !v)}
+          >
+            <Icon name="smart_toy" className="h-4 w-4" /> Testar RAG
           </Button>
-        )}
+          {canCreateArticle && (
+            <Button onClick={() => navigate('/knowledge/new')}>
+              <Icon name="add" className="h-4 w-4" /> Novo Artigo
+            </Button>
+          )}
+        </div>
       </PageHeader>
+
+      {listItems.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-light px-4 py-2.5 text-xs">
+          <span className="font-medium text-foreground">Saúde dos embeddings (página atual):</span>
+          <Badge color="success">{embeddingHealth.indexed} indexado(s)</Badge>
+          {embeddingHealth.indexing > 0 && (
+            <Badge color="slate">{embeddingHealth.indexing} indexando</Badge>
+          )}
+          {embeddingHealth.disabled > 0 && (
+            <Badge color="warning">{embeddingHealth.disabled} sem IA</Badge>
+          )}
+        </div>
+      )}
+
+      {ragPlaygroundOpen && (
+        <Card>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!ragQuery.trim()) return;
+              ragMutation.mutate({
+                query: ragQuery.trim(),
+                clientId: clientId || undefined,
+                siteId: siteId || undefined,
+                departmentId: departmentId || undefined,
+                mode: searchMode,
+                maxResults: 5,
+              });
+            }}
+          >
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[240px] flex-1">
+                <Input
+                  label="Playground RAG (simula busca da IA no chat)"
+                  value={ragQuery}
+                  onChange={(e) => setRagQuery(e.target.value)}
+                  placeholder="Digite uma dúvida do usuário final..."
+                />
+              </div>
+              <Button type="submit" loading={ragMutation.isPending} disabled={!ragQuery.trim()}>
+                Testar busca
+              </Button>
+            </div>
+            {ragMutation.isError && (
+              <p className="text-xs text-danger">Falha ao executar busca RAG.</p>
+            )}
+            {ragMutation.data && (
+              <div className="space-y-2 pt-1">
+                <p className="text-xs text-muted">
+                  {(ragMutation.data.suggestions ?? []).length} trecho(s) retornado(s)
+                </p>
+                {(ragMutation.data.suggestions ?? []).map((hit, idx) => (
+                  <div
+                    key={`${hit.articleId}-${idx}`}
+                    className="rounded-lg border border-border bg-surface-light p-2.5 text-xs"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/knowledge/${hit.articleId}`)}
+                        className="font-semibold text-primary hover:underline text-left"
+                      >
+                        {hit.articleTitle}
+                      </button>
+                      {typeof hit.score === 'number' && (
+                        <Badge color="slate">score {hit.score.toFixed(3)}</Badge>
+                      )}
+                    </div>
+                    {hit.excerpt && (
+                      <p className="mt-1 line-clamp-3 text-muted-foreground">{hit.excerpt}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </form>
+        </Card>
+      )}
 
       <Card>
         <form className="space-y-3" onSubmit={handleSearchSubmit}>

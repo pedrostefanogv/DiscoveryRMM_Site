@@ -107,12 +107,20 @@ export const mcpToolsApi = {
   audit: (params: {
     toolName?: string;
     status?: string;
+    clientId?: string;
+    agentId?: string;
+    fromUtc?: string;
+    toUtc?: string;
     page?: number;
     pageSize?: number;
   }) => {
     const qs = new URLSearchParams();
     if (params.toolName) qs.set("toolName", params.toolName);
     if (params.status) qs.set("status", params.status);
+    if (params.clientId) qs.set("clientId", params.clientId);
+    if (params.agentId) qs.set("agentId", params.agentId);
+    if (params.fromUtc) qs.set("fromUtc", params.fromUtc);
+    if (params.toUtc) qs.set("toUtc", params.toUtc);
     if (params.page) qs.set("page", String(params.page));
     if (params.pageSize) qs.set("pageSize", String(params.pageSize));
     const q = qs.toString();

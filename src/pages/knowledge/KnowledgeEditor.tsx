@@ -151,7 +151,7 @@ export default function KnowledgeEditor() {
   const sites = useSites(form.clientId);
   const departments = useDepartments({ clientId: form.clientId || undefined, activeOnly: true });
   const detailQuery = useKnowledgeArticle(id ?? '');
-  const versionsQuery = useKnowledgeArticleVersions(id ?? '');
+  const versionsQuery = useKnowledgeArticleVersions(id ?? '', showVersions);
   const createMutation = useCreateKnowledgeArticle();
   const updateMutation = useUpdateKnowledgeArticle();
   const publishMutation = usePublishKnowledgeArticle();
@@ -175,10 +175,15 @@ export default function KnowledgeEditor() {
     [id, uploadImage],
   );
 
+  const initializedArticleIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!isEdit || !detailQuery.data) return;
-
     const article = detailQuery.data;
+    // Evita sobrescrever edições Markdown não salvas durante refetchOnWindowFocus
+    if (initializedArticleIdRef.current === article.id) return;
+    initializedArticleIdRef.current = article.id;
+
     setForm({
       title: article.title,
       content: article.content,
@@ -194,6 +199,7 @@ export default function KnowledgeEditor() {
 
   // Ao trocar de artigo, volta para a "home" e limpa o editor de página.
   useEffect(() => {
+    initializedArticleIdRef.current = null;
     setActivePageId(null);
     setPageTitle('');
     setPageContent('');

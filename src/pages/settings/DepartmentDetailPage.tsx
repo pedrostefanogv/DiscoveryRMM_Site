@@ -1592,6 +1592,7 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
   const inherited = isInheritedMember(member);
   const skillTagsText = member.skillTags.join(", ");
   const [tags, setTags] = useState(skillTagsText);
+  const [tagDraft, setTagDraft] = useState("");
   const [level, setLevel] = useState(String(member.skillLevel));
   const [maxOpen, setMaxOpen] = useState(
     member.maxOpenTickets == null ? "" : String(member.maxOpenTickets),
@@ -1697,13 +1698,65 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
       )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-4">
-        <Input
-          label="Competências (vírgula)"
-          value={tags}
-          disabled={inherited}
-          onChange={(event) => setTags(event.target.value)}
-          placeholder="rede, impressora, erp"
-        />
+        <div className="space-y-1.5">
+          <Input
+            label="Competências (vírgula)"
+            value={tags}
+            disabled={inherited}
+            onChange={(event) => setTags(event.target.value)}
+            placeholder="rede, impressora, erp"
+          />
+          <div className="flex flex-wrap gap-1">
+            {tags
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
+              .map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-foreground"
+                >
+                  {tag}
+                  {!inherited && (
+                    <button
+                      type="button"
+                      aria-label={`Remover competência ${tag}`}
+                      onClick={() =>
+                        setTags(
+                          tags
+                            .split(",")
+                            .map((t) => t.trim())
+                            .filter((t) => t && t !== tag)
+                            .join(", "),
+                        )
+                      }
+                      className="text-muted hover:text-danger"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+          </div>
+          {!inherited && (
+            <Input
+              value={tagDraft}
+              onChange={(event) => setTagDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === ",") {
+                  event.preventDefault();
+                  const next = tagDraft.replace(/,/g, "").trim();
+                  if (!next) return;
+                  const existing = tags.split(",").map((t) => t.trim()).filter(Boolean);
+                  if (!existing.includes(next)) setTags([...existing, next].join(", "));
+                  setTagDraft("");
+                }
+              }}
+              placeholder="+ tag e Enter"
+              className="text-xs"
+            />
+          )}
+        </div>
         <Input
           label="Nível (1-5)"
           type="number"
@@ -1806,7 +1859,8 @@ export function DepartmentLearningCard({ departmentId }: { departmentId: string 
             <div className="mt-2 flex flex-wrap gap-2">
               <Button
                 size="sm"
-                loading={applySkill.isPending}
+                loading={applySkill.isPending && applySkill.variables === suggestion.id}
+                disabled={applySkill.isPending || discardSkill.isPending}
                 onClick={() =>
                   applySkill.mutate(suggestion.id, {
                     onSuccess: () => toast.success("Competências aplicadas ao perfil."),
@@ -1819,7 +1873,8 @@ export function DepartmentLearningCard({ departmentId }: { departmentId: string 
               <Button
                 size="sm"
                 variant="ghost"
-                loading={discardSkill.isPending}
+                loading={discardSkill.isPending && discardSkill.variables === suggestion.id}
+                disabled={applySkill.isPending || discardSkill.isPending}
                 onClick={() =>
                   discardSkill.mutate(suggestion.id, {
                     onSuccess: () => toast.success("Sugestão descartada."),

@@ -88,6 +88,13 @@ export function useKnowledgeArticle(id: string) {
     queryKey: KEYS.detail(id),
     queryFn: () => knowledgeApi.get(id),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (d && d.status !== "Draft" && d.aiIndexingEnabled !== false && !d.embeddingsReady) {
+        return 5000;
+      }
+      return false;
+    },
   });
 }
 
@@ -306,11 +313,11 @@ export function useKnowledgeImageUrl(
   };
 }
 
-export function useKnowledgeArticleVersions(id: string) {
+export function useKnowledgeArticleVersions(id: string, enabled = true) {
   return useQuery({
     queryKey: KEYS.versions(id),
     queryFn: () => knowledgeApi.getVersions(id),
-    enabled: !!id,
+    enabled: !!id && enabled,
   });
 }
 
@@ -445,11 +452,12 @@ export function useTicketKnowledgeLinks(ticketId: string) {
 export function useTicketKnowledgeSuggestions(
   ticketId: string,
   params?: TicketKnowledgeSuggestQuery,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: KEYS.ticketSuggest(ticketId, params),
     queryFn: () => knowledgeApi.suggestTicketKnowledge(ticketId, params),
-    enabled: !!ticketId,
+    enabled: !!ticketId && enabled,
   });
 }
 
@@ -465,7 +473,7 @@ export function useLinkTicketKnowledge() {
     }) => knowledgeApi.linkTicketKnowledge(ticketId, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.ticketLinks(vars.ticketId) });
-      qc.invalidateQueries({ queryKey: KEYS.ticketSuggest(vars.ticketId) });
+      qc.invalidateQueries({ queryKey: ["knowledge", "ticket-suggest", vars.ticketId] });
     },
   });
 }
@@ -482,7 +490,7 @@ export function useUnlinkTicketKnowledge() {
     }) => knowledgeApi.unlinkTicketKnowledge(ticketId, linkId),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.ticketLinks(vars.ticketId) });
-      qc.invalidateQueries({ queryKey: KEYS.ticketSuggest(vars.ticketId) });
+      qc.invalidateQueries({ queryKey: ["knowledge", "ticket-suggest", vars.ticketId] });
     },
   });
 }

@@ -18,9 +18,9 @@ export const ticketAiApi = {
       {},
     ),
 
-  draftKbArticle: (ticketId: string) =>
-    api.post<unknown>(
-      `/api/v1/tickets/${ticketId}/ai/draft-kb-article`,
+  draftKbArticle: (ticketId: string, persist = false) =>
+    api.post<{ content?: string; tokensUsed?: number; model?: string }>(
+      `/api/v1/tickets/${ticketId}/ai/draft-kb-article${persist ? "?persist=true" : ""}`,
       {},
     ),
 };

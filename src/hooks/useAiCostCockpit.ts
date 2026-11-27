@@ -12,5 +12,6 @@ export function useAiCostCockpit(params: AiCostCockpitParams = {}) {
     queryKey: KEYS.cockpit(params),
     queryFn: () => aiCostApi.cockpit(params),
     placeholderData: (previous) => previous,
+    staleTime: 60_000,
   });
 }

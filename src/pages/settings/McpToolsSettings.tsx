@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -154,13 +154,14 @@ export default function McpToolsSettings() {
         timeoutSeconds: isNonExecutableCapability(tool) ? null : edit.timeoutSeconds,
         locked: edit.locked,
       }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       toast.success(`Política de "${variables.tool.name}" salva.`);
       setEdits((prev) => {
         const next = { ...prev };
         delete next[variables.tool.name];
         return next;
       });
+      if (data) queryClient.setQueryData(["mcp-tools", level, clientId, siteId, agentId], data);
       setLimitText(null);
       setEditingTool(null);
       void queryClient.invalidateQueries({ queryKey: ["mcp-tools"] });
@@ -171,7 +172,7 @@ export default function McpToolsSettings() {
 
   const resetMutation = useMutation({
     mutationFn: (toolName: string) => mcpToolsApi.reset(toolName, scope),
-    onSuccess: (_data, toolName) => {
+    onSuccess: (data, toolName) => {
       toast.success(`"${toolName}" voltou a herdar do nível acima.`);
       // A sobrescrita deixou de existir: descartar o rascunho evita a linha
       // continuar marcada como "Não salvo" com valores que já não valem.
@@ -180,6 +181,7 @@ export default function McpToolsSettings() {
         delete next[toolName];
         return next;
       });
+      if (data) queryClient.setQueryData(["mcp-tools", level, clientId, siteId, agentId], data);
       void queryClient.invalidateQueries({ queryKey: ["mcp-tools"] });
     },
     onError: (error) =>
@@ -310,15 +312,41 @@ export default function McpToolsSettings() {
 
   const [activeTab, setActiveTab] = useState<"policies" | "audit">("policies");
   const [auditToolFilter, setAuditToolFilter] = useState("");
+  const [debouncedAuditTool, setDebouncedAuditTool] = useState("");
   const [auditStatusFilter, setAuditStatusFilter] = useState("");
+  const [auditClientId, setAuditClientId] = useState("");
+  const [auditAgentId, setAuditAgentId] = useState("");
+  const [auditFromDate, setAuditFromDate] = useState("");
+  const [auditToDate, setAuditToDate] = useState("");
+  const [expandedAuditId, setExpandedAuditId] = useState<string | null>(null);
   const [auditPage, setAuditPage] = useState(1);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedAuditTool(auditToolFilter.trim());
+    }, 300);
+    return () => clearTimeout(t);
+  }, [auditToolFilter]);
+
   const auditQuery = useQuery<McpToolAuditResponse>({
-    queryKey: ["mcp-tools-audit", auditToolFilter, auditStatusFilter, auditPage],
+    queryKey: [
+      "mcp-tools-audit",
+      debouncedAuditTool,
+      auditStatusFilter,
+      auditClientId,
+      auditAgentId,
+      auditFromDate,
+      auditToDate,
+      auditPage,
+    ],
     queryFn: () =>
       mcpToolsApi.audit({
-        toolName: auditToolFilter.trim() || undefined,
+        toolName: debouncedAuditTool || undefined,
         status: auditStatusFilter || undefined,
+        clientId: auditClientId.trim() || undefined,
+        agentId: auditAgentId.trim() || undefined,
+        fromUtc: auditFromDate ? `${auditFromDate}T00:00:00Z` : undefined,
+        toUtc: auditToDate ? `${auditToDate}T23:59:59Z` : undefined,
         page: auditPage,
         pageSize: 25,
       }),
@@ -365,7 +393,7 @@ export default function McpToolsSettings() {
             title="Auditoria de execuções MCP"
             subtitle="Histórico de chamadas de ferramentas executadas no servidor e no agente."
           />
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Input
               label="Ferramenta"
               placeholder="Ex.: registry_read, request_human_support"
@@ -385,11 +413,38 @@ export default function McpToolsSettings() {
                 { value: "timeout", label: "Timeout" },
               ]}
             />
-            <div className="flex items-end">
-              <Button type="button" size="sm" variant="secondary" onClick={() => void auditQuery.refetch()}>
-                Atualizar
-              </Button>
-            </div>
+            <Select
+              label="Cliente"
+              value={auditClientId}
+              onChange={(e) => { setAuditClientId(e.target.value); setAuditPage(1); }}
+              options={[
+                { value: "", label: "Todos" },
+                ...(clients.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
+            <Input
+              label="Agent ID"
+              placeholder="UUID do agente"
+              value={auditAgentId}
+              onChange={(e) => { setAuditAgentId(e.target.value); setAuditPage(1); }}
+            />
+            <Input
+              label="De"
+              type="date"
+              value={auditFromDate}
+              onChange={(e) => { setAuditFromDate(e.target.value); setAuditPage(1); }}
+            />
+            <Input
+              label="Até"
+              type="date"
+              value={auditToDate}
+              onChange={(e) => { setAuditToDate(e.target.value); setAuditPage(1); }}
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button type="button" size="sm" variant="secondary" onClick={() => void auditQuery.refetch()}>
+              Atualizar
+            </Button>
           </div>
           {auditQuery.isLoading ? (
             <p className="py-6 text-center text-xs text-muted-foreground">Carregando registros de auditoria...</p>
@@ -415,24 +470,48 @@ export default function McpToolsSettings() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(auditQuery.data?.items ?? []).map((row) => (
-                      <tr key={row.id} className="border-b border-border/50">
-                        <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
-                          {new Date(row.createdAt).toLocaleString("pt-BR")}
-                        </td>
-                        <td className="py-2 pr-3 font-mono font-medium">{row.toolName}</td>
-                        <td className="py-2 pr-3">{row.origin}</td>
-                        <td className="py-2 pr-3">
-                          <Badge color={row.status === "success" ? "success" : row.status === "denied" || row.status === "rate_limited" ? "warning" : "danger"}>
-                            {row.status}
-                          </Badge>
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{row.durationMs} ms</td>
-                        <td className="py-2 max-w-xs truncate text-muted-foreground" title={row.errorMessage ?? ""}>
-                          {row.errorMessage || "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {(auditQuery.data?.items ?? []).map((row) => {
+                      const isExpanded = expandedAuditId === row.id;
+                      return (
+                        <Fragment key={row.id}>
+                          <tr
+                            onClick={() => setExpandedAuditId(isExpanded ? null : row.id)}
+                            className="cursor-pointer border-b border-border/50 hover:bg-surface-light/60"
+                          >
+                            <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
+                              {new Date(row.createdAt).toLocaleString("pt-BR")}
+                            </td>
+                            <td className="py-2 pr-3 font-mono font-medium">{row.toolName}</td>
+                            <td className="py-2 pr-3">{row.origin}</td>
+                            <td className="py-2 pr-3">
+                              <Badge color={row.status === "success" ? "success" : row.status === "denied" || row.status === "rate_limited" ? "warning" : "danger"}>
+                                {row.status}
+                              </Badge>
+                            </td>
+                            <td className="py-2 pr-3 text-right tabular-nums">{row.durationMs} ms</td>
+                            <td className="py-2 max-w-xs truncate text-muted-foreground" title={row.errorMessage ?? ""}>
+                              {row.errorMessage || "—"}
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr className="border-b border-border/50 bg-surface-light/40">
+                              <td colSpan={6} className="p-3 text-[11px] text-muted-foreground">
+                                <div className="grid gap-1 sm:grid-cols-3">
+                                  <span><strong>Sessão:</strong> {row.sessionId ?? "—"}</span>
+                                  <span><strong>Cliente:</strong> {row.clientId ?? "—"}</span>
+                                  <span><strong>Agente:</strong> {row.agentId ?? "—"}</span>
+                                </div>
+                                {row.errorMessage && (
+                                  <pre className="mt-2 whitespace-pre-wrap rounded border border-border bg-surface p-2 font-mono text-[11px] text-foreground">
+                                    {row.errorMessage}
+                                  </pre>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                     {(auditQuery.data?.items.length ?? 0) === 0 && (
                       <tr>
                         <td colSpan={6} className="py-6 text-center text-muted-foreground">
@@ -668,7 +747,9 @@ export default function McpToolsSettings() {
                       {tool.overriddenHere ? (
                         <Badge color="warning">Sobrescrito aqui</Badge>
                       ) : (
-                        <Badge color="slate">Herdado</Badge>
+                        <span title={level === "global" ? "Padrão do sistema" : "Herdado do nível acima"}>
+                          <Badge color="slate">Herdado</Badge>
+                        </span>
                       )}
                       {tool.locked && (
                         <Badge color="danger">
@@ -852,7 +933,7 @@ export default function McpToolsSettings() {
                 <Input
                   id="mcp-policy-max-calls"
                   label="Chamadas/min"
-                  type="number"
+                  type="text"
                   inputMode="numeric"
                   disabled={editingLockedByParent}
                   value={callsText}
@@ -874,7 +955,7 @@ export default function McpToolsSettings() {
                     <Input
                       id="mcp-policy-timeout"
                       label="Timeout (s)"
-                      type="number"
+                      type="text"
                       inputMode="numeric"
                       disabled={editingLockedByParent}
                       value={timeoutText}

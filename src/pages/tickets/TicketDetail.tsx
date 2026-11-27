@@ -60,6 +60,7 @@ import {
   useTicketAutomationLinks,
 } from '@/hooks/useTicketAutomationLinks';
 import {
+  useTicketAiDraftKb,
   useTicketAiSuggestReply,
   useTicketAiSummary,
   useTicketAiTriage,
@@ -99,6 +100,7 @@ const TICKET_CHAT_PERMISSIONS = ['tickets.chat', 'tickets.*', 'tickets.edit', 'a
 type CommentSeed = {
   nonce: number;
   content: string;
+  isInternal?: boolean;
 };
 
 function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
@@ -312,7 +314,9 @@ export default function TicketDetail() {
                     ? [{ id: 'attachments', label: 'Anexos', icon: 'attach_file' } satisfies DetailTab<Tab>]
                     : []),
                   { id: 'automation', label: 'Automação', icon: 'build' },
-                  { id: 'ai', label: 'IA', icon: 'smart_toy' },
+                  ...(capabilities.canTreat
+                    ? [{ id: 'ai', label: 'IA', icon: 'smart_toy' } satisfies DetailTab<Tab>]
+                    : []),
                   { id: 'chat', label: 'Chat', icon: 'desktop_windows' },
                 ]}
                 active={tab}
@@ -352,7 +356,7 @@ export default function TicketDetail() {
                   siteId={t.siteId}
                   agentId={t.agentId}
                 />
-              ) : tab === 'ai' ? (
+              ) : tab === 'ai' && capabilities.canTreat ? (
                 <TicketAiPanel
                   ticket={t}
                   onUseSuggestedReply={(content) => {
@@ -361,7 +365,16 @@ export default function TicketDetail() {
                       content,
                     });
                     setTab('comments');
-                    toast.success('Resposta sugerida enviada para o rascunho do comentario.');
+                    toast.success('Resposta sugerida enviada para o rascunho do comentário.');
+                  }}
+                  onUseInternalNote={(content) => {
+                    setCommentSeed({
+                      nonce: Date.now(),
+                      content,
+                      isInternal: true,
+                    });
+                    setTab('comments');
+                    toast.success('Resumo enviado para o rascunho como nota interna.');
                   }}
                 />
               ) : tab === 'chat' ? (
@@ -384,6 +397,7 @@ export default function TicketDetail() {
               ) : (
                 <CommentsPanel
                   ticketId={id!}
+                  capabilities={capabilities}
                   draftSeed={commentSeed}
                   currentUserLogin={currentUserLogin}
                   onOpenAttachments={() => setTab('attachments')}
@@ -510,13 +524,16 @@ function TicketAiMetadata({
 function TicketAiPanel({
   ticket,
   onUseSuggestedReply,
+  onUseInternalNote,
 }: {
   ticket: Ticket;
   onUseSuggestedReply: (content: string) => void;
+  onUseInternalNote: (content: string) => void;
 }) {
-  const triage = useTicketAiTriage();
-  const summary = useTicketAiSummary();
-  const suggestReply = useTicketAiSuggestReply();
+  const triage = useTicketAiTriage(ticket.id);
+  const summary = useTicketAiSummary(ticket.id);
+  const suggestReply = useTicketAiSuggestReply(ticket.id);
+  const draftKb = useTicketAiDraftKb(ticket.id);
   const updateTicket = useUpdateTicket();
 
   const parsedTriage = useMemo(
@@ -637,8 +654,8 @@ function TicketAiPanel({
                     variant="ghost"
                     onClick={() =>
                       void copyTextToClipboard(
-                        triage.data.suggestion,
-                        'Saida da triagem copiada para a area de transferencia.',
+                        triage.data?.suggestion ?? '',
+                        'Saída da triagem copiada para a área de transferência.',
                       )
                     }
                   >
@@ -659,8 +676,8 @@ function TicketAiPanel({
                   variant="ghost"
                   onClick={() =>
                     void copyTextToClipboard(
-                      triage.data.suggestion,
-                      'Saida da triagem copiada para a area de transferencia.',
+                      triage.data?.suggestion ?? '',
+                      'Saída da triagem copiada para a área de transferência.',
                     )
                   }
                 >
@@ -709,12 +726,19 @@ function TicketAiPanel({
                 variant="ghost"
                 onClick={() =>
                   void copyTextToClipboard(
-                    summary.data.summary,
-                    'Resumo copiado para a area de transferencia.',
+                    summary.data?.summary ?? '',
+                    'Resumo copiado para a área de transferência.',
                   )
                 }
               >
                 <Icon name="content_copy" className="h-4 w-4" /> Copiar resumo
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onUseInternalNote(summary.data?.summary ?? '')}
+              >
+                <Icon name="lock" className="h-4 w-4" /> Inserir resumo como nota interna
               </Button>
             </div>
             <TicketAiMetadata data={summary.data} />
@@ -727,7 +751,7 @@ function TicketAiPanel({
           <div>
             <h3 className="text-sm font-semibold text-foreground">Resposta sugerida</h3>
             <p className="text-xs text-muted">
-              Gera a proxima resposta ao usuario com base no ticket e nos comentarios.
+              Gera a próxima resposta ao usuário com base no ticket e nos comentários.
             </p>
           </div>
           <Button
@@ -759,8 +783,8 @@ function TicketAiPanel({
                 variant="ghost"
                 onClick={() =>
                   void copyTextToClipboard(
-                    suggestReply.data.suggestedReply,
-                    'Resposta sugerida copiada para a area de transferencia.',
+                    suggestReply.data?.suggestedReply ?? '',
+                    'Resposta sugerida copiada para a área de transferência.',
                   )
                 }
               >
@@ -768,12 +792,80 @@ function TicketAiPanel({
               </Button>
               <Button
                 size="sm"
-                onClick={() => onUseSuggestedReply(suggestReply.data.suggestedReply)}
+                onClick={() => onUseSuggestedReply(suggestReply.data?.suggestedReply ?? '')}
               >
                 Usar no comentario
               </Button>
             </div>
             <TicketAiMetadata data={suggestReply.data} />
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border bg-surface-light p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Artigo de Base de Conhecimento (KB)</h3>
+            <p className="text-xs text-muted">
+              Gera um rascunho em Markdown anonimizado a partir da resolução deste chamado.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={draftKb.isPending && !draftKb.variables?.persist}
+              disabled={draftKb.isPending}
+              onClick={() =>
+                draftKb.mutate(
+                  { id: ticket.id, persist: false },
+                  {
+                    onSuccess: () => toast.success('Prévia do artigo gerada.'),
+                    onError: (err) => toast.error(err instanceof Error && err.message ? err.message : 'Erro ao gerar rascunho de KB.'),
+                  },
+                )
+              }
+            >
+              Gerar prévia
+            </Button>
+            <Button
+              size="sm"
+              loading={draftKb.isPending && Boolean(draftKb.variables?.persist)}
+              disabled={draftKb.isPending}
+              onClick={() =>
+                draftKb.mutate(
+                  { id: ticket.id, persist: true },
+                  {
+                    onSuccess: () => toast.success('Rascunho salvo na Base de Conhecimento!'),
+                    onError: (err) => toast.error(err instanceof Error && err.message ? err.message : 'Erro ao salvar rascunho na KB.'),
+                  },
+                )
+              }
+            >
+              Salvar rascunho na Base
+            </Button>
+          </div>
+        </div>
+        {draftKb.data?.content && (
+          <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+            <MarkdownViewer source={draftKb.data.content} />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  void copyTextToClipboard(
+                    draftKb.data?.content ?? '',
+                    'Rascunho copiado para a área de transferência.',
+                  )
+                }
+              >
+                <Icon name="content_copy" className="h-4 w-4" /> Copiar Markdown
+              </Button>
+              <Link to="/knowledge" className="text-xs font-medium text-primary hover:underline">
+                Abrir Base de Conhecimento →
+              </Link>
+            </div>
           </div>
         )}
       </div>
@@ -2072,9 +2164,11 @@ function TicketSummaryPanel({
         <WatchersSection ticketId={ticketId} assignedToUserId={assignedToUserId} />
       </div>
 
-      <div className="mt-4 border-t border-border pt-4">
-        <TicketAiAssignmentCard ticketId={ticketId} />
-      </div>
+      {capabilities.canTreat && (
+        <div className="mt-4 border-t border-border pt-4">
+          <TicketAiAssignmentCard ticketId={ticketId} />
+        </div>
+      )}
 
       <div className="mt-4 border-t border-border pt-4">
         <div className="mb-2 flex items-center gap-2 text-muted-foreground">
@@ -2334,7 +2428,7 @@ function CommentsPanel({
   siteId?: string | null;
   clientName?: string;
   currentUserName?: string;
-  capabilities?: { canExecuteRunbook?: boolean; canSeeInternalNotes?: boolean };
+  capabilities?: { canExecuteRunbook?: boolean; canSeeInternalNotes?: boolean; canTreat?: boolean };
   draftSeed?: CommentSeed | null;
   /** Login do usuário logado já em minúsculas; vazio quando não resolvido. */
   currentUserLogin: string;
@@ -2802,13 +2896,14 @@ function CommentForm({
   siteId?: string | null;
   clientName?: string;
   currentUserName?: string;
-  capabilities?: { canExecuteRunbook?: boolean; canSeeInternalNotes?: boolean };
+  capabilities?: { canExecuteRunbook?: boolean; canSeeInternalNotes?: boolean; canTreat?: boolean };
   draftSeed?: CommentSeed | null;
   onAdded?: () => void;
   /** Atalho para a aba Anexos quando o arquivo excede o limite da conversa. */
   onOpenAttachments?: () => void;
 }) {
   const addComment = useAddComment();
+  const suggestReplyInline = useTicketAiSuggestReply(ticketId);
   const macrosQuery = useTicketMacros({ includeGlobal: true });
   const draftStorageKey = `ticket_comment_draft:${ticketId}`;
   const [content, setContent] = useState(() => {
@@ -2964,7 +3059,7 @@ function CommentForm({
     if (!draftSeed?.content) return;
 
     setContent(draftSeed.content);
-    setIsInternal(false);
+    setIsInternal(Boolean(draftSeed.isInternal));
   }, [draftSeed?.nonce]);
 
   const hasQueuedAttachments = pending.some((item) => item.status === 'queued');
@@ -3109,6 +3204,25 @@ function CommentForm({
           >
             <Icon name="attach_file" className="h-4 w-4" /> Anexar
           </Button>
+          {(capabilities?.canTreat ?? false) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={suggestReplyInline.isPending}
+              onClick={() =>
+                suggestReplyInline.mutate(ticketId, {
+                  onSuccess: (res) => {
+                    setContent(res.suggestedReply);
+                    toast.success('Resposta gerada pela IA.');
+                  },
+                  onError: (err) =>
+                    toast.error(err instanceof Error && err.message ? err.message : 'Erro ao gerar resposta com IA.'),
+                })
+              }
+            >
+              <Icon name="smart_toy" className="h-4 w-4" /> Gerar resposta com IA
+            </Button>
+          )}
           {(capabilities?.canSeeInternalNotes ?? false) && (
             <>
               <label className="flex items-center gap-2 text-sm text-muted">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Icon, Button, Card, CardHeader, Input, Select } from "@/components/ui";
-import { listOpenRouterModels, validateApiKey } from "@/services/configurationApi";
+import { listOpenRouterModels, testStoredAiKey, validateApiKey } from "@/services/configurationApi";
 import type { AIIntegrationSettings } from "@/api";
 
 // ── Fallback inicial (substituído pela API OpenRouter se disponível) ─
@@ -240,25 +240,34 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [keyValid, setKeyValid] = useState<boolean | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
 
+  const loadCatalog = async (isCancelled?: () => boolean) => {
+    if (provider === "ollama") {
+      setFetching(false);
+      setFetchError(false);
+      return;
+    }
+    setFetching(true);
+    setFetchError(false);
+    try {
+      const data = await listOpenRouterModels();
+      if (!isCancelled?.()) {
+        const payload = data as unknown as { chatModels?: OrModel[]; embeddingModels?: OrModel[] };
+        if (payload.chatModels?.length) setAllChat(payload.chatModels);
+        if (payload.embeddingModels?.length) setAllEmbed(payload.embeddingModels);
+      }
+    } catch {
+      if (!isCancelled?.()) setFetchError(true);
+    } finally {
+      if (!isCancelled?.()) setFetching(false);
+    }
+  };
+
   useEffect(() => {
     let c = false;
-    (async () => {
-      setFetching(true);
-      try {
-        const data = await listOpenRouterModels();
-        if (!c) {
-          const payload = data as unknown as { chatModels?: OrModel[]; embeddingModels?: OrModel[] };
-          if (payload.chatModels?.length) setAllChat(payload.chatModels);
-          if (payload.embeddingModels?.length) setAllEmbed(payload.embeddingModels);
-        }
-      } catch {
-        if (!c) setFetchError(true);
-      } finally {
-        if (!c) setFetching(false);
-      }
-    })();
+    void loadCatalog(() => c);
     return () => { c = true; };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider]);
 
   const filteredChat = useMemo(() => {
     const q = chatSearch.toLowerCase().trim();
@@ -305,7 +314,13 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     !Number.isFinite(presPen) ||
     maxTokensProblem !== null ||
     !Number.isFinite(embeddingDimensions) ||
-    embeddingDimensions < 1;
+    embeddingDimensions < 1 ||
+    !Number.isFinite(tokenBudgetDaily) ||
+    tokenBudgetDaily < 1000 ||
+    !Number.isFinite(rateLimitPerMinute) ||
+    rateLimitPerMinute < 1 ||
+    !Number.isFinite(timeoutMs) ||
+    timeoutMs < 5000;
 
   function getBaseUrl(): string {
     if (provider === "openrouter") return "https://openrouter.ai/api/v1/";
@@ -326,6 +341,19 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     } catch (e: unknown) {
       setKeyValid(false);
       setKeyError(e instanceof Error ? e.message : "Erro");
+    } finally { setValidating(false); }
+  }
+
+  async function handleTestStoredKey() {
+    setValidating(true); setKeyValid(null); setKeyError(null);
+    try {
+      const data = await testStoredAiKey() as unknown as { valid?: boolean; ok?: boolean; error?: string };
+      const ok = data.valid === true || data.ok === true;
+      setKeyValid(ok);
+      if (!ok) setKeyError(data.error ?? "Chave salva inválida ou ausente");
+    } catch (e: unknown) {
+      setKeyValid(false);
+      setKeyError(e instanceof Error ? e.message : "Erro ao testar chave salva");
     } finally { setValidating(false); }
   }
 
@@ -367,6 +395,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     };
     if (apiKey.trim()) s.apiKey = apiKey.trim();
     await onSave(JSON.stringify(s));
+    if (apiKey.trim()) setApiKey("");
   }
 
   return (
@@ -437,6 +466,11 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 <Button type="button" size="sm" variant="ghost" onClick={handleValidateKey} disabled={validating || !apiKey.trim()}>
                   {validating ? <Icon name="refresh" className="h-3 w-3 animate-spin" /> : "Validar"}
                 </Button>
+                {!apiKey.trim() && (
+                  <Button type="button" size="sm" variant="ghost" onClick={handleTestStoredKey} disabled={validating}>
+                    Testar chave salva
+                  </Button>
+                )}
                 {keyValid === true && <Icon name="check_circle" className="h-5 w-5 self-center text-green-600 dark:text-green-400" />}
                 {keyValid === false && (
                   <span title={keyError ?? ""}>
@@ -476,7 +510,20 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                     — {providerFromId(chatModel)}: {allChat.find((m) => m.id === chatModel)?.name ?? chatModel}
                   </span>
                 )}
-                {fetchError && !fetching && <span className="ml-2 text-amber-600 dark:text-amber-400">(offline)</span>}
+                {fetchError && !fetching && (
+                  <span className="ml-2 inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                    (offline)
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => { e.stopPropagation(); void loadCatalog(); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); void loadCatalog(); } }}
+                      className="underline hover:text-foreground"
+                    >
+                      Recarregar catálogo
+                    </span>
+                  </span>
+                )}
               </span>
               {expandedChat ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
             </button>
@@ -638,6 +685,13 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 {!embeddingModel && (
                   <p className="mt-1 text-[11px] text-muted">
                     Escolha o modelo de embedding acima para definir as dimensões do vetor.
+                  </p>
+                )}
+                {!!aiSettings?.embeddingModel &&
+                  (embeddingModel !== (aiSettings.embeddingModel ?? "") ||
+                    embeddingDimensions !== (aiSettings.embeddingDimensions ?? 1536)) && (
+                  <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+                    Atenção: alterar o modelo ou as dimensões de embedding dispara reindexação completa da base vetorial ao salvar.
                   </p>
                 )}
               </>
@@ -819,6 +873,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                     value={String(tokenBudgetDaily)}
                     onChange={(e) => setTokenBudgetDaily(Number(e.target.value))}
                   />
+                  <HelpText>Teto diário de tokens por tenant quando o controle de custo está ativo.</HelpText>
                 </div>
                 <div className="space-y-1">
                   <label className="block text-xs text-muted">Rate limit (req/min)</label>
@@ -829,6 +884,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                     value={String(rateLimitPerMinute)}
                     onChange={(e) => setRateLimitPerMinute(Number(e.target.value))}
                   />
+                  <HelpText>Máximo de requisições por minuto por usuário/dispositivo.</HelpText>
                 </div>
                 <div className="space-y-1">
                   <label className="block text-xs text-muted">Timeout (ms)</label>
@@ -866,7 +922,10 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                   <Toggle checked={sendScreenshotImages} onToggle={() => setSendScreenshotImages(!sendScreenshotImages)} label="Enviar prints" />
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Guardrails DLP de saída</span>
+                  <div>
+                    <span className="text-xs text-muted-foreground">Guardrails DLP de saída</span>
+                    <HelpText>Mascara segredos, chaves de API e CPFs nas respostas da IA.</HelpText>
+                  </div>
                   <Toggle checked={outputGuardrailsEnabled} onToggle={() => setOutputGuardrailsEnabled(!outputGuardrailsEnabled)} label="Guardrails DLP" />
                 </div>
               </div>
