@@ -1,22 +1,36 @@
 import { formatDate } from '@/utils/format';
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Icon,
+import {
+  Icon,
   Badge,
   Button,
   Card,
+  ConfirmDialog,
+  ContextMenu,
   DataTable,
   ErrorDisplay,
   Input,
   Loading,
+  Modal,
   Pagination,
   Select,
-PageHeader,
+  PageHeader,
 } from '@/components/ui';
-import type { Column } from '@/components/ui';
+import type { Column, ContextMenuItem } from '@/components/ui';
 import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
 import { useCursorPagination } from '@/hooks/useCursorPagination';
-import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
+import {
+  useClients,
+  useDeleteKnowledgeArticle,
+  useDepartments,
+  useKnowledgeAllArticles,
+  useKnowledgeCategories,
+  useKnowledgeSearch,
+  usePublishKnowledgeArticle,
+  useSites,
+  useUnpublishKnowledgeArticle,
+} from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
 import toast from 'react-hot-toast';
 
@@ -30,6 +44,7 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '', label: 'Todos os status' },
   { value: 'Published', label: 'Publicados' },
   { value: 'Internal', label: 'Internos' },
+  { value: 'AiOnly', label: 'Somente IA' },
   { value: 'Draft', label: 'Rascunhos' },
 ];
 
@@ -94,15 +109,17 @@ function statusLabel(article: KnowledgeArticle): string {
   switch (article.status) {
     case 'Published': return 'Publicado';
     case 'Internal': return 'Interno';
+    case 'AiOnly': return 'Somente IA';
     case 'Draft': return 'Rascunho';
     default: return article.status;
   }
 }
 
-function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' {
+function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' | 'slate' {
   switch (status) {
     case 'Published': return 'success';
     case 'Internal': return 'accent';
+    case 'AiOnly': return 'slate';
     case 'Draft': return 'warning';
     default: return 'warning';
   }
@@ -127,11 +144,14 @@ export default function KnowledgeList() {
   const [page, setPage] = useState(1);
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [publishModalArticle, setPublishModalArticle] = useState<KnowledgeArticle | null>(null);
+  const [publishStatusChoice, setPublishStatusChoice] = useState<'Published' | 'Internal' | 'AiOnly'>('Published');
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeArticle | null>(null);
   const knowledgePag = useCursorPagination({ initialLimit: DEFAULT_PAGE_SIZE });
 
   const sites = useSites(clientId);
   const departments = useDepartments({ clientId: clientId || undefined, activeOnly: true });
+  const categoriesQuery = useKnowledgeCategories();
 
   const allVisibleParams = useMemo(() => ({
     cursor: knowledgePag.cursor,
@@ -186,57 +206,20 @@ export default function KnowledgeList() {
 
   useEffect(() => {
     if (clientId) return;
-    if (!siteId && !departmentId) return;
+    if (!siteId) return;
 
     setSiteId('');
-    setDepartmentId('');
-  }, [clientId, departmentId, siteId]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-
-    const closeMenu = () => setContextMenu(null);
-    window.addEventListener('click', closeMenu);
-    window.addEventListener('scroll', closeMenu, true);
-    window.addEventListener('contextmenu', closeMenu);
-
-    return () => {
-      window.removeEventListener('click', closeMenu);
-      window.removeEventListener('scroll', closeMenu, true);
-      window.removeEventListener('contextmenu', closeMenu);
-    };
-  }, [contextMenu]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setContextMenu(null);
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!contextMenu || !contextMenuRef.current) return;
-
-    const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 240));
-    const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - 220));
-
-    contextMenuRef.current.style.left = `${left}px`;
-    contextMenuRef.current.style.top = `${top}px`;
-  }, [contextMenu]);
+  }, [clientId, siteId]);
 
   const categoryOptions = useMemo(() => {
-    const source = listItems;
-    const unique = Array.from(new Set(source.map((item) => normalizeCategory(item.category))));
-    unique.sort((a, b) => a.localeCompare(b));
-    // mantém a categoria selecionada nas opções mesmo se não houver
-    // nenhum artigo dela na página atual (senão o Select "perde" o valor)
+    const serverCats = categoriesQuery.data ?? [];
+    const fromItems = listItems.map((item) => item.category?.trim()).filter((c): c is string => Boolean(c));
+    const unique = Array.from(new Set([...serverCats, ...fromItems]));
+    unique.sort((a, b) => a.localeCompare(b, 'pt-BR'));
     if (category && !unique.includes(category)) unique.push(category);
 
     return [{ value: '', label: 'Todas categorias' }, ...unique.map((name) => ({ value: name, label: name }))];
-  }, [listItems, category]);
+  }, [categoriesQuery.data, listItems, category]);
 
   const clientOptions = [
     { value: '', label: 'Todos os artigos que posso acessar (multi-escopo)' },
@@ -276,7 +259,17 @@ export default function KnowledgeList() {
     if (clientId) parts.push(`Cliente: ${selectedClientLabel}`);
     if (siteId) parts.push(`Site: ${selectedSiteLabel}`);
     if (category) parts.push(`Categoria: ${category}`);
-    if (statusFilter) parts.push(`Status: ${statusFilter === 'Published' ? 'Publicados' : statusFilter === 'Internal' ? 'Internos' : 'Rascunhos'}`);
+    if (statusFilter) {
+      const statusText =
+        statusFilter === 'Published'
+          ? 'Publicados'
+          : statusFilter === 'Internal'
+          ? 'Internos'
+          : statusFilter === 'AiOnly'
+          ? 'Somente IA'
+          : 'Rascunhos';
+      parts.push(`Status: ${statusText}`);
+    }
     if (departmentId) parts.push(`Departamento: ${departmentOptions.find(d => d.value === departmentId)?.label ?? departmentId}`);
     if (sortBy !== 'updatedAt') parts.push(`Ordenação: ${sortLabel}`);
     if (sortDirection !== 'desc') parts.push('Direção crescente');
@@ -339,23 +332,12 @@ export default function KnowledgeList() {
     setContextMenu(null);
 
     if (article.status === 'Draft') {
-      // Prompt para escolher Published ou Internal
-      const choice = window.confirm(
-        `Publicar "${article.title}"?\n\nOK = Publicado (visível para todos)\nCancelar = vamos abrir o editor para configurar.`
-      );
-      if (choice) {
-        const data: PublishArticleRequest = { status: 'Published', lastEditedBy: null };
-        publishMutation.mutate({ id: article.id, data }, {
-          onSuccess: () => toast.success('Artigo publicado'),
-          onError: () => toast.error('Falha ao publicar artigo'),
-        });
-      } else {
-        navigate(`/knowledge/${article.id}/edit`);
-      }
+      setPublishStatusChoice(article.departmentId ? 'Internal' : 'Published');
+      setPublishModalArticle(article);
       return;
     }
 
-    // Published/Internal → Unpublish
+    // Published/Internal/AiOnly → Unpublish
     unpublishMutation.mutate(
       { id: article.id },
       {
@@ -365,17 +347,57 @@ export default function KnowledgeList() {
     );
   };
 
+  const confirmPublishModal = () => {
+    if (!publishModalArticle) return;
+    if (publishStatusChoice === 'Internal' && !publishModalArticle.departmentId) {
+      toast.error('Este artigo não possui departamento. Edite-o para selecionar um departamento antes de publicar como Interno.');
+      return;
+    }
+    const data: PublishArticleRequest = { status: publishStatusChoice, lastEditedBy: null };
+    publishMutation.mutate(
+      { id: publishModalArticle.id, data },
+      {
+        onSuccess: () => {
+          toast.success('Artigo publicado');
+          setPublishModalArticle(null);
+        },
+        onError: () => toast.error('Falha ao publicar artigo'),
+      },
+    );
+  };
+
   const onDelete = (article: KnowledgeArticle) => {
     setContextMenu(null);
+    setDeleteTarget(article);
+  };
 
-    const confirmed = window.confirm(`Excluir o artigo "${article.title}"?`);
-    if (!confirmed) return;
-
-    deleteMutation.mutate(article.id, {
-      onSuccess: () => toast.success('Artigo excluído'),
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        toast.success('Artigo excluído');
+        setDeleteTarget(null);
+      },
       onError: () => toast.error('Falha ao excluir artigo'),
     });
   };
+
+  const departmentNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of departments.data ?? []) {
+      map.set(d.id, d.name);
+    }
+    return map;
+  }, [departments.data]);
+
+  const filteredSearchResults = useMemo(() => {
+    const items = searchQuery.data ?? [];
+    return items.filter((item) => {
+      if (statusFilter && item.status !== statusFilter) return false;
+      if (category && (item.category ?? '').toLowerCase() !== category.toLowerCase()) return false;
+      return true;
+    });
+  }, [searchQuery.data, statusFilter, category]);
 
   const columns: Column<KnowledgeArticle>[] = [
     {
@@ -383,12 +405,15 @@ export default function KnowledgeList() {
       header: 'Artigo',
       render: (article) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
-            <Icon name="menu_book" className="h-4 w-4 text-primary" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/20">
+            <Icon
+              name={article.status === 'AiOnly' ? 'smart_toy' : 'menu_book'}
+              className="h-4 w-4 text-primary"
+            />
           </div>
-          <div>
-            <p className="font-medium text-foreground">{article.title}</p>
-            <p className="text-xs text-muted">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-foreground">{article.title}</p>
+            <p className="truncate text-xs text-muted">
               {normalizeCategory(article.category)} • {Array.isArray(article.tags) && article.tags.length > 0 ? article.tags.join(', ') : 'sem tags'}
               {article.currentVersionNumber > 0 ? ` • v${article.currentVersionNumber}` : ''}
             </p>
@@ -398,16 +423,30 @@ export default function KnowledgeList() {
     },
     {
       key: 'scope',
-      header: 'Escopo',
-      render: (article) => <Badge color="accent">{scopeLabel(article)}</Badge>,
+      header: 'Escopo / Depto',
+      render: (article) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge color="accent">{scopeLabel(article)}</Badge>
+          {article.departmentId && (
+            <Badge color="slate">
+              {departmentNameById.get(article.departmentId) ?? 'Departamento'}
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       key: 'status',
-      header: 'Status',
+      header: 'Status / IA',
       render: (article) => (
-        <Badge color={statusColor(article.status)}>
-          {statusLabel(article)}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge color={statusColor(article.status)}>
+            {statusLabel(article)}
+          </Badge>
+          {article.aiIndexingEnabled === false && (
+            <Badge color="warning">Sem IA</Badge>
+          )}
+        </div>
       ),
     },
     {
@@ -431,6 +470,66 @@ export default function KnowledgeList() {
         <span className="text-xs text-muted">
           {formatDate(article.updatedAt)}
         </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      render: (article) => (
+        <div
+          className="flex items-center justify-end gap-1"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/knowledge/${article.id}`)}
+            title="Visualizar artigo"
+            aria-label={`Visualizar ${article.title}`}
+          >
+            <Icon name="visibility" className="h-4 w-4" />
+          </Button>
+          {canEditArticle && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/knowledge/${article.id}/edit`)}
+              title="Editar artigo"
+              aria-label={`Editar ${article.title}`}
+            >
+              <Icon name="edit" className="h-4 w-4" />
+            </Button>
+          )}
+          {canPublishArticle && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onTogglePublish(article)}
+              disabled={publishMutation.isPending || unpublishMutation.isPending}
+              title={article.status === 'Draft' ? 'Publicar artigo' : 'Mover para rascunho'}
+              aria-label={article.status === 'Draft' ? `Publicar ${article.title}` : `Despublicar ${article.title}`}
+            >
+              <Icon name={article.status === 'Draft' ? 'send' : 'edit_note'} className="h-4 w-4" />
+            </Button>
+          )}
+          {canDeleteArticle && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(article)}
+              disabled={deleteMutation.isPending}
+              title="Excluir artigo"
+              aria-label={`Excluir ${article.title}`}
+              className="text-danger hover:bg-danger/10"
+            >
+              <Icon name="delete" className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
@@ -493,14 +592,16 @@ export default function KnowledgeList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <PageHeader title="Base de Conhecimento" description="Busque artigos rapidamente e abra filtros avançados só quando precisar." />
+      <PageHeader
+        title="Base de Conhecimento"
+        description="Busque artigos rapidamente, organize por departamento e controle o uso pela IA."
+      >
         {canCreateArticle && (
           <Button onClick={() => navigate('/knowledge/new')}>
             <Icon name="add" className="h-4 w-4" /> Novo Artigo
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       <Card>
         <form className="space-y-3" onSubmit={handleSearchSubmit}>
@@ -541,6 +642,26 @@ export default function KnowledgeList() {
           <p className="text-xs text-muted">
             Use linguagem natural para encontrar artigos mesmo sem palavras exatas.
           </p>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {STATUS_OPTIONS.map((opt) => {
+              const active = statusFilter === opt.value;
+              return (
+                <button
+                  key={opt.value || 'all'}
+                  type="button"
+                  onClick={() => setStatusFilter(opt.value as ArticleStatus | '')}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? 'border-primary bg-primary/15 text-primary'
+                      : 'border-border bg-surface-light text-muted hover:text-foreground'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
         </form>
 
         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -614,7 +735,6 @@ export default function KnowledgeList() {
                 options={departmentOptions}
                 value={departmentId}
                 onChange={(event) => setDepartmentId(event.target.value)}
-                disabled={!clientId}
               />
             </div>
 
@@ -663,7 +783,7 @@ export default function KnowledgeList() {
                 </p>
               </div>
               {!searchQuery.isLoading && !searchQuery.isError && (
-                <Badge color="accent">{(searchQuery.data ?? []).length}</Badge>
+                <Badge color="accent">{filteredSearchResults.length}</Badge>
               )}
             </div>
 
@@ -679,7 +799,7 @@ export default function KnowledgeList() {
                 <div className="space-y-3">
                   <DataTable
                     columns={columns}
-                    data={searchQuery.data ?? []}
+                    data={filteredSearchResults}
                     keyExtractor={(item) => item.id}
                     onRowClick={(item) => navigate(`/knowledge/${item.id}`)}
                     onRowContextMenu={(event, item) => {
@@ -692,7 +812,7 @@ export default function KnowledgeList() {
 
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
                     <p className="text-xs text-muted">
-                      {(searchQuery.data ?? []).length} artigo(s) relevantes para "{query}".
+                      {filteredSearchResults.length} artigo(s) relevantes para "{query}".
                     </p>
                     <Button type="button" variant="ghost" size="sm" onClick={handleClearSearch}>
                       Voltar para listagem completa
@@ -752,60 +872,91 @@ export default function KnowledgeList() {
       </Card>
 
       {contextMenu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
-          <div
-            ref={contextMenuRef}
-            className="fixed z-50 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl"
-          >
-            <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
-              onClick={() => {
-                navigate(`/knowledge/${contextMenu.article.id}`);
-                setContextMenu(null);
-              }}
-            >
-              <Icon name="visibility" className="h-4 w-4" />
-              Visualizar artigo
-            </button>
-
-            {canEditArticle && (
-              <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
-                onClick={() => {
-                  navigate(`/knowledge/${contextMenu.article.id}/edit`);
-                  setContextMenu(null);
-                }}
-              >
-                <Icon name="edit" className="h-4 w-4" />
-                Editar artigo
-              </button>
-            )}
-
-            {canPublishArticle && (
-              <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => onTogglePublish(contextMenu.article)}
-                disabled={publishMutation.isPending || unpublishMutation.isPending}
-              >
-                <Icon name="send" className="h-4 w-4" />
-                {contextMenu.article.status === 'Draft' ? 'Publicar artigo' : 'Despublicar artigo'}
-              </button>
-            )}
-
-            {canDeleteArticle && (
-              <button
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => onDelete(contextMenu.article)}
-                disabled={deleteMutation.isPending}
-              >
-                <Icon name="delete" className="h-4 w-4" />
-                Excluir artigo
-              </button>
-            )}
-          </div>
-        </>
+        <ContextMenu
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          onClose={() => setContextMenu(null)}
+          items={([
+            {
+              key: 'view',
+              label: 'Visualizar artigo',
+              icon: <Icon name="visibility" className="h-4 w-4" />,
+              onClick: () => navigate(`/knowledge/${contextMenu.article.id}`),
+            },
+            canEditArticle
+              ? {
+                  key: 'edit',
+                  label: 'Editar artigo',
+                  icon: <Icon name="edit" className="h-4 w-4" />,
+                  onClick: () => navigate(`/knowledge/${contextMenu.article.id}/edit`),
+                }
+              : null,
+            canPublishArticle
+              ? {
+                  key: 'publish',
+                  label: contextMenu.article.status === 'Draft' ? 'Publicar artigo' : 'Despublicar artigo',
+                  icon: <Icon name={contextMenu.article.status === 'Draft' ? 'send' : 'edit_note'} className="h-4 w-4" />,
+                  disabled: publishMutation.isPending || unpublishMutation.isPending,
+                  onClick: () => onTogglePublish(contextMenu.article),
+                }
+              : null,
+            canDeleteArticle
+              ? {
+                  key: 'delete',
+                  label: 'Excluir artigo',
+                  icon: <Icon name="delete" className="h-4 w-4" />,
+                  danger: true,
+                  separatorBefore: true,
+                  disabled: deleteMutation.isPending,
+                  onClick: () => onDelete(contextMenu.article),
+                }
+              : null,
+          ].filter(Boolean) as ContextMenuItem[])}
+        />
       )}
+
+      <Modal
+        open={publishModalArticle !== null}
+        onClose={() => setPublishModalArticle(null)}
+        title="Publicar artigo"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Escolha a visibilidade de <strong className="text-foreground">"{publishModalArticle?.title}"</strong>:
+          </p>
+          <Select
+            label="Visibilidade"
+            value={publishStatusChoice}
+            onChange={(e) => setPublishStatusChoice(e.target.value as 'Published' | 'Internal' | 'AiOnly')}
+            options={[
+              { value: 'Published', label: 'Publicado — visível para todos os usuários' },
+              { value: 'Internal', label: 'Interno — restrito ao departamento' },
+              { value: 'AiOnly', label: 'Somente IA — orienta o chat sem expor o documento' },
+            ]}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setPublishModalArticle(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmPublishModal} loading={publishMutation.isPending}>
+              Publicar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Excluir artigo"
+        message={
+          <>
+            Tem certeza que deseja excluir o artigo <strong>"{deleteTarget?.title}"</strong>?
+          </>
+        }
+        confirmLabel="Excluir"
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

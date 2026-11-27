@@ -1,19 +1,40 @@
 import { formatDateTime, formatDate } from '@/utils/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { Icon,
+import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
+import {
+  Icon,
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   ErrorDisplay,
   Input,
   Loading,
   MarkdownEditor,
+  Modal,
   Select,
-PageHeader,
+  PageHeader,
 } from '@/components/ui';
-import { useArticleImages, useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDeleteArticleImage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle, useUploadArticleImage } from '@/hooks';
+import {
+  useArticleImages,
+  useArticlePages,
+  useClients,
+  useCreateKnowledgeArticle,
+  useCreateArticlePage,
+  useDeleteArticleImage,
+  useDepartments,
+  useKnowledgeArticle,
+  useKnowledgeArticleVersions,
+  usePublishKnowledgeArticle,
+  useReindexKnowledgeArticle,
+  useSites,
+  useUnpublishKnowledgeArticle,
+  useUpdateArticlePage,
+  useUpdateKnowledgeArticle,
+  useUploadArticleImage,
+} from '@/hooks';
 import {
   countKbImageOccurrences,
   removeKbImageFromMarkdown,
@@ -34,6 +55,20 @@ type FormState = {
   siteId: string;
   departmentId: string;
   targetStatus: ArticleStatus;
+  aiIndexingEnabled: boolean;
+};
+
+type KnowledgePrefillState = {
+  prefill?: {
+    title?: string;
+    content?: string;
+    category?: string;
+    tags?: string[];
+    clientId?: string | null;
+    siteId?: string | null;
+    departmentId?: string | null;
+    fromTicketId?: string;
+  };
 };
 
 function toTagArray(tags: string): string[] {
@@ -47,15 +82,17 @@ function statusLabel(status: ArticleStatus): string {
   switch (status) {
     case 'Published': return 'Publicado';
     case 'Internal': return 'Interno';
+    case 'AiOnly': return 'Somente IA';
     case 'Draft': return 'Rascunho';
     default: return status;
   }
 }
 
-function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' {
+function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' | 'slate' {
   switch (status) {
     case 'Published': return 'success';
     case 'Internal': return 'accent';
+    case 'AiOnly': return 'slate';
     case 'Draft': return 'warning';
     default: return 'warning';
   }
@@ -63,21 +100,27 @@ function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' {
 
 export default function KnowledgeEditor() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
+  const prefill = !isEdit ? (location.state as KnowledgePrefillState | null)?.prefill : undefined;
 
   const [form, setForm] = useState<FormState>({
-    title: '',
-    content: '## Novo Artigo\n\nDescreva aqui o procedimento em Markdown.',
-    category: '',
-    tags: '',
-    clientId: '',
-    siteId: '',
-    departmentId: '',
+    title: prefill?.title ?? '',
+    content: prefill?.content ?? '## Novo Artigo\n\nDescreva aqui o procedimento em Markdown.',
+    category: prefill?.category ?? '',
+    tags: prefill?.tags?.join(', ') ?? '',
+    clientId: prefill?.clientId ?? '',
+    siteId: prefill?.siteId ?? '',
+    departmentId: prefill?.departmentId ?? '',
     targetStatus: 'Draft',
+    aiIndexingEnabled: true,
   });
 
   const [showVersions, setShowVersions] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<ArticleVersion | null>(null);
+  const [confirmQuickStatus, setConfirmQuickStatus] = useState<'Published' | 'Internal' | 'AiOnly' | null>(null);
+  const [pendingNavAction, setPendingNavAction] = useState<(() => void) | null>(null);
 
   // ── Editor único de sub-páginas (estilo Notion) ──────────────
   // activePageId === null → editando a "home" (artigo principal)
@@ -112,6 +155,8 @@ export default function KnowledgeEditor() {
   const createMutation = useCreateKnowledgeArticle();
   const updateMutation = useUpdateKnowledgeArticle();
   const publishMutation = usePublishKnowledgeArticle();
+  const unpublishMutation = useUnpublishKnowledgeArticle();
+  const reindexMutation = useReindexKnowledgeArticle();
   const uploadImageMutation = useUploadArticleImage(id ?? '');
   // mutateAsync é estável no react-query v5: evita recriar o handler (e o
   // despacho interno de commandos do MDEditor) a cada render.
@@ -143,6 +188,7 @@ export default function KnowledgeEditor() {
       siteId: article.siteId ?? '',
       departmentId: article.departmentId ?? '',
       targetStatus: article.status,
+      aiIndexingEnabled: article.aiIndexingEnabled ?? true,
     });
   }, [detailQuery.data, isEdit]);
 
@@ -167,37 +213,96 @@ export default function KnowledgeEditor() {
     return null;
   };
 
+  const isPageDirty = useMemo(() => {
+    if (activePageId === null) return false;
+    if (activePageId === '__new__') {
+      return pageTitle.trim().length > 0 || pageContent.trim().length > 0 || pageParentId !== '';
+    }
+    const node = findPage(pagesQuery.data ?? [], activePageId);
+    if (!node) return false;
+    return (
+      pageTitle !== node.title ||
+      pageContent !== (node.content ?? '') ||
+      pageParentId !== (node.parentPageId ?? '')
+    );
+  }, [activePageId, pageTitle, pageContent, pageParentId, pagesQuery.data]);
+
+  const isHomeDirty = useMemo(() => {
+    if (!isEdit) {
+      return form.title.trim().length > 0;
+    }
+    const article = detailQuery.data;
+    if (!article) return false;
+    return (
+      form.title !== article.title ||
+      form.content !== article.content ||
+      form.category !== (article.category ?? '') ||
+      form.tags !== (Array.isArray(article.tags) ? article.tags.join(', ') : '') ||
+      form.clientId !== (article.clientId ?? '') ||
+      form.siteId !== (article.siteId ?? '') ||
+      form.departmentId !== (article.departmentId ?? '') ||
+      form.targetStatus !== article.status ||
+      form.aiIndexingEnabled !== (article.aiIndexingEnabled ?? true)
+    );
+  }, [detailQuery.data, form, isEdit]);
+
+  const guardUnsavedPage = (action: () => void) => {
+    if (isPageDirty) {
+      setPendingNavAction(() => action);
+      return;
+    }
+    action();
+  };
+
+  const guardUnsavedExit = (action: () => void) => {
+    if (isPageDirty || isHomeDirty) {
+      setPendingNavAction(() => action);
+      return;
+    }
+    action();
+  };
+
   // Seleciona uma sub-página para edição no editor único.
-  const handleSelectPage = (pageId: string) => {
+  const applySelectPage = (pageId: string) => {
     const node = findPage(pagesQuery.data ?? [], pageId);
     if (!node) return;
     setActivePageId(pageId);
     setPageTitle(node.title);
     setPageContent(node.content ?? '');
     setPageParentId(node.parentPageId ?? '');
-    // Rola até o editor único para o usuário ver a página selecionada.
     requestAnimationFrame(() => {
       pageEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
 
+  const handleSelectPage = (pageId: string) => {
+    if (pageId === activePageId) return;
+    guardUnsavedPage(() => applySelectPage(pageId));
+  };
+
   // Volta para a "home" (artigo principal).
-  const handleSelectHome = () => {
+  const applySelectHome = () => {
     setActivePageId(null);
     setPageTitle('');
     setPageContent('');
     setPageParentId('');
   };
 
+  const handleSelectHome = () => {
+    if (activePageId === null) return;
+    guardUnsavedPage(applySelectHome);
+  };
+
   // Abre o editor único em modo de criação de nova sub-página.
   const handleCreatePage = () => {
-    setActivePageId('__new__');
-    setPageTitle('');
-    setPageContent('');
-    setPageParentId('');
-    // Rola até o editor único para o usuário ver o formulário de criação.
-    requestAnimationFrame(() => {
-      pageEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    guardUnsavedPage(() => {
+      setActivePageId('__new__');
+      setPageTitle('');
+      setPageContent('');
+      setPageParentId('');
+      requestAnimationFrame(() => {
+        pageEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
   };
 
@@ -219,7 +324,7 @@ export default function KnowledgeEditor() {
         {
           onSuccess: () => {
             toast.success('Página criada.');
-            handleSelectHome();
+            applySelectHome();
           },
           onError: () => toast.error('Falha ao criar página.'),
         },
@@ -240,7 +345,7 @@ export default function KnowledgeEditor() {
         {
           onSuccess: () => {
             toast.success('Página atualizada.');
-            handleSelectHome();
+            applySelectHome();
           },
           onError: () => toast.error('Falha ao atualizar página.'),
         },
@@ -252,7 +357,7 @@ export default function KnowledgeEditor() {
   const handleDeletePage = (pageId: string) => {
     if (!activePageId || activePageId === '__new__') return;
     if (activePageId === pageId) {
-      handleSelectHome();
+      applySelectHome();
       return;
     }
     // Se a página excluída é ancestral da ativa, a ativa também foi removida.
@@ -265,7 +370,7 @@ export default function KnowledgeEditor() {
     };
     const deletedNode = findPage(pagesQuery.data ?? [], pageId);
     if (deletedNode && contains([deletedNode], activePageId)) {
-      handleSelectHome();
+      applySelectHome();
     }
   };
 
@@ -373,21 +478,21 @@ export default function KnowledgeEditor() {
     handleSelectHome();
   };
 
-  // Opções de "página pai" para criar/mover sub-página (limite de 3 níveis).
+  // Opções de "página pai" para criar/mover sub-página (limite de 3 níveis, sem ciclos).
   const pageParentOptions = useMemo(() => {
     const options: Array<{ value: string; label: string; disabled?: boolean }> = [
       { value: '', label: 'Nenhuma (nível 1)' },
     ];
     const flatten = (list: ArticlePageTreeNode[], depth: number) => {
       for (const node of list) {
-        if (node.id !== activePageId) {
-          const disabled = depth + 1 >= 3;
-          options.push({
-            value: node.id,
-            label: `${'  '.repeat(depth)}${node.title}${disabled ? ' (limite de níveis)' : ''}`,
-            disabled,
-          });
-        }
+        // Exclui a própria página e toda a sua subárvore para evitar ciclo
+        if (node.id === activePageId) continue;
+        const disabled = depth + 1 >= 3;
+        options.push({
+          value: node.id,
+          label: `${'  '.repeat(depth)}${node.title}${disabled ? ' (limite de níveis)' : ''}`,
+          disabled,
+        });
         flatten(node.children, depth + 1);
       }
     };
@@ -432,7 +537,10 @@ export default function KnowledgeEditor() {
 
   const valid = form.title.trim().length >= 3 && form.content.trim().length >= 10;
 
-  const submit = async (targetStatus: ArticleStatus = 'Draft') => {
+  const submit = async (
+    targetStatus: ArticleStatus = 'Draft',
+    stayInEditor = false,
+  ) => {
     if (!valid) {
       toast.error('Preencha título e conteúdo do artigo.');
       return;
@@ -454,32 +562,61 @@ export default function KnowledgeEditor() {
       return;
     }
 
+    const effectiveAiEnabled = targetStatus === 'AiOnly' ? true : form.aiIndexingEnabled;
+
     if (isEdit && id) {
       const payload: UpdateKnowledgeArticleRequest = {
         title: form.title.trim(),
         content: form.content,
         category: form.category.trim() || null,
         tags: toTagArray(form.tags),
+        clientId: form.clientId || null,
+        siteId: form.siteId || null,
+        departmentId: form.departmentId || null,
+        aiIndexingEnabled: effectiveAiEnabled,
+        updateScope: true,
       };
+
+      const wasDraft = detailQuery.data?.status === 'Draft';
 
       updateMutation.mutate({ id, data: payload }, {
         onSuccess: () => {
-          // Se o status alvo for Draft, só salva
-          if (form.targetStatus === 'Draft') {
+          // Se o status alvo for Draft e o artigo estava publicado, despublica de fato
+          if (targetStatus === 'Draft') {
+            if (!wasDraft) {
+              unpublishMutation.mutate(
+                { id },
+                {
+                  onSuccess: () => {
+                    toast.success('Artigo atualizado e movido para rascunho.');
+                    navigate(`/knowledge/${id}`);
+                  },
+                  onError: () => {
+                    toast.error('Artigo salvo, mas falhou ao mover para rascunho.');
+                    navigate(`/knowledge/${id}`);
+                  },
+                },
+              );
+              return;
+            }
             toast.success('Artigo atualizado (rascunho).');
             navigate(`/knowledge/${id}`);
             return;
           }
 
-          // Caso contrário publica/interniza
+          // Caso contrário publica/interniza/somente-IA
           const publishPayload: PublishArticleRequest = {
-            status: form.targetStatus,
+            status: targetStatus,
           };
           publishMutation.mutate({ id, data: publishPayload }, {
             onSuccess: () => {
-              toast.success(form.targetStatus === 'Published'
-                ? 'Artigo atualizado e publicado!'
-                : 'Artigo atualizado e marcado como Interno!');
+              toast.success(
+                targetStatus === 'Published'
+                  ? 'Artigo atualizado e publicado!'
+                  : targetStatus === 'Internal'
+                  ? 'Artigo atualizado e marcado como Interno!'
+                  : 'Artigo atualizado e marcado como Somente IA!',
+              );
               navigate(`/knowledge/${id}`);
             },
             onError: () => {
@@ -502,13 +639,14 @@ export default function KnowledgeEditor() {
       clientId: form.clientId || null,
       siteId: form.siteId || null,
       departmentId: form.departmentId || null,
+      aiIndexingEnabled: effectiveAiEnabled,
     };
 
     createMutation.mutate(payload, {
       onSuccess: (created) => {
         if (targetStatus === 'Draft') {
-          toast.success('Artigo criado como rascunho.');
-          navigate(`/knowledge/${created.id}`);
+          toast.success(stayInEditor ? 'Rascunho criado! Agora você pode adicionar imagens e sub-páginas.' : 'Artigo criado como rascunho.');
+          navigate(stayInEditor ? `/knowledge/${created.id}/edit` : `/knowledge/${created.id}`);
           return;
         }
 
@@ -518,9 +656,13 @@ export default function KnowledgeEditor() {
 
         publishMutation.mutate({ id: created.id, data: publishPayload }, {
           onSuccess: () => {
-            toast.success(targetStatus === 'Published'
-              ? 'Artigo criado e publicado!'
-              : 'Artigo criado e marcado como Interno!');
+            toast.success(
+              targetStatus === 'Published'
+                ? 'Artigo criado e publicado!'
+                : targetStatus === 'Internal'
+                ? 'Artigo criado e marcado como Interno!'
+                : 'Artigo criado e marcado como Somente IA!',
+            );
             navigate(`/knowledge/${created.id}`);
           },
           onError: () => {
@@ -545,14 +687,17 @@ export default function KnowledgeEditor() {
     <div className="space-y-6">
       <PageHeader
         title={isEdit ? 'Editar artigo' : 'Novo artigo'}
-        description="Conteúdo em Markdown com preview em tempo real."
-        onBack={() => navigate('/knowledge')}
+        description="Conteúdo em Markdown com preview em tempo real, sub-páginas e controle de IA."
+        onBack={() => guardUnsavedExit(() => navigate('/knowledge'))}
       >
         {isEdit && detailQuery.data && (
           <>
             <Badge color={statusColor(detailQuery.data.status)}>
               {statusLabel(detailQuery.data.status)}
             </Badge>
+            {detailQuery.data.aiIndexingEnabled === false && (
+              <Badge color="warning">Sem IA</Badge>
+            )}
             {detailQuery.data.status !== 'Draft' && (
               <span className="text-xs text-muted">
                 v{detailQuery.data.currentVersionNumber}
@@ -562,7 +707,129 @@ export default function KnowledgeEditor() {
         )}
       </PageHeader>
 
-      <div className="grid gap-6">
+      <div className={isEdit ? 'grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)] items-start' : 'grid gap-6'}>
+        {isEdit && id && (
+          <div className="space-y-4">
+            <Card>
+              <ArticlePagesManager
+                articleId={id}
+                homeLabel={detailQuery.data?.title ?? 'Home'}
+                activePageId={isCreatingPage ? null : activePageId}
+                homeActive={!isEditingPage}
+                onSelectHome={handleSelectHome}
+                onSelectPage={handleSelectPage}
+                onCreatePage={handleCreatePage}
+                onDeletePage={handleDeletePage}
+              />
+            </Card>
+
+            <ArticleImagesPanel
+              images={imagesQuery.data ?? []}
+              isLoading={imagesQuery.isLoading}
+              isError={imagesQuery.isError}
+              activeContent={activeImageContent}
+              activeLabel={activeImageLabel}
+              canDeletePermanently={canDeletePermanently}
+              locationsOf={imageLocationsOf}
+              onChangeSize={handleChangeImageSize}
+              onOpenLocation={handleOpenImageLocation}
+              onInsert={handleInsertImageToken}
+              onDelete={handleDeleteImage}
+              onPermanentDelete={handlePermanentDeleteImage}
+              deletingId={
+                deleteImageMutation.isPending &&
+                !deleteImageMutation.variables?.permanent
+                  ? (deleteImageMutation.variables?.attachmentId ?? null)
+                  : null
+              }
+              permanentDeletingId={
+                deleteImageMutation.isPending &&
+                deleteImageMutation.variables?.permanent
+                  ? (deleteImageMutation.variables?.attachmentId ?? null)
+                  : null
+              }
+              onRetry={() => void imagesQuery.refetch()}
+            />
+
+            {detailQuery.data && (
+              <Card>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-foreground">Indexação IA</h3>
+                  {detailQuery.data.status !== 'Draft' && detailQuery.data.aiIndexingEnabled !== false && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={reindexMutation.isPending}
+                      onClick={() =>
+                        reindexMutation.mutate(id, {
+                          onSuccess: () => toast.success('Artigo enfileirado para reindexação.'),
+                          onError: () => toast.error('Falha ao solicitar reindexação.'),
+                        })
+                      }
+                    >
+                      <Icon name="refresh" className="h-3.5 w-3.5" /> Reindexar
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted">
+                  {detailQuery.data.aiIndexingEnabled === false
+                    ? 'Análise por IA desativada neste artigo.'
+                    : detailQuery.data.status === 'Draft'
+                    ? 'Rascunhos não são indexados até serem publicados.'
+                    : detailQuery.data.embeddingsReady
+                    ? `Pronto (${detailQuery.data.embeddedChunkCount ?? detailQuery.data.chunkCount}/${detailQuery.data.chunkCount} chunks com embedding).`
+                    : detailQuery.data.chunkCount > 0
+                    ? `Em processamento (${detailQuery.data.embeddedChunkCount ?? 0}/${detailQuery.data.chunkCount} chunks).`
+                    : 'Aguardando geração de chunks/embeddings.'}
+                </p>
+              </Card>
+            )}
+
+            <Card>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVersions(!showVersions);
+                  if (!showVersions) versionsQuery.refetch();
+                }}
+                className="flex w-full items-center justify-between text-sm font-medium text-foreground transition-colors hover:text-primary"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Icon name="history" className="h-4 w-4 text-muted" />
+                  Histórico de versões ({detailQuery.data?.currentVersionNumber ?? 0})
+                </span>
+                <Icon name={showVersions ? 'expand_less' : 'expand_more'} className="h-4 w-4 text-muted" />
+              </button>
+              {showVersions && (
+                <div className="mt-3 space-y-2">
+                  {versionsQuery.isLoading && <Loading message="Carregando versões..." />}
+                  {versionsQuery.data?.map((v: ArticleVersion) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setPreviewVersion(v)}
+                      className="w-full rounded-lg border border-border bg-surface-light p-2.5 text-left text-xs transition-colors hover:border-primary/60"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-foreground">v{v.versionNumber}</span>
+                        <Badge color="slate">{statusLabel(v.status as ArticleStatus)}</Badge>
+                      </div>
+                      {v.changeSummary && <p className="mt-1 truncate text-muted">{v.changeSummary}</p>}
+                      <p className="mt-1 text-[11px] text-muted">
+                        {formatDateTime(v.createdAt)}
+                        {v.editedBy && ` • ${v.editedBy}`}
+                      </p>
+                    </button>
+                  ))}
+                  {versionsQuery.data?.length === 0 && (
+                    <p className="text-xs text-muted">Nenhuma versão publicada ainda.</p>
+                  )}
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
         <Card>
           <div className="space-y-4">
             <Input
@@ -572,21 +839,20 @@ export default function KnowledgeEditor() {
               placeholder="Ex.: Como resetar senha do AD"
             />
 
-            <div className="grid gap-4 md:grid-cols-1">
+            <div className="grid gap-4 md:grid-cols-2">
               <Input
                 label="Categoria"
                 value={form.category}
                 onChange={(event) => setField('category', event.target.value)}
                 placeholder="Ex.: Active Directory"
               />
+              <Input
+                label="Tags (separadas por vírgula)"
+                value={form.tags}
+                onChange={(event) => setField('tags', event.target.value)}
+                placeholder="ad, senha, reset"
+              />
             </div>
-
-            <Input
-              label="Tags (separadas por vírgula)"
-              value={form.tags}
-              onChange={(event) => setField('tags', event.target.value)}
-              placeholder="ad, senha, reset"
-            />
 
             <div className="grid gap-4 md:grid-cols-2">
               <Select
@@ -621,22 +887,54 @@ export default function KnowledgeEditor() {
                   { value: 'Draft', label: 'Rascunho — ainda não publicado' },
                   { value: 'Published', label: 'Publicado — visível para todos os usuários' },
                   { value: 'Internal', label: 'Interno — restrito ao departamento' },
+                  { value: 'AiOnly', label: 'Somente IA — orienta o chat sem expor o documento' },
                 ]}
                 value={form.targetStatus}
-                onChange={(event) => setField('targetStatus', event.target.value as ArticleStatus)}
+                onChange={(event) => {
+                  const nextStatus = event.target.value as ArticleStatus;
+                  setForm((prev) => ({
+                    ...prev,
+                    targetStatus: nextStatus,
+                    aiIndexingEnabled: nextStatus === 'AiOnly' ? true : prev.aiIndexingEnabled,
+                  }));
+                }}
                 hint={
                   form.targetStatus === 'Published'
                     ? 'Visível para todos os usuários. Respeita a herança: Global → Clientes → Sites → Agentes.'
                     : form.targetStatus === 'Internal'
                     ? 'Visível apenas para usuários do departamento vinculado. Ainda respeita a herança de escopo.'
+                    : form.targetStatus === 'AiOnly'
+                    ? 'Usado exclusivamente pela IA para orientar usuários no chat, sem exibir o título nem link do artigo.'
                     : 'Ainda não publicado. Apenas você pode ver este artigo.'
                 }
               />
             </div>
 
+            <div className="rounded-lg border border-border bg-surface-light p-3.5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-border accent-primary"
+                  checked={form.targetStatus === 'AiOnly' ? true : form.aiIndexingEnabled}
+                  disabled={form.targetStatus === 'AiOnly'}
+                  onChange={(event) => setField('aiIndexingEnabled', event.target.checked)}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    Permitir uso pela IA (RAG e Embeddings)
+                  </p>
+                  <p className="text-xs text-muted">
+                    {form.targetStatus === 'AiOnly'
+                      ? 'Artigos "Somente IA" exigem indexação ativa para que a IA possa consultá-los.'
+                      : 'Quando desmarcado, este artigo não será chunkado, não gerará embeddings e não será lido pelo chat de IA.'}
+                  </p>
+                </div>
+              </label>
+            </div>
+
             {isEdit && detailQuery.data && detailQuery.data.status !== 'Draft' && (
               <div className="rounded-lg border border-border bg-surface-light p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">
                       Publicado como <Badge color={statusColor(detailQuery.data.status)}>{statusLabel(detailQuery.data.status)}</Badge>
@@ -648,27 +946,40 @@ export default function KnowledgeEditor() {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const confirmMsg = detailQuery.data.status === 'Published'
-                          ? 'Republicar como Interno? (visível apenas para o departamento)'
-                          : 'Republicar como Público? (visível para todos)';
-                        if (!window.confirm(confirmMsg)) return;
-                        const newStatus = detailQuery.data.status === 'Published' ? 'Internal' : 'Published';
-                        const data: PublishArticleRequest = {
-                          status: newStatus as 'Published' | 'Internal',
-                        };
-                        publishMutation.mutate({ id: id!, data }, {
-                          onSuccess: () => toast.success(`Artigo republicado como ${newStatus === 'Published' ? 'Público' : 'Interno'}`),
-                          onError: () => toast.error('Falha ao republicar'),
-                        });
-                      }}
-                    >
-                      Mudar para {detailQuery.data.status === 'Published' ? 'Interno' : 'Público'}
-                    </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {detailQuery.data.status !== 'Published' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmQuickStatus('Published')}
+                      >
+                        Mudar para Público
+                      </Button>
+                    )}
+                    {detailQuery.data.status !== 'Internal' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (!detailQuery.data?.departmentId) {
+                            toast.error('Salve o artigo com um departamento selecionado antes de mudar para Interno.');
+                            return;
+                          }
+                          setConfirmQuickStatus('Internal');
+                        }}
+                      >
+                        Mudar para Interno
+                      </Button>
+                    )}
+                    {detailQuery.data.status !== 'AiOnly' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmQuickStatus('AiOnly')}
+                      >
+                        Mudar para Somente IA
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -676,90 +987,8 @@ export default function KnowledgeEditor() {
 
             {isEdit && detailQuery.data && detailQuery.data.status === 'Draft' && form.targetStatus === 'Draft' && (
               <p className="text-xs text-muted">
-                Selecione <strong>Publicado</strong> ou <strong>Interno</strong> no campo "Status ao salvar" para publicar o artigo.
+                Selecione <strong>Publicado</strong>, <strong>Interno</strong> ou <strong>Somente IA</strong> no campo "Status ao salvar" para publicar o artigo.
               </p>
-            )}
-
-            {isEdit && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowVersions(!showVersions);
-                    if (!showVersions) versionsQuery.refetch();
-                  }}
-                  className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
-                >
-                  <Icon name="history" className="h-4 w-4" />
-                  Histórico de versões ({detailQuery.data?.currentVersionNumber ?? 0})
-                </button>
-                {showVersions && (
-                  <div className="mt-2 space-y-2">
-                    {versionsQuery.isLoading && <Loading message="Carregando versões..." />}
-                    {versionsQuery.data?.map((v: ArticleVersion) => (
-                      <div key={v.id} className="rounded border border-border bg-surface-light p-2 text-xs">
-                        <p className="text-muted-foreground">
-                          <span className="font-medium text-foreground">v{v.versionNumber}</span>
-                          {' '}{v.status === 'Published' ? 'Publicado' : 'Interno'}
-                          {v.changeSummary && <span className="text-muted"> — {v.changeSummary}</span>}
-                        </p>
-                        <p className="text-muted">
-                          {formatDateTime(v.createdAt)}
-                          {v.editedBy && ` por ${v.editedBy}`}
-                        </p>
-                      </div>
-                    ))}
-                    {versionsQuery.data?.length === 0 && (
-                      <p className="text-xs text-muted">Nenhuma versão publicada ainda.</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isEdit && id && (
-              <ArticleImagesPanel
-                images={imagesQuery.data ?? []}
-                isLoading={imagesQuery.isLoading}
-                isError={imagesQuery.isError}
-                activeContent={activeImageContent}
-                activeLabel={activeImageLabel}
-                canDeletePermanently={canDeletePermanently}
-                locationsOf={imageLocationsOf}
-                onChangeSize={handleChangeImageSize}
-                onOpenLocation={handleOpenImageLocation}
-                onInsert={handleInsertImageToken}
-                onDelete={handleDeleteImage}
-                onPermanentDelete={handlePermanentDeleteImage}
-                deletingId={
-                  deleteImageMutation.isPending &&
-                  !deleteImageMutation.variables?.permanent
-                    ? (deleteImageMutation.variables?.attachmentId ?? null)
-                    : null
-                }
-                permanentDeletingId={
-                  deleteImageMutation.isPending &&
-                  deleteImageMutation.variables?.permanent
-                    ? (deleteImageMutation.variables?.attachmentId ?? null)
-                    : null
-                }
-                onRetry={() => void imagesQuery.refetch()}
-              />
-            )}
-
-            {isEdit && id && (
-              <div className="rounded-xl border border-border bg-surface-light p-4">
-                <ArticlePagesManager
-                  articleId={id}
-                  homeLabel={detailQuery.data?.title ?? 'Home'}
-                  activePageId={isCreatingPage ? null : activePageId}
-                  homeActive={!isEditingPage}
-                  onSelectHome={handleSelectHome}
-                  onSelectPage={handleSelectPage}
-                  onCreatePage={handleCreatePage}
-                  onDeletePage={handleDeletePage}
-                />
-              </div>
             )}
 
             {/* Editor único: home do artigo ou sub-página selecionada */}
@@ -847,26 +1076,124 @@ export default function KnowledgeEditor() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => navigate('/knowledge')}>
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button variant="ghost" onClick={() => guardUnsavedExit(() => navigate('/knowledge'))}>
                 Cancelar
               </Button>
+              {!isEdit && (
+                <Button
+                  variant="secondary"
+                  onClick={() => void submit('Draft', true)}
+                  loading={createMutation.isPending}
+                  disabled={!valid}
+                >
+                  <Icon name="edit_note" className="h-4 w-4" />
+                  Salvar rascunho e continuar editando
+                </Button>
+              )}
               <Button
                 onClick={() => void submit(form.targetStatus)}
-                loading={createMutation.isPending || updateMutation.isPending || publishMutation.isPending}
+                loading={createMutation.isPending || updateMutation.isPending || publishMutation.isPending || unpublishMutation.isPending}
                 disabled={!valid}
               >
                 {form.targetStatus === 'Published' && <Icon name="send" className="h-4 w-4" />}
-                {form.targetStatus === 'Draft' && <Icon name="save" className="h-4 w-4" />}
-                {form.targetStatus === 'Internal' && <Icon name="save" className="h-4 w-4" />}
+                {form.targetStatus === 'AiOnly' && <Icon name="smart_toy" className="h-4 w-4" />}
+                {(form.targetStatus === 'Draft' || form.targetStatus === 'Internal') && <Icon name="save" className="h-4 w-4" />}
                 {form.targetStatus === 'Draft' && 'Salvar rascunho'}
                 {form.targetStatus === 'Published' && 'Salvar e publicar'}
                 {form.targetStatus === 'Internal' && 'Salvar como Interno'}
+                {form.targetStatus === 'AiOnly' && 'Salvar como Somente IA'}
               </Button>
             </div>
           </div>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmQuickStatus !== null}
+        title="Alterar visibilidade do artigo"
+        tone="primary"
+        message={
+          confirmQuickStatus === 'Published'
+            ? 'Republicar como Público (visível para todos os usuários do escopo)?'
+            : confirmQuickStatus === 'Internal'
+            ? 'Republicar como Interno (visível apenas para o departamento vinculado)?'
+            : 'Republicar como Somente IA (usado exclusivamente pelo chat de IA)?'
+        }
+        confirmLabel="Confirmar"
+        isLoading={publishMutation.isPending}
+        onConfirm={() => {
+          if (!confirmQuickStatus || !id) return;
+          const data: PublishArticleRequest = { status: confirmQuickStatus };
+          publishMutation.mutate(
+            { id, data },
+            {
+              onSuccess: () => {
+                toast.success(`Artigo republicado como ${statusLabel(confirmQuickStatus)}.`);
+                setConfirmQuickStatus(null);
+              },
+              onError: () => toast.error('Falha ao republicar artigo.'),
+            },
+          );
+        }}
+        onClose={() => setConfirmQuickStatus(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingNavAction !== null}
+        title="Descartar alterações não salvas?"
+        message="Há alterações ainda não salvas. Deseja sair e descartar essas mudanças?"
+        confirmLabel="Descartar"
+        onConfirm={() => {
+          const action = pendingNavAction;
+          setPendingNavAction(null);
+          action?.();
+        }}
+        onClose={() => setPendingNavAction(null)}
+      />
+
+      <Modal
+        open={previewVersion !== null}
+        onClose={() => setPreviewVersion(null)}
+        title={previewVersion ? `Versão v${previewVersion.versionNumber} — ${previewVersion.title}` : 'Versão'}
+        maxWidth="max-w-3xl"
+      >
+        {previewVersion && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              <Badge color="slate">{statusLabel(previewVersion.status as ArticleStatus)}</Badge>
+              <span>{formatDateTime(previewVersion.createdAt)}</span>
+              {previewVersion.editedBy && <span>por {previewVersion.editedBy}</span>}
+              {previewVersion.changeSummary && <span>— {previewVersion.changeSummary}</span>}
+            </div>
+            <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-border bg-surface-light p-4">
+              <MarkdownViewer source={previewVersion.content || '_Conteúdo vazio._'} articleId={id} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setPreviewVersion(null)}>
+                Fechar
+              </Button>
+              <Button
+                onClick={() => {
+                  applySelectHome();
+                  setForm((prev) => ({
+                    ...prev,
+                    title: previewVersion.title,
+                    content: previewVersion.content,
+                    category: previewVersion.category ?? '',
+                    tags: Array.isArray(previewVersion.tags) ? previewVersion.tags.join(', ') : '',
+                  }));
+                  setPreviewVersion(null);
+                  toast.success(`Conteúdo da v${previewVersion.versionNumber} restaurado no editor — salve para aplicar.`);
+                }}
+              >
+                <Icon name="history" className="h-4 w-4" />
+                Restaurar no editor
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -31,6 +31,7 @@ import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { useAuthorization } from '@/auth/authorization';
 import TicketChatHistory from './TicketChatHistory';
 import { TicketRunbookPanel } from './TicketRunbookPanel';
+import { TicketKnowledgePanel } from './TicketKnowledgePanel';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
 import { TicketStateBadge } from '@/components/tickets/TicketStateBadge';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
@@ -418,6 +419,17 @@ export default function TicketDetail() {
             closedAt={t.closedAt}
             templateName={t.templateName}
             currentStateId={t.workflowStateId}
+          />
+          <TicketKnowledgePanel
+            ticketId={id!}
+            ticketTitle={t.title}
+            ticketDescription={t.description}
+            ticketCategory={t.category}
+            clientId={t.clientId}
+            siteId={t.siteId}
+            departmentId={t.departmentId}
+            canManageLinks={capabilities.canTreat}
+            comments={comments.data?.items}
           />
         </div>
       </div>

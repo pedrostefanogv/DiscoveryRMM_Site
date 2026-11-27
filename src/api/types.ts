@@ -2667,7 +2667,7 @@ export interface UpdateNoteRequest {
 }
 
 export type KnowledgeSearchMode = "semantic" | "keyword" | "hybrid";
-export type ArticleStatus = "Draft" | "Published" | "Internal";
+export type ArticleStatus = "Draft" | "Published" | "Internal" | "AiOnly";
 
 export interface KnowledgeArticle {
   id: string;
@@ -2690,6 +2690,8 @@ export interface KnowledgeArticle {
   publishedAt: string | null;
   chunkCount: number;
   embeddingsReady: boolean;
+  aiIndexingEnabled?: boolean;
+  embeddedChunkCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -2780,6 +2782,7 @@ export interface CreateKnowledgeArticleRequest {
   clientId: string | null;
   siteId: string | null;
   departmentId?: string | null;
+  aiIndexingEnabled?: boolean;
 }
 
 export interface UpdateKnowledgeArticleRequest {
@@ -2788,10 +2791,15 @@ export interface UpdateKnowledgeArticleRequest {
   category: string | null;
   tags: string[];
   lastEditedBy?: string | null;
+  clientId?: string | null;
+  siteId?: string | null;
+  departmentId?: string | null;
+  aiIndexingEnabled?: boolean;
+  updateScope?: boolean;
 }
 
 export interface PublishArticleRequest {
-  status: "Published" | "Internal";
+  status: "Published" | "Internal" | "AiOnly";
   lastEditedBy?: string | null;
   changeSummary?: string | null;
 }

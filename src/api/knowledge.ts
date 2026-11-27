@@ -107,6 +107,10 @@ export const knowledgeApi = {
       `${BASE}/${id}/unpublish${lastEditedBy ? `?lastEditedBy=${encodeURIComponent(lastEditedBy)}` : ''}`,
     ),
 
+  reindex: (id: string) => api.post<KnowledgeArticle>(`${BASE}/${id}/reindex`),
+
+  listCategories: () => api.get<string[]>(`${BASE}/categories`),
+
   getVersions: (id: string) =>
     api.get<ArticleVersion[]>(`${BASE}/${id}/versions`),
 

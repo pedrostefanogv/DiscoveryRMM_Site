@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Icon, Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Card, ConfirmDialog, ErrorDisplay, Loading } from '@/components/ui';
 import type { KbImageListItem } from '@/api';
 import {
   KB_IMAGE_SIZE_MAX_PX,
@@ -145,6 +145,7 @@ function ImageRow({
   const occurrencesHere = countKbImageOccurrences(activeContent, image.id);
   const currentSize = kbImageSizeInMarkdown(activeContent, image.id);
   const [customPx, setCustomPx] = useState('');
+  const [confirmState, setConfirmState] = useState<'reinsert' | 'softDelete' | 'permanentDelete' | null>(null);
 
   const presetValues = KB_IMAGE_SIZE_PRESETS.map((preset) => preset.value ?? '');
   const isCustom = !!currentSize && !presetValues.includes(currentSize);
@@ -250,12 +251,8 @@ function ImageRow({
             variant="ghost"
             size="sm"
             onClick={() => {
-              if (
-                occurrencesHere > 0 &&
-                !window.confirm(
-                  `"${image.fileName}" já está neste texto. Inserir de novo (vai duplicar a referência)?`,
-                )
-              ) {
+              if (occurrencesHere > 0) {
+                setConfirmState('reinsert');
                 return;
               }
               onInsert(buildKbImageToken(image.id, image.fileName, currentSize));
@@ -269,16 +266,7 @@ function ImageRow({
             variant="ghost"
             size="sm"
             loading={deleting}
-            onClick={() => {
-              if (
-                !window.confirm(
-                  `Excluir "${image.fileName}"? A referência sai do texto e a imagem fica 30 dias recuperável.`,
-                )
-              ) {
-                return;
-              }
-              onDelete(image.id);
-            }}
+            onClick={() => setConfirmState('softDelete')}
             title="Excluir (recuperável por 30 dias)"
           >
             <Icon name="delete" className="h-4 w-4" />
@@ -289,23 +277,7 @@ function ImageRow({
               variant="ghost"
               size="sm"
               loading={permanentDeleting}
-              onClick={() => {
-                if (
-                  !window.confirm(
-                    `Excluir DEFINITIVAMENTE "${image.fileName}"? O arquivo sai do storage agora e links pré-assinados já emitidos deixam de funcionar. Não há recuperação.`,
-                  )
-                ) {
-                  return;
-                }
-                if (
-                  !window.confirm(
-                    'Confirmar exclusão permanente? Esta ação não pode ser desfeita.',
-                  )
-                ) {
-                  return;
-                }
-                onPermanentDelete(image.id);
-              }}
+              onClick={() => setConfirmState('permanentDelete')}
               title="Excluir definitivamente (sem recuperação)"
             >
               <Icon name="ink_eraser" className="h-4 w-4" />
@@ -317,6 +289,58 @@ function ImageRow({
       {occurrencesHere > 1 && (
         <Badge color="slate">usada {occurrencesHere}x neste texto</Badge>
       )}
+
+      <ConfirmDialog
+        open={confirmState === 'reinsert'}
+        title="Imagem já está no texto"
+        tone="primary"
+        message={
+          <>
+            <strong>"{image.fileName}"</strong> já aparece neste texto. Deseja inserir novamente (duplicando a referência)?
+          </>
+        }
+        confirmLabel="Inserir mesmo assim"
+        onConfirm={() => {
+          onInsert(buildKbImageToken(image.id, image.fileName, currentSize));
+          setConfirmState(null);
+        }}
+        onClose={() => setConfirmState(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmState === 'softDelete'}
+        title="Excluir imagem"
+        message={
+          <>
+            Excluir <strong>"{image.fileName}"</strong>? A referência sai do texto e a imagem fica recuperável por 30 dias.
+          </>
+        }
+        confirmLabel="Excluir"
+        isLoading={deleting}
+        onConfirm={() => {
+          onDelete(image.id);
+          setConfirmState(null);
+        }}
+        onClose={() => setConfirmState(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmState === 'permanentDelete'}
+        title="Excluir imagem definitivamente"
+        message={
+          <>
+            Excluir DEFINITIVAMENTE <strong>"{image.fileName}"</strong>? O arquivo sai do storage agora e links pré-assinados já emitidos deixam de funcionar. Não há recuperação.
+          </>
+        }
+        confirmLabel="Excluir definitivamente"
+        requireText="EXCLUIR"
+        isLoading={permanentDeleting}
+        onConfirm={() => {
+          onPermanentDelete(image.id);
+          setConfirmState(null);
+        }}
+        onClose={() => setConfirmState(null)}
+      />
     </li>
   );
 }

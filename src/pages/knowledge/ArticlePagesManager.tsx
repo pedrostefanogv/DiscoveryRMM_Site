@@ -1,4 +1,5 @@
-import { Icon, Button } from '@/components/ui';
+import { useState } from 'react';
+import { Icon, Button, ConfirmDialog } from '@/components/ui';
 import ArticlePagesTree from './ArticlePagesTree';
 import { useArticlePages, useDeleteArticlePage } from '@/hooks';
 import toast from 'react-hot-toast';
@@ -38,12 +39,19 @@ export default function ArticlePagesManager({
 }: ArticlePagesManagerProps) {
   const pagesQuery = useArticlePages(articleId);
   const deleteMutation = useDeleteArticlePage(articleId);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
 
   const handleDelete = (pageId: string, title: string) => {
-    if (!window.confirm(`Excluir a página "${title}" e todas as suas sub-páginas?`)) return;
+    setPendingDelete({ id: pageId, title });
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    const { id: pageId } = pendingDelete;
     deleteMutation.mutate(pageId, {
       onSuccess: () => {
         toast.success('Página excluída.');
+        setPendingDelete(null);
         onDeletePage?.(pageId);
       },
       onError: () => toast.error('Falha ao excluir página.'),
@@ -75,6 +83,20 @@ export default function ArticlePagesManager({
           onDelete={handleDelete}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Excluir página"
+        message={
+          <>
+            Excluir a página <strong>"{pendingDelete?.title}"</strong> e todas as suas sub-páginas?
+          </>
+        }
+        confirmLabel="Excluir"
+        isLoading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

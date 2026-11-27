@@ -27,6 +27,7 @@ const KEYS = {
     [...KEYS.all, "image-url", articleId, attachmentId] as const,
   pages: (articleId: string) => [...KEYS.all, "pages", articleId] as const,
   page: (articleId: string, pageId: string) => [...KEYS.all, "page", articleId, pageId] as const,
+  categories: () => [...KEYS.all, "categories"] as const,
   search: (params: KnowledgeSearchQuery) =>
     [...KEYS.all, "search", params] as const,
   chatSearch: (params: KbSearchRequest) =>
@@ -72,6 +73,13 @@ export function useKnowledgeAllArticles(params?: {
         sortBy: params?.sortBy,
         sortDirection: params?.sortDirection,
       }),
+  });
+}
+
+export function useKnowledgeCategories() {
+  return useQuery({
+    queryKey: KEYS.categories(),
+    queryFn: () => knowledgeApi.listCategories(),
   });
 }
 
@@ -391,6 +399,35 @@ export function useUnpublishKnowledgeArticle() {
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+    },
+  });
+}
+
+export function useReindexKnowledgeArticle() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => knowledgeApi.reindex(id),
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+    },
+  });
+}
+
+export function useSendTicketKnowledgeFeedback() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      articleId,
+      useful,
+    }: {
+      ticketId: string;
+      articleId: string;
+      useful: boolean;
+    }) => knowledgeApi.sendTicketKnowledgeFeedback(ticketId, articleId, { useful }),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.ticketLinks(vars.ticketId) });
     },
   });
 }

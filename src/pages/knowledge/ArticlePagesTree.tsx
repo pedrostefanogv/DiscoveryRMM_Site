@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Icon } from "@/components/ui";
 
 import type { ArticlePageTreeNode } from '@/api';
@@ -39,6 +39,7 @@ export default function ArticlePagesTree({
   onDelete,
 }: ArticlePagesTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const toggle = (id: string) => {
     setCollapsed((prev) => {
@@ -47,6 +48,86 @@ export default function ArticlePagesTree({
       else next.add(id);
       return next;
     });
+  };
+
+  // Lista plana dos itens visíveis para navegação por teclado WAI-ARIA Treeview
+  const visibleItems = useMemo(() => {
+    const result: Array<{ id: string; parentId: string | null; hasChildren: boolean }> = [];
+    if (homeLabel) {
+      result.push({ id: '__home__', parentId: null, hasChildren: false });
+    }
+    const walk = (list: ArticlePageTreeNode[], depth: number, parentId: string | null) => {
+      for (const node of list) {
+        const hasChildren = node.children.length > 0 && depth < maxDepth;
+        result.push({ id: node.id, parentId, hasChildren });
+        if (hasChildren && !collapsed.has(node.id)) {
+          walk(node.children, depth + 1, node.id);
+        }
+      }
+    };
+    walk(nodes, 0, null);
+    return result;
+  }, [nodes, homeLabel, maxDepth, collapsed]);
+
+  const focusItem = (id: string) => {
+    itemRefs.current.get(id)?.focus();
+  };
+
+  const handleTreeKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    itemId: string,
+    hasChildren: boolean,
+    isCollapsed: boolean,
+  ) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (itemId === '__home__') onSelectHome?.();
+      else onSelect(itemId);
+      return;
+    }
+
+    const idx = visibleItems.findIndex((x) => x.id === itemId);
+    if (idx === -1) return;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const next = visibleItems[idx + 1];
+      if (next) focusItem(next.id);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      const prev = visibleItems[idx - 1];
+      if (prev) focusItem(prev.id);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      if (visibleItems[0]) focusItem(visibleItems[0].id);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      const last = visibleItems[visibleItems.length - 1];
+      if (last) focusItem(last.id);
+    } else if (event.key === 'ArrowRight' && itemId !== '__home__') {
+      if (hasChildren && isCollapsed) {
+        event.preventDefault();
+        toggle(itemId);
+      } else if (hasChildren && !isCollapsed) {
+        event.preventDefault();
+        const next = visibleItems[idx + 1];
+        if (next) focusItem(next.id);
+      }
+    } else if (event.key === 'ArrowLeft' && itemId !== '__home__') {
+      if (hasChildren && !isCollapsed) {
+        event.preventDefault();
+        toggle(itemId);
+      } else {
+        const current = visibleItems[idx];
+        if (current?.parentId) {
+          event.preventDefault();
+          focusItem(current.parentId);
+        } else if (homeLabel) {
+          event.preventDefault();
+          focusItem('__home__');
+        }
+      }
+    }
   };
 
   const renderNode = (node: ArticlePageTreeNode, depth: number) => {
@@ -58,6 +139,10 @@ export default function ArticlePagesTree({
     return (
       <div key={node.id}>
         <div
+          ref={(el) => {
+            if (el) itemRefs.current.set(node.id, el);
+            else itemRefs.current.delete(node.id);
+          }}
           className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
             isActive
               ? 'bg-primary/15 text-primary'
@@ -69,12 +154,7 @@ export default function ArticlePagesTree({
           aria-expanded={hasChildren ? !isCollapsed : undefined}
           tabIndex={isActive ? 0 : -1}
           onClick={() => onSelect(node.id)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              onSelect(node.id);
-            }
-          }}
+          onKeyDown={(event) => handleTreeKeyDown(event, node.id, hasChildren, isCollapsed)}
         >
           {hasChildren ? (
             <button
@@ -136,6 +216,10 @@ export default function ArticlePagesTree({
     <div className="space-y-0.5" role="tree" aria-label="Páginas do artigo">
       {homeLabel && (
         <div
+          ref={(el) => {
+            if (el) itemRefs.current.set('__home__', el);
+            else itemRefs.current.delete('__home__');
+          }}
           className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
             homeActive
               ? 'bg-primary/15 text-primary'
@@ -144,14 +228,9 @@ export default function ArticlePagesTree({
           style={{ paddingLeft: '8px' }}
           role="treeitem"
           aria-selected={homeActive}
-          tabIndex={homeActive ? 0 : -1}
+          tabIndex={homeActive || !activePageId ? 0 : -1}
           onClick={onSelectHome}
-          onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              onSelectHome?.();
-            }
-          }}
+          onKeyDown={(event) => handleTreeKeyDown(event, '__home__', false, false)}
         >
           <span className="w-4 shrink-0" />
           <Icon name="home" className="h-4 w-4 shrink-0 text-primary" />

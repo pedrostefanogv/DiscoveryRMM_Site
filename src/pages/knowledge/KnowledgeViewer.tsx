@@ -1,20 +1,31 @@
 import { formatDateTime } from '@/utils/format';
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
-import { Icon, Badge, Button, Card, ErrorDisplay, Loading,
-PageHeader,
+import {
+  Icon,
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  ErrorDisplay,
+  Loading,
+  PageHeader,
 } from '@/components/ui';
 import type { ArticlePageTreeNode, ArticleStatus, KnowledgeArticle } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import {
   useArticlePages,
   useClients,
+  useDeleteKnowledgeArticle,
   useDepartments,
   useKnowledgeArticle,
+  useReindexKnowledgeArticle,
   useSites,
+  useUnpublishKnowledgeArticle,
 } from '@/hooks';
+import toast from 'react-hot-toast';
 import ArticlePagesTree from './ArticlePagesTree';
 
 const KNOWLEDGE_EDIT_PERMISSIONS = [
@@ -25,12 +36,22 @@ const KNOWLEDGE_EDIT_PERMISSIONS = [
   'admin.*',
 ];
 
+const KNOWLEDGE_DELETE_PERMISSIONS = [
+  'KnowledgeBase.Delete',
+  'KnowledgeBase.*',
+  'knowledgebase.delete',
+  'knowledgebase.*',
+  'admin.*',
+];
+
 function statusLabel(status: ArticleStatus): string {
   switch (status) {
     case 'Published':
       return 'Publicado';
     case 'Internal':
       return 'Interno';
+    case 'AiOnly':
+      return 'Somente IA';
     case 'Draft':
       return 'Rascunho';
     default:
@@ -38,12 +59,14 @@ function statusLabel(status: ArticleStatus): string {
   }
 }
 
-function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' {
+function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' | 'slate' {
   switch (status) {
     case 'Published':
       return 'success';
     case 'Internal':
       return 'accent';
+    case 'AiOnly':
+      return 'slate';
     case 'Draft':
       return 'warning';
     default:
@@ -87,6 +110,7 @@ function resolveEntityName<T extends { id: string; name: string }>(
 
 export default function KnowledgeViewer() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { id } = useParams<{ id: string }>();
   const articleQuery = useKnowledgeArticle(id ?? '');
   const { hasAnyPermission } = useAuthorization();
@@ -99,18 +123,39 @@ export default function KnowledgeViewer() {
     activeOnly: true,
   });
 
-  // Sub-páginas internas do artigo (estilo Notion)
+  // Sub-páginas internas do artigo (estilo Notion) sincronizadas com ?pageId=
   const pagesQuery = useArticlePages(id ?? '');
-  const [activePageId, setActivePageId] = useState<string | null>(null);
-  const [showHome, setShowHome] = useState(true);
+  const activePageId = searchParams.get('pageId');
+  const showHome = !activePageId;
 
-  // Ao trocar de artigo, volta para a "home" e limpa a sub-página ativa.
-  useEffect(() => {
-    setActivePageId(null);
-    setShowHome(true);
-  }, [id]);
+  const setActivePage = (pageId: string | null) => {
+    const next = new URLSearchParams(searchParams);
+    if (pageId) next.set('pageId', pageId);
+    else next.delete('pageId');
+    setSearchParams(next, { replace: true });
+  };
 
   const canEditArticle = hasAnyPermission(KNOWLEDGE_EDIT_PERMISSIONS);
+  const canDeleteArticle = hasAnyPermission(KNOWLEDGE_DELETE_PERMISSIONS);
+  const unpublishMutation = useUnpublishKnowledgeArticle();
+  const deleteMutation = useDeleteKnowledgeArticle();
+  const reindexMutation = useReindexKnowledgeArticle();
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  // Lista linear das páginas (Home + sub-páginas em pré-ordem) para navegação Anterior/Próxima
+  const orderedPages = useMemo(() => {
+    const list: Array<{ id: string | null; title: string }> = [
+      { id: null, title: article?.title ?? 'Home' },
+    ];
+    const walk = (nodes: ArticlePageTreeNode[]) => {
+      for (const node of nodes) {
+        list.push({ id: node.id, title: node.title });
+        if (node.children?.length) walk(node.children);
+      }
+    };
+    walk(pagesQuery.data ?? []);
+    return list;
+  }, [article?.title, pagesQuery.data]);
 
   // Resolve a sub-página ativa (para exibir seu conteúdo)
   const activePage = useMemo(() => {
@@ -126,11 +171,20 @@ export default function KnowledgeViewer() {
     return find(pagesQuery.data);
   }, [activePageId, pagesQuery.data]);
 
+  const activeOrderIndex = orderedPages.findIndex((p) => p.id === (activePage ? activePage.id : null));
+  const prevPage = activeOrderIndex > 0 ? orderedPages[activeOrderIndex - 1] : null;
+  const nextPage =
+    activeOrderIndex >= 0 && activeOrderIndex < orderedPages.length - 1
+      ? orderedPages[activeOrderIndex + 1]
+      : null;
+
   const metadata = useMemo(() => {
     if (!article) return null;
 
+    const displayedContent = activePage ? activePage.content : article.content;
+
     return {
-      readingMinutes: estimateReadingMinutes(article.content),
+      readingMinutes: estimateReadingMinutes(displayedContent),
       clientName: resolveEntityName(
         clients.data,
         article.clientId,
@@ -143,12 +197,12 @@ export default function KnowledgeViewer() {
         'Sem departamento',
       ),
     };
-  }, [article, clients.data, departments.data, sites.data]);
+  }, [activePage, article, clients.data, departments.data, sites.data]);
 
   if (!id) {
     return (
       <ErrorDisplay
-        message="Artigo invalido."
+        message="Artigo inválido."
         onRetry={() => navigate('/knowledge')}
       />
     );
@@ -180,6 +234,12 @@ export default function KnowledgeViewer() {
           {statusLabel(article.status)}
         </Badge>
         <Badge color="accent">{scopeLabel(article)}</Badge>
+        {article.departmentId && (
+          <Badge color="slate">{metadata.departmentName}</Badge>
+        )}
+        {article.aiIndexingEnabled === false && (
+          <Badge color="warning">IA bloqueada</Badge>
+        )}
         <Badge color="slate">v{article.currentVersionNumber}</Badge>
         {canEditArticle && (
           <Button
@@ -188,6 +248,34 @@ export default function KnowledgeViewer() {
             onClick={() => navigate(`/knowledge/${article.id}/edit`)}
           >
             <Icon name="edit_note" className="h-4 w-4" /> Editar artigo
+          </Button>
+        )}
+        {canEditArticle && article.status !== 'Draft' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={unpublishMutation.isPending}
+            onClick={() =>
+              unpublishMutation.mutate(
+                { id: article.id },
+                {
+                  onSuccess: () => toast.success('Artigo movido para rascunho.'),
+                  onError: () => toast.error('Falha ao despublicar artigo.'),
+                },
+              )
+            }
+          >
+            <Icon name="edit_note" className="h-4 w-4" /> Despublicar
+          </Button>
+        )}
+        {canDeleteArticle && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setConfirmDeleteOpen(true)}
+            className="text-danger hover:bg-danger/10"
+          >
+            <Icon name="delete" className="h-4 w-4" /> Excluir
           </Button>
         )}
       </PageHeader>
@@ -199,7 +287,7 @@ export default function KnowledgeViewer() {
             <div className="px-5 py-6 sm:px-7">
               {showHome || !activePage ? (
                 <MarkdownViewer
-                  source={article.content || '_Conteudo vazio._'}
+                  source={article.content || '_Conteúdo vazio._'}
                   articleId={article.id}
                 />
               ) : (
@@ -208,10 +296,39 @@ export default function KnowledgeViewer() {
                     {activePage.title}
                   </h3>
                   <MarkdownViewer
-                    source={activePage.content || '_Conteudo vazio._'}
+                    source={activePage.content || '_Conteúdo vazio._'}
                     articleId={article.id}
                   />
                 </>
+              )}
+
+              {orderedPages.length > 1 && (
+                <div className="mt-8 flex items-center justify-between gap-3 border-t border-border pt-4">
+                  <div>
+                    {prevPage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActivePage(prevPage.id)}
+                      >
+                        <Icon name="arrow_back" className="h-4 w-4" />
+                        <span className="truncate max-w-[200px]">{prevPage.title}</span>
+                      </Button>
+                    )}
+                  </div>
+                  <div>
+                    {nextPage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActivePage(nextPage.id)}
+                      >
+                        <span className="truncate max-w-[200px]">{nextPage.title}</span>
+                        <Icon name="arrow_forward" className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </Card>
@@ -232,16 +349,10 @@ export default function KnowledgeViewer() {
               <ArticlePagesTree
                 nodes={pagesQuery.data ?? []}
                 activePageId={activePageId}
-                onSelect={(pageId) => {
-                  setActivePageId(pageId);
-                  setShowHome(false);
-                }}
+                onSelect={(pageId) => setActivePage(pageId)}
                 homeLabel={article.title}
                 homeActive={showHome}
-                onSelectHome={() => {
-                  setShowHome(true);
-                  setActivePageId(null);
-                }}
+                onSelectHome={() => setActivePage(null)}
               />
             )}
           </Card>
@@ -256,15 +367,15 @@ export default function KnowledgeViewer() {
                 <Icon name="person" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Autor</p>
-                  <p className="text-foreground">{article.createdBy ?? 'Nao informado'}</p>
+                  <p className="text-foreground">{article.createdBy ?? 'Não informado'}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
                 <Icon name="edit_note" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted">Ultima edicao</p>
-                  <p className="text-foreground">{article.lastEditedBy ?? article.createdBy ?? 'Nao informado'}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Última edição</p>
+                  <p className="text-foreground">{article.lastEditedBy ?? article.createdBy ?? 'Não informado'}</p>
                   <p className="text-xs text-muted">{formatDate(article.lastEditedAt ?? article.updatedAt)}</p>
                 </div>
               </div>
@@ -312,9 +423,27 @@ export default function KnowledgeViewer() {
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Tags e indexacao
-            </h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Tags e indexação IA
+              </h2>
+              {canEditArticle && article.status !== 'Draft' && article.aiIndexingEnabled !== false && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={reindexMutation.isPending}
+                  onClick={() =>
+                    reindexMutation.mutate(article.id, {
+                      onSuccess: () => toast.success('Artigo enfileirado para reindexação.'),
+                      onError: () => toast.error('Falha ao solicitar reindexação.'),
+                    })
+                  }
+                  title="Regerar chunks e embeddings deste artigo"
+                >
+                  <Icon name="refresh" className="h-3.5 w-3.5" /> Reindexar
+                </Button>
+              )}
+            </div>
             <div className="mb-4 flex flex-wrap gap-2">
               {tags.map((tag) => (
                 <Badge key={tag} color="slate">#{tag}</Badge>
@@ -327,23 +456,51 @@ export default function KnowledgeViewer() {
                 <p className="text-sm font-semibold text-foreground">{article.chunkCount}</p>
               </div>
               <div className="rounded-lg border border-border bg-surface-light p-2">
-                <p className="text-muted">Embeddings</p>
+                <p className="text-muted">Embeddings IA</p>
                 <p className="text-sm font-semibold text-foreground">
-                  {article.embeddingsReady ? 'Pronto' : 'Pendente'}
+                  {article.aiIndexingEnabled === false
+                    ? 'Bloqueado'
+                    : article.embeddingsReady
+                    ? `Pronto (${article.embeddedChunkCount ?? article.chunkCount}/${article.chunkCount})`
+                    : article.chunkCount > 0
+                    ? `Parcial (${article.embeddedChunkCount ?? 0}/${article.chunkCount})`
+                    : 'Pendente'}
                 </p>
               </div>
               <div className="col-span-2 rounded-lg border border-border bg-surface-light p-2">
                 <p className="inline-flex items-center gap-1 text-muted">
-                  <Icon name="layers" className="h-3.5 w-3.5" /> Publicacao
+                  <Icon name="layers" className="h-3.5 w-3.5" /> Publicação
                 </p>
                 <p className="mt-1 text-sm text-foreground">
-                  {article.publishedAt ? `Ultima publicacao em ${formatDate(article.publishedAt)}` : 'Ainda nao publicado'}
+                  {article.publishedAt ? `Última publicação em ${formatDate(article.publishedAt)}` : 'Ainda não publicado'}
                 </p>
               </div>
             </div>
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Excluir artigo"
+        message={
+          <>
+            Tem certeza que deseja excluir o artigo <strong>"{article.title}"</strong>?
+          </>
+        }
+        confirmLabel="Excluir"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() =>
+          deleteMutation.mutate(article.id, {
+            onSuccess: () => {
+              toast.success('Artigo excluído.');
+              navigate('/knowledge');
+            },
+            onError: () => toast.error('Falha ao excluir artigo.'),
+          })
+        }
+        onClose={() => setConfirmDeleteOpen(false)}
+      />
     </div>
   );
 }
