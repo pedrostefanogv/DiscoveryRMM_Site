@@ -123,8 +123,9 @@ export function useSendTicketChatMessage(ticketId: string | undefined, sessionId
       const previous = queryClient.getQueryData<TicketChatMessage[]>(key) ?? [];
 
       const optimistic: TicketChatMessage = {
-        id: "optimistic-" + Date.now(),
+        id: "optimistic-" + (data.clientMessageId || Date.now()),
         sequenceNumber: Number.MAX_SAFE_INTEGER,
+        clientMessageId: data.clientMessageId ?? undefined,
         authorKind: "Support",
         authorUserId: null,
         authorName: null,

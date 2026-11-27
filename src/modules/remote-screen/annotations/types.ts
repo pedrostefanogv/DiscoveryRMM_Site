@@ -1,4 +1,6 @@
-export type AnnotationTool = 'arrow' | 'ellipse' | 'rect' | 'freehand' | 'laser';
+export type RemoteAnnotationTool = 'arrow' | 'ellipse' | 'rect' | 'freehand' | 'laser';
+
+export type AnnotationTool = RemoteAnnotationTool | 'magnifier';
 
 export interface AnnotationPoint {
   x: number;
@@ -8,7 +10,7 @@ export interface AnnotationPoint {
 export interface AnnotationAddCommand {
   op: 'add';
   id: string;
-  tool: AnnotationTool;
+  tool: RemoteAnnotationTool;
   color: string;
   width: number;
   ttlMs: number;
@@ -34,10 +36,20 @@ export interface AnnotationSettings {
   color: string;
   width: number;
   ttlMs: number;
+  magnifierZoom: number;
+  magnifierSize: number;
 }
 
 export const ANNOTATION_MAX_POINTS = 256;
 export const ANNOTATION_LASER_TTL_MS = 3000;
+export const ANNOTATION_MAGNIFIER_ZOOMS = [2, 3, 4] as const;
+export const ANNOTATION_MAGNIFIER_MIN_ZOOM = 1.5;
+export const ANNOTATION_MAGNIFIER_MAX_ZOOM = 5;
+export const ANNOTATION_MAGNIFIER_SIZES = [
+  { value: 160, label: 'Pequena', short: 'P' },
+  { value: 220, label: 'Média', short: 'M' },
+  { value: 280, label: 'Grande', short: 'G' },
+] as const;
 
 export const ANNOTATION_COLORS = [
   { value: '#FF3B30', label: 'Vermelho' },
@@ -65,6 +77,8 @@ export const DEFAULT_ANNOTATION_SETTINGS: AnnotationSettings = {
   color: '#FF3B30',
   width: 5,
   ttlMs: 8000,
+  magnifierZoom: 2,
+  magnifierSize: 220,
 };
 
 export function clamp01(v: number): number {
@@ -138,8 +152,43 @@ export function generateAnnotationId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+export function constrainShapePoint(
+  tool: RemoteAnnotationTool,
+  start: AnnotationPoint,
+  current: AnnotationPoint,
+  aspectRatio: number,
+  shiftKey: boolean,
+): AnnotationPoint {
+  if (!shiftKey || tool === 'freehand' || tool === 'laser' || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
+    return current;
+  }
+
+  const dxVis = (current.x - start.x) * aspectRatio;
+  const dyVis = current.y - start.y;
+
+  if (tool === 'rect' || tool === 'ellipse') {
+    const side = Math.max(Math.abs(dxVis), Math.abs(dyVis));
+    const signX = dxVis < 0 ? -1 : 1;
+    const signY = dyVis < 0 ? -1 : 1;
+    return {
+      x: clamp01(start.x + (signX * side) / aspectRatio),
+      y: clamp01(start.y + signY * side),
+    };
+  }
+
+  // arrow: snap a ângulos múltiplos de 45°
+  const dist = Math.hypot(dxVis, dyVis);
+  if (dist < 1e-6) return current;
+  const angle = Math.atan2(dyVis, dxVis);
+  const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+  return {
+    x: clamp01(start.x + (Math.cos(snapped) * dist) / aspectRatio),
+    y: clamp01(start.y + Math.sin(snapped) * dist),
+  };
+}
+
 export function buildAddAnnotationCommand(
-  settings: AnnotationSettings,
+  settings: Omit<AnnotationSettings, 'tool'> & { tool: RemoteAnnotationTool },
   points: AnnotationPoint[],
   id = generateAnnotationId(),
 ): AnnotationAddCommand {
@@ -182,10 +231,11 @@ export function drawPreviewShape(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  tool: AnnotationTool,
+  tool: RemoteAnnotationTool,
   color: string,
   strokeWidth: number,
   points: AnnotationPoint[],
+  opacity = 1,
 ): void {
   if (points.length < 2 || width <= 0 || height <= 0) return;
 
@@ -196,10 +246,15 @@ export function drawPreviewShape(
   };
 
   ctx.save();
+  ctx.globalAlpha = opacity;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  const drawPass = (passColor: string, passWidth: number) => {
+  const drawPass = (passColor: string, passWidth: number, passAlpha?: number) => {
+    ctx.save();
+    if (passAlpha !== undefined) {
+      ctx.globalAlpha = opacity * passAlpha;
+    }
     ctx.strokeStyle = passColor;
     ctx.fillStyle = passColor;
     ctx.lineWidth = passWidth;
@@ -261,10 +316,18 @@ export function drawPreviewShape(
         break;
       }
     }
+    ctx.restore();
   };
 
-  // Halo escuro sutil para contraste + traço colorido principal
-  drawPass('rgba(0, 0, 0, 0.45)', strokeWidth + 3);
-  drawPass(color, strokeWidth);
+  if (tool === 'laser') {
+    drawPass(color, strokeWidth + 10, 0.28);
+    drawPass('rgba(0, 0, 0, 0.45)', strokeWidth + 3);
+    drawPass(color, strokeWidth);
+    drawPass('rgba(255, 255, 255, 0.85)', Math.max(1.5, strokeWidth * 0.4));
+  } else {
+    // Halo escuro sutil para contraste + traço colorido principal
+    drawPass('rgba(0, 0, 0, 0.45)', strokeWidth + 3);
+    drawPass(color, strokeWidth);
+  }
   ctx.restore();
 }

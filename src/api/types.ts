@@ -1831,6 +1831,8 @@ export interface AIIntegrationSettings {
   embeddingBaseUrl?: string;
   embeddingApiKey?: string;
   promptTemplate?: string;
+  procedurePrompts?: Record<string, string> | null;
+  toolPromptOverrides?: Record<string, string> | null;
   temperature?: number;
   embeddingEnabled?: boolean;
   embeddingArticlesEnabled?: boolean;
@@ -1880,6 +1882,8 @@ export interface AIIntegrationSettingsOverride {
   knowledgeBaseEnabled?: boolean;
   chatModel?: string;
   promptTemplate?: string;
+  procedurePrompts?: Record<string, string> | null;
+  toolPromptOverrides?: Record<string, string> | null;
   temperature?: number;
   /**
    * Teto de tokens de SAÍDA do chat IA.

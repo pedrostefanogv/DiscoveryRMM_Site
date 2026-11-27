@@ -334,6 +334,7 @@ describe("página inicial do agent (agentHomeTab)", () => {
       "chat",
       "support",
       "knowledge",
+      "files",
     ]);
   });
 

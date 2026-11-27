@@ -23,6 +23,10 @@ import RemoteScreenViewer, {
   type MonitorInfo,
   type RemoteScreenViewerHandle,
 } from '@/modules/remote-screen/RemoteScreenViewer';
+import type {
+  AnnotationTool,
+  RemoteAnnotationTool,
+} from '@/modules/remote-screen/annotations/types';
 // Menu de teclas especiais COMPARTILHADO com o viewer RDP.
 import SpecialKeysMenu from '@/components/SpecialKeysMenu';
 import type { RemoteRdpHandle } from '@/modules/remote-rdp/RemoteRdp';
@@ -671,6 +675,33 @@ export default function RemoteSession() {
   const rdpConnected = rdpIronStatus === 'connected';
   const [inputLockState, setInputLockState] = useState<InputLockChangedState | null>(null);
   const [annotating, setAnnotating] = useState(false);
+  const [annotationTool, setAnnotationTool] = useState<AnnotationTool>('arrow');
+  const lastDrawToolRef = useRef<RemoteAnnotationTool>('arrow');
+
+  const handleAnnotationToolChange = useCallback((tool: AnnotationTool) => {
+    setAnnotationTool(tool);
+    if (tool !== 'magnifier') {
+      lastDrawToolRef.current = tool;
+    }
+  }, []);
+
+  const handleToggleDraw = useCallback(() => {
+    if (annotating && annotationTool !== 'magnifier') {
+      setAnnotating(false);
+      return;
+    }
+    screenViewerRef.current?.setAnnotationTool(lastDrawToolRef.current);
+    setAnnotating(true);
+  }, [annotating, annotationTool]);
+
+  const handleToggleMagnifier = useCallback(() => {
+    if (annotating && annotationTool === 'magnifier') {
+      setAnnotating(false);
+      return;
+    }
+    screenViewerRef.current?.setAnnotationTool('magnifier');
+    setAnnotating(true);
+  }, [annotating, annotationTool]);
 
   useEffect(() => {
     setAnnotating(false);
@@ -2222,6 +2253,7 @@ export default function RemoteSession() {
                   onInputLockStateChange={setInputLockState}
                   annotating={annotating}
                   onAnnotatingChange={setAnnotating}
+                  onAnnotationToolChange={handleAnnotationToolChange}
                   ref={screenViewerRef}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
@@ -2723,20 +2755,39 @@ export default function RemoteSession() {
             />
             <button
               type="button"
-              onClick={() => setAnnotating((prev) => !prev)}
-              aria-pressed={annotating}
+              onClick={handleToggleDraw}
+              aria-pressed={annotating && annotationTool !== 'magnifier'}
               title={
-                annotating
+                annotating && annotationTool !== 'magnifier'
                   ? 'Sair do modo de anotação (Esc)'
                   : 'Desenhar anotações na tela do usuário remoto'
               }
-              className={`px-2 py-1 rounded ${
-                annotating
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+                annotating && annotationTool !== 'magnifier'
                   ? 'bg-primary text-primary-foreground font-medium'
                   : 'bg-surface-hover hover:bg-border text-foreground'
               }`}
             >
-              {annotating ? '✎ Desenhando' : '✎ Desenhar'}
+              <Icon name="edit" className="h-3.5 w-3.5" />
+              <span>{annotating && annotationTool !== 'magnifier' ? 'Desenhando' : 'Desenhar'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleMagnifier}
+              aria-pressed={annotating && annotationTool === 'magnifier'}
+              title={
+                annotating && annotationTool === 'magnifier'
+                  ? 'Fechar lupa (Esc)'
+                  : 'Lupa para ampliar detalhes da tela remota'
+              }
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded transition-colors ${
+                annotating && annotationTool === 'magnifier'
+                  ? 'bg-primary text-primary-foreground font-medium'
+                  : 'bg-surface-hover hover:bg-border text-foreground'
+              }`}
+            >
+              <Icon name="search" className="h-3.5 w-3.5" />
+              <span>Lupa</span>
             </button>
             </>
           )}
@@ -2834,23 +2885,44 @@ export default function RemoteSession() {
             ⤢
           </button>
           {screenSession && (
-            <button
-              type="button"
-              onClick={() => setAnnotating((prev) => !prev)}
-              aria-pressed={annotating}
-              title={
-                annotating
-                  ? 'Sair do modo de anotação (Esc)'
-                  : 'Desenhar anotações na tela do usuário remoto'
-              }
-              className={`inline-flex h-7 items-center rounded px-2 text-xs shadow ring-1 ring-border backdrop-blur-sm transition-opacity ${
-                annotating
-                  ? 'bg-primary text-primary-foreground opacity-100 font-medium'
-                  : 'bg-surface/70 text-foreground opacity-70 hover:bg-surface hover:opacity-100'
-              }`}
-            >
-              {annotating ? '✎ Desenhando' : '✎ Desenhar'}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleToggleDraw}
+                aria-pressed={annotating && annotationTool !== 'magnifier'}
+                title={
+                  annotating && annotationTool !== 'magnifier'
+                    ? 'Sair do modo de anotação (Esc)'
+                    : 'Desenhar anotações na tela do usuário remoto'
+                }
+                className={`inline-flex h-7 items-center gap-1 rounded px-2 text-xs shadow ring-1 ring-border backdrop-blur-sm transition-opacity ${
+                  annotating && annotationTool !== 'magnifier'
+                    ? 'bg-primary text-primary-foreground opacity-100 font-medium'
+                    : 'bg-surface/70 text-foreground opacity-70 hover:bg-surface hover:opacity-100'
+                }`}
+              >
+                <Icon name="edit" className="h-3.5 w-3.5" />
+                <span>{annotating && annotationTool !== 'magnifier' ? 'Desenhando' : 'Desenhar'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleMagnifier}
+                aria-pressed={annotating && annotationTool === 'magnifier'}
+                title={
+                  annotating && annotationTool === 'magnifier'
+                    ? 'Fechar lupa (Esc)'
+                    : 'Lupa para ampliar detalhes da tela remota'
+                }
+                className={`inline-flex h-7 items-center gap-1 rounded px-2 text-xs shadow ring-1 ring-border backdrop-blur-sm transition-opacity ${
+                  annotating && annotationTool === 'magnifier'
+                    ? 'bg-primary text-primary-foreground opacity-100 font-medium'
+                    : 'bg-surface/70 text-foreground opacity-70 hover:bg-surface hover:opacity-100'
+                }`}
+              >
+                <Icon name="search" className="h-3.5 w-3.5" />
+                <span>Lupa</span>
+              </button>
+            </>
           )}
         </div>
       )}

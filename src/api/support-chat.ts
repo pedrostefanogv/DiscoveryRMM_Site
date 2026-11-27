@@ -1,8 +1,10 @@
 import { api } from "./client";
 import type {
   CompleteChatUploadRequest,
+  LinkSupportChatToTicketRequest,
   PresignedChatUploadResponse,
   SendTicketChatMessageRequest,
+  TicketChatAssistedActionType,
   TicketChatAttachment,
   TicketChatMessage,
   TicketChatSession,
@@ -29,10 +31,31 @@ export const supportChatApi = {
   startForAgent: (agentId: string) =>
     api.post<TicketChatSession>(AGENTS_BASE + "/" + agentId + "/sessions"),
 
-  listMessages: (sessionId: string, afterSequence = 0, limit = 200) =>
+  listMessages: (sessionId: string, afterSequence = 0, limit = 200, beforeSequence?: number) =>
     api.get<TicketChatMessage[]>(
-      SESSIONS_BASE + "/" + sessionId + "/messages?afterSequence=" + afterSequence + "&limit=" + limit,
+      SESSIONS_BASE +
+        "/" +
+        sessionId +
+        "/messages?afterSequence=" +
+        afterSequence +
+        "&limit=" +
+        limit +
+        (beforeSequence && beforeSequence > 0 ? "&beforeSequence=" + beforeSequence : ""),
     ),
+
+  sendTyping: (sessionId: string, isTyping: boolean) =>
+    api.post<void>(SESSIONS_BASE + "/" + sessionId + "/typing", { isTyping }),
+
+  requestAssistedAction: (sessionId: string, actionType: TicketChatAssistedActionType) =>
+    api.post<TicketChatMessage>(SESSIONS_BASE + "/" + sessionId + "/assisted-action", {
+      actionType,
+    }),
+
+  transfer: (sessionId: string, targetUserId: string) =>
+    api.post<TicketChatSession>(SESSIONS_BASE + "/" + sessionId + "/transfer", { targetUserId }),
+
+  linkTicket: (sessionId: string, data: LinkSupportChatToTicketRequest) =>
+    api.post<TicketChatSession>(SESSIONS_BASE + "/" + sessionId + "/link-ticket", data),
 
   sendMessage: (sessionId: string, data: SendTicketChatMessageRequest) =>
     api.post<TicketChatMessage>(SESSIONS_BASE + "/" + sessionId + "/messages", data),

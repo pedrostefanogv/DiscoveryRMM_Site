@@ -23,12 +23,11 @@ function source(name: string): string {
 }
 
 describe("composer do chat de suporte — caixa única e controle remoto", () => {
-  it("mantém o textarea e os ícones na mesma caixa, no canto inferior direito", () => {
+  it("mantém o textarea e os ícones na mesma caixa, com barra de ações embaixo", () => {
     const panel = source("SupportChatPanel.tsx");
     expect(panel).toContain("focus-within:border-primary/60");
-    expect(panel).toContain("absolute right-2 bottom-2");
-    // Reserva de espaço para os TRÊS ícones (controle remoto, anexar, enviar).
-    expect(panel).toContain("pr-28");
+    // Textarea ocupa 100% da largura e as ações ficam na barra inferior da mesma caixa.
+    expect(panel).toContain("border-t border-border/50");
   });
 
   it("só oferece o controle remoto com o agent informado e permissão de execução", () => {

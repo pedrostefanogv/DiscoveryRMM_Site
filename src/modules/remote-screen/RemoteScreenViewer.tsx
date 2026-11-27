@@ -24,6 +24,7 @@ import {
   DEFAULT_ANNOTATION_SETTINGS,
   type AnnotationCommand,
   type AnnotationSettings,
+  type AnnotationTool,
 } from './annotations/types';
 
 interface FrameHeader {
@@ -73,6 +74,8 @@ interface RemoteScreenViewerProps {
   annotating?: boolean;
   /** Notifica quando o usuário sai do modo anotação (Esc / botão Controlar). */
   onAnnotatingChange?: (active: boolean) => void;
+  /** Notifica quando a ferramenta ativa da barra de anotação/lupa muda. */
+  onAnnotationToolChange?: (tool: AnnotationTool) => void;
 }
 
 export interface RemoteScreenViewerHandle {
@@ -82,6 +85,8 @@ export interface RemoteScreenViewerHandle {
   setInputLock: (locked: boolean) => void;
   /** Limpa todas as anotações visuais na tela remota. */
   clearAnnotations: () => void;
+  /** Seleciona a ferramenta ativa da barra de anotação/lupa. */
+  setAnnotationTool: (tool: AnnotationTool) => void;
 }
 
 export interface MonitorInfo {
@@ -162,6 +167,7 @@ export default function RemoteScreenViewer({
   onInputLockStateChange,
   annotating = false,
   onAnnotatingChange,
+  onAnnotationToolChange,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgSnapshotRef = useRef<HTMLCanvasElement | null>(null);
@@ -212,7 +218,13 @@ export default function RemoteScreenViewer({
   const [annotationSettings, setAnnotationSettings] = useState<AnnotationSettings>(
     DEFAULT_ANNOTATION_SETTINGS,
   );
-  const annotationHistoryRef = useRef<string[]>([]);
+  const annotationHistoryRef = useRef<{ id: string; expiresAt: number | null }[]>([]);
+  const annotationPruneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [activeAnnotationCount, setActiveAnnotationCount] = useState(0);
+  const [annotationResetToken, setAnnotationResetToken] = useState(0);
+  const resetAnnotationHistoryRef = useRef<() => void>(() => {});
+  const onAnnotationToolChangeRef = useRef(onAnnotationToolChange);
+  onAnnotationToolChangeRef.current = onAnnotationToolChange;
   // Combinação aguardando confirmação do agent (evento special_key em .event).
   const specialKeyPendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frameCountRef = useRef(0);
@@ -574,6 +586,7 @@ export default function RemoteScreenViewer({
             lockPendingRef.current = null;
           }
           onInputLockStateChangeRef.current?.(null);
+          resetAnnotationHistoryRef.current();
           onSessionEndedRef.current?.(String(reason));
         } else if (data?.eventType === 'special_key') {
           // Feedback das teclas especiais: o agent publica este evento para
@@ -1046,6 +1059,7 @@ export default function RemoteScreenViewer({
       }
       webRtcPeerRef.current?.close();
       webRtcPeerRef.current = null;
+      resetAnnotationHistoryRef.current();
       if (ws) ws.close();
     };
   }, [natsSubject, sessionId, natsUrl, jwt, decodeFrame, renderFrame, sendControlEnvelope, reconnectKey]);
@@ -1421,6 +1435,51 @@ export default function RemoteScreenViewer({
     setReconnectKey((k) => k + 1);
   }, []);
 
+  const syncAnnotationHistory = useCallback(() => {
+    if (annotationPruneTimerRef.current) {
+      clearTimeout(annotationPruneTimerRef.current);
+      annotationPruneTimerRef.current = null;
+    }
+    const now = Date.now();
+    annotationHistoryRef.current = annotationHistoryRef.current.filter(
+      (entry) => entry.expiresAt === null || entry.expiresAt > now,
+    );
+    setActiveAnnotationCount(annotationHistoryRef.current.length);
+
+    let nextExpiry: number | null = null;
+    for (const entry of annotationHistoryRef.current) {
+      if (entry.expiresAt !== null && (nextExpiry === null || entry.expiresAt < nextExpiry)) {
+        nextExpiry = entry.expiresAt;
+      }
+    }
+    if (nextExpiry !== null) {
+      const delay = Math.max(50, nextExpiry - now + 20);
+      annotationPruneTimerRef.current = setTimeout(() => {
+        syncAnnotationHistory();
+      }, delay);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (annotationPruneTimerRef.current) {
+        clearTimeout(annotationPruneTimerRef.current);
+        annotationPruneTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const updateAnnotationSettings = useCallback((next: AnnotationSettings) => {
+    setAnnotationSettings(next);
+    onAnnotationToolChangeRef.current?.(next.tool);
+  }, []);
+
+  resetAnnotationHistoryRef.current = () => {
+    annotationHistoryRef.current = [];
+    syncAnnotationHistory();
+    setAnnotationResetToken((t) => t + 1);
+  };
+
   // Handle imperativo para os controles do rodapé do pai. Delega para os refs
   // (sempre atualizados pelo efeito de conexão), então pode ser estável.
   useImperativeHandle(
@@ -1438,28 +1497,43 @@ export default function RemoteScreenViewer({
       },
       clearAnnotations: () => {
         annotationHistoryRef.current = [];
+        syncAnnotationHistory();
+        setAnnotationResetToken((t) => t + 1);
         sendAnnotationRef.current(buildClearAnnotationsCommand());
       },
+      setAnnotationTool: (tool: AnnotationTool) => {
+        setAnnotationSettings((prev) => ({ ...prev, tool }));
+        onAnnotationToolChangeRef.current?.(tool);
+      },
     }),
-    [],
+    [syncAnnotationHistory],
   );
 
   const handleCommitAnnotation = useCallback((cmd: AnnotationCommand) => {
     if (cmd.op === 'add') {
-      annotationHistoryRef.current.push(cmd.id);
+      annotationHistoryRef.current.push({
+        id: cmd.id,
+        expiresAt: cmd.ttlMs > 0 ? Date.now() + cmd.ttlMs : null,
+      });
+      syncAnnotationHistory();
     }
     sendAnnotationRef.current(cmd);
-  }, []);
+  }, [syncAnnotationHistory]);
 
   const handleUndoAnnotation = useCallback(() => {
-    const lastId = annotationHistoryRef.current.pop();
-    sendAnnotationRef.current(buildUndoAnnotationCommand(lastId));
-  }, []);
+    syncAnnotationHistory();
+    const last = annotationHistoryRef.current.pop();
+    syncAnnotationHistory();
+    setAnnotationResetToken((t) => t + 1);
+    sendAnnotationRef.current(buildUndoAnnotationCommand(last?.id));
+  }, [syncAnnotationHistory]);
 
   const handleClearAnnotations = useCallback(() => {
     annotationHistoryRef.current = [];
+    syncAnnotationHistory();
+    setAnnotationResetToken((t) => t + 1);
     sendAnnotationRef.current(buildClearAnnotationsCommand());
-  }, []);
+  }, [syncAnnotationHistory]);
 
   const handleExitAnnotating = useCallback(() => {
     onAnnotatingChange?.(false);
@@ -1500,16 +1574,21 @@ export default function RemoteScreenViewer({
           onCommit={handleCommitAnnotation}
           onUndo={handleUndoAnnotation}
           onExit={handleExitAnnotating}
+          sourceCanvasRef={canvasRef}
+          onChangeSettings={updateAnnotationSettings}
+          resetToken={annotationResetToken}
         />
       </div>
 
       {annotating && !sessionEnded && (
         <AnnotationToolbar
           settings={annotationSettings}
-          onChange={setAnnotationSettings}
+          onChange={updateAnnotationSettings}
           onUndo={handleUndoAnnotation}
           onClear={handleClearAnnotations}
           onExit={handleExitAnnotating}
+          canUndo={activeAnnotationCount > 0}
+          activeCount={activeAnnotationCount}
         />
       )}
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import AnnotationCanvas from './AnnotationCanvas';
 import AnnotationToolbar from './AnnotationToolbar';
 import {
   ANNOTATION_LASER_TTL_MS,
@@ -7,6 +8,7 @@ import {
   buildAddAnnotationCommand,
   buildClearAnnotationsCommand,
   buildUndoAnnotationCommand,
+  constrainShapePoint,
   DEFAULT_ANNOTATION_SETTINGS,
   normalizePoint,
   simplifyFreehandPoints,
@@ -71,6 +73,26 @@ describe('annotations helpers', () => {
     expect(buildUndoAnnotationCommand()).toEqual({ op: 'undo' });
     expect(buildClearAnnotationsCommand()).toEqual({ op: 'clear' });
   });
+
+  it('constrainShapePoint força quadrado, círculo e ângulos de 45° quando Shift está pressionado', () => {
+    const start = { x: 0.2, y: 0.2 };
+    const current = { x: 0.5, y: 0.3 };
+
+    expect(constrainShapePoint('rect', start, current, 1, false)).toEqual(current);
+
+    const sq = constrainShapePoint('rect', start, current, 2, true);
+    // dxVis = 0.3 * 2 = 0.6, dyVis = 0.1 -> side = 0.6 -> x = 0.2 + 0.6/2 = 0.5, y = 0.2 + 0.6 = 0.8
+    expect(sq.x).toBeCloseTo(0.5, 5);
+    expect(sq.y).toBeCloseTo(0.8, 5);
+
+    const circ = constrainShapePoint('ellipse', start, { x: 0.4, y: 0.5 }, 1, true);
+    expect(circ.x).toBeCloseTo(0.5, 5);
+    expect(circ.y).toBeCloseTo(0.5, 5);
+
+    const arrow = constrainShapePoint('arrow', start, { x: 0.5, y: 0.22 }, 1, true);
+    expect(arrow.y).toBeCloseTo(0.2, 5);
+    expect(arrow.x).toBeGreaterThan(0.49);
+  });
 });
 
 describe('AnnotationToolbar', () => {
@@ -90,7 +112,7 @@ describe('AnnotationToolbar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTitle('Retângulo'));
+    fireEvent.click(screen.getByTitle('Retângulo (3)'));
     expect(onChange).toHaveBeenCalledWith({
       ...DEFAULT_ANNOTATION_SETTINGS,
       tool: 'rect',
@@ -108,13 +130,113 @@ describe('AnnotationToolbar', () => {
       ttlMs: 0,
     });
 
-    fireEvent.click(screen.getByText('↶ Desfazer'));
+    fireEvent.click(screen.getByText('Desfazer'));
     expect(onUndo).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText('Limpar'));
     expect(onClear).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText('Controlar'));
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('exibe controles contextuais de zoom e tamanho no modo lupa e oculta cores/TTL', () => {
+    const onChange = vi.fn();
+    render(
+      <AnnotationToolbar
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier' }}
+        onChange={onChange}
+        onUndo={vi.fn()}
+        onClear={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('Cor Azul')).toBeNull();
+    expect(screen.queryByLabelText('Duração da anotação')).toBeNull();
+
+    fireEvent.click(screen.getByText('3×'));
+    expect(onChange).toHaveBeenCalledWith({
+      ...DEFAULT_ANNOTATION_SETTINGS,
+      tool: 'magnifier',
+      magnifierZoom: 3,
+    });
+
+    fireEvent.click(screen.getByLabelText('Lupa Grande'));
+    expect(onChange).toHaveBeenCalledWith({
+      ...DEFAULT_ANNOTATION_SETTINGS,
+      tool: 'magnifier',
+      magnifierSize: 280,
+    });
+  });
+
+  it('desabilita o botão Desfazer quando canUndo é false', () => {
+    const onUndo = vi.fn();
+    render(
+      <AnnotationToolbar
+        settings={DEFAULT_ANNOTATION_SETTINGS}
+        onChange={vi.fn()}
+        onUndo={onUndo}
+        onClear={vi.fn()}
+        onExit={vi.fn()}
+        canUndo={false}
+      />,
+    );
+
+    const undoBtn = screen.getByTitle('Desfazer última anotação (Ctrl+Z)') as HTMLButtonElement;
+    expect(undoBtn.disabled).toBe(true);
+    fireEvent.click(undoBtn);
+    expect(onUndo).not.toHaveBeenCalled();
+  });
+});
+
+describe('AnnotationCanvas', () => {
+  it('responde aos atalhos numéricos, Ctrl+Z, Esc e scroll da lupa', () => {
+    const onCommit = vi.fn();
+    const onUndo = vi.fn();
+    const onExit = vi.fn();
+    const onChangeSettings = vi.fn();
+
+    const { rerender } = render(
+      <AnnotationCanvas
+        active
+        settings={DEFAULT_ANNOTATION_SETTINGS}
+        onCommit={onCommit}
+        onUndo={onUndo}
+        onExit={onExit}
+        onChangeSettings={onChangeSettings}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: '6' });
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      ...DEFAULT_ANNOTATION_SETTINGS,
+      tool: 'magnifier',
+    });
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(onUndo).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier', magnifierZoom: 2 }}
+        onCommit={onCommit}
+        onUndo={onUndo}
+        onExit={onExit}
+        onChangeSettings={onChangeSettings}
+      />,
+    );
+
+    const canvas = screen.getByTestId('annotation-canvas');
+    fireEvent.wheel(canvas, { deltaY: -100 });
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      ...DEFAULT_ANNOTATION_SETTINGS,
+      tool: 'magnifier',
+      magnifierZoom: 2.5,
+    });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 });

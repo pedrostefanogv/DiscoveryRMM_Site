@@ -12,6 +12,7 @@ const mainLinks: { to: string; icon: MaterialSymbolName; label: string }[] = [
   // Visão de frota do monitoramento (a aba "Sensores" continua no detalhe).
   { to: '/sensors', icon: "sensors", label: 'Sensores' },
   { to: '/tickets', icon: "confirmation_number", label: 'Suporte' },
+  { to: '/files', icon: "folder", label: 'Arquivos' },
   { to: '/logs', icon: "article", label: 'Logs' },
   { to: '/deploy', icon: "key", label: 'Deploy' },
 ];
@@ -226,6 +227,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     .filter(({ to }) => {
       if (to === '/tickets') return false;
       if (to === '/deploy') return canViewDeploy;
+      if (to === '/files') return hasAnyPermission(['Files.View', 'files.*', 'admin.*']);
       if (to === '/logs') return canViewLogs;
       // '/sensors' e TODAS as subrotas (ex.: '/sensors/manage') exigem a
       // permissão de Sensores — comparar só a igualdade deixaria uma subrota

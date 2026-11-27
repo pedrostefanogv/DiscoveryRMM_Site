@@ -14,6 +14,7 @@ import {
 } from "@/hooks/useTicketChat";
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
 import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
+import { exportChatTranscript } from "@/utils/chatTranscriptExport";
 import { openTicketChatWindow, PopupBlockedError } from "./ticketChatLauncher";
 import { statusMessage } from "./SupportChatPanel";
 
@@ -348,11 +349,23 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
                     {selected.declinedReason ? " · " + selected.declinedReason : ""}
                   </p>
                 </div>
-                {selected.status === "Active" && (
-                  <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] text-success">
-                    ao vivo na janela do chat
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {selected.status === "Active" && (
+                    <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] text-success">
+                      ao vivo na janela do chat
+                    </span>
+                  )}
+                  {(messages.data?.length ?? 0) > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => exportChatTranscript(selected, messages.data ?? [], "md")}
+                      title="Exportar transcrição (Markdown)"
+                    >
+                      <Icon name="download" className="h-3.5 w-3.5" /> Exportar
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="max-h-[380px] space-y-3 overflow-y-auto p-4">

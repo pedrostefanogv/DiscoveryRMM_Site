@@ -2,8 +2,10 @@ import type { DashboardEvent } from "@/api/nats";
 import {
   ticketChatApi,
   type CompleteChatUploadRequest,
+  type LinkSupportChatToTicketRequest,
   type PresignedChatUploadResponse,
   type SendTicketChatMessageRequest,
+  type TicketChatAssistedActionType,
   type TicketChatAttachment,
   type TicketChatMessage,
   type TicketChatSession,
@@ -40,10 +42,22 @@ export interface SupportChatClient {
   ) => boolean;
 
   getCurrent: () => Promise<TicketChatState>;
-  listMessages: (sessionId: string, afterSequence?: number, limit?: number) => Promise<TicketChatMessage[]>;
+  listMessages: (
+    sessionId: string,
+    afterSequence?: number,
+    limit?: number,
+    beforeSequence?: number,
+  ) => Promise<TicketChatMessage[]>;
   start: () => Promise<TicketChatSession>;
   retryInvite: (sessionId: string) => Promise<TicketChatSession>;
   sendMessage: (sessionId: string, data: SendTicketChatMessageRequest) => Promise<TicketChatMessage>;
+  sendTyping: (sessionId: string, isTyping: boolean) => Promise<void>;
+  requestAssistedAction: (
+    sessionId: string,
+    actionType: TicketChatAssistedActionType,
+  ) => Promise<TicketChatMessage>;
+  transfer: (sessionId: string, targetUserId: string) => Promise<TicketChatSession>;
+  linkTicket?: (sessionId: string, data: LinkSupportChatToTicketRequest) => Promise<TicketChatSession>;
   end: (sessionId: string) => Promise<TicketChatSession>;
   prepareUpload: (
     sessionId: string,
@@ -83,11 +97,15 @@ export function createTicketChatClient(params: {
     },
 
     getCurrent: () => ticketChatApi.getCurrent(ticketId),
-    listMessages: (sessionId, afterSequence, limit) =>
-      ticketChatApi.listMessages(ticketId, sessionId, afterSequence, limit),
+    listMessages: (sessionId, afterSequence, limit, beforeSequence) =>
+      ticketChatApi.listMessages(ticketId, sessionId, afterSequence, limit, beforeSequence),
     start: () => ticketChatApi.start(ticketId),
     retryInvite: (sessionId) => ticketChatApi.retryInvite(ticketId, sessionId),
     sendMessage: (sessionId, data) => ticketChatApi.sendMessage(ticketId, sessionId, data),
+    sendTyping: (sessionId, isTyping) => ticketChatApi.sendTyping(ticketId, sessionId, isTyping),
+    requestAssistedAction: (sessionId, actionType) =>
+      ticketChatApi.requestAssistedAction(ticketId, sessionId, actionType),
+    transfer: (sessionId, targetUserId) => ticketChatApi.transfer(ticketId, sessionId, targetUserId),
     end: (sessionId) => ticketChatApi.end(ticketId, sessionId),
     prepareUpload: (sessionId, data) => ticketChatApi.prepareUpload(ticketId, sessionId, data),
     completeUpload: (sessionId, data) => ticketChatApi.completeUpload(ticketId, sessionId, data),
@@ -119,11 +137,16 @@ export function createAgentSupportChatClient(params: {
     },
 
     getCurrent: () => supportChatApi.getCurrentForAgent(agentId),
-    listMessages: (sessionId, afterSequence, limit) =>
-      supportChatApi.listMessages(sessionId, afterSequence, limit),
+    listMessages: (sessionId, afterSequence, limit, beforeSequence) =>
+      supportChatApi.listMessages(sessionId, afterSequence, limit, beforeSequence),
     start: () => supportChatApi.startForAgent(agentId),
     retryInvite: (sessionId) => supportChatApi.retryInvite(sessionId),
     sendMessage: (sessionId, data) => supportChatApi.sendMessage(sessionId, data),
+    sendTyping: (sessionId, isTyping) => supportChatApi.sendTyping(sessionId, isTyping),
+    requestAssistedAction: (sessionId, actionType) =>
+      supportChatApi.requestAssistedAction(sessionId, actionType),
+    transfer: (sessionId, targetUserId) => supportChatApi.transfer(sessionId, targetUserId),
+    linkTicket: (sessionId, data) => supportChatApi.linkTicket(sessionId, data),
     end: (sessionId) => supportChatApi.end(sessionId),
     prepareUpload: (sessionId, data) => supportChatApi.prepareUpload(sessionId, data),
     completeUpload: (sessionId, data) => supportChatApi.completeUpload(sessionId, data),

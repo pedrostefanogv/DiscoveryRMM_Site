@@ -1,7 +1,12 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
-import type { SendTicketChatMessageRequest, TicketChatMessage } from "@/api/ticket-chat";
+import type {
+  LinkSupportChatToTicketRequest,
+  SendTicketChatMessageRequest,
+  TicketChatAssistedActionType,
+  TicketChatMessage,
+} from "@/api/ticket-chat";
 import { realtimeConfig } from "@/config/realtime";
 import { buildDashboardNatsSubjects, type DashboardNatsScope } from "@/utils/natsSubjects";
 import type { SupportChatClient } from "./supportChatClient";
@@ -43,19 +48,114 @@ export function useSupportChatCurrent(
   });
 }
 
+function mergeChatMessages(
+  existing: TicketChatMessage[],
+  incoming: TicketChatMessage[],
+): TicketChatMessage[] {
+  if (incoming.length === 0) return existing;
+
+  const byId = new Map<string, TicketChatMessage>();
+  const seenClientIds = new Set<string>();
+
+  for (const msg of incoming) {
+    if (msg.clientMessageId) seenClientIds.add(msg.clientMessageId);
+  }
+
+  for (const msg of existing) {
+    // Remove bolha otimista quando a versão canônica chegou pelo mesmo clientMessageId.
+    if (
+      msg.sequenceNumber === Number.MAX_SAFE_INTEGER &&
+      msg.clientMessageId &&
+      seenClientIds.has(msg.clientMessageId)
+    ) {
+      continue;
+    }
+    byId.set(msg.id, msg);
+  }
+
+  for (const msg of incoming) {
+    byId.set(msg.id, msg);
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    if (a.sequenceNumber !== b.sequenceNumber) {
+      return a.sequenceNumber - b.sequenceNumber;
+    }
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+}
+
 export function useSupportChatMessages(
   client: SupportChatClient,
   sessionId: string | undefined,
   enabled = true,
   refetchInterval: number | false = false,
 ) {
+  const queryClient = useQueryClient();
+  const key = KEYS.messages(client.key, sessionId ?? "");
+
   return useQuery({
-    queryKey: KEYS.messages(client.key, sessionId ?? ""),
-    queryFn: () => client.listMessages(sessionId!, 0, 300),
+    queryKey: key,
+    queryFn: async () => {
+      const cached = queryClient.getQueryData<TicketChatMessage[]>(key) ?? [];
+      const canonical = cached.filter((m) => m.sequenceNumber < Number.MAX_SAFE_INTEGER);
+      const maxSeq = canonical.reduce((max, m) => Math.max(max, m.sequenceNumber), 0);
+
+      if (maxSeq > 0) {
+        const delta = await client.listMessages(sessionId!, maxSeq, 200);
+        return mergeChatMessages(canonical, delta);
+      }
+
+      return client.listMessages(sessionId!, 0, 200);
+    },
     enabled: !!sessionId && enabled,
     staleTime: 2_000,
     refetchInterval,
   });
+}
+
+export function useLoadOlderSupportChatMessages(
+  client: SupportChatClient,
+  sessionId: string | undefined,
+) {
+  const queryClient = useQueryClient();
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+
+  useEffect(() => {
+    setHasMoreOlder(true);
+  }, [client.key, sessionId]);
+
+  const loadOlder = useCallback(async () => {
+    if (!sessionId || isLoadingOlder || !hasMoreOlder) return;
+    const key = KEYS.messages(client.key, sessionId);
+    const cached = queryClient.getQueryData<TicketChatMessage[]>(key) ?? [];
+    const canonical = cached.filter((m) => m.sequenceNumber < Number.MAX_SAFE_INTEGER);
+    if (canonical.length === 0) return;
+
+    const minSeq = canonical.reduce((min, m) => Math.min(min, m.sequenceNumber), Number.MAX_SAFE_INTEGER);
+    if (minSeq <= 1 || minSeq === Number.MAX_SAFE_INTEGER) {
+      setHasMoreOlder(false);
+      return;
+    }
+
+    setIsLoadingOlder(true);
+    try {
+      const older = await client.listMessages(sessionId, 0, 200, minSeq);
+      if (older.length < 200) {
+        setHasMoreOlder(false);
+      }
+      if (older.length > 0) {
+        queryClient.setQueryData<TicketChatMessage[]>(key, (prev) =>
+          mergeChatMessages(prev ?? [], older),
+        );
+      }
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [client, hasMoreOlder, isLoadingOlder, queryClient, sessionId]);
+
+  return { loadOlder, isLoadingOlder, hasMoreOlder };
 }
 
 export function useStartSupportChat(client: SupportChatClient) {
@@ -93,8 +193,9 @@ export function useSendSupportChatMessage(
       const previous = queryClient.getQueryData<TicketChatMessage[]>(key) ?? [];
 
       const optimistic: TicketChatMessage = {
-        id: "optimistic-" + Date.now(),
+        id: "optimistic-" + (data.clientMessageId || Date.now()),
         sequenceNumber: Number.MAX_SAFE_INTEGER,
+        clientMessageId: data.clientMessageId ?? undefined,
         authorKind: "Support",
         authorUserId: null,
         authorName: null,
@@ -123,6 +224,37 @@ export function useEndSupportChat(client: SupportChatClient) {
   });
 }
 
+export function useTransferSupportChat(client: SupportChatClient) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, targetUserId }: { sessionId: string; targetUserId: string }) =>
+      client.transfer(sessionId, targetUserId),
+    onSuccess: () => refreshChat(queryClient),
+  });
+}
+
+export function useLinkSupportChatToTicket(client: SupportChatClient) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, data }: { sessionId: string; data: LinkSupportChatToTicketRequest }) => {
+      if (!client.linkTicket) {
+        return Promise.reject(new Error("Conversa já vinculada a chamado."));
+      }
+      return client.linkTicket(sessionId, data);
+    },
+    onSuccess: () => refreshChat(queryClient),
+  });
+}
+
+export function useRequestAssistedAction(client: SupportChatClient) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, actionType }: { sessionId: string; actionType: TicketChatAssistedActionType }) =>
+      client.requestAssistedAction(sessionId, actionType),
+    onSuccess: () => refreshChat(queryClient),
+  });
+}
+
 /**
  * Invalida as queries do chat quando ESTA conversa recebe atividade.
  *
@@ -133,6 +265,7 @@ export function useSupportChatRealtime(
   client: SupportChatClient,
   sessionId: string | undefined,
   enabled = true,
+  onTyping?: (payload: { authorName?: string; isTyping: boolean }) => void,
 ) {
   const queryClient = useQueryClient();
   const scope = client.realtimeScope;
@@ -173,6 +306,20 @@ export function useSupportChatRealtime(
 
     const onEvent = (event: DashboardEvent | Record<string, unknown>) => {
       if (disposed) return;
+
+      const record = event as Record<string, unknown> | null;
+      if (record && record.eventType === "TicketChatTyping") {
+        const data = (record.data as Record<string, unknown> | undefined) ?? record;
+        const eventSessionId = typeof data.sessionId === "string" ? data.sessionId : undefined;
+        if (sessionId && eventSessionId === sessionId && onTyping) {
+          onTyping({
+            authorName: typeof data.authorName === "string" ? data.authorName : undefined,
+            isTyping: Boolean(data.isTyping),
+          });
+        }
+        return;
+      }
+
       if (!client.matchesRealtimeEvent(event, sessionId)) return;
 
       void queryClient.invalidateQueries({ queryKey: TICKET_CHAT_QUERY_ROOT });
@@ -206,7 +353,7 @@ export function useSupportChatRealtime(
       disposed = true;
       subjects.forEach((subject) => natsService.unsubscribe(subject, onEvent));
     };
-  }, [client, sessionId, enabled, queryClient, stableScope]);
+  }, [client, sessionId, enabled, queryClient, stableScope, onTyping]);
 }
 
 /** O atendente está OLHANDO a conversa agora? (aba visível e janela em foco) */

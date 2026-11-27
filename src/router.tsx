@@ -91,6 +91,10 @@ const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const FirstAccessPage = lazy(() => import('@/pages/auth/FirstAccessPage'));
 const MfaAssertionPage = lazy(() => import('@/pages/auth/MfaAssertionPage'));
 const MfaRegistrationPage = lazy(() => import('@/pages/auth/MfaRegistrationPage'));
+const FilesHubPage = lazy(() => import('@/pages/files/FilesHubPage'));
+const PublicDownloadPage = lazy(() => import('@/pages/public/PublicDownloadPage'));
+const PublicShareDownloadPage = lazy(() => import('@/pages/public/PublicShareDownloadPage'));
+const PublicClientUploadPage = lazy(() => import('@/pages/public/PublicClientUploadPage'));
 
 const KNOWLEDGE_VIEW_PERMISSIONS = [
   'KnowledgeBase.View',
@@ -148,6 +152,24 @@ function applyPageErrorBoundary(routeList: RouteObject[]): RouteObject[] {
 }
 
 export const routes: RouteObject[] = [
+  {
+    path: '/download',
+    errorElement: <ErrorPage />,
+    children: applyPageErrorBoundary([
+      {
+        index: true,
+        element: <AuthLazyPage><PublicDownloadPage /></AuthLazyPage>,
+      },
+      {
+        path: 'share/:shortCode',
+        element: <AuthLazyPage><PublicShareDownloadPage /></AuthLazyPage>,
+      },
+      {
+        path: 'upload/:shortCode',
+        element: <AuthLazyPage><PublicClientUploadPage /></AuthLazyPage>,
+      },
+    ]),
+  },
   {
     path: '/auth',
     element: <PublicOnlyAuth />,
@@ -273,6 +295,14 @@ export const routes: RouteObject[] = [
         element: (
           <PermissionGate anyOf={['agents.*', 'agents.view', 'admin.*']}>
             <LazyPage><AgentDetail /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'files',
+        element: (
+          <PermissionGate anyOf={['Files.View', 'files.*', 'admin.*']}>
+            <LazyPage><FilesHubPage /></LazyPage>
           </PermissionGate>
         ),
       },

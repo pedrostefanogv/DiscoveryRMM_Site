@@ -176,6 +176,7 @@ export const AGENT_HOME_TAB_OPTIONS: { value: string; label: string }[] = [
   { value: "chat", label: "Chat IA" },
   { value: "support", label: "Suporte" },
   { value: "knowledge", label: "Base de Conhecimento" },
+  { value: "files", label: "Arquivos" },
 ];
 
 /**
@@ -609,6 +610,44 @@ export const serverEditableFields: EditableField[] = [
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Desligado, a aba Atualizações fica oculta no painel do agent.",
   },
   {
+    key: "filesTabEnabled",
+    label: "Aba de Arquivos (S3)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Exibe no agent a aba Arquivos com download de arquivos públicos e distribuídos (Global → Cliente → Site). Desligado, a aba Arquivos fica oculta no painel do agent.",
+  },
+  {
+    key: "publicDownloadPageEnabled",
+    label: "Portal Público (/download)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Habilita a página pública aberta em /download para listar e baixar arquivos marcados como Públicos.",
+  },
+  {
+    key: "publicDownloadZeroTouchEnabled",
+    label: "Agent Zero-Touch no /download",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Permite baixar o instalador Zero-Touch do agent diretamente na página pública /download (requer Portal Público ativo).",
+  },
+  {
+    key: "publicDownloadTitle",
+    label: "Título do Portal /download",
+    kind: "string",
+    group: "agent",
+    description: "Título customizado exibido no cabeçalho da página pública /download.",
+  },
+  {
+    key: "publicDownloadDescription",
+    label: "Descrição do Portal /download",
+    kind: "string",
+    group: "agent",
+    description: "Texto explicativo exibido na página pública /download.",
+  },
+  {
     // Teto GLOBAL herdável de chamadas de ferramentas MCP por minuto do chat IA
     // (McpToolCallsPerMinute no backend, ConfigurationService.CheckRange 1..600).
     // defaultValue "20": o backend recusa 0 aqui (o default de kind number é "0").
@@ -945,6 +984,14 @@ export const clientEditableFields: EditableField[] = [
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do servidor.",
   },
   {
+    key: "filesTabEnabled",
+    label: "Aba de Arquivos (S3)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Exibe no agent a aba Arquivos (Global → Cliente → Site). Vazio herda do servidor.",
+  },
+  {
     // Teto GLOBAL herdável de chamadas de ferramentas MCP por minuto do chat IA.
     // Vazio (null) = herda do servidor.
     key: "McpToolCallsPerMinute",
@@ -1167,6 +1214,14 @@ export const siteEditableFields: EditableField[] = [
     group: "features",
     description:
       "Exibe no agent a aba que lista os aplicativos com atualização pendente (winget/chocolatey) e permite aplicá-las. Vazio herda do cliente/servidor.",
+  },
+  {
+    key: "filesTabEnabled",
+    label: "Aba de Arquivos (S3)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Exibe no agent a aba Arquivos (Global → Cliente → Site). Vazio herda do cliente/servidor.",
   },
   {
     // Teto GLOBAL herdável de chamadas de ferramentas MCP por minuto do chat IA.

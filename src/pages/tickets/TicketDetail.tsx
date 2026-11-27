@@ -85,6 +85,7 @@ import toast from 'react-hot-toast';
 import { getTicketPriorityMeta } from '@/utils/labels';
 import { triggerBlobDownload, isImageAttachment } from '@/utils/chatAttachment';
 import { upsertCommentPage, type CommentPage } from '@/utils/commentPages';
+import { TicketUploadLinksPanel } from './TicketUploadLinksPanel';
 import {
   formatRelativeTime,
   groupTimelineByDay,
@@ -3785,6 +3786,8 @@ function AttachmentsPanel({
 
   return (
     <div className="space-y-4">
+      <TicketUploadLinksPanel ticketId={ticketId} />
+
       {!isEnabled && (
         <div className="rounded-lg border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning">
           Upload de anexos está desabilitado nas configurações do servidor.

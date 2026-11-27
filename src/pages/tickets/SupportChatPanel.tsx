@@ -1,11 +1,14 @@
 import { formatDateCompact } from '@/utils/format';
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import { apiFetchResponse } from "@/api/client";
 import type { TicketChatAttachment, TicketChatMessage, TicketChatSession } from "@/api/ticket-chat";
 import { Icon, Button, ConfirmDialog, ImageLightbox } from "@/components/ui";
 import {
   useEndSupportChat,
+  useLinkSupportChatToTicket,
+  useLoadOlderSupportChatMessages,
+  useRequestAssistedAction,
   useRetrySupportChatInvite,
   useSendSupportChatMessage,
   useStartSupportChat,
@@ -13,12 +16,20 @@ import {
   useSupportChatMessages,
   useSupportChatPresence,
   useSupportChatRealtime,
+  useTransferSupportChat,
 } from "@/hooks/useSupportChat";
+import { useTicketMacros } from "@/hooks/useSupportProductivity";
 import type { SupportChatClient } from "@/hooks/supportChatClient";
 import { useRealtimeStatus } from "@/hooks/useRealtimeStatus";
 import { useAuthorization } from "@/auth/authorization";
 import { openRemoteSessionPopup } from "@/pages/agents/remoteSessionLauncher";
 import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
+import {
+  notifyDesktopChatMessage,
+  playChatNotificationSound,
+} from "@/utils/chatNotificationSound";
+import { exportChatTranscript } from "@/utils/chatTranscriptExport";
+import { LinkTicketModal, TransferChatModal } from "./SupportChatModals";
 import { PopupBlockedError } from "./ticketChatLauncher";
 import {
   isLiveSupportChatStatus,
@@ -74,6 +85,43 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 const formatDateTime = (raw?: string | null) => formatDateCompact(raw, "");
+
+function formatDaySeparator(raw?: string | null): string | null {
+  if (!raw) return null;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (sameDay(date, today)) return "Hoje";
+  if (sameDay(date, yesterday)) return "Ontem";
+  return date.toLocaleDateString("pt-BR");
+}
+
+function getDayKey(raw?: string | null): string | null {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function isSameAuthorGroup(a: TicketChatMessage, b: TicketChatMessage): boolean {
+  const kindA = String(a.authorKind).toLowerCase();
+  const kindB = String(b.authorKind).toLowerCase();
+  if (kindA === "system" || kindB === "system" || kindA !== kindB) return false;
+  if ((a.authorName ?? "") !== (b.authorName ?? "")) return false;
+  const timeA = new Date(a.createdAt).getTime();
+  const timeB = new Date(b.createdAt).getTime();
+  if (Number.isNaN(timeA) || Number.isNaN(timeB)) return false;
+  return Math.abs(timeB - timeA) <= 3 * 60 * 1000;
+}
 
 function isOwnMessage(message: TicketChatMessage): boolean {
   return String(message.authorKind).toLowerCase() === "support";
@@ -160,8 +208,52 @@ export default function SupportChatPanel({
   // unmount (antes, abrir outra imagem ou fechar a janela com o lightbox aberto
   // deixava o blob vivo).
   const lightboxUrlRef = useRef<string | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const isNearBottomRef = useRef(true);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
+  const [soundMuted, setSoundMuted] = useState(false);
+  const [typingAuthor, setTypingAuthor] = useState<string | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
+  const lastTypingSentAtRef = useRef(0);
+  const localTypingTimerRef = useRef<number | null>(null);
+  const [macrosOpen, setMacrosOpen] = useState(false);
+  const [activeMacroIndex, setActiveMacroIndex] = useState(0);
+  const composerBoxRef = useRef<HTMLDivElement | null>(null);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [linkTicketModalOpen, setLinkTicketModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setActionsMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionsMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [actionsMenuOpen]);
+
+  useEffect(() => {
+    if (!macrosOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (composerBoxRef.current && !composerBoxRef.current.contains(event.target as Node)) {
+        setMacrosOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [macrosOpen]);
 
   // Rede de segurança da conversa ao vivo.
   //
@@ -270,13 +362,65 @@ export default function SupportChatPanel({
     Boolean(sessionId),
     messagesIntervalMs,
   );
+  const { loadOlder, isLoadingOlder, hasMoreOlder } = useLoadOlderSupportChatMessages(
+    client,
+    sessionId,
+  );
 
   const start = useStartSupportChat(client);
   const retry = useRetrySupportChatInvite(client);
   const send = useSendSupportChatMessage(client, sessionId);
   const end = useEndSupportChat(client);
+  const transfer = useTransferSupportChat(client);
+  const linkTicket = useLinkSupportChatToTicket(client);
+  const assistedAction = useRequestAssistedAction(client);
+  const macrosQuery = useTicketMacros({
+    clientId: client.realtimeScope.clientId ?? undefined,
+    includeGlobal: true,
+  });
 
-  useSupportChatRealtime(client, sessionId, true);
+  const filteredMacros = useMemo(() => {
+    const q = draft.startsWith("/") ? draft.slice(1).trim().toLowerCase() : "";
+    return (macrosQuery.data ?? [])
+      .filter((m) => m.isActive)
+      .filter((m) => {
+        if (!q) return true;
+        return m.name.toLowerCase().includes(q) || m.content.toLowerCase().includes(q);
+      })
+      .slice(0, 10);
+  }, [macrosQuery.data, draft]);
+
+  useEffect(() => {
+    setActiveMacroIndex(0);
+  }, [macrosOpen, draft]);
+
+  function applyMacro(content: string) {
+    setDraft((prev) =>
+      prev.startsWith("/") ? content : prev ? `${prev}\n${content}` : content,
+    );
+    setMacrosOpen(false);
+  }
+
+  const handleTypingEvent = useCallback(
+    (payload: { authorName?: string; isTyping: boolean }) => {
+      if (typingTimerRef.current !== null) {
+        window.clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      if (!payload.isTyping) {
+        setTypingAuthor(null);
+        return;
+      }
+      setTypingAuthor(payload.authorName?.trim() || "Usuário");
+      typingTimerRef.current = window.setTimeout(() => {
+        setTypingAuthor(null);
+        typingTimerRef.current = null;
+      }, 4500);
+    },
+    [],
+  );
+
+  useSupportChatRealtime(client, sessionId, true, handleTypingEvent);
 
   // Esta janela e a conversa AO VIVO: enquanto ela estiver aberta, visivel e em
   // foco, o servidor nao cria notificacao de mensagem para este atendente — a
@@ -284,10 +428,56 @@ export default function SupportChatPanel({
   useSupportChatPresence(client, sessionId, Boolean(sessionId));
 
   const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
+  const prevLastMsgIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+    prevLastMsgIdRef.current = null;
+    setTypingAuthor(null);
+    setHasUnreadBelow(false);
+    isNearBottomRef.current = true;
+    return () => {
+      if (typingTimerRef.current !== null) {
+        window.clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      if (localTypingTimerRef.current !== null) {
+        window.clearTimeout(localTypingTimerRef.current);
+        localTypingTimerRef.current = null;
+      }
+    };
+  }, [client.key, sessionId]);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    const prevId = prevLastMsgIdRef.current;
+    prevLastMsgIdRef.current = last.id;
+
+    // Quando prevId === last.id (ex.: carregar mensagens anteriores no topo),
+    // preserva a posição de leitura atual em vez de puxar para o rodapé.
+    const isInitialOrNewTail = prevId === null || prevId !== last.id;
+    if (!isInitialOrNewTail) return;
+
+    // Só auto-rola se o usuário já estava no rodapé ou se a mensagem é dele mesmo.
+    if (isNearBottomRef.current || isOwnMessage(last)) {
+      bottomRef.current?.scrollIntoView({ block: "end" });
+      setHasUnreadBelow(false);
+    } else if (prevId !== null) {
+      setHasUnreadBelow(true);
+    }
+
+    // Som + notificação do navegador quando chega mensagem do usuário final fora de foco.
+    if (
+      prevId !== null &&
+      String(last.authorKind).toLowerCase() === "enduser" &&
+      (document.hidden || (typeof document.hasFocus === "function" && !document.hasFocus()))
+    ) {
+      if (!soundMuted) {
+        playChatNotificationSound();
+      }
+      notifyDesktopChatMessage(last.authorName || "Usuário", last.body || "");
+    }
+  }, [messages, soundMuted]);
 
   // Unmount (janela do chat fechada): revoga o blob do lightbox que ainda
   // estiver aberto.
@@ -351,21 +541,75 @@ export default function SupportChatPanel({
     });
   }
 
+  const hasUploadingAttachments = pendingUploads.some((item) => !item.attachmentId);
+
+  function createClientMessageId(): string {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  function clearLocalTyping() {
+    if (localTypingTimerRef.current !== null) {
+      window.clearTimeout(localTypingTimerRef.current);
+      localTypingTimerRef.current = null;
+    }
+    if (lastTypingSentAtRef.current > 0 && sessionId) {
+      lastTypingSentAtRef.current = 0;
+      void client.sendTyping(sessionId, false).catch(() => {});
+    }
+  }
+
+  function notifyLocalTyping() {
+    if (!sessionId || !canSend) return;
+    const now = Date.now();
+    if (now - lastTypingSentAtRef.current >= 2500) {
+      lastTypingSentAtRef.current = now;
+      void client.sendTyping(sessionId, true).catch(() => {});
+    }
+    if (localTypingTimerRef.current !== null) {
+      window.clearTimeout(localTypingTimerRef.current);
+    }
+    localTypingTimerRef.current = window.setTimeout(() => {
+      localTypingTimerRef.current = null;
+      lastTypingSentAtRef.current = 0;
+      void client.sendTyping(sessionId, false).catch(() => {});
+    }, 3000);
+  }
+
   function handleSend() {
+    if (hasUploadingAttachments) {
+      toast("Aguarde a conclusão do upload dos anexos antes de enviar.");
+      return;
+    }
     const body = draft.trim();
     const attachmentIds = pendingUploads.map((item) => item.attachmentId).filter(Boolean) as string[];
     if (!body && !attachmentIds.length) return;
 
+    clearLocalTyping();
+    const sentSet = new Set(attachmentIds);
+
     send.mutate(
-      { body, attachmentIds },
+      { body, attachmentIds, clientMessageId: createClientMessageId() },
       {
         onSuccess: () => {
           setDraft("");
+          setMacrosOpen(false);
           setPendingUploads((prev) => {
-            prev.forEach((item) => {
-              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-            });
-            return [];
+            const remaining: typeof prev = [];
+            for (const item of prev) {
+              if (item.attachmentId && sentSet.has(item.attachmentId)) {
+                if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+              } else {
+                remaining.push(item);
+              }
+            }
+            return remaining;
           });
         },
         onError: (error: unknown) =>
@@ -535,15 +779,13 @@ export default function SupportChatPanel({
           ) : null}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {sessionForUi?.status === "Pending" && canManage && (
             <Button size="sm" variant="ghost" onClick={handleRetry} disabled={retry.isPending}>
               <Icon name="refresh" className="h-4 w-4" /> Reenviar convite
             </Button>
           )}
           {sessionForUi?.status === "Active" && canManage && (
-            // Botão de verdade (sólido, vermelho): antes era um Button ghost com
-            // ícone de quadrado vazio e parecia um checkbox desmarcado.
             <Button size="sm" variant="danger" onClick={() => setEndConfirmOpen(true)} disabled={end.isPending}>
               <Icon name="close" className="h-4 w-4" /> Encerrar
             </Button>
@@ -553,6 +795,97 @@ export default function SupportChatPanel({
               {sessionForUi ? "Iniciar nova conversa" : "Iniciar chat"}
             </Button>
           )}
+          <div ref={actionsMenuRef} className="relative">
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-haspopup="menu"
+              aria-expanded={actionsMenuOpen}
+              aria-label="Mais ações do chat"
+              title="Mais ações"
+              onClick={() => setActionsMenuOpen((prev) => !prev)}
+            >
+              <Icon name="more_vert" className="h-4 w-4" />
+            </Button>
+            {actionsMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 z-30 mt-1.5 w-56 rounded-xl border border-border bg-surface p-1.5 shadow-xl"
+              >
+                {sessionForUi?.status === "Active" && canManage && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      setTransferModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-foreground hover:bg-surface-hover"
+                  >
+                    <Icon name="swap_horiz" className="h-4 w-4 text-muted" />
+                    Transferir atendimento
+                  </button>
+                )}
+                {sessionForUi && !sessionForUi.ticketId && client.linkTicket && canManage && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setActionsMenuOpen(false);
+                      setLinkTicketModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-foreground hover:bg-surface-hover"
+                  >
+                    <Icon name="confirmation_number" className="h-4 w-4 text-muted" />
+                    Converter em chamado
+                  </button>
+                )}
+                {sessionForUi && messages.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        exportChatTranscript(sessionForUi, messages, "md");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-foreground hover:bg-surface-hover"
+                    >
+                      <Icon name="download" className="h-4 w-4 text-muted" />
+                      Exportar transcrição (.md)
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        exportChatTranscript(sessionForUi, messages, "txt");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-foreground hover:bg-surface-hover"
+                    >
+                      <Icon name="download" className="h-4 w-4 text-muted" />
+                      Exportar transcrição (.txt)
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setSoundMuted((prev) => !prev);
+                    setActionsMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-foreground hover:bg-surface-hover"
+                >
+                  <Icon
+                    name={soundMuted ? "notifications" : "notifications_off"}
+                    className="h-4 w-4 text-muted"
+                  />
+                  {soundMuted ? "Ativar som de notificação" : "Silenciar som de notificação"}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -567,8 +900,30 @@ export default function SupportChatPanel({
 
       {/* Conversa ativa */}
       {sessionForUi && (
-        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-border">
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="relative flex min-h-0 flex-1 flex-col rounded-xl border border-border">
+          <div
+            ref={messagesContainerRef}
+            onScroll={() => {
+              const el = messagesContainerRef.current;
+              if (!el) return;
+              const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+              isNearBottomRef.current = near;
+              if (near) setHasUnreadBelow(false);
+            }}
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+          >
+            {hasMoreOlder && messages.length >= 200 && (
+              <div className="flex justify-center">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isLoadingOlder}
+                  onClick={() => void loadOlder()}
+                >
+                  {isLoadingOlder ? "Carregando…" : "Carregar mensagens anteriores"}
+                </Button>
+              </div>
+            )}
             {messagesQuery.isLoading && <p className="text-sm text-muted">Carregando mensagens…</p>}
             {!messagesQuery.isLoading && messages.length === 0 && (
               <p className="text-sm text-muted">
@@ -580,54 +935,108 @@ export default function SupportChatPanel({
               </p>
             )}
 
-            {messages.map((message) => {
-              if (String(message.authorKind).toLowerCase() === "system") {
+            {messages.map((message, index) => {
+              const prevMsg = index > 0 ? messages[index - 1] : null;
+              const nextMsg = index < messages.length - 1 ? messages[index + 1] : null;
+              const currentDay = getDayKey(message.createdAt);
+              const prevDay = prevMsg ? getDayKey(prevMsg.createdAt) : null;
+              const dayLabel =
+                currentDay && currentDay !== prevDay ? formatDaySeparator(message.createdAt) : null;
+
+              const isSystem = String(message.authorKind).toLowerCase() === "system";
+              const groupedWithPrev = Boolean(prevMsg && !dayLabel && isSameAuthorGroup(prevMsg, message));
+              const groupedWithNext = Boolean(
+                nextMsg &&
+                  currentDay === getDayKey(nextMsg.createdAt) &&
+                  isSameAuthorGroup(message, nextMsg),
+              );
+              const isOptimistic = message.sequenceNumber === Number.MAX_SAFE_INTEGER;
+
+              if (isSystem) {
                 return (
-                  <p
-                    key={message.id || String(message.sequenceNumber)}
-                    className="self-center max-w-[85%] rounded-full border border-border bg-surface-light px-3 py-1 text-center text-[11px] text-muted"
-                  >
-                    {message.body}
-                  </p>
+                  <div key={message.id || String(message.sequenceNumber)} className="flex flex-col items-center gap-2">
+                    {dayLabel && (
+                      <span className="my-1 rounded-full bg-surface-light px-3 py-0.5 text-[10px] font-medium text-muted">
+                        {dayLabel}
+                      </span>
+                    )}
+                    <p className="max-w-[85%] rounded-full border border-border bg-surface-light px-3 py-1 text-center text-[11px] text-muted">
+                      {message.body}
+                    </p>
+                  </div>
                 );
               }
               return (
-              <div
-                key={message.id || String(message.sequenceNumber)}
-                className={"flex flex-col " + (isOwnMessage(message) ? "items-end" : "items-start")}
-              >
                 <div
-                  className={
-                    "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm " +
-                    (isOwnMessage(message)
-                      ? "bg-primary text-white rounded-br-md"
-                      : "border border-border bg-surface-light text-foreground rounded-bl-md")
-                  }
+                  key={message.id || String(message.sequenceNumber)}
+                  className={groupedWithPrev ? "!mt-1" : undefined}
                 >
-                  {message.body}
-                </div>
-                {message.attachments?.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {message.attachments.map((attachment) => (
-                      <MessageAttachmentPreview
-                        key={attachment.id}
-                        client={client}
-                        sessionId={sessionId}
-                        attachment={attachment}
-                        onOpen={openAttachment}
-                      />
-                    ))}
+                  {dayLabel && (
+                    <div className="my-2 flex justify-center">
+                      <span className="rounded-full bg-surface-light px-3 py-0.5 text-[10px] font-medium text-muted">
+                        {dayLabel}
+                      </span>
+                    </div>
+                  )}
+                  <div className={"flex flex-col " + (isOwnMessage(message) ? "items-end" : "items-start")}>
+                    {message.body && message.body.trim().length > 0 && (
+                      <div
+                        className={
+                          "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2 text-sm " +
+                          (isOptimistic ? "opacity-75 " : "") +
+                          (isOwnMessage(message)
+                            ? "bg-primary text-white rounded-br-md"
+                            : "border border-border bg-surface-light text-foreground rounded-bl-md")
+                        }
+                      >
+                        {message.body}
+                      </div>
+                    )}
+                    {message.attachments?.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {message.attachments.map((attachment) => (
+                          <MessageAttachmentPreview
+                            key={attachment.id}
+                            client={client}
+                            sessionId={sessionId}
+                            attachment={attachment}
+                            onOpen={openAttachment}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {(!groupedWithNext || isOptimistic) && (
+                      <span className="mt-1 text-[11px] text-muted">
+                        {(message.authorName || (isOwnMessage(message) ? "Suporte" : "Usuário")) +
+                          (message.createdAt ? " · " + formatDateTime(message.createdAt) : "") +
+                          (isOptimistic ? " · enviando…" : "")}
+                      </span>
+                    )}
                   </div>
-                )}
-                <span className="mt-1 text-[11px] text-muted">
-                  {(message.authorName || (isOwnMessage(message) ? "Suporte" : "Usuário")) +
-                    (message.createdAt ? " · " + formatDateTime(message.createdAt) : "")}
-                </span>
-              </div>
+                </div>
               );
             })}
             <div ref={bottomRef} />
           </div>
+
+          {hasUnreadBelow && (
+            <button
+              type="button"
+              onClick={() => {
+                bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+                setHasUnreadBelow(false);
+              }}
+              className="mx-auto mb-2 rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-xs font-medium text-primary shadow-sm hover:bg-primary/25"
+            >
+              Novas mensagens ↓
+            </button>
+          )}
+
+          {typingAuthor && (
+            <div className="px-4 pb-1 text-xs italic text-muted">
+              {typingAuthor} está digitando…
+            </div>
+          )}
 
           {/* Composer — mesma linguagem do Chat IA e do comentário do agent:
               uma caixa única arredondada com o textarea como corpo e os
@@ -686,19 +1095,55 @@ export default function SupportChatPanel({
                 botões (controle remoto, anexar e enviar) para o texto nunca
                 passar por baixo deles. O foco é indicado pela caixa
                 (:focus-within), sem borda própria no campo. */}
-            <div className="relative rounded-xl border border-border bg-surface px-3 py-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20">
+            <div
+              ref={composerBoxRef}
+              className="relative rounded-xl border border-border bg-surface px-3 pt-2 pb-1.5 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20"
+            >
+              {macrosOpen && canSend && (
+                <div className="absolute right-0 bottom-full left-0 z-20 mb-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-lg">
+                  <div className="flex items-center justify-between px-2 py-1 text-[11px] font-medium text-muted">
+                    <span>Respostas rápidas (↑↓ navega, Enter insere, Esc fecha)</span>
+                    <button type="button" onClick={() => setMacrosOpen(false)} className="hover:text-foreground">
+                      Fechar
+                    </button>
+                  </div>
+                  {filteredMacros.map((macro, idx) => (
+                    <button
+                      key={macro.id}
+                      type="button"
+                      onMouseEnter={() => setActiveMacroIndex(idx)}
+                      onClick={() => applyMacro(macro.content)}
+                      className={
+                        "flex w-full flex-col rounded-lg px-2.5 py-1.5 text-left " +
+                        (idx === activeMacroIndex ? "bg-primary/15" : "hover:bg-surface-hover")
+                      }
+                    >
+                      <span className="text-xs font-medium text-foreground">{macro.name}</span>
+                      <span className="line-clamp-1 text-[11px] text-muted">{macro.content}</span>
+                    </button>
+                  ))}
+                  {filteredMacros.length === 0 && (
+                    <p className="px-2.5 py-2 text-xs text-muted">Nenhuma macro encontrada.</p>
+                  )}
+                </div>
+              )}
               <textarea
-                className={
-                  "block min-h-[52px] w-full resize-none border-0 bg-transparent py-1 text-sm text-foreground outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60 " +
-                  // Três ícones (controle remoto + anexar + enviar) exigem 112px
-                  // de reserva; com dois, 80px bastam.
-                  (canRemoteControl ? "pr-28" : "pr-20")
-                }
+                className="block min-h-[52px] w-full resize-none border-0 bg-transparent py-1 text-sm text-foreground outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60"
                 rows={2}
-                placeholder={canSend ? "Escreva para o usuário… (Enter envia, Shift+Enter quebra linha)" : "A conversa não está ativa."}
+                placeholder={canSend ? "Escreva para o usuário… (/ para macros, Enter envia)" : "A conversa não está ativa."}
                 value={draft}
                 disabled={!canSend}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  const wasSlash = draft.startsWith("/");
+                  setDraft(val);
+                  if (val.startsWith("/")) {
+                    setMacrosOpen(true);
+                  } else if (wasSlash && macrosOpen) {
+                    setMacrosOpen(false);
+                  }
+                  notifyLocalTyping();
+                }}
                 onPaste={(event) => {
                   const files = event.clipboardData?.files;
                   if (files && files.length > 0 && canSend) {
@@ -707,6 +1152,33 @@ export default function SupportChatPanel({
                   }
                 }}
                 onKeyDown={(event) => {
+                  if (macrosOpen && filteredMacros.length > 0) {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setActiveMacroIndex((prev) => (prev + 1) % filteredMacros.length);
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setActiveMacroIndex((prev) => (prev - 1 + filteredMacros.length) % filteredMacros.length);
+                      return;
+                    }
+                    if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+                      event.preventDefault();
+                      const chosen = filteredMacros[activeMacroIndex] ?? filteredMacros[0];
+                      if (chosen) applyMacro(chosen.content);
+                      return;
+                    }
+                  }
+                  if (macrosOpen && event.key === "Escape") {
+                    event.preventDefault();
+                    setMacrosOpen(false);
+                    return;
+                  }
+                  if (macrosOpen && draft.startsWith("/") && filteredMacros.length === 0 && event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    return;
+                  }
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     handleSend();
@@ -714,34 +1186,65 @@ export default function SupportChatPanel({
                 }}
               />
 
-              <div className="absolute right-2 bottom-2 z-[1] flex items-center gap-1">
-                {canRemoteControl && (
+              <div className="mt-1 flex items-center justify-between gap-2 border-t border-border/50 pt-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={handleOpenRemoteControl}
-                    disabled={openingRemote}
-                    title="Abrir o controle remoto desta máquina"
-                    aria-label="Abrir o controle remoto desta máquina"
+                    onClick={() => setMacrosOpen((prev) => !prev)}
+                    disabled={!canSend}
+                    title="Inserir resposta rápida (macro)"
+                    aria-label="Inserir resposta rápida"
                     className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    <Icon name="desktop_windows" className="h-4 w-4" />
+                    <Icon name="bolt" className="h-4 w-4" />
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={!canSend || send.isPending}
-                  title="Anexar arquivo ou print"
-                  aria-label="Anexar arquivo ou print"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <Icon name="attach_file" className="h-4 w-4" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!sessionId) return;
+                      assistedAction.mutate(
+                        { sessionId, actionType: "request_screenshot" },
+                        {
+                          onSuccess: () => toast.success("Solicitação de captura de tela enviada."),
+                          onError: (err) => toast.error(describeError(err, "Falha ao solicitar captura.")),
+                        },
+                      );
+                    }}
+                    disabled={!canSend || assistedAction.isPending}
+                    title="Solicitar print da tela ao usuário"
+                    aria-label="Solicitar print da tela ao usuário"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Icon name="add_photo_alternate" className="h-4 w-4" />
+                  </button>
+                  {canRemoteControl && (
+                    <button
+                      type="button"
+                      onClick={handleOpenRemoteControl}
+                      disabled={openingRemote}
+                      title="Abrir o controle remoto desta máquina"
+                      aria-label="Abrir o controle remoto desta máquina"
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <Icon name="desktop_windows" className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={!canSend || send.isPending}
+                    title="Anexar arquivo ou print"
+                    aria-label="Anexar arquivo ou print"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Icon name="attach_file" className="h-4 w-4" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={handleSend}
-                  disabled={!canSend || send.isPending}
-                  title="Enviar (Enter)"
+                  disabled={!canSend || send.isPending || hasUploadingAttachments}
+                  title={hasUploadingAttachments ? "Aguarde o upload dos anexos…" : "Enviar (Enter)"}
                   aria-label="Enviar mensagem"
                   className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-all hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
                 >
@@ -779,6 +1282,46 @@ export default function SupportChatPanel({
           void handleEnd();
         }}
         onClose={() => setEndConfirmOpen(false)}
+      />
+      <TransferChatModal
+        open={transferModalOpen}
+        isLoading={transfer.isPending}
+        onClose={() => setTransferModalOpen(false)}
+        onConfirm={(targetUserId) => {
+          if (!sessionId) return;
+          transfer.mutate(
+            { sessionId, targetUserId },
+            {
+              onSuccess: () => {
+                setTransferModalOpen(false);
+                toast.success("Atendimento transferido.");
+              },
+              onError: (err) => toast.error(describeError(err, "Falha ao transferir atendimento.")),
+            },
+          );
+        }}
+      />
+      <LinkTicketModal
+        open={linkTicketModalOpen}
+        isLoading={linkTicket.isPending}
+        onClose={() => setLinkTicketModalOpen(false)}
+        onConfirm={(payload) => {
+          if (!sessionId) return;
+          linkTicket.mutate(
+            { sessionId, data: payload },
+            {
+              onSuccess: (updated) => {
+                setLinkTicketModalOpen(false);
+                toast.success(
+                  updated.ticketId
+                    ? `Conversa vinculada ao chamado ${updated.ticketId.slice(0, 8)}.`
+                    : "Conversa vinculada ao chamado.",
+                );
+              },
+              onError: (err) => toast.error(describeError(err, "Falha ao vincular chamado.")),
+            },
+          );
+        }}
       />
     </div>
   );

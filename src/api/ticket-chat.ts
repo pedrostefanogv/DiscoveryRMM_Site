@@ -94,6 +94,16 @@ export type TicketChatConflictCode =
   | "invite_cooldown"
   | "session_not_active";
 
+export type TicketChatAssistedActionType = "request_screenshot" | "request_diagnostics";
+
+export interface LinkSupportChatToTicketRequest {
+  existingTicketId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  priority?: "Low" | "Medium" | "High" | "Critical";
+  departmentId?: string | null;
+}
+
 export const ticketChatApi = {
   getCurrent: (ticketId: string) =>
     api.get<TicketChatState>(BASE + "/" + ticketId + "/chat/sessions/current"),
@@ -103,10 +113,46 @@ export const ticketChatApi = {
       BASE + "/" + ticketId + "/chat/sessions?skip=" + skip + "&take=" + take,
     ),
 
-  listMessages: (ticketId: string, sessionId: string, afterSequence = 0, limit = 200) =>
+  listMessages: (
+    ticketId: string,
+    sessionId: string,
+    afterSequence = 0,
+    limit = 200,
+    beforeSequence?: number,
+  ) =>
     api.get<TicketChatMessage[]>(
-      BASE + "/" + ticketId + "/chat/sessions/" + sessionId +
-      "/messages?afterSequence=" + afterSequence + "&limit=" + limit,
+      BASE +
+        "/" +
+        ticketId +
+        "/chat/sessions/" +
+        sessionId +
+        "/messages?afterSequence=" +
+        afterSequence +
+        "&limit=" +
+        limit +
+        (beforeSequence && beforeSequence > 0 ? "&beforeSequence=" + beforeSequence : ""),
+    ),
+
+  sendTyping: (ticketId: string, sessionId: string, isTyping: boolean) =>
+    api.post<void>(
+      BASE + "/" + ticketId + "/chat/sessions/" + sessionId + "/typing",
+      { isTyping },
+    ),
+
+  requestAssistedAction: (
+    ticketId: string,
+    sessionId: string,
+    actionType: TicketChatAssistedActionType,
+  ) =>
+    api.post<TicketChatMessage>(
+      BASE + "/" + ticketId + "/chat/sessions/" + sessionId + "/assisted-action",
+      { actionType },
+    ),
+
+  transfer: (ticketId: string, sessionId: string, targetUserId: string) =>
+    api.post<TicketChatSession>(
+      BASE + "/" + ticketId + "/chat/sessions/" + sessionId + "/transfer",
+      { targetUserId },
     ),
 
   start: (ticketId: string) =>
