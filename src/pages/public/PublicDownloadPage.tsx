@@ -1,15 +1,35 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { getPublicFileDownloadUrl, getPublicPortal, getZeroTouchDownloadUrl } from "@/api/publicDownloads";
 import { PublicPortalLayout, formatBytes } from "./PublicPortalLayout";
 import { Icon } from "@/components/ui/Icon";
 
+function normalizeFolder(path?: string | null): string {
+  if (!path) return "/";
+  const parts = path.replace(/\\/g, "/").split("/").filter((s) => s && s !== "." && s !== "..");
+  return parts.length === 0 ? "/" : `/${parts.join("/")}`;
+}
+
 export default function PublicDownloadPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentFolder = normalizeFolder(searchParams.get("folder"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [category, setCategory] = useState("");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const navigateToFolder = (path: string) => {
+    const norm = normalizeFolder(path);
+    const next = new URLSearchParams(searchParams);
+    if (norm === "/") {
+      next.delete("folder");
+    } else {
+      next.set("folder", norm);
+    }
+    setSearchParams(next);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -160,63 +180,172 @@ export default function PublicDownloadPage() {
           )}
         </div>
 
-        {/* Lista de arquivos */}
-        {data.files.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center text-sm text-slate-500">
-            Nenhum arquivo público disponível no momento.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {data.files.map((file) => (
-              <div
-                key={file.id}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col justify-between gap-4 hover:border-blue-300 dark:hover:border-blue-800 transition-colors"
-              >
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm truncate" title={file.name}>{file.name}</h3>
-                    {file.category && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
-                        {file.category}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{file.fileName}</div>
-                  {file.description && (
-                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{file.description}</p>
-                  )}
-                </div>
+        {(() => {
+          const isFiltering = Boolean(debouncedSearch.trim() || category);
+          const folders = data.folders || [];
+          const currentFolderLower = currentFolder.toLowerCase();
+          const subfolders = isFiltering
+            ? []
+            : folders.filter((f) => normalizeFolder(f.parentPath).toLowerCase() === currentFolderLower);
+          const visibleFiles = isFiltering
+            ? data.files
+            : data.files.filter((f) => normalizeFolder(f.folderPath).toLowerCase() === currentFolderLower);
+          const segments = currentFolder === "/" ? [] : currentFolder.split("/").filter(Boolean);
+          const parentFolder = segments.length <= 1 ? "/" : `/${segments.slice(0, -1).join("/")}`;
 
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                    <span>{formatBytes(file.sizeBytes)}</span>
-                    {file.sha256 && (
-                      <button
-                        type="button"
-                        onClick={() => copyHash(file.sha256!)}
-                        className="inline-flex items-center gap-1 hover:text-blue-600 font-mono text-[11px]"
-                        title={`SHA-256: ${file.sha256}`}
-                      >
-                        <Icon name="verified" size={13} />
-                        <span>SHA-256</span>
-                      </button>
-                    )}
+          return (
+            <div className="space-y-4">
+              {!isFiltering && currentFolder !== "/" && (
+                <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => navigateToFolder("/")}
+                      className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      Início
+                    </button>
+                    {segments.map((seg, idx) => {
+                      const path = `/${segments.slice(0, idx + 1).join("/")}`;
+                      const isLast = idx === segments.length - 1;
+                      return (
+                        <span key={path} className="inline-flex items-center gap-1.5">
+                          <Icon name="chevron_right" size={14} className="text-slate-400" />
+                          {isLast ? (
+                            <span className="font-semibold text-slate-700 dark:text-slate-200">{seg}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => navigateToFolder(path)}
+                              className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                            >
+                              {seg}
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
-
                   <button
                     type="button"
-                    disabled={downloadingId === file.id}
-                    onClick={() => handleDownloadFile(file.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+                    onClick={() => navigateToFolder(parentFolder)}
+                    className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-blue-600 font-medium"
                   >
-                    <Icon name="download" size={16} />
-                    <span>{downloadingId === file.id ? "Gerando..." : "Baixar"}</span>
+                    <Icon name="arrow_back" size={14} />
+                    <span>Voltar</span>
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              )}
+
+              {subfolders.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {subfolders.map((folder) => (
+                    <button
+                      key={folder.path}
+                      type="button"
+                      onClick={() => navigateToFolder(folder.path)}
+                      className="text-left rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 hover:border-blue-400 dark:hover:border-blue-700 transition-colors flex items-start gap-3"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                        <Icon name="folder" size={20} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm truncate">{folder.name}</span>
+                          <span className="px-2 py-0.5 rounded-md text-[11px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                            {folder.fileCount} {folder.fileCount === 1 ? "arquivo" : "arquivos"}
+                          </span>
+                        </div>
+                        {folder.description && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                            {folder.description}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {visibleFiles.length === 0 && subfolders.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center text-sm text-slate-500">
+                  {currentFolder !== "/" && !isFiltering
+                    ? "Esta pasta está vazia."
+                    : "Nenhum arquivo público disponível no momento."}
+                </div>
+              ) : visibleFiles.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {visibleFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col justify-between gap-4 hover:border-blue-300 dark:hover:border-blue-800 transition-colors"
+                    >
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-sm truncate" title={file.name}>{file.name}</h3>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isFiltering && file.folderPath && file.folderPath !== "/" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSearch("");
+                                  setDebouncedSearch("");
+                                  setCategory("");
+                                  navigateToFolder(file.folderPath);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:underline"
+                                title="Abrir pasta"
+                              >
+                                <Icon name="folder" size={12} />
+                                <span>{file.folderPath}</span>
+                              </button>
+                            )}
+                            {file.category && (
+                              <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                {file.category}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{file.fileName}</div>
+                        {file.description && (
+                          <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{file.description}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                          <span>{formatBytes(file.sizeBytes)}</span>
+                          {file.sha256 && (
+                            <button
+                              type="button"
+                              onClick={() => copyHash(file.sha256!)}
+                              className="inline-flex items-center gap-1 hover:text-blue-600 font-mono text-[11px]"
+                              title={`SHA-256: ${file.sha256}`}
+                            >
+                              <Icon name="verified" size={13} />
+                              <span>SHA-256</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={downloadingId === file.id}
+                          onClick={() => handleDownloadFile(file.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium transition-colors"
+                        >
+                          <Icon name="download" size={16} />
+                          <span>{downloadingId === file.id ? "Gerando..." : "Baixar"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })()}
       </div>
     </PublicPortalLayout>
   );

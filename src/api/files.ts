@@ -50,6 +50,26 @@ export interface ManagedFileSummaryDto {
   sizeBytes: number;
   sha256?: string | null;
   scope: FileScope;
+  folderPath: string;
+}
+
+export interface ManagedFileFolderDto {
+  id: string;
+  name: string;
+  path: string;
+  parentPath: string;
+  description?: string | null;
+  scope: FileScope;
+  clientId?: string | null;
+  clientName?: string | null;
+  siteId?: string | null;
+  siteName?: string | null;
+  visibility: FileVisibility;
+  fileCount: number;
+  subfolderCount: number;
+  isVirtual: boolean;
+  createdBy?: string | null;
+  createdAt: string;
 }
 
 export interface PagedFilesResult {
@@ -141,6 +161,7 @@ export async function listManagedFiles(params?: {
   visibility?: FileVisibility;
   source?: FileSource;
   category?: string;
+  folderPath?: string;
   search?: string;
   includeInactive?: boolean;
   page?: number;
@@ -153,12 +174,67 @@ export async function listManagedFiles(params?: {
   if (params?.visibility !== undefined) qs.set("visibility", String(params.visibility));
   if (params?.source !== undefined) qs.set("source", String(params.source));
   if (params?.category) qs.set("category", params.category);
+  if (params?.folderPath) qs.set("folderPath", params.folderPath);
   if (params?.search) qs.set("search", params.search);
   if (params?.includeInactive) qs.set("includeInactive", "true");
   if (params?.page) qs.set("page", String(params.page));
   if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();
   return apiRequest<PagedFilesResult>(`/files${query ? `?${query}` : ""}`);
+}
+
+export async function listManagedFolders(params?: {
+  parentPath?: string;
+  includeAll?: boolean;
+  scope?: FileScope;
+  clientId?: string;
+  siteId?: string;
+  visibility?: FileVisibility;
+}): Promise<ManagedFileFolderDto[]> {
+  const qs = new URLSearchParams();
+  if (params?.parentPath) qs.set("parentPath", params.parentPath);
+  if (params?.includeAll) qs.set("includeAll", "true");
+  if (params?.scope !== undefined) qs.set("scope", String(params.scope));
+  if (params?.clientId) qs.set("clientId", params.clientId);
+  if (params?.siteId) qs.set("siteId", params.siteId);
+  if (params?.visibility !== undefined) qs.set("visibility", String(params.visibility));
+  const query = qs.toString();
+  return apiRequest<ManagedFileFolderDto[]>(`/files/folders${query ? `?${query}` : ""}`);
+}
+
+export function createManagedFolder(body: {
+  name: string;
+  parentPath?: string;
+  description?: string | null;
+  scope: FileScope;
+  clientId?: string | null;
+  siteId?: string | null;
+  visibility: FileVisibility;
+}): Promise<ManagedFileFolderDto> {
+  return apiRequest<ManagedFileFolderDto>("/files/folders", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateManagedFolder(
+  id: string,
+  body: {
+    name?: string;
+    description?: string | null;
+    visibility?: FileVisibility;
+  },
+): Promise<ManagedFileFolderDto> {
+  return apiRequest<ManagedFileFolderDto>(`/files/folders/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteManagedFolder(id: string, moveFilesToParent = true): Promise<void> {
+  return apiRequest<void>(`/files/folders/${id}?moveFilesToParent=${moveFilesToParent ? "true" : "false"}`, {
+    method: "DELETE",
+  });
 }
 
 export function getFileHubStats(): Promise<FileHubStatsDto> {

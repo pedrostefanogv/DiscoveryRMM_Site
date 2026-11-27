@@ -12,6 +12,14 @@ export interface PublicZeroTouchInfo {
   sha256?: string | null;
 }
 
+export interface PublicFolderDto {
+  path: string;
+  name: string;
+  parentPath: string;
+  description?: string | null;
+  fileCount: number;
+}
+
 export interface PublicPortalDto {
   enabled: boolean;
   title?: string | null;
@@ -21,6 +29,7 @@ export interface PublicPortalDto {
   zeroTouch: PublicZeroTouchInfo;
   files: ManagedFileSummaryDto[];
   categories: string[];
+  folders: PublicFolderDto[];
 }
 
 export interface PublicShareInfoDto {
@@ -97,10 +106,11 @@ async function publicFetch<T>(path: string, init?: RequestInit, sessionToken?: s
   return data as T;
 }
 
-export function getPublicPortal(search?: string, category?: string): Promise<PublicPortalDto> {
+export function getPublicPortal(search?: string, category?: string, folder?: string): Promise<PublicPortalDto> {
   const qs = new URLSearchParams();
   if (search) qs.set("search", search);
   if (category) qs.set("category", category);
+  if (folder) qs.set("folder", folder);
   const q = qs.toString();
   return publicFetch<PublicPortalDto>(`/downloads/portal${q ? `?${q}` : ""}`);
 }
