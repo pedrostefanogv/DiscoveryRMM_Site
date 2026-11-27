@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 
 const BASE = "/api/v1/agent-updates";
 
@@ -41,9 +41,15 @@ export const agentUpdatesApi = {
   syncRepository: () =>
     api.post<unknown>(`${BASE}/repository/sync`),
 
+  // ?wait=true preserva o contrato síncrono antigo (a UI espera o build publicado).
+  // Sem o parâmetro o endpoint responde 202 e o build roda em background —
+  // acompanhe por getRebuildStatus().
   syncAndBuild: () =>
-    api.post<unknown>(`${BASE}/build/rebuild`),
+    api.post<unknown>(`${BASE}/build/rebuild?wait=true`),
 
   refreshBuild: () =>
-    api.post<unknown>(`${BASE}/build/rebuild`),
+    api.post<unknown>(`${BASE}/build/rebuild?wait=true`),
+
+  getRebuildStatus: () =>
+    api.get<unknown>(`${BASE}/build/rebuild/status`),
 };
