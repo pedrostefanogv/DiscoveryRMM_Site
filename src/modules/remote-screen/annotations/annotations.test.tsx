@@ -7,6 +7,7 @@ import {
   ANNOTATION_MAX_POINTS,
   buildAddAnnotationCommand,
   buildClearAnnotationsCommand,
+  buildLaserCommand,
   buildMagnifierCommand,
   buildUndoAnnotationCommand,
   constrainShapePoint,
@@ -85,6 +86,18 @@ describe('annotations helpers', () => {
       zoom: 5,
       radius: 0.45,
       pinned: true,
+    });
+
+    expect(buildLaserCommand(false)).toEqual({ op: 'laser', active: false });
+    expect(
+      buildLaserCommand(true, { x: 1.4, y: -0.1, color: '#FF3B30', width: 5 }),
+    ).toEqual({
+      op: 'laser',
+      active: true,
+      x: 1,
+      y: 0,
+      color: '#FF3B30',
+      width: 5,
     });
   });
 
@@ -410,5 +423,66 @@ describe('AnnotationCanvas', () => {
       />,
     );
     expect(onCommit).toHaveBeenCalledWith({ op: 'magnifier', active: false });
+  });
+
+  it('envia apontador laser em tempo real ao mover e desativa ao sair', () => {
+    const onCommit = vi.fn();
+
+    const { rerender } = render(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'laser', color: '#FF3B30', width: 5 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    );
+
+    const canvas = screen.getByTestId('annotation-canvas');
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 500,
+      right: 1000,
+      bottom: 500,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerMove(canvas, { clientX: 250, clientY: 125 });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      op: 'laser',
+      active: true,
+      x: 0.25,
+      y: 0.25,
+      color: '#FF3B30',
+      width: 5,
+    });
+
+    fireEvent.pointerLeave(canvas);
+    expect(onCommit).toHaveBeenLastCalledWith({ op: 'laser', active: false });
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 500, clientY: 250 });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      op: 'laser',
+      active: true,
+      x: 0.5,
+      y: 0.5,
+      color: '#FF3B30',
+      width: 5,
+    });
+
+    rerender(
+      <AnnotationCanvas
+        active={false}
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'laser', color: '#FF3B30', width: 5 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+      />,
+    );
+    expect(onCommit).toHaveBeenLastCalledWith({ op: 'laser', active: false });
   });
 });

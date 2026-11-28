@@ -36,11 +36,21 @@ export interface AnnotationMagnifierCommand {
   pinned?: boolean;
 }
 
+export interface AnnotationLaserCommand {
+  op: 'laser';
+  active: boolean;
+  x?: number;
+  y?: number;
+  color?: string;
+  width?: number;
+}
+
 export type AnnotationCommand =
   | AnnotationAddCommand
   | AnnotationUndoCommand
   | AnnotationClearCommand
-  | AnnotationMagnifierCommand;
+  | AnnotationMagnifierCommand
+  | AnnotationLaserCommand;
 
 export interface AnnotationSettings {
   tool: AnnotationTool;
@@ -260,6 +270,28 @@ export function buildMagnifierCommand(
     zoom,
     radius,
     pinned: Boolean(opts.pinned),
+  };
+}
+
+export function buildLaserCommand(
+  active: boolean,
+  opts?: {
+    x: number;
+    y: number;
+    color: string;
+    width: number;
+  },
+): AnnotationLaserCommand {
+  if (!active || !opts) {
+    return { op: 'laser', active: false };
+  }
+  return {
+    op: 'laser',
+    active: true,
+    x: clamp01(opts.x),
+    y: clamp01(opts.y),
+    color: opts.color,
+    width: opts.width,
   };
 }
 

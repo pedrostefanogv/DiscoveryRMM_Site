@@ -55,9 +55,19 @@ const TOOLS: { id: AnnotationTool; label: string; shortcut: string; icon: ReactN
   },
   {
     id: 'laser',
-    label: 'Laser (3s)',
+    label: 'Apontador laser',
     shortcut: '5',
-    icon: <Icon name="auto_awesome" className="h-4 w-4" />,
+    icon: (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden="true">
+        <circle cx="11" cy="5" r="2" fill="currentColor" />
+        <path
+          d="M11 1.5v1.2M14.5 5h-1.2M13.5 2.5l-.85.85M8.5 2.5l.85.85M13.5 7.5l-.85-.85M8.8 7.2L3 13"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
   },
   {
     id: 'magnifier',
@@ -254,9 +264,9 @@ export default function AnnotationToolbar({
             {isLaser ? (
               <span
                 className="rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-warning"
-                title="Apontador laser desaparece em 3 segundos"
+                title="Apontador laser acompanha o cursor em tempo real"
               >
-                3s
+                Ao vivo
               </span>
             ) : (
               ANNOTATION_TTLS.map((t) => {

@@ -3,11 +3,13 @@ import {
   ANNOTATION_MAGNIFIER_MAX_ZOOM,
   ANNOTATION_MAGNIFIER_MIN_ZOOM,
   buildAddAnnotationCommand,
+  buildLaserCommand,
   buildMagnifierCommand,
   constrainShapePoint,
   drawPreviewShape,
   normalizePoint,
   type AnnotationCommand,
+  type AnnotationLaserCommand,
   type AnnotationMagnifierCommand,
   type AnnotationPoint,
   type AnnotationSettings,
@@ -45,6 +47,7 @@ const TOOL_SHORTCUTS: Record<string, AnnotationTool> = {
 
 const OPTIMISTIC_PREVIEW_MS = 220;
 const MAGNIFIER_THROTTLE_MS = 33;
+const LASER_THROTTLE_MS = 33;
 
 export default function AnnotationCanvas({
   active,
@@ -71,6 +74,13 @@ export default function AnnotationCanvas({
   const magThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const magLastSentAtRef = useRef(0);
   const magPendingCmdRef = useRef<AnnotationMagnifierCommand | null>(null);
+
+  // Estado do apontador laser ao vivo (coordenadas normalizadas [0..1])
+  const laserNormPosRef = useRef<AnnotationPoint | null>(null);
+  const remoteLaserActiveRef = useRef(false);
+  const laserThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const laserLastSentAtRef = useRef(0);
+  const laserPendingCmdRef = useRef<AnnotationLaserCommand | null>(null);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -145,12 +155,63 @@ export default function AnnotationCanvas({
     }
   }, [clearMagThrottle, sendMagnifierNow]);
 
+  const clearLaserThrottle = useCallback(() => {
+    if (laserThrottleTimerRef.current) {
+      clearTimeout(laserThrottleTimerRef.current);
+      laserThrottleTimerRef.current = null;
+    }
+    laserPendingCmdRef.current = null;
+  }, []);
+
+  const sendLaserNow = useCallback(
+    (cmd: AnnotationLaserCommand) => {
+      clearLaserThrottle();
+      laserLastSentAtRef.current = Date.now();
+      remoteLaserActiveRef.current = cmd.active;
+      onCommitRef.current(cmd);
+    },
+    [clearLaserThrottle],
+  );
+
+  const sendLaserThrottled = useCallback(
+    (cmd: AnnotationLaserCommand) => {
+      const now = Date.now();
+      const elapsed = now - laserLastSentAtRef.current;
+      if (elapsed >= LASER_THROTTLE_MS) {
+        sendLaserNow(cmd);
+        return;
+      }
+      laserPendingCmdRef.current = cmd;
+      if (!laserThrottleTimerRef.current) {
+        laserThrottleTimerRef.current = setTimeout(() => {
+          laserThrottleTimerRef.current = null;
+          const pending = laserPendingCmdRef.current;
+          laserPendingCmdRef.current = null;
+          if (pending) {
+            laserLastSentAtRef.current = Date.now();
+            remoteLaserActiveRef.current = pending.active;
+            onCommitRef.current(pending);
+          }
+        }, LASER_THROTTLE_MS - elapsed);
+      }
+    },
+    [sendLaserNow],
+  );
+
+  const hideRemoteLaser = useCallback(() => {
+    clearLaserThrottle();
+    if (remoteLaserActiveRef.current) {
+      sendLaserNow(buildLaserCommand(false));
+    }
+  }, [clearLaserThrottle, sendLaserNow]);
+
   useEffect(
     () => () => {
       clearPendingTimer();
       hideRemoteMagnifier();
+      hideRemoteLaser();
     },
-    [clearPendingTimer, hideRemoteMagnifier],
+    [clearPendingTimer, hideRemoteMagnifier, hideRemoteLaser],
   );
 
   const clearPreview = useCallback(() => {
@@ -199,7 +260,10 @@ export default function AnnotationCanvas({
     lensNormPosRef.current = null;
     lensPinnedRef.current = false;
     remoteMagnifierActiveRef.current = false;
-  }, [clearToken, clearMagThrottle]);
+    clearLaserThrottle();
+    laserNormPosRef.current = null;
+    remoteLaserActiveRef.current = false;
+  }, [clearToken, clearMagThrottle, clearLaserThrottle]);
 
   useEffect(() => {
     if (!active) {
@@ -208,9 +272,11 @@ export default function AnnotationCanvas({
       pendingPreviewRef.current = null;
       lensNormPosRef.current = null;
       lensPinnedRef.current = false;
+      laserNormPosRef.current = null;
       clearPendingTimer();
       clearPreview();
       hideRemoteMagnifier();
+      hideRemoteLaser();
       return;
     }
 
@@ -243,6 +309,7 @@ export default function AnnotationCanvas({
         clearPendingTimer();
         clearPreview();
         hideRemoteMagnifier();
+        hideRemoteLaser();
         onExit();
         return;
       }
@@ -287,6 +354,7 @@ export default function AnnotationCanvas({
     clearPendingTimer,
     clearPreview,
     computeNormalizedRadius,
+    hideRemoteLaser,
     hideRemoteMagnifier,
     onExit,
     onUndo,
@@ -363,6 +431,27 @@ export default function AnnotationCanvas({
     settings.tool,
   ]);
 
+  // Sincronização do apontador laser ao vivo
+  useEffect(() => {
+    if (!active || settings.tool !== 'laser') {
+      laserNormPosRef.current = null;
+      hideRemoteLaser();
+      return;
+    }
+
+    const pos = laserNormPosRef.current;
+    if (pos) {
+      sendLaserNow(
+        buildLaserCommand(true, {
+          x: pos.x,
+          y: pos.y,
+          color: settings.color,
+          width: settings.width,
+        }),
+      );
+    }
+  }, [active, hideRemoteLaser, sendLaserNow, settings.color, settings.tool, settings.width]);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!active || e.button !== 0) return;
     e.preventDefault();
@@ -383,6 +472,20 @@ export default function AnnotationCanvas({
           zoom: settings.magnifierZoom,
           radius: computeNormalizedRadius(settings.magnifierSize),
           pinned: lensPinnedRef.current,
+        }),
+      );
+      return;
+    }
+
+    if (settings.tool === 'laser') {
+      const pt = normalizePoint(e.clientX, e.clientY, rect);
+      laserNormPosRef.current = pt;
+      sendLaserNow(
+        buildLaserCommand(true, {
+          x: pt.x,
+          y: pt.y,
+          color: settings.color,
+          width: settings.width,
         }),
       );
       return;
@@ -422,6 +525,20 @@ export default function AnnotationCanvas({
       return;
     }
 
+    if (settings.tool === 'laser') {
+      const pt = normalizePoint(e.clientX, e.clientY, rect);
+      laserNormPosRef.current = pt;
+      sendLaserThrottled(
+        buildLaserCommand(true, {
+          x: pt.x,
+          y: pt.y,
+          color: settings.color,
+          width: settings.width,
+        }),
+      );
+      return;
+    }
+
     if (!drawingRef.current) return;
     e.preventDefault();
     e.stopPropagation();
@@ -429,7 +546,7 @@ export default function AnnotationCanvas({
     const aspect = rect.height > 0 ? rect.width / rect.height : 1;
     const pt = constrainShapePoint(settings.tool, pointsRef.current[0], rawPt, aspect, e.shiftKey);
 
-    if (settings.tool === 'freehand' || settings.tool === 'laser') {
+    if (settings.tool === 'freehand') {
       pointsRef.current.push(pt);
     } else {
       pointsRef.current = [pointsRef.current[0], pt];
@@ -438,7 +555,7 @@ export default function AnnotationCanvas({
   };
 
   const finishStroke = (e: React.PointerEvent<HTMLCanvasElement>, commit: boolean) => {
-    if (settings.tool === 'magnifier' || !drawingRef.current) return;
+    if (settings.tool === 'magnifier' || settings.tool === 'laser' || !drawingRef.current) return;
     e.preventDefault();
     e.stopPropagation();
     const canvas = canvasRef.current;
@@ -446,7 +563,7 @@ export default function AnnotationCanvas({
       canvas.releasePointerCapture(e.pointerId);
     }
 
-    if (commit && settings.tool !== 'freehand' && settings.tool !== 'laser' && canvas) {
+    if (commit && settings.tool !== 'freehand' && canvas) {
       const rect = canvas.getBoundingClientRect();
       const rawPt = normalizePoint(e.clientX, e.clientY, rect);
       const aspect = rect.height > 0 ? rect.width / rect.height : 1;
@@ -504,6 +621,9 @@ export default function AnnotationCanvas({
     if (settings.tool === 'magnifier' && !lensPinnedRef.current) {
       lensNormPosRef.current = null;
       hideRemoteMagnifier();
+    } else if (settings.tool === 'laser') {
+      laserNormPosRef.current = null;
+      hideRemoteLaser();
     }
   };
 
