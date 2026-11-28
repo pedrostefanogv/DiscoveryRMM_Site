@@ -64,10 +64,6 @@ export default function AgentSupportChatWindow() {
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
             <span className="truncate">
-              <span className="text-muted">Máquina:</span>{' '}
-              <span className="font-medium text-foreground">{machineName}</span>
-            </span>
-            <span className="truncate">
               <span className="text-muted">Usuário:</span>{' '}
               <span className="font-medium text-foreground">{a.loggedUser || '—'}</span>
             </span>

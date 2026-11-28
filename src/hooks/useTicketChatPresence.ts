@@ -5,15 +5,14 @@ import { ticketChatApi } from "@/api/ticket-chat";
 export const TICKET_CHAT_PRESENCE_HEARTBEAT_MS = 30_000;
 
 /**
- * O atendente esta OLHANDO a conversa agora?
+ * O atendente esta com a conversa aberta e visivel na tela?
  *
- * Exige aba visivel E janela em foco: com o chat aberto atras de outro
- * aplicativo o atendente nao esta lendo a mensagem, entao o aviso deve voltar.
+ * Basta a aba/janela estar visivel: quando o chat esta aberto lado a lado
+ * em uma janela popup, perder o foco do cursor nao significa que foi fechado.
  */
 function isActivelyViewing(): boolean {
   if (typeof document === "undefined") return false;
-  if (document.visibilityState !== "visible") return false;
-  return typeof document.hasFocus !== "function" || document.hasFocus();
+  return document.visibilityState === "visible";
 }
 
 /**
@@ -80,14 +79,12 @@ export function useTicketChatPresence(ticketId: string | undefined, enabled = tr
 
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("focus", sync);
-    window.addEventListener("blur", sync);
     window.addEventListener("pageshow", sync);
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("focus", sync);
-      window.removeEventListener("blur", sync);
       window.removeEventListener("pageshow", sync);
       window.removeEventListener("pagehide", handlePageHide);
       stopHeartbeat();

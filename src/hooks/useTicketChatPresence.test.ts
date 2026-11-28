@@ -88,7 +88,7 @@ describe("useTicketChatPresence", () => {
     expect(setPresenceMock).toHaveBeenCalledWith("ticket-1", true, expect.any(String));
   });
 
-  it("limpa a presenca quando a janela perde o foco e retoma ao focar", () => {
+  it("mantem a presenca quando a janela perde o foco mas continua visivel em tela", () => {
     renderHook(() => useTicketChatPresence("ticket-1", true));
     setPresenceMock.mockClear();
 
@@ -97,9 +97,8 @@ describe("useTicketChatPresence", () => {
       window.dispatchEvent(new Event("blur"));
     });
 
-    expect(setPresenceMock).toHaveBeenCalledWith("ticket-1", false, expect.any(String));
+    expect(setPresenceMock).not.toHaveBeenCalled();
 
-    setPresenceMock.mockClear();
     setFocus(true);
     act(() => {
       window.dispatchEvent(new Event("focus"));

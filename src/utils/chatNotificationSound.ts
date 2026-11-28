@@ -44,13 +44,33 @@ export function notifyDesktopChatMessage(senderName: string, body: string): void
   if (typeof window === "undefined" || typeof Notification === "undefined") return;
   if (Notification.permission !== "granted") return;
 
-  try {
-    const preview = body.trim().slice(0, 140) || "Nova mensagem recebida";
-    new Notification(`Chat de suporte — ${senderName}`, {
-      body: preview,
-      tag: "discovery-support-chat",
-    });
-  } catch {
-    // Algumas webviews não permitem new Notification() direto.
+  const showLocal = () => {
+    try {
+      const preview = body.trim().slice(0, 140) || "Nova mensagem recebida";
+      new Notification(`Chat de suporte — ${senderName}`, {
+        body: preview,
+        tag: "discovery-support-chat",
+      });
+    } catch {
+      // Algumas webviews não permitem new Notification() direto.
+    }
+  };
+
+  // Se o navegador já possui inscrição Web Push ativa, o servidor entregará a
+  // notificação via Service Worker — evita exibir duas notificações para a mesma mensagem.
+  const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
+  if (sw && typeof sw.getRegistration === "function") {
+    void sw
+      .getRegistration()
+      .then((reg) => reg?.pushManager?.getSubscription?.() ?? null)
+      .then((sub) => {
+        if (!sub) showLocal();
+      })
+      .catch(() => {
+        showLocal();
+      });
+    return;
   }
+
+  showLocal();
 }

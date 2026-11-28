@@ -466,7 +466,8 @@ export default function SupportChatPanel({
       setHasUnreadBelow(true);
     }
 
-    // Som + notificação do navegador quando chega mensagem do usuário final fora de foco.
+    // Som discreto quando janela não está em foco; notificação do navegador
+    // apenas quando a janela/aba está realmente oculta (não visível em tela).
     if (
       prevId !== null &&
       String(last.authorKind).toLowerCase() === "enduser" &&
@@ -475,7 +476,9 @@ export default function SupportChatPanel({
       if (!soundMuted) {
         playChatNotificationSound();
       }
-      notifyDesktopChatMessage(last.authorName || "Usuário", last.body || "");
+      if (document.hidden) {
+        notifyDesktopChatMessage(last.authorName || "Usuário", last.body || "");
+      }
     }
   }, [messages, soundMuted]);
 
@@ -786,8 +789,14 @@ export default function SupportChatPanel({
             </Button>
           )}
           {sessionForUi?.status === "Active" && canManage && (
-            <Button size="sm" variant="danger" onClick={() => setEndConfirmOpen(true)} disabled={end.isPending}>
-              <Icon name="close" className="h-4 w-4" /> Encerrar
+            <Button
+              size="sm"
+              variant="ghost"
+              className="!min-h-0 !min-w-0 rounded-lg border border-danger/30 bg-danger/5 px-2.5 py-1 text-xs font-medium text-danger hover:border-danger/50 hover:bg-danger/10 hover:text-danger"
+              onClick={() => setEndConfirmOpen(true)}
+              disabled={end.isPending}
+            >
+              <Icon name="close" className="h-3.5 w-3.5" /> Encerrar
             </Button>
           )}
           {canStart && (
@@ -799,6 +808,7 @@ export default function SupportChatPanel({
             <Button
               size="sm"
               variant="ghost"
+              className="!min-h-0 !min-w-0 px-2 py-1"
               aria-haspopup="menu"
               aria-expanded={actionsMenuOpen}
               aria-label="Mais ações do chat"

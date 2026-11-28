@@ -103,10 +103,11 @@ export function useSupportChatMessages(
 
       if (maxSeq > 0) {
         const delta = await client.listMessages(sessionId!, maxSeq, 200);
-        return mergeChatMessages(canonical, delta);
+        return mergeChatMessages(cached, delta);
       }
 
-      return client.listMessages(sessionId!, 0, 200);
+      const initial = await client.listMessages(sessionId!, 0, 200);
+      return mergeChatMessages(cached, initial);
     },
     enabled: !!sessionId && enabled,
     staleTime: 2_000,
@@ -206,6 +207,13 @@ export function useSendSupportChatMessage(
 
       queryClient.setQueryData<TicketChatMessage[]>(key, [...previous, optimistic]);
       return { previous };
+    },
+
+    onSuccess: (saved) => {
+      if (!sessionId || !saved) return;
+      queryClient.setQueryData<TicketChatMessage[]>(key, (prev) =>
+        mergeChatMessages(prev ?? [], [saved]),
+      );
     },
 
     onError: (_error, _variables, context) => {
@@ -356,11 +364,10 @@ export function useSupportChatRealtime(
   }, [client, sessionId, enabled, queryClient, stableScope, onTyping]);
 }
 
-/** O atendente está OLHANDO a conversa agora? (aba visível e janela em foco) */
+/** O atendente está com a janela da conversa aberta e visível na tela? */
 function isActivelyViewing(): boolean {
   if (typeof document === "undefined") return false;
-  if (document.visibilityState !== "visible") return false;
-  return typeof document.hasFocus !== "function" || document.hasFocus();
+  return document.visibilityState === "visible";
 }
 
 /** Identificador de UMA execução do efeito (uma "janela" lógica). */
@@ -419,14 +426,12 @@ export function useSupportChatPresence(
 
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("focus", sync);
-    window.addEventListener("blur", sync);
     window.addEventListener("pageshow", sync);
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("focus", sync);
-      window.removeEventListener("blur", sync);
       window.removeEventListener("pageshow", sync);
       window.removeEventListener("pagehide", handlePageHide);
       stopHeartbeat();

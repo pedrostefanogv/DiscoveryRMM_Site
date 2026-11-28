@@ -68,17 +68,47 @@ self.addEventListener("push", (event) => {
   const tag = normalize(payload.tag) ?? normalize(payload.notificationId) ?? "discovery-notification";
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      tag,
-      // ICON precisa existir em public/ (o build valida isso em verify-build.mjs):
-      // sem o arquivo o navegador exibe a notificacao sem icone.
-      icon: ICON,
-      lang: "pt-BR",
-      // Sem "badge": o Android usa apenas o canal alfa do badge e nossos PNGs
-      // sao opacos — o resultado seria um bloco solido na barra de status.
-      data: { url, severity: payload.severity ?? null, eventType: payload.eventType ?? null },
-    }),
+    (async () => {
+      if (payload.eventType === "ticket_chat_message") {
+        const targetPath = new URL(resolveUrl(url)).pathname;
+        const clientList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        const alreadyVisible = clientList.some((client) => {
+          const windowClient = client as WindowClient & { visibilityState?: string };
+          try {
+            const clientUrl = new URL(windowClient.url);
+            if (clientUrl.origin !== self.location.origin || windowClient.visibilityState !== "visible") {
+              return false;
+            }
+            const path = clientUrl.pathname;
+            if (path === targetPath) return true;
+            if (targetPath.startsWith("/tickets/") && path === `${targetPath}/chat`) return true;
+            if (
+              targetPath.startsWith("/agents/") &&
+              !targetPath.endsWith("/support-chat") &&
+              path === `${targetPath}/support-chat`
+            ) {
+              return true;
+            }
+            return false;
+          } catch {
+            return false;
+          }
+        });
+        if (alreadyVisible) return;
+      }
+
+      await self.registration.showNotification(title, {
+        body,
+        tag,
+        // ICON precisa existir em public/ (o build valida isso em verify-build.mjs):
+        // sem o arquivo o navegador exibe a notificacao sem icone.
+        icon: ICON,
+        lang: "pt-BR",
+        // Sem "badge": o Android usa apenas o canal alfa do badge e nossos PNGs
+        // sao opacos — o resultado seria um bloco solido na barra de status.
+        data: { url, severity: payload.severity ?? null, eventType: payload.eventType ?? null },
+      });
+    })(),
   );
 });
 
