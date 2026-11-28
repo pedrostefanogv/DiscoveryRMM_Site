@@ -232,6 +232,8 @@ export async function listManagedFiles(params?: {
   category?: string;
   folderPath?: string;
   search?: string;
+  /** Id do link de upload (File Drop): lista só os arquivos recebidos por ele. */
+  sourceUploadLinkId?: string;
   includeInactive?: boolean;
   page?: number;
   pageSize?: number;
@@ -245,6 +247,7 @@ export async function listManagedFiles(params?: {
   if (params?.category) qs.set("category", params.category);
   if (params?.folderPath) qs.set("folderPath", params.folderPath);
   if (params?.search) qs.set("search", params.search);
+  if (params?.sourceUploadLinkId) qs.set("sourceUploadLinkId", params.sourceUploadLinkId);
   if (params?.includeInactive) qs.set("includeInactive", "true");
   if (params?.page) qs.set("page", String(params.page));
   if (params?.pageSize) qs.set("pageSize", String(params.pageSize));

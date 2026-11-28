@@ -27,6 +27,11 @@ import {
 } from "@/api/files";
 import { formatBytes } from "@/pages/public/PublicPortalLayout";
 import { Icon } from "@/components/ui/Icon";
+import {
+  FILE_ACTION_BTN,
+  FILE_ACTION_BTN_DANGER,
+  FILE_ACTION_BTN_PRIMARY,
+} from "@/components/files/fileActionStyles";
 import { ticketsApi } from "@/api/tickets";
 
 type HubTab = "files" | "shares" | "uploads" | "logs";
@@ -145,6 +150,9 @@ export default function FilesHubPage() {
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState<string>("");
   const [visFilter, setVisFilter] = useState<string>("");
+  // Link de upload cujos arquivos recebidos estão sendo exibidos na aba Arquivos
+  // ("Ver arquivos" na aba de Links de Upload).
+  const [linkFilter, setLinkFilter] = useState<{ id: string; title: string } | null>(null);
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -220,11 +228,14 @@ export default function FilesHubPage() {
   const isSearching = search.trim().length > 0;
   const statsQuery = useQuery({ queryKey: ["files-stats"], queryFn: getFileHubStats });
   const filesQuery = useQuery({
-    queryKey: ["managed-files", currentFolder, search, scopeFilter, visFilter],
+    queryKey: ["managed-files", currentFolder, search, scopeFilter, visFilter, linkFilter?.id],
     queryFn: () =>
       listManagedFiles({
-        folderPath: isSearching ? undefined : currentFolder,
-        search: search || undefined,
+        // Com filtro de link ativo, pasta/busca não se aplicam: o objetivo é
+        // ver TODOS os arquivos recebidos por aquele link.
+        folderPath: linkFilter || isSearching ? undefined : currentFolder,
+        search: linkFilter ? undefined : search || undefined,
+        sourceUploadLinkId: linkFilter?.id,
         scope: scopeFilter !== "" ? (Number(scopeFilter) as FileScope) : undefined,
         visibility: visFilter !== "" ? (Number(visFilter) as FileVisibility) : undefined,
         pageSize: 100,
@@ -238,7 +249,8 @@ export default function FilesHubPage() {
         scope: scopeFilter !== "" ? (Number(scopeFilter) as FileScope) : undefined,
         visibility: visFilter !== "" ? (Number(visFilter) as FileVisibility) : undefined,
       }),
-    enabled: tab === "files" && !isSearching,
+    // Com o filtro de link ativo as pastas não são exibidas: evita a busca inútil.
+    enabled: tab === "files" && !isSearching && !linkFilter,
   });
   const allFoldersQuery = useQuery({
     queryKey: ["managed-folders-all"],
@@ -290,6 +302,20 @@ export default function FilesHubPage() {
   const selectedEditFileFolder = editFileFolderPath === "/" ? undefined : findFolderMeta(editFileFolderPath);
 
   const breadcrumbSegments = currentFolder === "/" ? [] : currentFolder.split("/").filter(Boolean);
+
+  // "Ver arquivos": leva para a aba Arquivos já filtrada pelos arquivos que este
+  // link de upload recebeu — sem precisar procurar na pasta de destino.
+  const openUploadedFiles = (link: { id: string; title: string }) => {
+    setLinkFilter({ id: link.id, title: link.title });
+    setSearch("");
+    setCurrentFolder("/");
+    // Os arquivos recebidos por um link são Visibility=Private, no escopo do
+    // link. Sem limpar os filtros da barra, um filtro de visibilidade/escopo
+    // ativo esconderia exatamente os arquivos que o usuário pediu para ver.
+    setScopeFilter("");
+    setVisFilter("");
+    setTab("files");
+  };
 
   const copyLink = async (path: string, passcode?: string) => {
     const fullUrl = `${window.location.origin}${path}`;
@@ -805,7 +831,26 @@ export default function FilesHubPage() {
             </button>
           </div>
 
-          {!isSearching && (
+          {linkFilter && (
+            <div className="flex items-center justify-between gap-2 flex-wrap text-xs bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl px-3.5 py-2.5 text-blue-800 dark:text-blue-200">
+              <div className="flex items-center gap-2">
+                <Icon name="filter_alt" size={15} />
+                <span>
+                  Mostrando os arquivos recebidos pelo link <strong>{linkFilter.title}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkFilter(null)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-950/70 font-medium"
+              >
+                <Icon name="close" size={13} />
+                <span>Limpar filtro</span>
+              </button>
+            </div>
+          )}
+
+          {!isSearching && !linkFilter && (
             <div className="flex items-center justify-between gap-2 flex-wrap text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5">
               <div className="flex items-center gap-1.5 flex-wrap">
                 {currentFolder !== "/" && (
@@ -881,6 +926,7 @@ export default function FilesHubPage() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {!isSearching &&
+                  !linkFilter &&
                   (foldersQuery.data || []).map((folder) => (
                     <tr
                       key={`folder-${folder.scope}-${folder.clientId || ""}-${folder.siteId || ""}-${folder.path}`}
@@ -918,7 +964,7 @@ export default function FilesHubPage() {
                             <button
                               type="button"
                               onClick={() => copyLink(`/download?folder=${encodeURIComponent(folder.path)}`)}
-                              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                              className={FILE_ACTION_BTN}
                             >
                               Link /download
                             </button>
@@ -926,14 +972,14 @@ export default function FilesHubPage() {
                           <button
                             type="button"
                             onClick={() => openShareForFolder(folder)}
-                            className="px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/70 text-xs font-medium text-blue-700 dark:text-blue-300"
+                            className={FILE_ACTION_BTN_PRIMARY}
                           >
                             Compartilhar
                           </button>
                           <button
                             type="button"
                             onClick={() => setCurrentFolder(folder.path)}
-                            className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                            className={FILE_ACTION_BTN}
                           >
                             Abrir
                           </button>
@@ -941,7 +987,7 @@ export default function FilesHubPage() {
                             <button
                               type="button"
                               onClick={() => openEditFolderModal(folder)}
-                              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                              className={FILE_ACTION_BTN}
                             >
                               Editar
                             </button>
@@ -950,7 +996,7 @@ export default function FilesHubPage() {
                             <button
                               type="button"
                               onClick={() => handleDeleteFolder(folder)}
-                              className="px-2 py-1 rounded-lg border border-red-200 dark:border-red-900/70 hover:bg-red-50 dark:hover:bg-red-950/50 text-xs font-medium text-red-600 dark:text-red-400"
+                              className={FILE_ACTION_BTN_DANGER}
                             >
                               Excluir
                             </button>
@@ -994,28 +1040,28 @@ export default function FilesHubPage() {
                         <button
                           type="button"
                           onClick={() => openEditFileModal(f)}
-                          className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                          className={FILE_ACTION_BTN}
                         >
                           Editar/Mover
                         </button>
                         <button
                           type="button"
                           onClick={() => openShareForFile(f)}
-                          className="px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/70 text-xs font-medium text-blue-700 dark:text-blue-300"
+                          className={FILE_ACTION_BTN_PRIMARY}
                         >
                           Compartilhar
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDownload(f)}
-                          className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                          className={FILE_ACTION_BTN}
                         >
                           Baixar
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(f)}
-                          className="px-2 py-1 rounded-lg border border-red-200 dark:border-red-900/70 hover:bg-red-50 dark:hover:bg-red-950/50 text-xs font-medium text-red-600 dark:text-red-400"
+                          className={FILE_ACTION_BTN_DANGER}
                         >
                           Excluir
                         </button>
@@ -1023,15 +1069,19 @@ export default function FilesHubPage() {
                     </td>
                   </tr>
                 ))}
-                {(filesQuery.data?.items || []).length === 0 && (isSearching || (foldersQuery.data || []).length === 0) && (
+                {(filesQuery.data?.items || []).length === 0 && (isSearching || linkFilter || (foldersQuery.data || []).length === 0) && (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-500">
                         <Icon name="folder" size={32} className="text-slate-300 dark:text-slate-700" />
                         <div className="text-sm font-medium">
-                          {isSearching ? "Nenhum arquivo encontrado para a busca." : "Esta pasta está vazia."}
+                          {linkFilter
+                            ? "Nenhum arquivo recebido por este link até agora."
+                            : isSearching
+                              ? "Nenhum arquivo encontrado para a busca."
+                              : "Esta pasta está vazia."}
                         </div>
-                        {!isSearching && (
+                        {!isSearching && !linkFilter && (
                           <div className="flex items-center gap-2 mt-1">
                             <button
                               type="button"
@@ -1097,23 +1147,25 @@ export default function FilesHubPage() {
                   <td className="px-4 py-3 text-xs">
                     {l.isRevoked ? "Revogado" : l.isExpired ? "Expirado" : "Ativo"}
                   </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button type="button" onClick={() => copyLink(`/download/share/${l.shortCode}`)} className="text-xs text-blue-600 hover:underline">
-                      Copiar Link
-                    </button>
-                    {!l.isRevoked && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await revokeShareLink(l.id);
-                          qc.invalidateQueries({ queryKey: ["file-share-links"] });
-                          toast.success("Link revogado.");
-                        }}
-                        className="text-xs text-red-600 hover:underline"
-                      >
-                        Revogar
+                  <td className="px-4 py-3 text-right">
+                    <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                      <button type="button" onClick={() => copyLink(`/download/share/${l.shortCode}`)} className={FILE_ACTION_BTN_PRIMARY}>
+                        Copiar Link
                       </button>
-                    )}
+                      {!l.isRevoked && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await revokeShareLink(l.id);
+                            qc.invalidateQueries({ queryKey: ["file-share-links"] });
+                            toast.success("Link revogado.");
+                          }}
+                          className={FILE_ACTION_BTN_DANGER}
+                        >
+                          Revogar
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1148,27 +1200,45 @@ export default function FilesHubPage() {
                     {l.allowMultiple ? `Até ${l.maxFiles} arqs` : "Único"} • Máx {formatBytes(l.maxFileSizeBytes)}
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    {l.uploadedFilesCount} ({formatBytes(l.uploadedTotalBytes)})
+                    {l.uploadedFilesCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => openUploadedFiles(l)}
+                        className="hover:underline font-medium text-blue-600 dark:text-blue-400"
+                        title="Ver os arquivos recebidos por este link"
+                      >
+                        {l.uploadedFilesCount} ({formatBytes(l.uploadedTotalBytes)})
+                      </button>
+                    ) : (
+                      <span>{l.uploadedFilesCount} ({formatBytes(l.uploadedTotalBytes)})</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs">{new Date(l.expiresAtUtc).toLocaleString("pt-BR")}</td>
                   <td className="px-4 py-3 text-xs">{l.isRevoked ? "Revogado" : l.isExpired ? "Expirado" : "Ativo"}</td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <button type="button" onClick={() => copyLink(`/download/upload/${l.shortCode}`)} className="text-xs text-blue-600 hover:underline">
-                      Copiar Link
-                    </button>
-                    {!l.isRevoked && (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await revokeUploadLink(l.id);
-                          qc.invalidateQueries({ queryKey: ["file-upload-links"] });
-                          toast.success("Link revogado.");
-                        }}
-                        className="text-xs text-red-600 hover:underline"
-                      >
-                        Revogar
+                  <td className="px-4 py-3 text-right">
+                    <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                      {l.uploadedFilesCount > 0 && (
+                        <button type="button" onClick={() => openUploadedFiles(l)} className={FILE_ACTION_BTN}>
+                          Ver arquivos ({l.uploadedFilesCount})
+                        </button>
+                      )}
+                      <button type="button" onClick={() => copyLink(`/download/upload/${l.shortCode}`)} className={FILE_ACTION_BTN_PRIMARY}>
+                        Copiar Link
                       </button>
-                    )}
+                      {!l.isRevoked && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await revokeUploadLink(l.id);
+                            qc.invalidateQueries({ queryKey: ["file-upload-links"] });
+                            toast.success("Link revogado.");
+                          }}
+                          className={FILE_ACTION_BTN_DANGER}
+                        >
+                          Revogar
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
