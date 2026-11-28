@@ -455,7 +455,10 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     const s: Record<string, unknown> = {
       ...aiSettings,
       enabled,
-      chatAIEnabled: enabled ? (aiSettings?.chatAIEnabled ?? true) : false,
+      // NAO enviar chatAIEnabled: quem manda no gate do chat e o kill switch
+      // global/cliente/site "Chat IA" (Funcionalidades do Sistema). Este cartao
+      // regravava o valor antigo (false) e criava uma segunda fonte de verdade —
+      // a API respondia 400 com o card marcado como ligado (incidente 28/11/2026).
       provider,
       baseUrl: getBaseUrl() || undefined,
       chatModel: chatModel || undefined,
