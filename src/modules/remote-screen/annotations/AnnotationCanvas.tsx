@@ -256,6 +256,12 @@ export default function AnnotationCanvas({
   }, [resetToken, clearPendingTimer, clearPreview]);
 
   useEffect(() => {
+    drawingRef.current = false;
+    pointsRef.current = [];
+    clearPreview();
+  }, [settings.tool, clearPreview]);
+
+  useEffect(() => {
     clearMagThrottle();
     lensNormPosRef.current = null;
     lensPinnedRef.current = false;
