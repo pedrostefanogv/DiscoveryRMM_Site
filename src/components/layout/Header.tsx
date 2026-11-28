@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Icon } from "@/components/ui";
 
 import { useNavigate } from 'react-router-dom';
@@ -67,9 +67,11 @@ function UserAvatar({ email, initials, className }: { email?: string; initials: 
 
 interface HeaderProps {
   onMenuClick: () => void;
+  mobileMenuOpen?: boolean;
+  menuButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ onMenuClick, mobileMenuOpen = false, menuButtonRef }: HeaderProps) {
   const navigate = useNavigate();
   const { logout, session, isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -149,10 +151,13 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="flex h-16 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
+            ref={menuButtonRef}
             type="button"
             onClick={onMenuClick}
             className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-surface-light text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground sm:h-9 sm:w-9 lg:hidden"
             aria-label="Abrir menu lateral"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="main-sidebar"
           >
             <Icon name="menu" className="h-4 w-4" />
           </button>

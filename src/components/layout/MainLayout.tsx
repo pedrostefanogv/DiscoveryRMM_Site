@@ -105,7 +105,13 @@ export function MainLayout() {
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true,
   );
   const [mobileOpen, setMobileOpen] = useState(false);
-  const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const dismissMobileMenu = useCallback(() => {
+    setMobileOpen(false);
+    requestAnimationFrame(() => {
+      menuButtonRef.current?.focus();
+    });
+  }, []);
   // Persiste o estado recolhido para sobreviver a reloads.
   const toggleCollapsed = useCallback(() => {
     setCollapsed((current) => {
@@ -215,6 +221,22 @@ export function MainLayout() {
     return () => media.removeEventListener('change', handleChange);
   }, []);
 
+  useEffect(() => {
+    if (!isDesktop) setMobileOpen(false);
+  }, [location.pathname, isDesktop]);
+
+  useEffect(() => {
+    if (isDesktop || !mobileOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        dismissMobileMenu();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isDesktop, mobileOpen, dismissMobileMenu]);
+
   return (
     <div className="app-shell relative flex min-h-screen text-foreground">
       <div className="app-grid-bg" aria-hidden="true" />
@@ -224,7 +246,7 @@ export function MainLayout() {
         onToggle={toggleCollapsed}
         isDesktop={isDesktop}
         mobileOpen={mobileOpen}
-        onCloseMobile={closeMobileMenu}
+        onCloseMobile={dismissMobileMenu}
       />
 
       {!isDesktop && mobileOpen && (
@@ -232,7 +254,7 @@ export function MainLayout() {
           type="button"
           aria-label="Fechar menu lateral"
           className="fixed inset-0 z-20 bg-overlay backdrop-blur-sm"
-          onClick={closeMobileMenu}
+          onClick={dismissMobileMenu}
         />
       )}
 
@@ -244,11 +266,16 @@ export function MainLayout() {
         documento ficava com rolagem horizontal em vez de a barra rolar sozinha).
       */}
       <div
+        inert={!isDesktop && mobileOpen}
         className={`sidebar-transition relative z-10 flex min-h-screen min-w-0 flex-1 flex-col ${
           isDesktop ? (collapsed ? 'lg:ml-16' : 'lg:ml-60') : ''
         }`}
       >
-        <Header onMenuClick={() => setMobileOpen(true)} />
+        <Header
+          onMenuClick={() => setMobileOpen(true)}
+          mobileMenuOpen={mobileOpen}
+          menuButtonRef={menuButtonRef}
+        />
         <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 pb-8 pt-5 sm:px-6 lg:px-8 lg:pt-6">
           <Outlet />
         </main>

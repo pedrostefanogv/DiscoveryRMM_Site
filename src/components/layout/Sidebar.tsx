@@ -1,94 +1,16 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Icon, type MaterialSymbolName } from "@/components/ui";
-import { useEffect, useMemo, useState } from 'react';
-
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { Icon } from '@/components/ui';
 import { useTheme } from '@/theme/ThemeContext';
 import { useAuthorization } from '@/auth/authorization';
-
-const mainLinks: { to: string; icon: MaterialSymbolName; label: string }[] = [
-  { to: '/', icon: "dashboard", label: 'Dashboard' },
-  { to: '/service-board', icon: "checklist", label: 'Service Board' },
-  { to: '/agents', icon: "desktop_windows", label: 'Agentes' },
-  // Visão de frota do monitoramento (a aba "Sensores" continua no detalhe).
-  { to: '/sensors', icon: "sensors", label: 'Sensores' },
-  { to: '/tickets', icon: "confirmation_number", label: 'Suporte' },
-  { to: '/files', icon: "folder", label: 'Arquivos' },
-  { to: '/logs', icon: "article", label: 'Logs' },
-  { to: '/deploy', icon: "key", label: 'Deploy' },
-];
-
-const clientLinks = [
-  { to: '/clients', label: 'Clientes' },
-  { to: '/sites', label: 'Sites' },
-];
-
-const softwareLinks = [
-  { to: '/software/inventory', label: 'Inventário Detalhado' },
-  { to: '/software/automation', label: 'Automação de software' },
-  { to: '/software/store', label: 'Loja de aplicativos' },
-];
-
-const patchesLinks = [
-  { to: '/patches', label: 'Visão geral' },
-  { to: '/patches/compliance', label: 'Conformidade' },
-  { to: '/patches/updates', label: 'Atualizações e pendências' },
-  { to: '/patches/approvals', label: 'Aprovações e auditoria' },
-  { to: '/patches/policy', label: 'Política' },
-];
-
-const automationLinks = [
-  { to: '/automation', label: 'Visão Geral' },
-  { to: '/automation/scripts', label: 'Scripts' },
-  { to: '/automation/tasks', label: 'Tarefas' },
-  { to: '/automation/operations', label: 'Operações' },
-  { to: '/automation/audit', label: 'Auditoria' },
-  // Rotulagem automática dos agentes vive na Automação (antes ficava em Configurações).
-  { to: '/automation/agent-labels', label: 'Labels Automáticas' },
-];
-
-const reportsLinks = [
-  { to: '/reports/templates', label: 'Templates' },
-  { to: '/reports/executions', label: 'Execuções' },
-  { to: '/reports/schedules', label: 'Agendamentos' },
-];
-
-const ticketsLinks = [
-  { to: '/tickets', label: 'Chamados' },
-  { to: '/tickets/csat', label: 'Satisfação (CSAT)' },
-  { to: '/tickets/templates', label: 'Templates' },
-  { to: '/tickets/macros', label: 'Macros' },
-  { to: '/knowledge', label: 'Conhecimento' },
-  { to: '/tickets/alerts', label: 'Alertas' },
-  { to: '/tickets/sla', label: 'SLA, Calendários e Perfis' },
-  { to: '/tickets/departments', label: 'Departamentos' },
-  { to: '/tickets/auto-rules', label: 'Auto-Ticket' },
-  { to: '/settings/workflow-profiles', label: 'Workflow Profiles' },
-];
-
-const settingsLinks = [
-  { to: '/settings', label: 'Geral' },
-  { to: '/settings/ai-cost', label: 'Cockpit de custo IA' },
-  { to: '/settings/server', label: 'Servidor' },
-  { to: '/settings/scope', label: 'Escopo (Cliente / Site)' },
-  // Acesso remoto unificado (consentimento, destinos do proxy e WebRTC).
-  { to: '/settings/remote-access', label: 'Acesso Remoto' },
-  // Este menu é uma lista PRÓPRIA, paralela às rotas — registrar a página em
-  // router.tsx não a faz aparecer aqui.
-
-  { to: '/settings/workflow', label: 'Workflow' },
-  { to: '/settings/notifications', label: 'Notificações' },
-  { to: '/settings/custom-fields', label: 'Campos Personalizados' },
-  { to: '/settings/mcp-tools', label: 'Ferramentas de IA (MCP)' },
-  { to: '/settings/agent-updates', label: 'Agent Updates' },
-  { to: '/settings/audit', label: 'Auditoria Config' },
-  { to: '/settings/database-maintenance', label: 'Manutenção do Banco' },
-  { to: '/settings/branding', label: 'Branding' },
-];
-
-const identityLinks = [
-  { to: '/identity/authentication', label: 'Perfil e Segurança' },
-  { to: '/identity/access', label: 'Usuários, Grupos e Roles' },
-];
+import {
+  SIDEBAR_GROUPS,
+  filterSidebarGroups,
+  filterSidebarGroupsByQuery,
+  isRouteActive,
+  resolveActiveAccordionSection,
+  type SidebarAccordionSection,
+} from './sidebarConfig';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -98,632 +20,303 @@ interface SidebarProps {
   onCloseMobile: () => void;
 }
 
-type SidebarAccordionSection =
-  | 'tickets'
-  | 'software'
-  | 'patches'
-  | 'automation'
-  | 'reports'
-  | 'identity'
-  | 'settings';
-
-/**
- * Classe do submenu animado.
- *
- * O max-height fechado é 0 e o aberto precisa COMPORTAR o conteúdo. Antes era
- * fixo em max-h-96 (384px) e "Configurações" — o maior submenu — passou a ter
- * itens cortados: com overflow-hidden eles sumiam sem barra de rolagem, dando a
- * impressão de menu incompleto. Cada item ocupa ~32px (py-1.5 + text-sm), então
- * 13 itens já estouravam os 384px.
- *
- * max-h-[36rem] (576px) dá folga confortável (comporta ~18 itens) sem custo
- * visual. Subiu de 32rem quando "WebRTC" entrou na lista e os 17 itens passaram
- * a estourar o teto anterior — o guard em tests/unit/sidebarSettingsLinks.test.ts
- * detecta exatamente esse caso.
- * Se um submenu passar disso, aumente aqui — de novo, é um teto de animação,
- * não um limite de layout.
- */
-function submenuAnimationClass(isOpen: boolean): string {
+function submenuGridClass(isOpen: boolean): string {
   return [
-    'overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out',
-    isOpen ? 'max-h-[36rem] opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1 pointer-events-none',
+    'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+    isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none',
   ].join(' ');
 }
 
 function chevronAnimationClass(isOpen: boolean): string {
-  return `h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`;
+  return `h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`;
 }
 
-export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMobile }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  isDesktop,
+  mobileOpen,
+  onCloseMobile,
+}: SidebarProps) {
   const { branding } = useTheme();
-  const {
-    canManageIdentity,
-    canViewAutomation,
-    canViewDeploy,
-    canViewReports,
-    canViewSettings,
-    canViewSoftware,
-    hasAnyPermission,
-  } = useAuthorization();
+  const { hasAnyPermission } = useAuthorization();
   const location = useLocation();
   const navigate = useNavigate();
+
   const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [filterQuery, setFilterQuery] = useState('');
+  const filterInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Quando colapsado no desktop e o mouse está sobre a sidebar, expande visualmente
-  const effectiveCollapsed = collapsed && (!hovered || !isDesktop);
-  const clientsIsActive =
-    location.pathname.startsWith('/clients') || location.pathname.startsWith('/sites');
-  const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
-  const patchesIsActive = location.pathname.startsWith('/patches');
-  const automationIsActive = location.pathname.startsWith('/automation');
-  const reportsIsActive = location.pathname.startsWith('/reports');
-  const isWorkflowProfiles = location.pathname.startsWith('/settings/workflow-profiles');
-  const ticketsIsActive =
-    location.pathname.startsWith('/tickets') ||
-    location.pathname.startsWith('/knowledge') ||
-    isWorkflowProfiles;
-  const settingsIsActive = location.pathname.startsWith('/settings') && !isWorkflowProfiles;
-  const identityIsActive = location.pathname.startsWith('/identity');
+  // No desktop recolhido, expandir temporariamente ao passar o mouse ou focar via teclado
+  const effectiveCollapsed = collapsed && ((!hovered && !focused) || !isDesktop);
 
-  // BUG-12: resolveActiveSection memoizado para evitar recriação a cada render
-  const activeSection = useMemo((): SidebarAccordionSection | null => {
-
-    if (ticketsIsActive) return 'tickets';
-    if (softwareIsActive) return 'software';
-    if (patchesIsActive) return 'patches';
-    if (automationIsActive) return 'automation';
-    if (reportsIsActive) return 'reports';
-    if (identityIsActive) return 'identity';
-    if (settingsIsActive) return 'settings';
-    return null;
-  }, [ticketsIsActive, softwareIsActive, patchesIsActive, automationIsActive, reportsIsActive, identityIsActive, settingsIsActive]);
-
-  const [openSection, setOpenSection] = useState<SidebarAccordionSection | null>(() =>
-    activeSection,
+  const visibleGroups = useMemo(
+    () => filterSidebarGroups(SIDEBAR_GROUPS, hasAnyPermission),
+    [hasAnyPermission],
   );
 
-  const ticketsOpen = openSection === 'tickets';
-  const softwareOpen = openSection === 'software';
-  const patchesOpen = openSection === 'patches';
-  const automationOpen = openSection === 'automation';
-  const reportsOpen = openSection === 'reports';
-  const identityOpen = openSection === 'identity';
-  const settingsOpen = openSection === 'settings';
+  const hasQuery = filterQuery.trim().length > 0;
 
-  const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
-  const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
-  const canViewWorkflowProfiles = hasAnyPermission(['workflow-profiles.*', 'settings.*', 'settings.read', 'admin.*']);
-  // A rota /tickets/auto-rules exige tickets.edit (PermissionGate do router).
-  // O menu espelha a MESMA regra, para não exibir link que levaria a "sem acesso".
-  const canManageAutoTicketRules = hasAnyPermission(['tickets.*', 'tickets.edit', 'admin.*']);
-  let visibleTicketsLinks = canViewDepartments
-    ? ticketsLinks
-    : ticketsLinks.filter(({ to }) => to !== '/tickets/departments');
-  visibleTicketsLinks = canViewWorkflowProfiles
-    ? visibleTicketsLinks
-    : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
-  visibleTicketsLinks = canManageAutoTicketRules
-    ? visibleTicketsLinks
-    : visibleTicketsLinks.filter(({ to }) => to !== '/tickets/auto-rules');
-  // A rota /automation/agent-labels repete a permissão do AgentLabelsController
-  // (Agents.View), e NÃO a família automation.*: os dados rotulados são de agentes.
-  // O menu espelha a MESMA regra, para não exibir um link que levaria a 403.
-  const canViewAgentLabels = hasAnyPermission([
-    'agents.*',
-    'agents.view',
-    'Agents.View',
-    'admin.*',
-  ]);
-  const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
-  const canViewSensors = hasAnyPermission(['Sensors.View', 'sensors.view', 'sensors.*', 'admin.*']);
-  const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);
-  const canViewClients = hasAnyPermission(['Clients.View', 'clients.*', 'admin.*']);
-  const canViewSites = hasAnyPermission(['Sites.View', 'sites.*', 'admin.*']);
-  const visibleClientLinks = clientLinks.filter(({ to }) =>
-    to === '/sites' ? canViewSites : canViewClients,
+  const displayedGroups = useMemo(
+    () => (hasQuery ? filterSidebarGroupsByQuery(visibleGroups, filterQuery) : visibleGroups),
+    [visibleGroups, filterQuery, hasQuery],
   );
-  const visibleMainLinks = mainLinks
-    .slice(1)
-    .filter(({ to }) => {
-      if (to === '/tickets') return false;
-      if (to === '/deploy') return canViewDeploy;
-      if (to === '/files') return hasAnyPermission(['Files.View', 'files.*', 'admin.*']);
-      if (to === '/logs') return canViewLogs;
-      // '/sensors' e TODAS as subrotas (ex.: '/sensors/manage') exigem a
-      // permissão de Sensores — comparar só a igualdade deixaria uma subrota
-      // nova visível para quem não tem o recurso.
-      if (to === '/sensors' || to.startsWith('/sensors/')) return canViewSensors;
-      return true;
-    });
-  const visibleAutomationLinks = canViewAgentLabels
-    ? automationLinks
-    : automationLinks.filter(({ to }) => to !== '/automation/agent-labels');
 
-  useEffect(() => {
-    if (!isDesktop) onCloseMobile();
-  }, [location.pathname, isDesktop, onCloseMobile]);
+  const activeSection = useMemo(
+    () => resolveActiveAccordionSection(location.pathname, visibleGroups),
+    [location.pathname, visibleGroups],
+  );
+
+  const [openSection, setOpenSection] = useState<SidebarAccordionSection | null>(
+    () => activeSection,
+  );
 
   useEffect(() => {
     if (activeSection) {
       setOpenSection(activeSection);
     }
-  }, [
-    clientsIsActive,
-    ticketsIsActive,
-    softwareIsActive,
-    patchesIsActive,
-    automationIsActive,
-    reportsIsActive,
-    identityIsActive,
-    settingsIsActive,
-  ]);
+  }, [activeSection]);
+
+  const handleBlur = (event: FocusEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setFocused(false);
+    }
+  };
+
+  const handleFilterKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape' && filterQuery) {
+      event.preventDefault();
+      event.stopPropagation();
+      setFilterQuery('');
+    }
+  };
 
   const expandedWidthClass = effectiveCollapsed ? 'lg:w-16' : 'lg:w-60';
   const mobileVisibleClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
+  const isMobileDrawerOpen = !isDesktop && mobileOpen;
 
   return (
     <aside
+      id="main-sidebar"
+      role={isMobileDrawerOpen ? 'dialog' : undefined}
+      aria-modal={isMobileDrawerOpen ? true : undefined}
+      aria-label={isMobileDrawerOpen ? 'Menu lateral' : undefined}
+      aria-hidden={!isDesktop && !mobileOpen}
+      inert={!isDesktop && !mobileOpen}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`sidebar-transition fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-border bg-sidebar/95 shadow-2xl backdrop-blur-xl ${
+      onFocus={() => setFocused(true)}
+      onBlur={handleBlur}
+      className={`sidebar-transition fixed left-0 top-0 z-30 flex h-dvh w-60 flex-col border-r border-border bg-sidebar/95 shadow-2xl backdrop-blur-xl ${
         isDesktop ? `translate-x-0 ${expandedWidthClass}` : mobileVisibleClass
       }`}
     >
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-4">
-        {branding.logoUrl ? (
-          <img src={branding.logoUrl} alt="Logo" className="h-8 w-8 rounded" />
-        ) : (
-          <img src="/icon.ico" alt="Discovery RMM" className="h-8 w-8 rounded" />
-        )}
-        {!effectiveCollapsed && (
-          <span className="text-lg font-bold text-foreground truncate">
+      {/* Logo + botão fechar no mobile */}
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-3.5">
+        <Link
+          to="/"
+          className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-1 text-foreground transition-opacity hover:opacity-90"
+        >
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.appName} className="h-8 w-8 shrink-0 rounded" />
+          ) : (
+            <img src="/icon.ico" alt={branding.appName} className="h-8 w-8 shrink-0 rounded" />
+          )}
+          <span className={effectiveCollapsed ? 'sr-only' : 'truncate text-lg font-bold text-foreground'}>
             {branding.appName}
           </span>
+        </Link>
+
+        {!isDesktop && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Fechar menu lateral"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+          >
+            <Icon name="close" className="h-4 w-4" />
+          </button>
         )}
       </div>
 
-      {/* Nav Links */}
-      <nav className="mt-2 flex-1 space-y-1 px-2 overflow-y-auto">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) =>
-            `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-              isActive
-                ? 'bg-surface-hover text-foreground'
-                : 'text-muted hover:bg-surface-light hover:text-foreground'
-            }`
-          }
-        >
-          <Icon name="dashboard" className="h-5 w-5 shrink-0" />
-          {!effectiveCollapsed && <span className="truncate">Dashboard</span>}
-        </NavLink>
-
-        {visibleClientLinks.length > 0 && (
-          <NavLink
-            to={visibleClientLinks[0]?.to ?? '/clients'}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive || clientsIsActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`
-            }
-          >
-            <Icon name="group" className="h-5 w-5 shrink-0" />
-            {!effectiveCollapsed && <span className="truncate">Clientes e Sites</span>}
-          </NavLink>
-        )}
-
-        {visibleMainLinks.map(({ to, icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`
-            }
-          >
-            <Icon name={icon} className="h-5 w-5 shrink-0" />
-            {!effectiveCollapsed && <span className="truncate">{label}</span>}
-          </NavLink>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => {
-            if (effectiveCollapsed) {
-              navigate('/tickets');
-              return;
-            }
-            setOpenSection((prev) => (prev === 'tickets' ? null : 'tickets'));
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            ticketsIsActive
-              ? 'bg-surface-hover text-foreground'
-              : 'text-muted hover:bg-surface-light hover:text-foreground'
-          }`}
-          aria-label="Abrir submenu de suporte"
-          aria-expanded={ticketsOpen}
-        >
-          <Icon name="confirmation_number" className="h-5 w-5 shrink-0" />
-          {!effectiveCollapsed && (
-            <>
-              <span className="truncate">Suporte</span>
-              <span className="ml-auto">
-                <Icon name="expand_more" className={chevronAnimationClass(ticketsOpen)} />
-              </span>
-            </>
-          )}
-        </button>
-
-        {!effectiveCollapsed && (
-          <div className={submenuAnimationClass(ticketsOpen)} aria-hidden={!ticketsOpen} inert={!ticketsOpen}>
-            <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-              {visibleTicketsLinks.map(({ to, label }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={to === '/tickets'}
-                  className={({ isActive }) =>
-                    `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                      isActive
-                        ? 'bg-surface-hover text-foreground'
-                        : 'text-muted hover:bg-surface-light hover:text-foreground'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-              ))}
-            </div>
+      {/* Filtro rápido do menu */}
+      {!effectiveCollapsed && (
+        <div className="px-3 pb-2">
+          <div className="relative">
+            <Icon
+              name="search"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+            />
+            <input
+              ref={filterInputRef}
+              type="search"
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+              onKeyDown={handleFilterKeyDown}
+              placeholder="Filtrar menu..."
+              aria-label="Filtrar menu"
+              className="w-full rounded-lg border border-border bg-input py-1.5 pl-8 pr-7 text-xs text-foreground placeholder-muted outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
+            />
+            {hasQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterQuery('');
+                  filterInputRef.current?.focus();
+                }}
+                aria-label="Limpar filtro do menu"
+                className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+              >
+                <Icon name="close" className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        {canViewSoftware && (
-          <>
+      {/* Links de navegação */}
+      <nav aria-label="Menu principal" className="mt-1 flex-1 space-y-3 overflow-y-auto overscroll-contain px-2 pb-3">
+        {displayedGroups.length === 0 && hasQuery ? (
+          <div className="px-3 py-6 text-center">
+            <p className="text-xs text-muted">Nenhum item encontrado</p>
             <button
               type="button"
-              onClick={() => {
-                if (effectiveCollapsed) {
-                  navigate('/software');
-                  return;
-                }
-                setOpenSection((prev) => (prev === 'software' ? null : 'software'));
-              }}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                softwareIsActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`}
-              aria-label="Abrir submenu de softwares"
-          aria-expanded={softwareOpen}
+              onClick={() => setFilterQuery('')}
+              className="mt-2 text-xs font-medium text-primary hover:underline"
             >
-              <Icon name="web_asset" className="h-5 w-5 shrink-0" />
-              {!effectiveCollapsed && (
-                <>
-                  <span className="truncate">Softwares</span>
-                  <span className="ml-auto">
-                    <Icon name="expand_more" className={chevronAnimationClass(softwareOpen)} />
-                  </span>
-                </>
-              )}
+              Limpar filtro
             </button>
-
-            {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(softwareOpen)} aria-hidden={!softwareOpen} inert={!softwareOpen}>
-                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {softwareLinks.map(({ to, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      className={({ isActive }) =>
-                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface-hover text-foreground'
-                            : 'text-muted hover:bg-surface-light hover:text-foreground'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {canViewPatches && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                if (effectiveCollapsed) {
-                  navigate('/patches');
-                  return;
-                }
-                setOpenSection((prev) => (prev === 'patches' ? null : 'patches'));
-              }}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                patchesIsActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`}
-              aria-label="Abrir submenu de gerenciamento de patches"
-              aria-expanded={patchesOpen}
-            >
-              <Icon name="gpp_maybe" className="h-5 w-5 shrink-0" />
-              {!effectiveCollapsed && (
-                <>
-                  <span className="truncate">Patches</span>
-                  <span className="ml-auto">
-                    <Icon name="expand_more" className={chevronAnimationClass(patchesOpen)} />
-                  </span>
-                </>
-              )}
-            </button>
-
-            {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(patchesOpen)} aria-hidden={!patchesOpen} inert={!patchesOpen}>
-                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {patchesLinks.map(({ to, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={to === '/patches'}
-                      className={({ isActive }) =>
-                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface-hover text-foreground'
-                            : 'text-muted hover:bg-surface-light hover:text-foreground'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {canViewAutomation && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                if (effectiveCollapsed) {
-                  navigate('/automation');
-                  return;
-                }
-                setOpenSection((prev) => (prev === 'automation' ? null : 'automation'));
-              }}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                automationIsActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`}
-              aria-label="Abrir submenu de automação"
-          aria-expanded={automationOpen}
-            >
-              <Icon name="build" className="h-5 w-5 shrink-0" />
-              {!effectiveCollapsed && (
-                <>
-                  <span className="truncate">Automação</span>
-                  <span className="ml-auto">
-                    <Icon name="expand_more" className={chevronAnimationClass(automationOpen)} />
-                  </span>
-                </>
-              )}
-            </button>
-
-            {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen} inert={!automationOpen}>
-                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {visibleAutomationLinks.map(({ to, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={to === '/automation'}
-                      className={({ isActive }) =>
-                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface-hover text-foreground'
-                            : 'text-muted hover:bg-surface-light hover:text-foreground'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {canViewReports && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                if (effectiveCollapsed) {
-                  navigate('/reports/templates');
-                  return;
-                }
-                setOpenSection((prev) => (prev === 'reports' ? null : 'reports'));
-              }}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                reportsIsActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`}
-              aria-label="Abrir submenu de relatórios"
-          aria-expanded={reportsOpen}
-            >
-              <Icon name="insert_chart" className="h-5 w-5 shrink-0" />
-              {!effectiveCollapsed && (
-                <>
-                  <span className="truncate">Relatórios</span>
-                  <span className="ml-auto">
-                    <Icon name="expand_more" className={chevronAnimationClass(reportsOpen)} />
-                  </span>
-                </>
-              )}
-            </button>
-
-            {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(reportsOpen)} aria-hidden={!reportsOpen} inert={!reportsOpen}>
-                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {reportsLinks.map(({ to, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      className={({ isActive }) =>
-                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface-hover text-foreground'
-                            : 'text-muted hover:bg-surface-light hover:text-foreground'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        <button
-          type="button"
-          onClick={() => {
-            if (effectiveCollapsed) {
-              navigate('/identity/authentication');
-              return;
-            }
-            setOpenSection((prev) => (prev === 'identity' ? null : 'identity'));
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            identityIsActive
-              ? 'bg-surface-hover text-foreground'
-              : 'text-muted hover:bg-surface-light hover:text-foreground'
-          }`}
-          aria-label="Abrir submenu de identidade"
-          aria-expanded={identityOpen}
-        >
-          <Icon name="verified_user" className="h-5 w-5 shrink-0" />
-          {!effectiveCollapsed && (
-            <>
-              <span className="truncate">Identidade</span>
-              <span className="ml-auto">
-                <Icon name="expand_more" className={chevronAnimationClass(identityOpen)} />
-              </span>
-            </>
-          )}
-        </button>
-
-        {!effectiveCollapsed && (
-          <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen} inert={!identityOpen}>
-            <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-              {visibleIdentityLinks.map(({ to, label }) => {
-                const isIdentityHubPath =
-                  to === '/identity/access' &&
-                  (location.pathname.startsWith('/identity/users') ||
-                    location.pathname.startsWith('/identity/groups') ||
-                    location.pathname.startsWith('/identity/roles'));
-                return (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                      isActive || isIdentityHubPath
-                        ? 'bg-surface-hover text-foreground'
-                        : 'text-muted hover:bg-surface-light hover:text-foreground'
-                    }`
-                  }
-                >
-                  {label}
-                </NavLink>
-                );
-              })}
-            </div>
           </div>
-        )}
-
-        {canViewSettings && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                if (effectiveCollapsed) {
-                  navigate('/settings');
-                  return;
-                }
-                setOpenSection((prev) => (prev === 'settings' ? null : 'settings'));
-              }}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                settingsIsActive
-                  ? 'bg-surface-hover text-foreground'
-                  : 'text-muted hover:bg-surface-light hover:text-foreground'
-              }`}
-              aria-label="Abrir submenu de configurações"
-          aria-expanded={settingsOpen}
-            >
-              <Icon name="settings" className="h-5 w-5 shrink-0" />
-              {!effectiveCollapsed && (
-                <>
-                  <span className="truncate">Configurações</span>
-                  <span className="ml-auto">
-                    <Icon name="expand_more" className={chevronAnimationClass(settingsOpen)} />
-                  </span>
-                </>
+        ) : (
+          displayedGroups.map((group, groupIndex) => (
+            <div key={group.id}>
+              {!effectiveCollapsed ? (
+                <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted/80">
+                  {group.label}
+                </p>
+              ) : (
+                groupIndex > 0 && (
+                  <div className="mx-2 my-2 border-t border-border/60" role="separator" />
+                )
               )}
-            </button>
 
-            {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(settingsOpen)} aria-hidden={!settingsOpen} inert={!settingsOpen}>
-                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-                  {settingsLinks.map(({ to, label }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={to === '/settings'}
-                      className={({ isActive }) =>
-                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface-hover text-foreground'
-                            : 'text-muted hover:bg-surface-light hover:text-foreground'
-                        }`
-                      }
-                    >
-                      {label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  if (item.kind === 'link') {
+                    const active = isRouteActive(location.pathname, item);
+                    return (
+                      <li key={item.id}>
+                        <Link
+                          to={item.to}
+                          title={effectiveCollapsed ? item.label : undefined}
+                          aria-current={active ? 'page' : undefined}
+                          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                            active
+                              ? 'bg-primary/12 font-semibold text-primary'
+                              : 'font-medium text-muted hover:bg-surface-light hover:text-foreground'
+                          }`}
+                        >
+                          <Icon name={item.icon} className="h-5 w-5 shrink-0" />
+                          <span className={effectiveCollapsed ? 'sr-only' : 'truncate'}>
+                            {item.label}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  }
+
+                  const sectionActive =
+                    activeSection === item.id ||
+                    item.children.some((child) => isRouteActive(location.pathname, child));
+                  const isOpen = hasQuery || openSection === item.id;
+                  const submenuId = `sidebar-submenu-${item.id}`;
+
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        title={effectiveCollapsed ? item.label : undefined}
+                        aria-expanded={isOpen}
+                        aria-controls={submenuId}
+                        onClick={() => {
+                          if (effectiveCollapsed) {
+                            const firstTarget = item.children[0]?.to;
+                            if (firstTarget) navigate(firstTarget);
+                            return;
+                          }
+                          setOpenSection((prev) => (prev === item.id ? null : item.id));
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                          sectionActive
+                            ? 'bg-primary/12 font-semibold text-primary'
+                            : 'font-medium text-muted hover:bg-surface-light hover:text-foreground'
+                        }`}
+                      >
+                        <Icon name={item.icon} className="h-5 w-5 shrink-0" />
+                        <span className={effectiveCollapsed ? 'sr-only' : 'truncate'}>
+                          {item.label}
+                        </span>
+                        {!effectiveCollapsed && (
+                          <span className="ml-auto">
+                            <Icon name="expand_more" className={chevronAnimationClass(isOpen)} />
+                          </span>
+                        )}
+                      </button>
+
+                      {!effectiveCollapsed && (
+                        <div
+                          id={submenuId}
+                          className={submenuGridClass(isOpen)}
+                          aria-hidden={!isOpen}
+                          inert={!isOpen}
+                        >
+                          <div className="overflow-hidden">
+                            <ul className="ml-6 mt-0.5 space-y-0.5 border-l border-border pl-3 pb-1">
+                              {item.children.map((child) => {
+                                const childActive = isRouteActive(location.pathname, child);
+                                return (
+                                  <li key={child.to}>
+                                    <Link
+                                      to={child.to}
+                                      aria-current={childActive ? 'page' : undefined}
+                                      className={`block rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                                        childActive
+                                          ? 'bg-primary/12 font-semibold text-primary'
+                                          : 'text-muted hover:bg-surface-light hover:text-foreground'
+                                      }`}
+                                    >
+                                      {child.label}
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
         )}
       </nav>
 
       {/* Collapse toggle */}
-      <div className="hidden border-t border-border lg:block">
+      <div className="hidden shrink-0 border-t border-border lg:block">
         <button
+          type="button"
           onClick={onToggle}
-          className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-muted transition-colors hover:bg-surface-light hover:text-muted-foreground"
-          aria-label={effectiveCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
+          className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+          aria-label={effectiveCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
         >
-          {effectiveCollapsed ? <Icon name="chevron_right" className="h-4 w-4" /> : <Icon name="chevron_left" className="h-4 w-4" />}
+          {effectiveCollapsed ? (
+            <Icon name="chevron_right" className="h-4 w-4" />
+          ) : (
+            <Icon name="chevron_left" className="h-4 w-4" />
+          )}
           {!effectiveCollapsed && <span>Recolher</span>}
         </button>
       </div>
