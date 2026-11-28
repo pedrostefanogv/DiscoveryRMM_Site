@@ -7,6 +7,7 @@ import {
   ANNOTATION_MAX_POINTS,
   buildAddAnnotationCommand,
   buildClearAnnotationsCommand,
+  buildMagnifierCommand,
   buildUndoAnnotationCommand,
   constrainShapePoint,
   DEFAULT_ANNOTATION_SETTINGS,
@@ -72,6 +73,19 @@ describe('annotations helpers', () => {
     expect(buildUndoAnnotationCommand('id-1')).toEqual({ op: 'undo', id: 'id-1' });
     expect(buildUndoAnnotationCommand()).toEqual({ op: 'undo' });
     expect(buildClearAnnotationsCommand()).toEqual({ op: 'clear' });
+
+    expect(buildMagnifierCommand(false)).toEqual({ op: 'magnifier', active: false });
+    expect(
+      buildMagnifierCommand(true, { x: -0.2, y: 1.5, zoom: 10, radius: 0.9, pinned: true }),
+    ).toEqual({
+      op: 'magnifier',
+      active: true,
+      x: 0,
+      y: 1,
+      zoom: 5,
+      radius: 0.45,
+      pinned: true,
+    });
   });
 
   it('constrainShapePoint força quadrado, círculo e ângulos de 45° quando Shift está pressionado', () => {
@@ -238,5 +252,163 @@ describe('AnnotationCanvas', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('envia comandos de lupa remota ao mover, fixar, ajustar zoom e desativar', () => {
+    const onCommit = vi.fn();
+    const onChangeSettings = vi.fn();
+
+    const { rerender } = render(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier', magnifierZoom: 2 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+        onChangeSettings={onChangeSettings}
+      />,
+    );
+
+    const canvas = screen.getByTestId('annotation-canvas');
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 500,
+      right: 1000,
+      bottom: 500,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerMove(canvas, { clientX: 500, clientY: 250 });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      op: 'magnifier',
+      active: true,
+      x: 0.5,
+      y: 0.5,
+      zoom: 2,
+      radius: 0.22,
+      pinned: false,
+    });
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 300, clientY: 100 });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      op: 'magnifier',
+      active: true,
+      x: 0.3,
+      y: 0.2,
+      zoom: 2,
+      radius: 0.22,
+      pinned: true,
+    });
+
+    // Enquanto fixada, pointerLeave não oculta a lupa
+    onCommit.mockClear();
+    fireEvent.pointerLeave(canvas);
+    expect(onCommit).not.toHaveBeenCalled();
+
+    // Alterar zoom reenvia imediatamente com a posição fixada
+    rerender(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier', magnifierZoom: 3 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+        onChangeSettings={onChangeSettings}
+      />,
+    );
+    expect(onCommit).toHaveBeenLastCalledWith({
+      op: 'magnifier',
+      active: true,
+      x: 0.3,
+      y: 0.2,
+      zoom: 3,
+      radius: 0.22,
+      pinned: true,
+    });
+
+    // Trocar de ferramenta desativa a lupa remota
+    rerender(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'arrow', magnifierZoom: 3 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+        onChangeSettings={onChangeSettings}
+      />,
+    );
+    expect(onCommit).toHaveBeenLastCalledWith({ op: 'magnifier', active: false });
+  });
+
+  it('mantém a lupa sincronizada após resetToken (undo) e limpa estado local apenas com clearToken', () => {
+    const onCommit = vi.fn();
+
+    const { rerender } = render(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier', magnifierZoom: 2 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+        resetToken={0}
+        clearToken={0}
+      />,
+    );
+
+    const canvas = screen.getByTestId('annotation-canvas');
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 500,
+      right: 1000,
+      bottom: 500,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 400, clientY: 200 });
+    expect(onCommit).toHaveBeenLastCalledWith({
+      op: 'magnifier',
+      active: true,
+      x: 0.4,
+      y: 0.4,
+      zoom: 2,
+      radius: 0.22,
+      pinned: true,
+    });
+    onCommit.mockClear();
+
+    // Undo (resetToken) não deve apagar o estado remoto da lupa
+    rerender(
+      <AnnotationCanvas
+        active
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier', magnifierZoom: 2 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+        resetToken={1}
+        clearToken={0}
+      />,
+    );
+
+    // Ao sair do modo anotação após um undo, deve enviar active: false
+    rerender(
+      <AnnotationCanvas
+        active={false}
+        settings={{ ...DEFAULT_ANNOTATION_SETTINGS, tool: 'magnifier', magnifierZoom: 2 }}
+        onCommit={onCommit}
+        onUndo={vi.fn()}
+        onExit={vi.fn()}
+        resetToken={1}
+        clearToken={0}
+      />,
+    );
+    expect(onCommit).toHaveBeenCalledWith({ op: 'magnifier', active: false });
   });
 });

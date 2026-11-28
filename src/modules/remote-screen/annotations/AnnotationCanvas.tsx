@@ -3,10 +3,12 @@ import {
   ANNOTATION_MAGNIFIER_MAX_ZOOM,
   ANNOTATION_MAGNIFIER_MIN_ZOOM,
   buildAddAnnotationCommand,
+  buildMagnifierCommand,
   constrainShapePoint,
   drawPreviewShape,
   normalizePoint,
   type AnnotationCommand,
+  type AnnotationMagnifierCommand,
   type AnnotationPoint,
   type AnnotationSettings,
   type AnnotationTool,
@@ -22,6 +24,7 @@ interface AnnotationCanvasProps {
   sourceCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   onChangeSettings?: (next: AnnotationSettings) => void;
   resetToken?: number;
+  clearToken?: number;
 }
 
 interface PendingPreview {
@@ -41,6 +44,7 @@ const TOOL_SHORTCUTS: Record<string, AnnotationTool> = {
 };
 
 const OPTIMISTIC_PREVIEW_MS = 220;
+const MAGNIFIER_THROTTLE_MS = 33;
 
 export default function AnnotationCanvas({
   active,
@@ -48,9 +52,10 @@ export default function AnnotationCanvas({
   onCommit,
   onUndo,
   onExit,
-  sourceCanvasRef,
+  sourceCanvasRef: _sourceCanvasRef,
   onChangeSettings,
   resetToken = 0,
+  clearToken = 0,
 }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -59,14 +64,20 @@ export default function AnnotationCanvas({
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cssSizeRef = useRef<{ w: number; h: number; dpr: number }>({ w: 1, h: 1, dpr: 1 });
 
-  // Estado da lupa (coordenadas CSS relativas ao canvas)
-  const lensPosRef = useRef<{ x: number; y: number } | null>(null);
+  // Estado da lupa remota (coordenadas normalizadas [0..1])
+  const lensNormPosRef = useRef<AnnotationPoint | null>(null);
   const lensPinnedRef = useRef(false);
+  const remoteMagnifierActiveRef = useRef(false);
+  const magThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const magLastSentAtRef = useRef(0);
+  const magPendingCmdRef = useRef<AnnotationMagnifierCommand | null>(null);
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const onChangeSettingsRef = useRef(onChangeSettings);
   onChangeSettingsRef.current = onChangeSettings;
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
 
   const clearPendingTimer = useCallback(() => {
     if (pendingTimerRef.current) {
@@ -75,7 +86,72 @@ export default function AnnotationCanvas({
     }
   }, []);
 
-  useEffect(() => () => clearPendingTimer(), [clearPendingTimer]);
+  const clearMagThrottle = useCallback(() => {
+    if (magThrottleTimerRef.current) {
+      clearTimeout(magThrottleTimerRef.current);
+      magThrottleTimerRef.current = null;
+    }
+    magPendingCmdRef.current = null;
+  }, []);
+
+  const computeNormalizedRadius = useCallback((magnifierSize: number): number => {
+    const canvas = canvasRef.current;
+    if (!canvas) return 0.15;
+    const rect = canvas.getBoundingClientRect();
+    const minDim = Math.min(rect.width, rect.height);
+    if (minDim <= 0) return 0.15;
+    return Math.min(0.45, Math.max(0.05, magnifierSize / 2 / minDim));
+  }, []);
+
+  const sendMagnifierNow = useCallback(
+    (cmd: AnnotationMagnifierCommand) => {
+      clearMagThrottle();
+      magLastSentAtRef.current = Date.now();
+      remoteMagnifierActiveRef.current = cmd.active;
+      onCommitRef.current(cmd);
+    },
+    [clearMagThrottle],
+  );
+
+  const sendMagnifierThrottled = useCallback(
+    (cmd: AnnotationMagnifierCommand) => {
+      const now = Date.now();
+      const elapsed = now - magLastSentAtRef.current;
+      if (elapsed >= MAGNIFIER_THROTTLE_MS) {
+        sendMagnifierNow(cmd);
+        return;
+      }
+      magPendingCmdRef.current = cmd;
+      if (!magThrottleTimerRef.current) {
+        magThrottleTimerRef.current = setTimeout(() => {
+          magThrottleTimerRef.current = null;
+          const pending = magPendingCmdRef.current;
+          magPendingCmdRef.current = null;
+          if (pending) {
+            magLastSentAtRef.current = Date.now();
+            remoteMagnifierActiveRef.current = pending.active;
+            onCommitRef.current(pending);
+          }
+        }, MAGNIFIER_THROTTLE_MS - elapsed);
+      }
+    },
+    [sendMagnifierNow],
+  );
+
+  const hideRemoteMagnifier = useCallback(() => {
+    clearMagThrottle();
+    if (remoteMagnifierActiveRef.current) {
+      sendMagnifierNow(buildMagnifierCommand(false));
+    }
+  }, [clearMagThrottle, sendMagnifierNow]);
+
+  useEffect(
+    () => () => {
+      clearPendingTimer();
+      hideRemoteMagnifier();
+    },
+    [clearPendingTimer, hideRemoteMagnifier],
+  );
 
   const clearPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -115,20 +191,26 @@ export default function AnnotationCanvas({
   useEffect(() => {
     pendingPreviewRef.current = null;
     clearPendingTimer();
-    if (settings.tool !== 'magnifier') {
-      clearPreview();
-    }
-  }, [resetToken, clearPendingTimer, clearPreview, settings.tool]);
+    clearPreview();
+  }, [resetToken, clearPendingTimer, clearPreview]);
+
+  useEffect(() => {
+    clearMagThrottle();
+    lensNormPosRef.current = null;
+    lensPinnedRef.current = false;
+    remoteMagnifierActiveRef.current = false;
+  }, [clearToken, clearMagThrottle]);
 
   useEffect(() => {
     if (!active) {
       drawingRef.current = false;
       pointsRef.current = [];
       pendingPreviewRef.current = null;
-      lensPosRef.current = null;
+      lensNormPosRef.current = null;
       lensPinnedRef.current = false;
       clearPendingTimer();
       clearPreview();
+      hideRemoteMagnifier();
       return;
     }
 
@@ -139,6 +221,20 @@ export default function AnnotationCanvas({
         e.stopPropagation();
         if (currentSettings.tool === 'magnifier' && lensPinnedRef.current) {
           lensPinnedRef.current = false;
+          const pos = lensNormPosRef.current;
+          if (pos) {
+            sendMagnifierNow(
+              buildMagnifierCommand(true, {
+                x: pos.x,
+                y: pos.y,
+                zoom: currentSettings.magnifierZoom,
+                radius: computeNormalizedRadius(currentSettings.magnifierSize),
+                pinned: false,
+              }),
+            );
+          } else {
+            hideRemoteMagnifier();
+          }
           return;
         }
         drawingRef.current = false;
@@ -146,6 +242,7 @@ export default function AnnotationCanvas({
         pendingPreviewRef.current = null;
         clearPendingTimer();
         clearPreview();
+        hideRemoteMagnifier();
         onExit();
         return;
       }
@@ -185,7 +282,16 @@ export default function AnnotationCanvas({
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
     };
-  }, [active, clearPendingTimer, clearPreview, onExit, onUndo]);
+  }, [
+    active,
+    clearPendingTimer,
+    clearPreview,
+    computeNormalizedRadius,
+    hideRemoteMagnifier,
+    onExit,
+    onUndo,
+    sendMagnifierNow,
+  ]);
 
   const renderPreview = useCallback(() => {
     const canvas = canvasRef.current;
@@ -226,177 +332,67 @@ export default function AnnotationCanvas({
     }
   }, [settings.color, settings.tool, settings.width, syncSize]);
 
-  // Loop de renderização em tempo real para a Lupa
+  // Sincronização da lupa remota ao trocar ferramenta ou ajustar zoom/tamanho
   useEffect(() => {
     if (!active || settings.tool !== 'magnifier') {
-      lensPosRef.current = null;
+      lensNormPosRef.current = null;
       lensPinnedRef.current = false;
+      hideRemoteMagnifier();
       return;
     }
 
-    let rafId = 0;
-    const drawMagnifierFrame = () => {
-      const pos = lensPosRef.current;
-      const canvas = canvasRef.current;
-      const src = sourceCanvasRef?.current;
-      if (pos && canvas) {
-        if (canvas.width <= 1 || canvas.height <= 1) {
-          syncSize();
-        }
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const { w: cssW, h: cssH, dpr } = cssSizeRef.current;
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          if (src && src.width > 0 && src.height > 0 && cssW > 0 && cssH > 0) {
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-            const radius = Math.min(settings.magnifierSize / 2, Math.min(cssW, cssH) * 0.45);
-            const zoom = Math.max(
-              ANNOTATION_MAGNIFIER_MIN_ZOOM,
-              Math.min(ANNOTATION_MAGNIFIER_MAX_ZOOM, settings.magnifierZoom),
-            );
-            const cx = Math.max(0, Math.min(cssW, pos.x));
-            const cy = Math.max(0, Math.min(cssH, pos.y));
-            const pinned = lensPinnedRef.current;
-
-            // Sombra externa suave da lente
-            ctx.save();
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-            ctx.shadowBlur = 18;
-            ctx.shadowOffsetY = 4;
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#020617';
-            ctx.fill();
-            ctx.restore();
-
-            // Conteúdo ampliado dentro do recorte circular
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.clip();
-
-            ctx.fillStyle = '#020617';
-            ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
-
-            const scaleX = src.width / cssW;
-            const scaleY = src.height / cssH;
-            const srcCenterX = cx * scaleX;
-            const srcCenterY = cy * scaleY;
-            const srcW = ((radius * 2) / zoom) * scaleX;
-            const srcH = ((radius * 2) / zoom) * scaleY;
-            const sx = srcCenterX - srcW / 2;
-            const sy = srcCenterY - srcH / 2;
-
-            // Interseção estrita com os limites do canvas fonte (evita artefatos fora da borda)
-            const clipSrcX = Math.max(0, sx);
-            const clipSrcY = Math.max(0, sy);
-            const clipSrcRight = Math.min(src.width, sx + srcW);
-            const clipSrcBottom = Math.min(src.height, sy + srcH);
-            const clipSrcW = clipSrcRight - clipSrcX;
-            const clipSrcH = clipSrcBottom - clipSrcY;
-
-            if (clipSrcW > 0 && clipSrcH > 0) {
-              const dstX = cx - radius + ((clipSrcX - sx) / srcW) * (radius * 2);
-              const dstY = cy - radius + ((clipSrcY - sy) / srcH) * (radius * 2);
-              const dstW = (clipSrcW / srcW) * (radius * 2);
-              const dstH = (clipSrcH / srcH) * (radius * 2);
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = 'high';
-              ctx.drawImage(src, clipSrcX, clipSrcY, clipSrcW, clipSrcH, dstX, dstY, dstW, dstH);
-            }
-
-            // Retículo sutil no centro com vão para não cobrir texto sob o cursor
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(cx - 10, cy);
-            ctx.lineTo(cx - 4, cy);
-            ctx.moveTo(cx + 4, cy);
-            ctx.lineTo(cx + 10, cy);
-            ctx.moveTo(cx, cy - 10);
-            ctx.lineTo(cx, cy - 4);
-            ctx.moveTo(cx, cy + 4);
-            ctx.lineTo(cx, cy + 10);
-            ctx.stroke();
-
-            // Badge de zoom na base interna da lente
-            const zoomLabel = Number.isInteger(zoom) ? `${zoom}×` : `${zoom.toFixed(1)}×`;
-            const badgeText = pinned ? `${zoomLabel} · Fixo` : zoomLabel;
-            ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace';
-            const textWidth = ctx.measureText(badgeText).width;
-            const pillW = textWidth + 14;
-            const pillH = 18;
-            const pillX = cx - pillW / 2;
-            const pillY = cy + radius - pillH - 8;
-            ctx.fillStyle = pinned ? 'rgba(37, 99, 235, 0.9)' : 'rgba(15, 23, 42, 0.85)';
-            ctx.beginPath();
-            if (typeof ctx.roundRect === 'function') {
-              ctx.roundRect(pillX, pillY, pillW, pillH, 9);
-            } else {
-              ctx.rect(pillX, pillY, pillW, pillH);
-            }
-            ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(badgeText, cx, pillY + pillH / 2 + 0.5);
-            ctx.restore();
-
-            // Anel duplo da lente
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-            ctx.lineWidth = pinned ? 3 : 2;
-            ctx.strokeStyle = pinned ? '#3B82F6' : 'rgba(255, 255, 255, 0.9)';
-            ctx.stroke();
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius + 1.5, 0, Math.PI * 2);
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-            ctx.stroke();
-            ctx.restore();
-          }
-        }
-      }
-      rafId = requestAnimationFrame(drawMagnifierFrame);
-    };
-
-    rafId = requestAnimationFrame(drawMagnifierFrame);
-    return () => cancelAnimationFrame(rafId);
-  }, [active, settings.magnifierSize, settings.magnifierZoom, settings.tool, sourceCanvasRef, syncSize]);
-
-  const getLocalCssPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(rect.width, e.clientX - rect.left)),
-      y: Math.max(0, Math.min(rect.height, e.clientY - rect.top)),
-    };
-  };
+    const pos = lensNormPosRef.current;
+    if (pos) {
+      sendMagnifierNow(
+        buildMagnifierCommand(true, {
+          x: pos.x,
+          y: pos.y,
+          zoom: settings.magnifierZoom,
+          radius: computeNormalizedRadius(settings.magnifierSize),
+          pinned: lensPinnedRef.current,
+        }),
+      );
+    }
+  }, [
+    active,
+    computeNormalizedRadius,
+    hideRemoteMagnifier,
+    sendMagnifierNow,
+    settings.magnifierSize,
+    settings.magnifierZoom,
+    settings.tool,
+  ]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!active || e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
 
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
     if (settings.tool === 'magnifier') {
-      lensPosRef.current = getLocalCssPos(e);
+      const pt = normalizePoint(e.clientX, e.clientY, rect);
+      lensNormPosRef.current = pt;
       lensPinnedRef.current = !lensPinnedRef.current;
+      sendMagnifierNow(
+        buildMagnifierCommand(true, {
+          x: pt.x,
+          y: pt.y,
+          zoom: settings.magnifierZoom,
+          radius: computeNormalizedRadius(settings.magnifierSize),
+          pinned: lensPinnedRef.current,
+        }),
+      );
       return;
     }
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
     canvas.setPointerCapture(e.pointerId);
     pendingPreviewRef.current = null;
     clearPendingTimer();
 
-    const pt = normalizePoint(e.clientX, e.clientY, canvas.getBoundingClientRect());
+    const pt = normalizePoint(e.clientX, e.clientY, rect);
     drawingRef.current = true;
     pointsRef.current = [pt, pt];
     renderPreview();
@@ -405,9 +401,23 @@ export default function AnnotationCanvas({
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!active) return;
 
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
     if (settings.tool === 'magnifier') {
       if (!lensPinnedRef.current) {
-        lensPosRef.current = getLocalCssPos(e);
+        const pt = normalizePoint(e.clientX, e.clientY, rect);
+        lensNormPosRef.current = pt;
+        sendMagnifierThrottled(
+          buildMagnifierCommand(true, {
+            x: pt.x,
+            y: pt.y,
+            zoom: settings.magnifierZoom,
+            radius: computeNormalizedRadius(settings.magnifierSize),
+            pinned: false,
+          }),
+        );
       }
       return;
     }
@@ -415,9 +425,6 @@ export default function AnnotationCanvas({
     if (!drawingRef.current) return;
     e.preventDefault();
     e.stopPropagation();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
     const rawPt = normalizePoint(e.clientX, e.clientY, rect);
     const aspect = rect.height > 0 ? rect.width / rect.height : 1;
     const pt = constrainShapePoint(settings.tool, pointsRef.current[0], rawPt, aspect, e.shiftKey);
@@ -495,8 +502,8 @@ export default function AnnotationCanvas({
 
   const handlePointerLeave = () => {
     if (settings.tool === 'magnifier' && !lensPinnedRef.current) {
-      lensPosRef.current = null;
-      clearPreview();
+      lensNormPosRef.current = null;
+      hideRemoteMagnifier();
     }
   };
 

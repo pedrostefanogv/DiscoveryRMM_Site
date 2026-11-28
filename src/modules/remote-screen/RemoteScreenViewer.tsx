@@ -24,7 +24,6 @@ import {
   DEFAULT_ANNOTATION_SETTINGS,
   type AnnotationCommand,
   type AnnotationSettings,
-  type AnnotationTool,
 } from './annotations/types';
 
 interface FrameHeader {
@@ -74,8 +73,6 @@ interface RemoteScreenViewerProps {
   annotating?: boolean;
   /** Notifica quando o usuário sai do modo anotação (Esc / botão Controlar). */
   onAnnotatingChange?: (active: boolean) => void;
-  /** Notifica quando a ferramenta ativa da barra de anotação/lupa muda. */
-  onAnnotationToolChange?: (tool: AnnotationTool) => void;
 }
 
 export interface RemoteScreenViewerHandle {
@@ -85,8 +82,6 @@ export interface RemoteScreenViewerHandle {
   setInputLock: (locked: boolean) => void;
   /** Limpa todas as anotações visuais na tela remota. */
   clearAnnotations: () => void;
-  /** Seleciona a ferramenta ativa da barra de anotação/lupa. */
-  setAnnotationTool: (tool: AnnotationTool) => void;
 }
 
 export interface MonitorInfo {
@@ -167,7 +162,6 @@ export default function RemoteScreenViewer({
   onInputLockStateChange,
   annotating = false,
   onAnnotatingChange,
-  onAnnotationToolChange,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgSnapshotRef = useRef<HTMLCanvasElement | null>(null);
@@ -222,9 +216,8 @@ export default function RemoteScreenViewer({
   const annotationPruneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeAnnotationCount, setActiveAnnotationCount] = useState(0);
   const [annotationResetToken, setAnnotationResetToken] = useState(0);
+  const [annotationClearToken, setAnnotationClearToken] = useState(0);
   const resetAnnotationHistoryRef = useRef<() => void>(() => {});
-  const onAnnotationToolChangeRef = useRef(onAnnotationToolChange);
-  onAnnotationToolChangeRef.current = onAnnotationToolChange;
   // Combinação aguardando confirmação do agent (evento special_key em .event).
   const specialKeyPendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frameCountRef = useRef(0);
@@ -1471,13 +1464,13 @@ export default function RemoteScreenViewer({
 
   const updateAnnotationSettings = useCallback((next: AnnotationSettings) => {
     setAnnotationSettings(next);
-    onAnnotationToolChangeRef.current?.(next.tool);
   }, []);
 
   resetAnnotationHistoryRef.current = () => {
     annotationHistoryRef.current = [];
     syncAnnotationHistory();
     setAnnotationResetToken((t) => t + 1);
+    setAnnotationClearToken((t) => t + 1);
   };
 
   // Handle imperativo para os controles do rodapé do pai. Delega para os refs
@@ -1499,11 +1492,8 @@ export default function RemoteScreenViewer({
         annotationHistoryRef.current = [];
         syncAnnotationHistory();
         setAnnotationResetToken((t) => t + 1);
+        setAnnotationClearToken((t) => t + 1);
         sendAnnotationRef.current(buildClearAnnotationsCommand());
-      },
-      setAnnotationTool: (tool: AnnotationTool) => {
-        setAnnotationSettings((prev) => ({ ...prev, tool }));
-        onAnnotationToolChangeRef.current?.(tool);
       },
     }),
     [syncAnnotationHistory],
@@ -1532,6 +1522,7 @@ export default function RemoteScreenViewer({
     annotationHistoryRef.current = [];
     syncAnnotationHistory();
     setAnnotationResetToken((t) => t + 1);
+    setAnnotationClearToken((t) => t + 1);
     sendAnnotationRef.current(buildClearAnnotationsCommand());
   }, [syncAnnotationHistory]);
 
@@ -1577,6 +1568,7 @@ export default function RemoteScreenViewer({
           sourceCanvasRef={canvasRef}
           onChangeSettings={updateAnnotationSettings}
           resetToken={annotationResetToken}
+          clearToken={annotationClearToken}
         />
       </div>
 

@@ -26,10 +26,21 @@ export interface AnnotationClearCommand {
   op: 'clear';
 }
 
+export interface AnnotationMagnifierCommand {
+  op: 'magnifier';
+  active: boolean;
+  x?: number;
+  y?: number;
+  zoom?: number;
+  radius?: number;
+  pinned?: boolean;
+}
+
 export type AnnotationCommand =
   | AnnotationAddCommand
   | AnnotationUndoCommand
-  | AnnotationClearCommand;
+  | AnnotationClearCommand
+  | AnnotationMagnifierCommand;
 
 export interface AnnotationSettings {
   tool: AnnotationTool;
@@ -220,6 +231,36 @@ export function buildUndoAnnotationCommand(id?: string): AnnotationUndoCommand {
 
 export function buildClearAnnotationsCommand(): AnnotationClearCommand {
   return { op: 'clear' };
+}
+
+export function buildMagnifierCommand(
+  active: boolean,
+  opts?: {
+    x: number;
+    y: number;
+    zoom: number;
+    radius: number;
+    pinned: boolean;
+  },
+): AnnotationMagnifierCommand {
+  if (!active || !opts) {
+    return { op: 'magnifier', active: false };
+  }
+  const zoom = Number.isFinite(opts.zoom)
+    ? Math.max(ANNOTATION_MAGNIFIER_MIN_ZOOM, Math.min(ANNOTATION_MAGNIFIER_MAX_ZOOM, opts.zoom))
+    : DEFAULT_ANNOTATION_SETTINGS.magnifierZoom;
+  const radius = Number.isFinite(opts.radius)
+    ? Math.max(0.05, Math.min(0.45, opts.radius))
+    : 0.15;
+  return {
+    op: 'magnifier',
+    active: true,
+    x: clamp01(opts.x),
+    y: clamp01(opts.y),
+    zoom,
+    radius,
+    pinned: Boolean(opts.pinned),
+  };
 }
 
 /**
