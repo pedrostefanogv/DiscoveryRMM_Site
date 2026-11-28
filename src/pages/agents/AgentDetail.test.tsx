@@ -476,10 +476,11 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.getByTestId('agent-app-install-modal')).toBeTruthy();
   });
 
-  it('oculta os StatCards nas abas de dados e exibe filtros na aba Logs', async () => {
+  it('mantém os StatCards visíveis nas abas de dados e exibe filtros na aba Logs', async () => {
     await renderPage('?tab=logs');
 
-    expect(screen.queryByText('MachineScore')).toBeNull();
+    expect(screen.getByText('MachineScore')).toBeTruthy();
+    expect(screen.getByText('Memória RAM')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Erros' })).toBeTruthy();
     expect(screen.getByPlaceholderText('Filtrar logs por mensagem...')).toBeTruthy();
   });

@@ -1273,8 +1273,7 @@ export default function AgentDetail() {
       <LiveAgentHeartbeatCard agentId={a.id} fallbackMetrics={a.heartbeatMetrics} />
 
 
-      {/* Stat Cards — exibidos apenas na aba principal Info para manter as abas de dados acima da dobra */}
-      {activeDataTab === 'info' && (
+      {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Tooltip
           position="bottom"
@@ -1522,7 +1521,6 @@ export default function AgentDetail() {
           </div>
         </Tooltip>
       </div>
-      )}
 
       {/* Abas do agente: Info (principal) · Anotações · Histórico de labels · dados */}
       <DetailTabs
