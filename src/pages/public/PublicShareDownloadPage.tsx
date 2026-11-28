@@ -93,6 +93,12 @@ export default function PublicShareDownloadPage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-xl font-bold">{data.title}</h1>
+              {data.folderPath && (
+                <div className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-mono">
+                  <Icon name="folder" size={14} />
+                  <span>Pasta: {data.folderPath}</span>
+                </div>
+              )}
               {data.message && (
                 <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line">{data.message}</p>
               )}
@@ -150,6 +156,7 @@ export default function PublicShareDownloadPage() {
                 <div className="min-w-0">
                   <div className="font-medium text-sm truncate">{file.name}</div>
                   <div className="text-xs text-slate-500 font-mono truncate">
+                    {file.folderPath && file.folderPath !== "/" ? `${file.folderPath}/` : ""}
                     {file.fileName} • {formatBytes(file.sizeBytes)}
                   </div>
                 </div>

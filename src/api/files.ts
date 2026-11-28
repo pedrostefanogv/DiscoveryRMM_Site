@@ -13,8 +13,73 @@ async function apiRequest<T>(path: string, init?: { method?: string; body?: stri
 }
 
 export type FileScope = 0 | 1 | 2; // 0=Global, 1=Client, 2=Site
-export type FileVisibility = 0 | 1 | 2; // 0=Private, 1=AgentOnly, 2=Public
+export type FileVisibility = 0 | 1 | 2 | 3; // 0=Private, 1=AgentOnly, 2=Public, 3=PublicWebOnly
 export type FileSource = 0 | 1; // 0=AdminUpload, 1=ClientUploadLink
+
+export function normalizeFileScope(value: unknown): FileScope {
+  if (value === 1 || value === "1") return 1;
+  if (value === 2 || value === "2") return 2;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (s === "client") return 1;
+    if (s === "site") return 2;
+  }
+  return 0;
+}
+
+export function normalizeFileVisibility(value: unknown): FileVisibility {
+  if (value === 1 || value === "1") return 1;
+  if (value === 2 || value === "2") return 2;
+  if (value === 3 || value === "3") return 3;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (s === "agentonly" || s === "agent_only") return 1;
+    if (s === "public") return 2;
+    if (s === "publicwebonly" || s === "public_web_only") return 3;
+  }
+  return 0;
+}
+
+export function normalizeFileSource(value: unknown): FileSource {
+  if (value === 1 || value === "1") return 1;
+  if (typeof value === "string" && value.trim().toLowerCase() === "clientuploadlink") return 1;
+  return 0;
+}
+
+function normalizeManagedSummary(s: ManagedFileSummaryDto): ManagedFileSummaryDto {
+  return {
+    ...s,
+    scope: normalizeFileScope(s.scope),
+    folderPath: s.folderPath || "/",
+  };
+}
+
+function normalizeManagedFile(f: ManagedFileDto): ManagedFileDto {
+  return {
+    ...f,
+    scope: normalizeFileScope(f.scope),
+    visibility: normalizeFileVisibility(f.visibility),
+    source: normalizeFileSource(f.source),
+    folderPath: f.folderPath || "/",
+  };
+}
+
+function normalizeManagedFolder(f: ManagedFileFolderDto): ManagedFileFolderDto {
+  return {
+    ...f,
+    scope: normalizeFileScope(f.scope),
+    visibility: normalizeFileVisibility(f.visibility),
+    path: f.path || "/",
+    parentPath: f.parentPath || "/",
+  };
+}
+
+function normalizeShareLink(l: FileShareLinkDto): FileShareLinkDto {
+  return {
+    ...l,
+    files: (l.files || []).map(normalizeManagedSummary),
+  };
+}
 
 export interface ManagedFileDto {
   id: string;
@@ -109,6 +174,7 @@ export interface FileShareLinkDto {
   files: ManagedFileSummaryDto[];
   createdBy?: string | null;
   createdAt: string;
+  folderPath?: string | null;
 }
 
 export interface FileUploadLinkDto {
@@ -183,7 +249,11 @@ export async function listManagedFiles(params?: {
   if (params?.page) qs.set("page", String(params.page));
   if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
   const query = qs.toString();
-  return apiRequest<PagedFilesResult>(`/files${query ? `?${query}` : ""}`);
+  const res = await apiRequest<PagedFilesResult>(`/files${query ? `?${query}` : ""}`);
+  return {
+    ...res,
+    items: (res.items || []).map(normalizeManagedFile),
+  };
 }
 
 export async function listManagedFolders(params?: {
@@ -202,10 +272,11 @@ export async function listManagedFolders(params?: {
   if (params?.siteId) qs.set("siteId", params.siteId);
   if (params?.visibility !== undefined) qs.set("visibility", String(params.visibility));
   const query = qs.toString();
-  return apiRequest<ManagedFileFolderDto[]>(`/files/folders${query ? `?${query}` : ""}`);
+  const list = await apiRequest<ManagedFileFolderDto[]>(`/files/folders${query ? `?${query}` : ""}`);
+  return (list || []).map(normalizeManagedFolder);
 }
 
-export function createManagedFolder(body: {
+export async function createManagedFolder(body: {
   name: string;
   parentPath?: string;
   description?: string | null;
@@ -214,13 +285,14 @@ export function createManagedFolder(body: {
   siteId?: string | null;
   visibility: FileVisibility;
 }): Promise<ManagedFileFolderDto> {
-  return apiRequest<ManagedFileFolderDto>("/files/folders", {
+  const created = await apiRequest<ManagedFileFolderDto>("/files/folders", {
     method: "POST",
     body: JSON.stringify(body),
   });
+  return normalizeManagedFolder(created);
 }
 
-export function updateManagedFolder(
+export async function updateManagedFolder(
   id: string,
   body: {
     name?: string;
@@ -228,10 +300,11 @@ export function updateManagedFolder(
     visibility?: FileVisibility;
   },
 ): Promise<ManagedFileFolderDto> {
-  return apiRequest<ManagedFileFolderDto>(`/files/folders/${id}`, {
+  const updated = await apiRequest<ManagedFileFolderDto>(`/files/folders/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
+  return normalizeManagedFolder(updated);
 }
 
 export function deleteManagedFolder(id: string, moveFilesToParent = true): Promise<void> {
@@ -289,7 +362,7 @@ export async function uploadManagedFile(
 
   if (begin.mode === "single" && begin.uploadUrl) {
     await putBlobWithProgress(begin.uploadUrl, file, contentType, onProgress);
-    return apiRequest<ManagedFileDto>("/files/upload/complete", {
+    const completed = await apiRequest<ManagedFileDto>("/files/upload/complete", {
       method: "POST",
       body: JSON.stringify({
         fileId: begin.fileId,
@@ -309,6 +382,7 @@ export async function uploadManagedFile(
         expiresAtUtc: meta.expiresAtUtc || null,
       }),
     });
+    return normalizeManagedFile(completed);
   }
 
   // Multipart direto ao S3
@@ -338,7 +412,7 @@ export async function uploadManagedFile(
     }
 
     onProgress?.(100);
-    return await apiRequest<ManagedFileDto>("/files/upload/complete", {
+    const completed = await apiRequest<ManagedFileDto>("/files/upload/complete", {
       method: "POST",
       body: JSON.stringify({
         fileId: begin.fileId,
@@ -360,6 +434,7 @@ export async function uploadManagedFile(
         parts,
       }),
     });
+    return normalizeManagedFile(completed);
   } catch (err) {
     await apiRequest(
       `/files/upload/abort?objectKey=${encodeURIComponent(begin.objectKey)}&uploadId=${encodeURIComponent(uploadId)}`,
@@ -399,7 +474,7 @@ export function putBlobWithProgress(
   });
 }
 
-export function updateManagedFile(
+export async function updateManagedFile(
   id: string,
   patch: Partial<{
     name: string;
@@ -413,10 +488,11 @@ export function updateManagedFile(
     isActive: boolean;
   }>,
 ): Promise<ManagedFileDto> {
-  return apiRequest<ManagedFileDto>(`/files/${id}`, {
+  const updated = await apiRequest<ManagedFileDto>(`/files/${id}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
+  return normalizeManagedFile(updated);
 }
 
 export function deleteManagedFile(id: string): Promise<void> {
@@ -432,33 +508,51 @@ export function getManagedFileDownloadUrl(id: string): Promise<{
   return apiRequest(`/files/${id}/download-url`);
 }
 
-export function listShareLinks(): Promise<FileShareLinkDto[]> {
-  return apiRequest<FileShareLinkDto[]>("/files/share-links");
+export async function listShareLinks(params?: {
+  clientId?: string;
+  siteId?: string;
+}): Promise<FileShareLinkDto[]> {
+  const qs = new URLSearchParams();
+  if (params?.clientId) qs.set("clientId", params.clientId);
+  if (params?.siteId) qs.set("siteId", params.siteId);
+  const query = qs.toString();
+  const list = await apiRequest<FileShareLinkDto[]>(`/files/share-links${query ? `?${query}` : ""}`);
+  return (list || []).map(normalizeShareLink);
 }
 
-export function createShareLink(body: {
+export async function createShareLink(body: {
   title: string;
   message?: string | null;
   clientId?: string | null;
   siteId?: string | null;
-  fileIds: string[];
+  fileIds?: string[];
+  folderPath?: string | null;
+  folderScope?: FileScope | null;
   expiresAtUtc: string;
   requirePasscode: boolean;
   passcode?: string | null;
   maxDownloads?: number | null;
 }): Promise<FileShareLinkDto> {
-  return apiRequest<FileShareLinkDto>("/files/share-links", {
+  const created = await apiRequest<FileShareLinkDto>("/files/share-links", {
     method: "POST",
     body: JSON.stringify(body),
   });
+  return normalizeShareLink(created);
 }
 
 export function revokeShareLink(id: string): Promise<void> {
   return apiRequest<void>(`/files/share-links/${id}`, { method: "DELETE" });
 }
 
-export function listUploadLinks(): Promise<FileUploadLinkDto[]> {
-  return apiRequest<FileUploadLinkDto[]>("/files/upload-links");
+export function listUploadLinks(params?: {
+  clientId?: string;
+  siteId?: string;
+}): Promise<FileUploadLinkDto[]> {
+  const qs = new URLSearchParams();
+  if (params?.clientId) qs.set("clientId", params.clientId);
+  if (params?.siteId) qs.set("siteId", params.siteId);
+  const query = qs.toString();
+  return apiRequest<FileUploadLinkDto[]>(`/files/upload-links${query ? `?${query}` : ""}`);
 }
 
 export function createUploadLink(body: {
@@ -478,6 +572,7 @@ export function createUploadLink(body: {
   allowedMimeTypes?: string[];
   fileRetentionDays?: number | null;
   notifyOnUpload: boolean;
+  ticketId?: string | null;
 }): Promise<FileUploadLinkDto> {
   return apiRequest<FileUploadLinkDto>("/files/upload-links", {
     method: "POST",

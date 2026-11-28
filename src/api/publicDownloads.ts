@@ -47,6 +47,7 @@ export interface PublicShareInfoDto {
   maxDownloads?: number | null;
   downloadCount: number;
   files: ManagedFileSummaryDto[];
+  folderPath?: string | null;
 }
 
 export interface PublicUploadInfoDto {

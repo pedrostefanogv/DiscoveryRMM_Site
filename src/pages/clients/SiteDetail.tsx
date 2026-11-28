@@ -15,6 +15,7 @@ import { useSendScopeNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
 import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading, PageHeader, StatCard, EmptyState } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
+import { ScopedFilesTab } from '@/components/files/ScopedFilesTab';
 import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
 import { AgentContextMenu } from '@/components/agents/AgentContextMenu';
 import { AgentBulkActionsBar } from '@/components/agents/AgentBulkActionsBar';
@@ -44,9 +45,9 @@ function scrollToSection(id: string) {
  * customizados e é a aba PADRÃO (mesmo desenho do ClientDetail): era o bloco
  * que ficava acima da barra e empurrava as abas para baixo da dobra.
  */
-type SiteTab = 'info' | 'chamados' | 'logs' | 'agentes';
+type SiteTab = 'info' | 'chamados' | 'logs' | 'agentes' | 'arquivos';
 
-const SITE_TAB_IDS: SiteTab[] = ['info', 'chamados', 'logs', 'agentes'];
+const SITE_TAB_IDS: SiteTab[] = ['info', 'chamados', 'logs', 'agentes', 'arquivos'];
 
 
 export default function SiteDetail() {
@@ -107,6 +108,7 @@ export default function SiteDetail() {
       { id: 'chamados', label: 'Chamados', icon: 'confirmation_number', badge: ticketsArray.length },
       { id: 'logs', label: 'Logs', icon: 'article', badge: logsArray.length },
       { id: 'agentes', label: 'Agentes', icon: 'desktop_windows', badge: agentsArray.length },
+      { id: 'arquivos', label: 'Arquivos', icon: 'folder' },
     ],
     [ticketsArray.length, logsArray.length, agentsArray.length],
   );
@@ -604,6 +606,17 @@ export default function SiteDetail() {
                 />
               </>
             )}
+          </Card>
+        )}
+
+        {activeTab === 'arquivos' && (
+          <Card>
+            <ScopedFilesTab
+              scope={2}
+              clientId={currentClient.id}
+              siteId={currentSite.id}
+              entityName={currentSite.name}
+            />
           </Card>
         )}
       </div>

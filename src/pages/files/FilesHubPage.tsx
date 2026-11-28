@@ -27,6 +27,7 @@ import {
 } from "@/api/files";
 import { formatBytes } from "@/pages/public/PublicPortalLayout";
 import { Icon } from "@/components/ui/Icon";
+import { ticketsApi } from "@/api/tickets";
 
 type HubTab = "files" | "shares" | "uploads" | "logs";
 
@@ -50,17 +51,24 @@ const SCOPE_LABELS: Record<FileScope, string> = {
 const VISIBILITY_LABELS: Record<FileVisibility, string> = {
   0: "Privado",
   1: "Somente Agent",
-  2: "Público (/download)",
+  2: "Público (/download + Agent)",
+  3: "Somente Página Web (/download)",
 };
+
+function isWebPublicVisibility(vis: FileVisibility): boolean {
+  return vis === 2 || vis === 3;
+}
 
 function getVisibilityRowBorder(vis: FileVisibility): string {
   if (vis === 2) return "border-l-4 border-l-emerald-500";
+  if (vis === 3) return "border-l-4 border-l-teal-500";
   if (vis === 1) return "border-l-4 border-l-blue-500";
   return "border-l-4 border-l-slate-400 dark:border-l-slate-600";
 }
 
 function getFolderIconColor(vis: FileVisibility): string {
   if (vis === 2) return "text-emerald-500";
+  if (vis === 3) return "text-teal-500";
   if (vis === 1) return "text-blue-500";
   return "text-slate-500";
 }
@@ -70,7 +78,15 @@ function renderVisibilityBadge(vis: FileVisibility) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/70">
         <Icon name="download" size={12} />
-        <span>Público (/download)</span>
+        <span>Público (/download + Agent)</span>
+      </span>
+    );
+  }
+  if (vis === 3) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-950/60 dark:text-teal-300 dark:border-teal-800/70">
+        <Icon name="download" size={12} />
+        <span>Somente Página Web</span>
       </span>
     );
   }
@@ -88,6 +104,33 @@ function renderVisibilityBadge(vis: FileVisibility) {
     </span>
   );
 }
+
+function generateRandomPasscode(length = 10): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+const UPLOAD_FILE_TYPE_PRESETS: { label: string; extensions: string[]; mimes: string[] }[] = [
+  { label: "Imagens", extensions: [".png", ".jpg", ".jpeg", ".webp", ".gif"], mimes: ["image/*"] },
+  { label: "PDF", extensions: [".pdf"], mimes: ["application/pdf"] },
+  {
+    label: "Documentos Office",
+    extensions: [".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt"],
+    mimes: [
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+      "text/plain",
+    ],
+  },
+  { label: "Compactados", extensions: [".zip", ".7z", ".rar", ".tar", ".gz"], mimes: ["application/zip", "application/x-7z-compressed", "application/gzip"] },
+  { label: "Logs / Diagnóstico", extensions: [".log", ".txt", ".json", ".xml", ".evtx", ".dmp"], mimes: ["text/plain", "application/json", "application/xml"] },
+  { label: "Instaladores", extensions: [".exe", ".msi", ".msix"], mimes: ["application/x-msdownload", "application/x-msi"] },
+];
 
 function defaultExpiryLocal(days = 7): string {
   const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
@@ -141,6 +184,12 @@ export default function FilesHubPage() {
 
   // Share link modal
   const [showShareModal, setShowShareModal] = useState(false);
+  const [shareMode, setShareMode] = useState<"folder" | "file">("folder");
+  const [shareFolderPath, setShareFolderPath] = useState("");
+  const [shareFolderScope, setShareFolderScope] = useState<FileScope | null>(null);
+  const [shareClientId, setShareClientId] = useState<string | null>(null);
+  const [shareSiteId, setShareSiteId] = useState<string | null>(null);
+  const [shareFileFolderFilter, setShareFileFolderFilter] = useState("/");
   const [shareTitle, setShareTitle] = useState("");
   const [shareMessage, setShareMessage] = useState("");
   const [shareFileIds, setShareFileIds] = useState<string[]>([]);
@@ -156,6 +205,7 @@ export default function FilesHubPage() {
   const [ulTargetFolder, setUlTargetFolder] = useState("/recebidos");
   const [ulClientId, setUlClientId] = useState("");
   const [ulSiteId, setUlSiteId] = useState("");
+  const [ulTicketId, setUlTicketId] = useState("");
   const [ulExpires, setUlExpires] = useState(() => defaultExpiryLocal(7));
   const [ulRequirePasscode, setUlRequirePasscode] = useState(false);
   const [ulPasscode, setUlPasscode] = useState("");
@@ -193,15 +243,20 @@ export default function FilesHubPage() {
   const allFoldersQuery = useQuery({
     queryKey: ["managed-folders-all"],
     queryFn: () => listManagedFolders({ includeAll: true }),
-    enabled: tab === "files" || showUploadModal || showNewFolderModal || Boolean(editingFile) || showUploadLinkModal,
+    enabled: tab === "files" || showUploadModal || showNewFolderModal || showShareModal || Boolean(editingFile) || showUploadLinkModal,
   });
   const shareFilesQuery = useQuery({
-    queryKey: ["managed-files-share-picker"],
-    queryFn: () => listManagedFiles({ pageSize: 200 }),
-    enabled: showShareModal,
+    queryKey: ["managed-files-share-picker", shareFileFolderFilter],
+    queryFn: () => listManagedFiles({ folderPath: shareFileFolderFilter || "/", pageSize: 200 }),
+    enabled: showShareModal && shareMode === "file",
   });
-  const shareLinksQuery = useQuery({ queryKey: ["file-share-links"], queryFn: listShareLinks, enabled: tab === "shares" });
-  const uploadLinksQuery = useQuery({ queryKey: ["file-upload-links"], queryFn: listUploadLinks, enabled: tab === "uploads" });
+  const ticketsQuery = useQuery({
+    queryKey: ["tickets-for-upload-link", ulClientId],
+    queryFn: () => ticketsApi.list({ limit: 50, clientId: ulClientId || undefined }),
+    enabled: showUploadLinkModal,
+  });
+  const shareLinksQuery = useQuery({ queryKey: ["file-share-links"], queryFn: () => listShareLinks(), enabled: tab === "shares" });
+  const uploadLinksQuery = useQuery({ queryKey: ["file-upload-links"], queryFn: () => listUploadLinks(), enabled: tab === "uploads" });
   const logsQuery = useQuery({ queryKey: ["file-access-logs"], queryFn: () => listFileAccessLogs(), enabled: tab === "logs" });
 
   const clientsQuery = useQuery({
@@ -222,8 +277,10 @@ export default function FilesHubPage() {
   ).sort((a, b) => a.localeCompare(b));
 
   const nonPublicFolderPaths = Array.from(
-    new Set(["/recebidos", ...(allFoldersQuery.data || []).filter((f) => f.visibility !== 2).map((f) => f.path)]),
+    new Set(["/recebidos", ...(allFoldersQuery.data || []).filter((f) => !isWebPublicVisibility(f.visibility)).map((f) => f.path)]),
   ).sort((a, b) => a.localeCompare(b));
+
+  const shareableFolders = (allFoldersQuery.data || []).filter((f) => f.path !== "/");
 
   const findFolderMeta = (path: string) =>
     (allFoldersQuery.data || []).find((f) => f.path.toLowerCase() === (path || "/").toLowerCase());
@@ -372,6 +429,46 @@ export default function FilesHubPage() {
     setEditFolderVisibility(folder.visibility);
   };
 
+  const openShareForFile = (file: ManagedFileDto) => {
+    setShareMode("file");
+    setShareFolderPath("");
+    setShareFolderScope(null);
+    setShareClientId(file.clientId || null);
+    setShareSiteId(file.siteId || null);
+    setShareFileFolderFilter(file.folderPath || "/");
+    setShareFileIds([file.id]);
+    setShareTitle(`Download: ${file.name}`);
+    setShowShareModal(true);
+  };
+
+  const openShareForFolder = (folder: ManagedFileFolderDto) => {
+    setShareMode("folder");
+    setShareFolderPath(folder.path);
+    setShareFolderScope(folder.scope);
+    setShareClientId(folder.clientId || null);
+    setShareSiteId(folder.siteId || null);
+    setShareFileIds([]);
+    setShareTitle(`Pasta: ${folder.name}`);
+    setShowShareModal(true);
+  };
+
+  const openGenericShareModal = () => {
+    if (currentFolderMeta) {
+      openShareForFolder(currentFolderMeta);
+      return;
+    }
+    const firstFolder = shareableFolders[0];
+    setShareMode("folder");
+    setShareFolderPath(firstFolder?.path || "");
+    setShareFolderScope(firstFolder ? firstFolder.scope : null);
+    setShareClientId(firstFolder?.clientId || null);
+    setShareSiteId(firstFolder?.siteId || null);
+    setShareFileFolderFilter("/");
+    setShareFileIds([]);
+    setShareTitle(firstFolder ? `Pasta: ${firstFolder.name}` : "Arquivos Compartilhados");
+    setShowShareModal(true);
+  };
+
   const handleEditFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFolder) return;
@@ -385,11 +482,23 @@ export default function FilesHubPage() {
       return;
     }
     try {
-      await updateManagedFolder(editingFolder.id, {
-        name: editFolderName.trim() || undefined,
-        description: editFolderDesc.trim(),
-        visibility: editingFolder.parentPath === "/" ? editFolderVisibility : undefined,
-      });
+      if (editingFolder.isVirtual) {
+        await createManagedFolder({
+          name: editFolderName.trim() || editingFolder.name,
+          parentPath: editingFolder.parentPath,
+          description: editFolderDesc.trim() || null,
+          scope: editingFolder.scope,
+          clientId: editingFolder.clientId || null,
+          siteId: editingFolder.siteId || null,
+          visibility: editFolderVisibility,
+        });
+      } else {
+        await updateManagedFolder(editingFolder.id, {
+          name: editFolderName.trim() || undefined,
+          description: editFolderDesc.trim(),
+          visibility: editingFolder.parentPath === "/" ? editFolderVisibility : undefined,
+        });
+      }
       toast.success("Pasta atualizada!");
       setEditingFolder(null);
       qc.invalidateQueries({ queryKey: ["managed-folders"] });
@@ -449,7 +558,11 @@ export default function FilesHubPage() {
 
   const handleCreateShareLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (shareFileIds.length === 0) {
+    if (shareMode === "folder" && !shareFolderPath) {
+      toast.error("Selecione uma pasta específica para compartilhar.");
+      return;
+    }
+    if (shareMode === "file" && shareFileIds.length === 0) {
       toast.error("Selecione ao menos um arquivo.");
       return;
     }
@@ -457,7 +570,11 @@ export default function FilesHubPage() {
       const created = await createShareLink({
         title: shareTitle.trim() || "Arquivos Compartilhados",
         message: shareMessage.trim() || null,
-        fileIds: shareFileIds,
+        clientId: shareClientId,
+        siteId: shareSiteId,
+        fileIds: shareMode === "file" ? shareFileIds : undefined,
+        folderPath: shareMode === "folder" ? shareFolderPath : null,
+        folderScope: shareMode === "folder" ? shareFolderScope : null,
         expiresAtUtc: new Date(shareExpires).toISOString(),
         requirePasscode: shareRequirePasscode,
         passcode: shareRequirePasscode ? sharePasscode.trim() : null,
@@ -497,11 +614,13 @@ export default function FilesHubPage() {
         allowedMimeTypes: ulMimes.split(",").map((s) => s.trim()).filter(Boolean),
         fileRetentionDays: ulRetentionDays ? Number(ulRetentionDays) : null,
         notifyOnUpload: true,
+        ticketId: ulTicketId || null,
       });
       await copyLink(`/download/upload/${created.shortCode}`, ulRequirePasscode ? ulPasscode.trim() : undefined);
       setShowUploadLinkModal(false);
       setUlTitle("");
       setUlDesc("");
+      setUlTicketId("");
       setUlPasscode("");
       setTab("uploads");
       qc.invalidateQueries({ queryKey: ["file-upload-links"] });
@@ -516,18 +635,23 @@ export default function FilesHubPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Central de Arquivos (S3)</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Gerencie arquivos públicos (/download), distribuição para Agents (Global → Cliente → Site) e links temporários.
-          </p>
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600/10 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+            <Icon name="folder" size={22} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Central de Arquivos (S3)</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Gerencie arquivos públicos (/download), distribuição para Agents (Global → Cliente → Site) e links temporários.
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => copyLink("/download")}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
           >
             <Icon name="link" size={16} />
             <span>Copiar /download</span>
@@ -535,15 +659,15 @@ export default function FilesHubPage() {
           <button
             type="button"
             onClick={() => setShowUploadLinkModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
           >
             <Icon name="drive_folder_upload" size={16} />
             <span>Solicitar Upload</span>
           </button>
           <button
             type="button"
-            onClick={() => setShowShareModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium"
+            onClick={openGenericShareModal}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
           >
             <Icon name="link" size={16} />
             <span>Link de Download</span>
@@ -551,7 +675,7 @@ export default function FilesHubPage() {
           <button
             type="button"
             onClick={openUploadModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-sm transition-colors"
           >
             <Icon name="upload" size={16} />
             <span>Enviar Arquivo</span>
@@ -561,23 +685,43 @@ export default function FilesHubPage() {
 
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <div className="text-xs text-slate-500">Arquivos Ativos</div>
-            <div className="text-2xl font-bold mt-1">{stats.totalFiles}</div>
-            <div className="text-xs text-slate-400 mt-0.5">{formatBytes(stats.totalBytes)} no S3</div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Arquivos Ativos</div>
+              <div className="text-2xl font-bold mt-1">{stats.totalFiles}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{formatBytes(stats.totalBytes)} no S3</div>
+            </div>
+            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+              <Icon name="folder" size={18} />
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <div className="text-xs text-slate-500">Downloads Totais</div>
-            <div className="text-2xl font-bold mt-1">{stats.totalDownloads}</div>
-            <div className="text-xs text-slate-400 mt-0.5">Global: {formatBytes(stats.globalBytes)}</div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Downloads Totais</div>
+              <div className="text-2xl font-bold mt-1">{stats.totalDownloads}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Global: {formatBytes(stats.globalBytes)}</div>
+            </div>
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Icon name="download" size={18} />
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <div className="text-xs text-slate-500">Links de Download Ativos</div>
-            <div className="text-2xl font-bold mt-1">{stats.activeShareLinks}</div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Links de Download Ativos</div>
+              <div className="text-2xl font-bold mt-1">{stats.activeShareLinks}</div>
+            </div>
+            <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Icon name="link" size={18} />
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-            <div className="text-xs text-slate-500">Links de Upload Ativos</div>
-            <div className="text-2xl font-bold mt-1">{stats.activeUploadLinks}</div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-slate-500 dark:text-slate-400">Links de Upload Ativos</div>
+              <div className="text-2xl font-bold mt-1">{stats.activeUploadLinks}</div>
+            </div>
+            <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Icon name="drive_folder_upload" size={18} />
+            </div>
           </div>
         </div>
       )}
@@ -610,13 +754,26 @@ export default function FilesHubPage() {
       {tab === "files" && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome ou arquivo..."
-              className="flex-1 min-w-[220px] px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm"
-            />
+            <div className="relative flex-1 min-w-[220px]">
+              <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nome ou arquivo..."
+                className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Limpar busca"
+                >
+                  <Icon name="close" size={15} />
+                </button>
+              )}
+            </div>
             <select
               value={scopeFilter}
               onChange={(e) => setScopeFilter(e.target.value)}
@@ -633,14 +790,15 @@ export default function FilesHubPage() {
               className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm"
             >
               <option value="">Todas visibilidades</option>
-              <option value="2">Público (/download)</option>
+              <option value="2">Público (/download + Agent)</option>
+              <option value="3">Somente Página Web (/download)</option>
               <option value="1">Somente Agent</option>
               <option value="0">Privado</option>
             </select>
             <button
               type="button"
               onClick={openNewFolderModal}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950/70 text-xs font-semibold transition-colors"
             >
               <Icon name="create_new_folder" size={16} />
               <span>Nova Pasta</span>
@@ -648,8 +806,21 @@ export default function FilesHubPage() {
           </div>
 
           {!isSearching && (
-            <div className="flex items-center justify-between gap-2 flex-wrap text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5">
               <div className="flex items-center gap-1.5 flex-wrap">
+                {currentFolder !== "/" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parent = breadcrumbSegments.length <= 1 ? "/" : `/${breadcrumbSegments.slice(0, -1).join("/")}`;
+                      setCurrentFolder(parent);
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 mr-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium"
+                  >
+                    <Icon name="arrow_back" size={13} />
+                    <span>Voltar</span>
+                  </button>
+                )}
                 <Icon
                   name="folder"
                   size={15}
@@ -687,7 +858,7 @@ export default function FilesHubPage() {
                 <div className="flex items-center gap-2">
                   {renderVisibilityBadge(currentFolderMeta.visibility)}
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {currentFolderMeta.visibility === 2
+                    {isWebPublicVisibility(currentFolderMeta.visibility)
                       ? "Todos os itens aqui aparecem em /download"
                       : "Invisível em /download (herdado nos novos uploads)"}
                   </span>
@@ -729,7 +900,7 @@ export default function FilesHubPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700">
                           {SCOPE_LABELS[folder.scope]}
                           {folder.clientName ? ` • ${folder.clientName}` : ""}
                           {folder.siteName ? ` / ${folder.siteName}` : ""}
@@ -741,41 +912,50 @@ export default function FilesHubPage() {
                         {folder.subfolderCount > 0 ? ` • ${folder.subfolderCount} subpasta(s)` : ""}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-400">-</td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        {folder.visibility === 2 && (
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                          {isWebPublicVisibility(folder.visibility) && (
+                            <button
+                              type="button"
+                              onClick={() => copyLink(`/download?folder=${encodeURIComponent(folder.path)}`)}
+                              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                            >
+                              Link /download
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => copyLink(`/download?folder=${encodeURIComponent(folder.path)}`)}
-                            className="text-xs text-slate-600 dark:text-slate-300 hover:underline"
+                            onClick={() => openShareForFolder(folder)}
+                            className="px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/70 text-xs font-medium text-blue-700 dark:text-blue-300"
                           >
-                            Link /download
+                            Compartilhar
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setCurrentFolder(folder.path)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Abrir
-                        </button>
-                        {!folder.isVirtual && (
-                          <>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentFolder(folder.path)}
+                            className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                          >
+                            Abrir
+                          </button>
+                          {(!folder.isVirtual || folder.parentPath === "/") && (
                             <button
                               type="button"
                               onClick={() => openEditFolderModal(folder)}
-                              className="text-xs text-slate-600 dark:text-slate-300 hover:underline"
+                              className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
                             >
-                              Renomear
+                              Editar
                             </button>
+                          )}
+                          {!folder.isVirtual && (
                             <button
                               type="button"
                               onClick={() => handleDeleteFolder(folder)}
-                              className="text-xs text-red-600 hover:underline"
+                              className="px-2 py-1 rounded-lg border border-red-200 dark:border-red-900/70 hover:bg-red-50 dark:hover:bg-red-950/50 text-xs font-medium text-red-600 dark:text-red-400"
                             >
                               Excluir
                             </button>
-                          </>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -800,7 +980,7 @@ export default function FilesHubPage() {
                       <div className="text-xs text-slate-500 font-mono">{f.fileName}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700">
                         {SCOPE_LABELS[f.scope]}
                         {f.clientName ? ` • ${f.clientName}` : ""}
                         {f.siteName ? ` / ${f.siteName}` : ""}
@@ -809,38 +989,69 @@ export default function FilesHubPage() {
                     <td className="px-4 py-3 text-xs">{renderVisibilityBadge(f.visibility)}</td>
                     <td className="px-4 py-3 text-xs">{formatBytes(f.sizeBytes)}</td>
                     <td className="px-4 py-3 text-xs">{f.downloadCount}</td>
-                    <td className="px-4 py-3 text-right space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => openEditFileModal(f)}
-                        className="text-xs text-slate-600 dark:text-slate-300 hover:underline"
-                      >
-                        Editar/Mover
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShareFileIds([f.id]);
-                          setShareTitle(`Download: ${f.name}`);
-                          setShowShareModal(true);
-                        }}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        Compartilhar
-                      </button>
-                      <button type="button" onClick={() => handleDownload(f)} className="text-xs text-slate-600 dark:text-slate-300 hover:underline">
-                        Baixar
-                      </button>
-                      <button type="button" onClick={() => handleDelete(f)} className="text-xs text-red-600 hover:underline">
-                        Excluir
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => openEditFileModal(f)}
+                          className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                        >
+                          Editar/Mover
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openShareForFile(f)}
+                          className="px-2 py-1 rounded-lg border border-blue-200 dark:border-blue-800/70 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/70 text-xs font-medium text-blue-700 dark:text-blue-300"
+                        >
+                          Compartilhar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(f)}
+                          className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                        >
+                          Baixar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(f)}
+                          className="px-2 py-1 rounded-lg border border-red-200 dark:border-red-900/70 hover:bg-red-50 dark:hover:bg-red-950/50 text-xs font-medium text-red-600 dark:text-red-400"
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {(filesQuery.data?.items || []).length === 0 && (isSearching || (foldersQuery.data || []).length === 0) && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-sm">
-                      Nenhum arquivo ou pasta encontrado.
+                    <td colSpan={6} className="px-4 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2 text-slate-500">
+                        <Icon name="folder" size={32} className="text-slate-300 dark:text-slate-700" />
+                        <div className="text-sm font-medium">
+                          {isSearching ? "Nenhum arquivo encontrado para a busca." : "Esta pasta está vazia."}
+                        </div>
+                        {!isSearching && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              type="button"
+                              onClick={openNewFolderModal}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                            >
+                              <Icon name="create_new_folder" size={14} />
+                              <span>Nova Pasta</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={openUploadModal}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium"
+                            >
+                              <Icon name="upload" size={14} />
+                              <span>Enviar Arquivo</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -867,7 +1078,15 @@ export default function FilesHubPage() {
               {(shareLinksQuery.data || []).map((l) => (
                 <tr key={l.id}>
                   <td className="px-4 py-3">
-                    <div className="font-medium">{l.title}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{l.title}</span>
+                      {l.folderPath && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-mono">
+                          <Icon name="folder" size={12} />
+                          <span>{l.folderPath}</span>
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-500 font-mono">
                       /download/share/{l.shortCode} {l.requirePasscode ? "• 🔒 Com senha" : ""}
                     </div>
@@ -986,8 +1205,13 @@ export default function FilesHubPage() {
       {/* Modal: Upload de Arquivo */}
       {showUploadModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={handleUploadSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h2 className="text-lg font-bold">Enviar Arquivo para o S3</h2>
+          <form onSubmit={handleUploadSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Enviar Arquivo para o S3</h2>
+              <button type="button" onClick={() => setShowUploadModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -1060,6 +1284,7 @@ export default function FilesHubPage() {
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm disabled:opacity-60"
                 >
                   <option value={2}>Público (/download + Agent)</option>
+                  <option value={3}>Somente Página Web (/download)</option>
                   <option value={1}>Somente Agent</option>
                   <option value={0}>Privado (Links/Admin)</option>
                 </select>
@@ -1114,9 +1339,30 @@ export default function FilesHubPage() {
 
       {/* Modal: Criar Link de Download */}
       {showShareModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={handleCreateShareLink} className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h2 className="text-lg font-bold">Criar Link de Download</h2>
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={handleCreateShareLink} className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Criar Link de Download</h2>
+              <button type="button" onClick={() => setShowShareModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setShareMode("folder")}
+                className={`py-1.5 rounded-lg transition-colors ${shareMode === "folder" ? "bg-white dark:bg-slate-900 shadow-sm text-blue-600 dark:text-blue-400" : "text-slate-600 dark:text-slate-300"}`}
+              >
+                Pasta específica (dinâmico)
+              </button>
+              <button
+                type="button"
+                onClick={() => setShareMode("file")}
+                className={`py-1.5 rounded-lg transition-colors ${shareMode === "file" ? "bg-white dark:bg-slate-900 shadow-sm text-blue-600 dark:text-blue-400" : "text-slate-600 dark:text-slate-300"}`}
+              >
+                Arquivo(s) de uma pasta
+              </button>
+            </div>
             <input
               type="text"
               value={shareTitle}
@@ -1132,23 +1378,71 @@ export default function FilesHubPage() {
               rows={2}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
             />
-            <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 space-y-1">
-              {(shareFilesQuery.data?.items || filesQuery.data?.items || []).map((f) => (
-                <label key={f.id} className="flex items-center gap-2 text-xs cursor-pointer p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">
-                  <input
-                    type="checkbox"
-                    checked={shareFileIds.includes(f.id)}
-                    onChange={(e) =>
-                      setShareFileIds((prev) => (e.target.checked ? [...prev, f.id] : prev.filter((id) => id !== f.id)))
-                    }
-                  />
-                  <span className="truncate">
-                    {f.folderPath && f.folderPath !== "/" ? `[${f.folderPath}] ` : ""}
-                    {f.name} ({formatBytes(f.sizeBytes)})
-                  </span>
-                </label>
-              ))}
-            </div>
+            {shareMode === "folder" ? (
+              <div>
+                <label className="text-xs text-slate-500">Pasta vinculada ao link</label>
+                <select
+                  value={shareFolderPath}
+                  onChange={(e) => {
+                    const nextPath = e.target.value;
+                    setShareFolderPath(nextPath);
+                    const meta = shareableFolders.find((f) => f.path.toLowerCase() === nextPath.toLowerCase());
+                    setShareFolderScope(meta ? meta.scope : null);
+                    setShareClientId(meta?.clientId || null);
+                    setShareSiteId(meta?.siteId || null);
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
+                  required
+                >
+                  <option value="">Selecione uma pasta específica...</option>
+                  {shareableFolders.map((f) => (
+                    <option key={`${f.scope}-${f.clientId || ""}-${f.siteId || ""}-${f.path}`} value={f.path}>
+                      {f.path} ({f.fileCount} {f.fileCount === 1 ? "arquivo" : "arquivos"})
+                    </option>
+                  ))}
+                </select>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  O link compartilha dinamicamente apenas os arquivos desta pasta e subpastas.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-slate-500">Filtrar por pasta</label>
+                  <select
+                    value={shareFileFolderFilter}
+                    onChange={(e) => {
+                      setShareFileFolderFilter(e.target.value);
+                      setShareFileIds([]);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
+                  >
+                    {uniqueFolderPaths.map((p) => (
+                      <option key={p} value={p}>{p === "/" ? "/ (Raiz)" : p}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-2 space-y-1">
+                  {(shareFilesQuery.data?.items || []).map((f) => (
+                    <label key={f.id} className="flex items-center gap-2 text-xs cursor-pointer p-1 hover:bg-slate-50 dark:hover:bg-slate-800 rounded">
+                      <input
+                        type="checkbox"
+                        checked={shareFileIds.includes(f.id)}
+                        onChange={(e) =>
+                          setShareFileIds((prev) => (e.target.checked ? [...prev, f.id] : prev.filter((id) => id !== f.id)))
+                        }
+                      />
+                      <span className="truncate">{f.name} ({formatBytes(f.sizeBytes)})</span>
+                    </label>
+                  ))}
+                  {(shareFilesQuery.data?.items || []).length === 0 && (
+                    <div className="text-xs text-slate-400 text-center py-3">
+                      Nenhum arquivo nesta pasta.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-500">Válido até</label>
@@ -1177,14 +1471,23 @@ export default function FilesHubPage() {
               <span>Exigir contra-senha / código</span>
             </label>
             {shareRequirePasscode && (
-              <input
-                type="text"
-                value={sharePasscode}
-                onChange={(e) => setSharePasscode(e.target.value)}
-                placeholder="Digite o código/contra-senha"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
-                required
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={sharePasscode}
+                  onChange={(e) => setSharePasscode(e.target.value)}
+                  placeholder="Digite o código/contra-senha"
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm font-mono"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setSharePasscode(generateRandomPasscode(10))}
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium shrink-0"
+                >
+                  Gerar
+                </button>
+              </div>
             )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowShareModal(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
@@ -1201,8 +1504,13 @@ export default function FilesHubPage() {
       {/* Modal: Criar Link de Upload (File Drop) */}
       {showUploadLinkModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-          <form onSubmit={handleCreateUploadLink} className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h2 className="text-lg font-bold">Criar Link de Upload (File Drop)</h2>
+          <form onSubmit={handleCreateUploadLink} className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Criar Link de Upload (File Drop)</h2>
+              <button type="button" onClick={() => setShowUploadLinkModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
             <input
               type="text"
               value={ulTitle}
@@ -1255,6 +1563,21 @@ export default function FilesHubPage() {
                 {filteredUlSites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
+            <div>
+              <label className="text-xs text-slate-500">Vincular a um chamado (opcional)</label>
+              <select
+                value={ulTicketId}
+                onChange={(e) => setUlTicketId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
+              >
+                <option value="">Nenhum chamado vinculado</option>
+                {(ticketsQuery.data?.items || []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-500">Válido até</label>
@@ -1291,20 +1614,66 @@ export default function FilesHubPage() {
                 <input type="number" min={1} value={ulMaxTotalMb} onChange={(e) => setUlMaxTotalMb(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm" />
               </div>
             </div>
-            <input
-              type="text"
-              value={ulExtensions}
-              onChange={(e) => setUlExtensions(e.target.value)}
-              placeholder="Extensões permitidas (ex.: .pdf, .zip, .png) — vazio = todas"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
-            />
-            <input
-              type="text"
-              value={ulMimes}
-              onChange={(e) => setUlMimes(e.target.value)}
-              placeholder="MIMEs permitidos (ex.: application/pdf, image/*) — vazio = todos"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
-            />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-500">Tipos de arquivo permitidos (presets rápidos)</span>
+                {(ulExtensions || ulMimes) && (
+                  <button
+                    type="button"
+                    onClick={() => { setUlExtensions(""); setUlMimes(""); }}
+                    className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 underline"
+                  >
+                    Limpar (todos permitidos)
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {UPLOAD_FILE_TYPE_PRESETS.map((preset) => {
+                  const currentExts = ulExtensions.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+                  const active = preset.extensions.every((ext) => currentExts.includes(ext));
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        const nextExts = new Set(currentExts);
+                        const nextMimes = new Set(ulMimes.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
+                        if (active) {
+                          preset.extensions.forEach((e) => nextExts.delete(e));
+                          preset.mimes.forEach((m) => nextMimes.delete(m));
+                        } else {
+                          preset.extensions.forEach((e) => nextExts.add(e));
+                          preset.mimes.forEach((m) => nextMimes.add(m));
+                        }
+                        setUlExtensions(Array.from(nextExts).join(", "));
+                        setUlMimes(Array.from(nextMimes).join(", "));
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
+                        active
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <input
+                type="text"
+                value={ulExtensions}
+                onChange={(e) => setUlExtensions(e.target.value)}
+                placeholder="Extensões permitidas (ex.: .pdf, .zip, .png) — vazio = todas"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
+              />
+              <input
+                type="text"
+                value={ulMimes}
+                onChange={(e) => setUlMimes(e.target.value)}
+                placeholder="MIMEs permitidos (ex.: application/pdf, image/*) — vazio = todos"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
+              />
+            </div>
             <div className="flex items-center gap-4 text-xs">
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={ulAllowMultiple} onChange={(e) => setUlAllowMultiple(e.target.checked)} />
@@ -1316,14 +1685,23 @@ export default function FilesHubPage() {
               </label>
             </div>
             {ulRequirePasscode && (
-              <input
-                type="text"
-                value={ulPasscode}
-                onChange={(e) => setUlPasscode(e.target.value)}
-                placeholder="Digite o código/contra-senha"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm"
-                required
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={ulPasscode}
+                  onChange={(e) => setUlPasscode(e.target.value)}
+                  placeholder="Digite o código/contra-senha"
+                  className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm font-mono"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setUlPasscode(generateRandomPasscode(10))}
+                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium shrink-0"
+                >
+                  Gerar
+                </button>
+              </div>
             )}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setShowUploadLinkModal(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
@@ -1340,8 +1718,13 @@ export default function FilesHubPage() {
       {/* Modal: Nova Pasta */}
       {showNewFolderModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={handleCreateFolderSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h2 className="text-lg font-bold">Nova Pasta</h2>
+          <form onSubmit={handleCreateFolderSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Nova Pasta</h2>
+              <button type="button" onClick={() => setShowNewFolderModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
             <div className="text-xs text-slate-500">
               Será criada dentro de: <span className="font-mono">{currentFolder}</span>
             </div>
@@ -1379,6 +1762,7 @@ export default function FilesHubPage() {
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm disabled:opacity-60"
                 >
                   <option value={2}>Público (/download + Agent)</option>
+                  <option value={3}>Somente Página Web (/download)</option>
                   <option value={1}>Somente Agent</option>
                   <option value={0}>Privado</option>
                 </select>
@@ -1428,8 +1812,13 @@ export default function FilesHubPage() {
       {/* Modal: Renomear/Editar Pasta */}
       {editingFolder && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={handleEditFolderSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h2 className="text-lg font-bold">Editar Pasta</h2>
+          <form onSubmit={handleEditFolderSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Editar Pasta</h2>
+              <button type="button" onClick={() => setEditingFolder(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
             <input
               type="text"
               value={editFolderName}
@@ -1453,6 +1842,7 @@ export default function FilesHubPage() {
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm disabled:opacity-60"
               >
                 <option value={2}>Público (/download + Agent)</option>
+                <option value={3}>Somente Página Web (/download)</option>
                 <option value={1}>Somente Agent</option>
                 <option value={0}>Privado</option>
               </select>
@@ -1481,8 +1871,13 @@ export default function FilesHubPage() {
       {/* Modal: Editar / Mover Arquivo */}
       {editingFile && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={handleEditFileSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h2 className="text-lg font-bold">Editar / Mover Arquivo</h2>
+          <form onSubmit={handleEditFileSubmit} className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">Editar / Mover Arquivo</h2>
+              <button type="button" onClick={() => setEditingFile(null)} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <Icon name="close" size={18} />
+              </button>
+            </div>
             <input
               type="text"
               value={editFileName}
@@ -1532,6 +1927,7 @@ export default function FilesHubPage() {
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm disabled:opacity-60"
               >
                 <option value={2}>Público (/download + Agent)</option>
+                <option value={3}>Somente Página Web (/download)</option>
                 <option value={1}>Somente Agent</option>
                 <option value={0}>Privado</option>
               </select>

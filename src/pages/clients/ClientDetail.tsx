@@ -15,6 +15,7 @@ import { useSendScopeNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
 import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, StatCard, PageHeader, ConfirmDialog, EmptyState } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
+import { ScopedFilesTab } from '@/components/files/ScopedFilesTab';
 import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { SiteFormModal } from '@/components/entity/SiteFormModal';
 import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
@@ -46,9 +47,9 @@ function scrollToSection(id: string) {
  * empurrava as abas para baixo da dobra. ?tab=sites/chamados/logs/agentes
  * continua funcionando como deep link.
  */
-type ClientTab = 'info' | 'sites' | 'chamados' | 'logs' | 'agentes';
+type ClientTab = 'info' | 'sites' | 'chamados' | 'logs' | 'agentes' | 'arquivos';
 
-const CLIENT_TAB_IDS: ClientTab[] = ['info', 'sites', 'chamados', 'logs', 'agentes'];
+const CLIENT_TAB_IDS: ClientTab[] = ['info', 'sites', 'chamados', 'logs', 'agentes', 'arquivos'];
 
 
 export default function ClientDetail() {
@@ -139,6 +140,7 @@ export default function ClientDetail() {
       { id: 'chamados', label: 'Chamados', icon: 'confirmation_number', badge: ticketsArray.length },
       { id: 'logs', label: 'Logs', icon: 'article', badge: logsArray.length },
       { id: 'agentes', label: 'Agentes', icon: 'desktop_windows', badge: agentsArray.length },
+      { id: 'arquivos', label: 'Arquivos', icon: 'folder' },
     ],
     [sitesArray.length, ticketsArray.length, logsArray.length, agentsArray.length],
   );
@@ -652,6 +654,12 @@ export default function ClientDetail() {
                 />
               </>
             )}
+          </Card>
+        )}
+
+        {activeTab === 'arquivos' && (
+          <Card>
+            <ScopedFilesTab scope={1} clientId={c.id} entityName={c.name} />
           </Card>
         )}
       </div>
